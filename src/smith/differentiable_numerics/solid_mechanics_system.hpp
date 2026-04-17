@@ -357,6 +357,32 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, Displ
 }
 
 /**
+ * @brief Register all solid mechanics fields (no rule instance — Rule given as explicit template param).
+ *
+ * Preferred form: Rule is deduced from the PhysicsFields type rather than a runtime instance.
+ * Equivalent to the rule-instance overload but avoids requiring a dummy rule object.
+ */
+template <int dim, int order, typename DisplacementTimeRule>
+auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store)
+{
+  return registerSolidMechanicsFields<dim, order>(field_store, DisplacementTimeRule{});
+}
+
+/**
+ * @brief Register solid mechanics fields with parameters (no rule instance).
+ *
+ * @return CouplingParams carrying the exported field tokens (for use as coupling input to other systems).
+ */
+template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
+  requires(sizeof...(parameter_space) > 0)
+auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
+                                  FieldType<parameter_space>... parameter_types)
+{
+  return registerSolidMechanicsFields<dim, order>(field_store, DisplacementTimeRule{},
+                                                  std::move(parameter_types)...);
+}
+
+/**
  * @brief Register all solid mechanics fields into a FieldStore (with parameters).
  *
  * Legacy overload that also registers parameter fields directly.
@@ -513,22 +539,40 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, Displace
 }
 
 /**
- * @brief Build a SolidMechanicsSystem without coupling, assuming fields are already registered.
+ * @brief Build a SolidMechanicsSystem from a coupling pack and optional parameter fields.
  *
- * Overload for the common case of no inter-physics coupling.
- * Parameters (if any) are wrapped into a CouplingParams so the system sees them.
+ * Preferred API: Rule is given as explicit template param (no rule instance needed).
+ * The coupling argument carries the fields borrowed from another physics (or CouplingParams<> for none).
+ * Additional parameter_types are registered and appended after the coupling fields.
+ *
+ * Returns a @c SystemBuildResult so callers can write @c res.system, @c res.cycle_zero_system, etc.
+ *
+ * Usage:
+ * @code
+ *   auto res = buildSolidMechanicsSystem<dim, order, DispRule>(
+ *       field_store, thermal_fields, solver, opts, youngs_modulus);
+ *   auto solid = res.system;
+ * @endcode
  */
-template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule rule,
+template <int dim, int order, typename DisplacementTimeRule, typename Coupling, typename... parameter_space>
+  requires detail::is_coupling_params_v<Coupling>
+auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
                                std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
                                FieldType<parameter_space>... parameter_types)
 {
-  auto prefix_param = [&](auto& pt) {
+  ([&](auto& pt) {
     pt.name = "param_" + pt.name;
     field_store->addParameter(pt);
-  };
-  (prefix_param(parameter_types), ...);
-  return buildSolidMechanicsSystem<dim, order>(field_store, rule, CouplingParams{parameter_types...}, solver, options);
+  }(parameter_types),
+   ...);
+
+  auto combined = std::apply(
+      [&](auto... cfs) { return CouplingParams{cfs..., parameter_types...}; }, coupling.fields);
+
+  auto [sys, cz, ends] =
+      buildSolidMechanicsSystem<dim, order>(field_store, DisplacementTimeRule{}, combined, solver, options);
+  using SysType = typename decltype(sys)::element_type;
+  return SystemBuildResult<SysType>{std::move(sys), std::move(cz), std::move(ends)};
 }
 
 /**

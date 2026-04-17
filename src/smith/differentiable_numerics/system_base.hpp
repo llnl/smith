@@ -89,4 +89,20 @@ inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_
   return std::make_shared<SystemBase>(std::move(field_store), std::move(solver), std::move(weak_forms));
 }
 
+/**
+ * @brief Return type for physics system build functions.
+ *
+ * Replaces the previous std::tuple<system, cz, end_steps> return so callers can write
+ * @code
+ *   auto res = buildSolidMechanicsSystem<dim, order, Rule>(...);
+ *   auto system = res.system;
+ * @endcode
+ */
+template <typename SysType>
+struct SystemBuildResult {
+  std::shared_ptr<SysType> system;
+  std::shared_ptr<SystemBase> cycle_zero_system;
+  std::vector<std::shared_ptr<SystemBase>> end_step_systems;
+};
+
 }  // namespace smith

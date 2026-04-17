@@ -53,11 +53,14 @@ struct ThermalStaticFixture : public testing::Test {
     auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
     
-    QuasiStaticFirstOrderTimeIntegrationRule temp_rule;
-    registerThermalFields<2, temp_order>(field_store, temp_rule);
+    using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
+    registerThermalFields<2, temp_order, TempRule>(field_store);
 
-    auto [thermal_system, cz_sys, end_steps] = buildThermalSystem<2, temp_order>(
-        field_store, temp_rule, coupled_solver, ThermalOptions{});
+    auto thermal_res = buildThermalSystem<2, temp_order, TempRule>(
+        field_store, CouplingParams<>{}, coupled_solver, ThermalOptions{});
+    auto thermal_system = thermal_res.system;
+    auto cz_sys = thermal_res.cycle_zero_system;
+    auto end_steps = thermal_res.end_step_systems;
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
@@ -149,11 +152,14 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   FieldType<L2<0>> conductivity_param("conductivity");
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
   
-  QuasiStaticFirstOrderTimeIntegrationRule temp_rule;
-  registerThermalFields<2, 1>(field_store, temp_rule, conductivity_param);
+  using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
+  registerThermalFields<2, 1, TempRule>(field_store, conductivity_param);
 
-  auto [thermal_system, cz_sys, end_steps] = buildThermalSystem<2, 1>(
-      field_store, temp_rule, coupled_solver, ThermalOptions{}, conductivity_param);
+  auto thermal_res = buildThermalSystem<2, 1, TempRule>(
+      field_store, CouplingParams<>{}, coupled_solver, ThermalOptions{}, conductivity_param);
+  auto thermal_system = thermal_res.system;
+  auto cz_sys = thermal_res.cycle_zero_system;
+  auto end_steps = thermal_res.end_step_systems;
 
   // Set the conductivity parameter field to k=1.0
   thermal_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(

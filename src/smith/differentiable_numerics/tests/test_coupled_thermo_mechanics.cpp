@@ -175,21 +175,22 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
   auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
+  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
-  QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
-  BackwardEulerFirstOrderTimeIntegrationRule temp_rule;
 
   auto solid_coupling_fields =
-      registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule, youngs_modulus);
-  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule, youngs_modulus);
+      registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store, youngs_modulus);
+  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store, youngs_modulus);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
-      field_store, disp_rule, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+  auto solid = solid_res.system;
 
-  auto [thermal, thermal_cz, thermal_end_steps] =
-      buildThermalSystem<dim, temperature_order>(field_store, temp_rule, solid_coupling_fields,
-                                                 std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
+      field_store, solid_coupling_fields, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+  auto thermal = thermal_res.system;
 
   auto [coupled, coupled_cz] = combineSystems(solid, thermal);
 
@@ -227,21 +228,22 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
+  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
 
-  QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
-  BackwardEulerFirstOrderTimeIntegrationRule temp_rule;
   auto solid_coupling_fields =
-      registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule, youngs_modulus);
-  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule, youngs_modulus);
+      registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store, youngs_modulus);
+  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store, youngs_modulus);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
-      field_store, disp_rule, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+  auto solid = solid_res.system;
 
-  auto [thermal, thermal_cz, thermal_end_steps] =
-      buildThermalSystem<dim, temperature_order>(field_store, temp_rule, solid_coupling_fields,
-                                                 std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
+      field_store, solid_coupling_fields, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+  auto thermal = thermal_res.system;
 
   auto [coupled, coupled_cz] = combineSystems(solid, thermal);
 
@@ -316,20 +318,21 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
 
   auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
 
+  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
 
-  QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
-  BackwardEulerFirstOrderTimeIntegrationRule temp_rule;
-  auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule);
-  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule);
+  auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
+  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
-      field_store, disp_rule, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+  auto solid = solid_res.system;
 
-  auto [thermal, thermal_cz, thermal_end_steps] =
-      buildThermalSystem<dim, temperature_order>(field_store, temp_rule, solid_coupling_fields,
-                                                 std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
+      field_store, solid_coupling_fields, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
+  auto thermal = thermal_res.system;
 
   auto [coupled, coupled_cz] = combineSystems(solid, thermal);
 
@@ -414,20 +417,21 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
 
   // Notice that the block_solver is the SAME solver for the whole system
-
+  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
 
-  QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
-  BackwardEulerFirstOrderTimeIntegrationRule temp_rule;
-  auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule);
-  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule);
+  auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
+  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
-      field_store, disp_rule, thermal_coupling_fields, nullptr, solid_opts);
+  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store, thermal_coupling_fields, nullptr, solid_opts);
+  auto solid = solid_res.system;
 
-  auto [thermal, thermal_cz, thermal_end_steps] =
-      buildThermalSystem<dim, temperature_order>(field_store, temp_rule, solid_coupling_fields, nullptr, thermal_opts);
+  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
+      field_store, solid_coupling_fields, nullptr, thermal_opts);
+  auto thermal = thermal_res.system;
 
   auto [coupled, coupled_cz] = combineSystems(solver_ptr, solid, thermal);
 
@@ -497,19 +501,19 @@ TEST_F(ThermoMechanicsMeshFixture, NewAPIBackpropagateThroughPhysics)
   auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
+  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
 
-  QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
-  BackwardEulerFirstOrderTimeIntegrationRule temp_rule;
   auto param_fields = registerParameterFields(youngs_modulus);
-  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order>(field_store, disp_rule);
-  auto thermal_fields = registerThermalFields<dim, temperature_order>(field_store, temp_rule);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order>(
+  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
       std::make_shared<SystemSolver>(solid_block_solver), solid_opts, param_fields, solid_fields, thermal_fields);
 
-  auto [thermal, thermal_cz, thermal_end_steps] = buildThermalSystem<dim, temperature_order>(
+  auto [thermal, thermal_cz, thermal_end_steps] = buildThermalSystem<dim, temperature_order, TempRule>(
       std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts, param_fields, thermal_fields, solid_fields);
 
   auto [coupled, coupled_cz] = combineSystems(solid, thermal);

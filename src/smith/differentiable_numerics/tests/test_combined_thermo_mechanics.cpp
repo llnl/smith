@@ -99,12 +99,12 @@ struct ThermoelasticMaterialNoParam {
 
 template <int disp_order_, int temp_order_, typename DispRule, typename TempRule, typename... P, typename MaterialType>
 void setCoupledThermoMechanicsMaterial(
-    std::shared_ptr<
-        SolidMechanicsSystem<dim, disp_order_, DispRule, CouplingParams<H1<temp_order_>, H1<temp_order_>>, P...>>
+    std::shared_ptr<SolidMechanicsSystem<dim, disp_order_, DispRule,
+                                         CouplingParams<H1<temp_order_>, H1<temp_order_>, P...>>>
         solid,
-    std::shared_ptr<ThermalSystem<
-        dim, temp_order_, TempRule,
-        CouplingParams<H1<disp_order_, dim>, H1<disp_order_, dim>, H1<disp_order_, dim>, H1<disp_order_, dim>, P...>>>
+    std::shared_ptr<ThermalSystem<dim, temp_order_, TempRule,
+                                  CouplingParams<H1<disp_order_, dim>, H1<disp_order_, dim>, H1<disp_order_, dim>,
+                                                 H1<disp_order_, dim>, P...>>>
         thermal,
     const MaterialType& material, const std::string& domain_name)
 {
