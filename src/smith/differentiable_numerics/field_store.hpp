@@ -108,6 +108,16 @@ struct FieldStore {
   void addParameter(FieldType<Space>& type)
   {
     type.name = prefix(type.name);
+    if (to_params_index_.count(type.name)) {
+      // Already registered — expected when multiple systems share the same parameter.
+      // Verify the space matches by checking vdim (== Space::components).
+      auto& existing = params_[to_params_index_.at(type.name)];
+      SLIC_ERROR_ROOT_IF(existing.get()->space().GetVDim() != Space::components,
+                         axom::fmt::format("Parameter '{}' re-registered with a different space "
+                                           "(existing vdim={}, new vdim={})",
+                                           type.name, existing.get()->space().GetVDim(), Space::components));
+      return;
+    }
     to_params_index_[type.name] = params_.size();
     params_.push_back(smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag()));
   }

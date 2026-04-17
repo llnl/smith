@@ -41,7 +41,7 @@ namespace smith {
  * @tparam parameter_space Parameter spaces for material properties.
  */
 template <int dim, int order, typename DisplacementTimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule,
-          typename Coupling = CouplingParams<>, typename... parameter_space>
+          typename Coupling = CouplingParams<>>
 struct SolidMechanicsSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -50,23 +50,21 @@ struct SolidMechanicsSystem : public SystemBase {
   /// Main weak form: (u, u_old, v_old, a_old, coupling_fields..., params...)
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<order, dim>,
-      typename detail::TimeRuleParamsWithCoupling<DisplacementTimeRule, H1<order, dim>, Coupling,
-                                                  parameter_space...>::type>;
+      typename detail::TimeRuleParamsWithCoupling<DisplacementTimeRule, H1<order, dim>, Coupling>::type>;
 
   /// Cycle-zero form: (u, v_old, a, coupling_fields..., params...)
   /// 3-state form: u, v, a (no u_old needed; at cycle 0 u and v are given, solve for a)
-  using CycleZeroSolidWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<order, dim>,
-      typename detail::AppendCouplingToParams<Coupling, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>>,
-                                              parameter_space...>::type>;
+  using CycleZeroSolidWeakFormType =
+      TimeDiscretizedWeakForm<dim, H1<order, dim>,
+                              typename detail::AppendCouplingToParams<
+                                  Coupling, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>>>::type>;
 
   /// L2 projection weak form for PK1 stress output (dim*dim components).
   /// Args: (stress_unknown, u, u_old, v_old, a_old, coupling_fields..., params...).
   using StressOutputWeakFormType = TimeDiscretizedWeakForm<
       dim, L2<0, dim * dim>,
-      typename detail::AppendCouplingToParams<
-          Coupling, Parameters<L2<0, dim * dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>>,
-          parameter_space...>::type>;
+      typename detail::AppendCouplingToParams<Coupling, Parameters<L2<0, dim * dim>, H1<order, dim>, H1<order, dim>,
+                                                                   H1<order, dim>, H1<order, dim>>>::type>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroSolidWeakFormType>
@@ -153,7 +151,7 @@ struct SolidMechanicsSystem : public SystemBase {
         [=](auto t_info, auto X, auto u, auto v_old, auto a, auto... params) {
           return force_function(t_info.time(), X, u, v_old, a, params...);
         },
-        std::make_index_sequence<3 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
+        std::make_index_sequence<3 + Coupling::num_coupling_fields>{});
   }
 
   /**
@@ -165,7 +163,7 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename BodyForceType>
   void addBodyForce(const std::string& domain_name, BodyForceType force_function)
   {
-    addBodyForceAllParams(domain_name, force_function, std::make_index_sequence<4 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
+    addBodyForceAllParams(domain_name, force_function, std::make_index_sequence<4 + Coupling::num_coupling_fields>{});
   }
 
   /**
@@ -193,7 +191,7 @@ struct SolidMechanicsSystem : public SystemBase {
         [=](auto t_info, auto X, auto n, auto u, auto v_old, auto a, auto... params) {
           return traction_function(t_info.time(), X, n, u, v_old, a, params...);
         },
-        std::make_index_sequence<3 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
+        std::make_index_sequence<3 + Coupling::num_coupling_fields>{});
   }
 
   /**
@@ -205,7 +203,7 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename TractionType>
   void addTraction(const std::string& domain_name, TractionType traction_function)
   {
-    addTractionAllParams(domain_name, traction_function, std::make_index_sequence<4 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
+    addTractionAllParams(domain_name, traction_function, std::make_index_sequence<4 + Coupling::num_coupling_fields>{});
   }
 
   /**
@@ -247,7 +245,7 @@ struct SolidMechanicsSystem : public SystemBase {
 
           return pressure * n_deformed * (1.0 / n_shape_norm);
         },
-        std::make_index_sequence<3 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
+        std::make_index_sequence<3 + Coupling::num_coupling_fields>{});
   }
 
   /**
@@ -259,7 +257,23 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename PressureType>
   void addPressure(const std::string& domain_name, PressureType pressure_function)
   {
-    addPressureAllParams(domain_name, pressure_function, std::make_index_sequence<4 + Coupling::num_coupling_fields + sizeof...(parameter_space)>{});
+    addPressureAllParams(domain_name, pressure_function, std::make_index_sequence<4 + Coupling::num_coupling_fields>{});
+  }
+
+  /// Set zero-displacement Dirichlet BC on all components.
+  void setDisplacementBC(const Domain& domain) { disp_bc->template setFixedVectorBCs<dim>(domain); }
+
+  /// Set zero-displacement BC on specific components.
+  void setDisplacementBC(const Domain& domain, std::vector<int> components)
+  {
+    disp_bc->template setFixedVectorBCs<dim>(domain, components);
+  }
+
+  /// Set displacement BC with a prescribed function.
+  template <typename AppliedDisplacementFunction>
+  void setDisplacementBC(const Domain& domain, AppliedDisplacementFunction f)
+  {
+    disp_bc->template setVectorBCs<dim>(domain, f);
   }
 
  private:
@@ -308,7 +322,6 @@ struct SolidMechanicsSystem : public SystemBase {
 };
 
 struct SolidMechanicsOptions {
-  bool cycle_zero_solve = false;
   bool enable_stress_output = false;
 };
 
@@ -318,13 +331,43 @@ struct SolidMechanicsOptions {
  * Phase 1 of the two-phase initialization. Pass an instance of the desired time integration rule
  * so its type is deduced; only `<dim, order>` need be specified explicitly.
  *
+ * @return PhysicsFields carrying the exported field tokens and time rule type.
+ */
+template <int dim, int order, typename DisplacementTimeRule>
+auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule /*rule*/)
+{
+  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
+  if (!field_store->hasField(shape_disp_type.name)) {
+    field_store->addShapeDisp(shape_disp_type);
+  }
+
+  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>();
+  FieldType<H1<order, dim>> disp_type("displacement_solve_state");
+  field_store->addIndependent(disp_type, disp_time_rule_ptr);
+
+  field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, "displacement");
+  field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, "velocity");
+  field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration");
+
+  return PhysicsFields<DisplacementTimeRule, H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>>{
+      field_store, FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
+      FieldType<H1<order, dim>>(field_store->prefix("displacement")),
+      FieldType<H1<order, dim>>(field_store->prefix("velocity")),
+      FieldType<H1<order, dim>>(field_store->prefix("acceleration"))};
+}
+
+/**
+ * @brief Register all solid mechanics fields into a FieldStore (with parameters).
+ *
+ * Legacy overload that also registers parameter fields directly.
+ * Prefer the no-params overload + registerParameterFields for new code.
+ *
  * @return CouplingParams carrying the exported field tokens (for use as coupling input to other systems).
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-auto registerSolidMechanicsFields(
-    std::shared_ptr<FieldStore> field_store,
-    DisplacementTimeRule /*rule*/,
-    FieldType<parameter_space>... parameter_types)
+  requires(sizeof...(parameter_space) > 0)
+auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule /*rule*/,
+                                  FieldType<parameter_space>... parameter_types)
 {
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
   if (!field_store->hasField(shape_disp_type.name)) {
@@ -345,13 +388,10 @@ auto registerSolidMechanicsFields(
   };
   (prefix_param(parameter_types), ...);
 
-  return CouplingParams{
-      FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
-      FieldType<H1<order, dim>>(field_store->prefix("displacement")),
-      FieldType<H1<order, dim>>(field_store->prefix("velocity")),
-      FieldType<H1<order, dim>>(field_store->prefix("acceleration")),
-      parameter_types...
-  };
+  return CouplingParams{FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
+                        FieldType<H1<order, dim>>(field_store->prefix("displacement")),
+                        FieldType<H1<order, dim>>(field_store->prefix("velocity")),
+                        FieldType<H1<order, dim>>(field_store->prefix("acceleration")), parameter_types...};
 }
 
 /**
@@ -364,15 +404,11 @@ auto registerSolidMechanicsFields(
  * `cycle_zero_system` is nullptr unless the rule requires an initial acceleration solve.
  * `end_step_systems` contains the stress output system when `enable_stress_output` is set.
  */
-template <int dim, int order, typename DisplacementTimeRule, typename Coupling, typename... parameter_space>
+template <int dim, int order, typename DisplacementTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
-auto buildSolidMechanicsSystem(
-    std::shared_ptr<FieldStore> field_store,
-    DisplacementTimeRule /*rule*/,
-    const Coupling& coupling,
-    std::shared_ptr<SystemSolver> solver,
-    const SolidMechanicsOptions& options,
-    FieldType<parameter_space>... parameter_types)
+auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule /*rule*/,
+                               const Coupling& coupling, std::shared_ptr<SystemSolver> solver,
+                               const SolidMechanicsOptions& options)
 {
   auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>();
 
@@ -384,27 +420,17 @@ auto buildSolidMechanicsSystem(
 
   auto disp_bc = field_store->getBoundaryConditions(disp_type.name);
 
-  auto prefix_param = [&](auto& pt) {
-    pt.name = field_store->prefix("param_" + pt.name);
-  };
-  (prefix_param(parameter_types), ...);
-  auto parameter_types_tuple = std::make_tuple(parameter_types...);
-
-  using SystemType = SolidMechanicsSystem<dim, order, DisplacementTimeRule, Coupling, parameter_space...>;
+  using SystemType = SolidMechanicsSystem<dim, order, DisplacementTimeRule, Coupling>;
 
   std::string force_name = field_store->prefix("reactions");
   auto solid_weak_form = std::apply(
-      [&](auto&... params) {
-        return std::apply(
-            [&](auto&... cfs) {
-              return std::make_shared<typename SystemType::SolidWeakFormType>(
-                  force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-                  field_store->createSpaces(force_name, disp_type.name, disp_type, disp_old_type, velo_old_type,
-                                            accel_old_type, cfs..., params...));
-            },
-            coupling.fields);
+      [&](auto&... cfs) {
+        return std::make_shared<typename SystemType::SolidWeakFormType>(
+            force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
+            field_store->createSpaces(force_name, disp_type.name, disp_type, disp_old_type, velo_old_type,
+                                      accel_old_type, cfs...));
       },
-      parameter_types_tuple);
+      coupling.fields);
 
   auto sys = std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{solid_weak_form});
   sys->disp_bc = disp_bc;
@@ -420,18 +446,13 @@ auto buildSolidMechanicsSystem(
     accel_as_unknown.is_unknown = true;
     FieldType<H1<order, dim>> disp_cz_input(disp_type.name);
     sys->cycle_zero_solid_weak_form = std::apply(
-        [&](auto&... params) {
-          return std::apply(
-              [&](auto&... cfs) {
-                return std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
-                    cycle_zero_name, field_store->getMesh(),
-                    field_store->getField(accel_old_type.name).get()->space(),
-                    field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type,
-                                              accel_as_unknown, cfs..., params...));
-              },
-              coupling.fields);
+        [&](auto&... cfs) {
+          return std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
+              cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
+              field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type,
+                                        accel_as_unknown, cfs...));
         },
-        parameter_types_tuple);
+        coupling.fields);
     field_store->markWeakFormInternal(cycle_zero_name);
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 
@@ -446,10 +467,10 @@ auto buildSolidMechanicsSystem(
                                .absolute_tol = 1e-14,
                                .max_iterations = 1000,
                                .print_level = 0};
-    auto cycle_zero_solver = std::make_shared<SystemSolver>(
-        buildNonlinearBlockSolver(cz_nonlin, cz_lin, *field_store->getMesh()));
+    auto cycle_zero_solver =
+        std::make_shared<SystemSolver>(buildNonlinearBlockSolver(cz_nonlin, cz_lin, *field_store->getMesh()));
 
-    sys->cycle_zero_system = makeSubSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form});
+    sys->cycle_zero_system = makeSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form});
     cycle_zero_system = sys->cycle_zero_system;
   }
 
@@ -462,17 +483,13 @@ auto buildSolidMechanicsSystem(
     FieldType<H1<order, dim>> disp_as_input(disp_type.name);
     std::string stress_name = field_store->prefix("stress_projection");
     sys->stress_weak_form = std::apply(
-        [&](auto&... params) {
-          return std::apply(
-              [&](auto&... cfs) {
-                return std::make_shared<typename SystemType::StressOutputWeakFormType>(
-                    stress_name, field_store->getMesh(), field_store->getField(stress_type.name).get()->space(),
-                    field_store->createSpaces(stress_name, stress_type.name, stress_type, disp_as_input, disp_old_type,
-                                              velo_old_type, accel_old_type, cfs..., params...));
-              },
-              coupling.fields);
+        [&](auto&... cfs) {
+          return std::make_shared<typename SystemType::StressOutputWeakFormType>(
+              stress_name, field_store->getMesh(), field_store->getField(stress_type.name).get()->space(),
+              field_store->createSpaces(stress_name, stress_type.name, stress_type, disp_as_input, disp_old_type,
+                                        velo_old_type, accel_old_type, cfs...));
         },
-        parameter_types_tuple);
+        coupling.fields);
 
     NonlinearSolverOptions stress_nonlin{.nonlin_solver = NonlinearSolver::Newton,
                                          .relative_tol = 1e-14,
@@ -485,10 +502,10 @@ auto buildSolidMechanicsSystem(
                                    .absolute_tol = 1e-14,
                                    .max_iterations = 1000,
                                    .print_level = 0};
-    auto stress_solver = std::make_shared<SystemSolver>(
-        buildNonlinearBlockSolver(stress_nonlin, stress_lin, *field_store->getMesh()));
+    auto stress_solver =
+        std::make_shared<SystemSolver>(buildNonlinearBlockSolver(stress_nonlin, stress_lin, *field_store->getMesh()));
 
-    sys->stress_output_system = makeSubSystem(field_store, stress_solver, {sys->stress_weak_form});
+    sys->stress_output_system = makeSystem(field_store, stress_solver, {sys->stress_weak_form});
     end_step_systems.push_back(sys->stress_output_system);
   }
 
@@ -498,18 +515,45 @@ auto buildSolidMechanicsSystem(
 /**
  * @brief Build a SolidMechanicsSystem without coupling, assuming fields are already registered.
  *
- * Overload for the common case of no inter-physics coupling (Coupling defaults to CouplingParams<>).
+ * Overload for the common case of no inter-physics coupling.
+ * Parameters (if any) are wrapped into a CouplingParams so the system sees them.
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
-auto buildSolidMechanicsSystem(
-    std::shared_ptr<FieldStore> field_store,
-    DisplacementTimeRule rule,
-    std::shared_ptr<SystemSolver> solver,
-    const SolidMechanicsOptions& options,
-    FieldType<parameter_space>... parameter_types)
+auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule rule,
+                               std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
+                               FieldType<parameter_space>... parameter_types)
 {
-  return buildSolidMechanicsSystem<dim, order>(
-      field_store, rule, CouplingParams<>{}, solver, options, parameter_types...);
+  auto prefix_param = [&](auto& pt) {
+    pt.name = "param_" + pt.name;
+    field_store->addParameter(pt);
+  };
+  (prefix_param(parameter_types), ...);
+  return buildSolidMechanicsSystem<dim, order>(field_store, rule, CouplingParams{parameter_types...}, solver, options);
+}
+
+/**
+ * @brief Build a SolidMechanicsSystem from variadic field packs.
+ *
+ * New API: accepts any combination of PhysicsFields and CouplingParams packs.
+ * The FieldStore is extracted from the PhysicsFields pack matching DisplacementTimeRule.
+ * Non-self packs become coupling fields; CouplingParams packs are registered as parameters.
+ *
+ * Usage:
+ * @code
+ *   auto [solid, cz, end] = buildSolidMechanicsSystem<dim, order, DispRule>(
+ *       solver, opts, param_fields, solid_fields, thermal_fields);
+ * @endcode
+ */
+template <int dim, int order, typename DisplacementTimeRule, typename... FieldPacks>
+  requires(sizeof...(FieldPacks) > 0 && (detail::is_physics_fields_v<FieldPacks> || ...) &&
+           !(std::is_same_v<std::decay_t<FieldPacks>, SolidMechanicsOptions> || ...))
+auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
+                               const FieldPacks&... field_packs)
+{
+  auto field_store = detail::findFieldStore(field_packs...);
+  (detail::registerParamsIfNeeded(field_store, field_packs), ...);
+  auto coupling = detail::collectCouplingFields<DisplacementTimeRule>(field_packs...);
+  return buildSolidMechanicsSystem<dim, order>(field_store, DisplacementTimeRule{}, coupling, solver, options);
 }
 
 }  // namespace smith

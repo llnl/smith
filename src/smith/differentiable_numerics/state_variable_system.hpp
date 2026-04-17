@@ -54,11 +54,10 @@ namespace smith {
  * @tparam StateSpace FE space for the internal variable (e.g., L2<0>).
  * @tparam InternalVarTimeRule Time integration rule (must have num_states == 2).
  * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: none).
- * @tparam parameter_space Parameter spaces for additional material properties.
  */
 template <int dim, typename StateSpace,
           typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
-          typename Coupling = CouplingParams<>, typename... parameter_space>
+          typename Coupling = CouplingParams<>>
 struct StateVariableSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -68,8 +67,7 @@ struct StateVariableSystem : public SystemBase {
   /// State weak form: (alpha, alpha_old, coupling_fields..., params...)
   using StateWeakFormType = TimeDiscretizedWeakForm<
       dim, StateSpace,
-      typename detail::TimeRuleParamsWithCoupling<InternalVarTimeRule, StateSpace, Coupling,
-                                                  parameter_space...>::type>;
+      typename detail::TimeRuleParamsWithCoupling<InternalVarTimeRule, StateSpace, Coupling>::type>;
 
   std::shared_ptr<StateWeakFormType> state_weak_form;          ///< Internal variable weak form.
   std::shared_ptr<DirichletBoundaryConditions> state_bc;       ///< Internal variable boundary conditions.
@@ -159,21 +157,15 @@ auto registerStateVariableFields(
  *
  * Returns `{system, nullptr, {}}` as a tuple (no cycle-zero or end-step systems).
  */
-template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling,
-          typename... parameter_space>
+template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
 auto buildStateVariableSystem(
     std::shared_ptr<FieldStore> field_store,
     InternalVarTimeRule /*rule*/,
     const Coupling& coupling,
     std::shared_ptr<SystemSolver> solver,
-    const StateVariableOptions& /*options*/,
-    FieldType<parameter_space>... parameter_types)
+    const StateVariableOptions& /*options*/)
 {
-  auto prefix_param = [&](auto& pt) { pt.name = field_store->prefix("param_" + pt.name); };
-  (prefix_param(parameter_types), ...);
-  auto parameter_types_tuple = std::make_tuple(parameter_types...);
-
   auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>();
 
   FieldType<StateSpace> state_type(field_store->prefix("state_solve_state"), true);
@@ -181,21 +173,16 @@ auto buildStateVariableSystem(
 
   auto state_bc = field_store->getBoundaryConditions(state_type.name);
 
-  using SystemType = StateVariableSystem<dim, StateSpace, InternalVarTimeRule, Coupling, parameter_space...>;
+  using SystemType = StateVariableSystem<dim, StateSpace, InternalVarTimeRule, Coupling>;
 
   std::string state_res_name = field_store->prefix("state_residual");
   auto state_weak_form = std::apply(
-      [&](auto&... params) {
-        return std::apply(
-            [&](auto&... cfs) {
-              return std::make_shared<typename SystemType::StateWeakFormType>(
-                  state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
-                  field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, cfs...,
-                                            params...));
-            },
-            coupling.fields);
+      [&](auto&... cfs) {
+        return std::make_shared<typename SystemType::StateWeakFormType>(
+            state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
+            field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, cfs...));
       },
-      parameter_types_tuple);
+      coupling.fields);
 
   auto sys = std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{state_weak_form});
   sys->state_bc = state_bc;
@@ -210,7 +197,8 @@ auto buildStateVariableSystem(
 /**
  * @brief Build a StateVariableSystem without coupling.
  *
- * Overload for the common case of no inter-physics coupling (Coupling defaults to CouplingParams<>).
+ * Overload for the common case of no inter-physics coupling.
+ * Parameters (if any) are wrapped into a CouplingParams so the system sees them.
  */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
 auto buildStateVariableSystem(
@@ -220,8 +208,13 @@ auto buildStateVariableSystem(
     const StateVariableOptions& options,
     FieldType<parameter_space>... parameter_types)
 {
+  auto prefix_param = [&](auto& pt) {
+    pt.name = "param_" + pt.name;
+    field_store->addParameter(pt);
+  };
+  (prefix_param(parameter_types), ...);
   return buildStateVariableSystem<dim, StateSpace>(
-      field_store, rule, CouplingParams<>{}, solver, options, parameter_types...);
+      field_store, rule, CouplingParams{parameter_types...}, solver, options);
 }
 
 }  // namespace smith

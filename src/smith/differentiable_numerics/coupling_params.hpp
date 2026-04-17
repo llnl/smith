@@ -48,17 +48,159 @@ struct CouplingParams {
 template <typename... Spaces>
 CouplingParams(FieldType<Spaces>...) -> CouplingParams<Spaces...>;
 
+/// Sentinel: no time integration rule (used for parameter-only packs).
+struct NoTimeRule {
+  static constexpr int num_states = 0;
+};
+
+/**
+ * @brief Fields returned by a physics register function, carrying time rule type information.
+ *
+ * Unlike CouplingParams, PhysicsFields knows which time integration rule governs its fields.
+ * This lets variadic build functions deduce which pack is "self" vs coupling, and enables
+ * compile-time interpolation of coupling fields in traction/body force wrappers.
+ *
+ * @tparam TimeRule  The time integration rule type (e.g. QuasiStaticSecondOrderTimeIntegrationRule).
+ * @tparam Spaces    FE space types of the fields (e.g. H1<order, dim> repeated num_states times).
+ */
+template <typename TimeRule, typename... Spaces>
+struct PhysicsFields {
+  using time_rule_type = TimeRule;
+  static constexpr std::size_t num_rule_states = TimeRule::num_states;
+  static constexpr std::size_t num_fields = sizeof...(Spaces);
+  static constexpr std::size_t num_coupling_fields = sizeof...(Spaces);
+  std::shared_ptr<FieldStore> field_store;
+  std::tuple<FieldType<Spaces>...> fields;
+
+  PhysicsFields(std::shared_ptr<FieldStore> fs, FieldType<Spaces>... f)
+      : field_store(std::move(fs)), fields(std::move(f)...)
+  {
+  }
+};
+
+/**
+ * @brief Register parameter fields as type-level tokens.
+ *
+ * Actual FieldStore registration is deferred to the build function.
+ * Returns a CouplingParams carrying the parameter field types.
+ */
+template <typename... ParamSpaces>
+auto registerParameterFields(FieldType<ParamSpaces>... param_types)
+{
+  return CouplingParams{std::move(param_types)...};
+}
+
 namespace detail {
 
-/// Type trait: true if T is a CouplingParams<...> specialization.
+/// Type trait: true if T is a CouplingParams<...> or PhysicsFields<...> specialization.
+/// Both carry a `fields` tuple and can be used as coupling input to build functions.
 template <typename T>
 struct is_coupling_params_impl : std::false_type {};
 
 template <typename... Spaces>
 struct is_coupling_params_impl<CouplingParams<Spaces...>> : std::true_type {};
 
+template <typename R, typename... Spaces>
+struct is_coupling_params_impl<PhysicsFields<R, Spaces...>> : std::true_type {};
+
 template <typename T>
-inline constexpr bool is_coupling_params_v = is_coupling_params_impl<T>::value;
+inline constexpr bool is_coupling_params_v = is_coupling_params_impl<std::decay_t<T>>::value;
+
+/// Type trait: true if T is a PhysicsFields<...> specialization.
+template <typename T>
+struct is_physics_fields_impl : std::false_type {};
+
+template <typename R, typename... S>
+struct is_physics_fields_impl<PhysicsFields<R, S...>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_physics_fields_v = is_physics_fields_impl<std::decay_t<T>>::value;
+
+/// True if T is a PhysicsFields with a real time rule (not NoTimeRule).
+template <typename T, typename = void>
+inline constexpr bool has_time_rule_v = false;
+
+template <typename T>
+inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>>> =
+    !std::is_same_v<typename std::decay_t<T>::time_rule_type, NoTimeRule>;
+
+// -------------------------------------------------------------------------
+// Helpers for variadic build functions
+// -------------------------------------------------------------------------
+
+/// Extract field_store from the first PhysicsFields pack.
+template <typename First, typename... Rest>
+std::shared_ptr<FieldStore> findFieldStore(const First& first, const Rest&... rest)
+{
+  if constexpr (is_physics_fields_v<First>) {
+    return first.field_store;
+  } else {
+    static_assert(sizeof...(Rest) > 0, "No PhysicsFields pack found — at least one is required");
+    return findFieldStore(rest...);
+  }
+}
+
+/// Extract physics coupling fields (non-self PhysicsFields packs).
+template <typename TargetRule, typename Pack>
+auto collectPhysicsFromPack(const Pack& pack)
+{
+  if constexpr (is_physics_fields_v<Pack>) {
+    if constexpr (std::is_same_v<typename std::decay_t<Pack>::time_rule_type, TargetRule>) {
+      return std::tuple{};  // skip self
+    } else {
+      return pack.fields;  // include coupling fields
+    }
+  } else {
+    return std::tuple{};  // skip non-physics packs
+  }
+}
+
+/// Extract parameter fields (CouplingParams packs that are NOT PhysicsFields), with "param_" prefix.
+template <typename Pack>
+auto collectParamsFromPack(const Pack& pack)
+{
+  if constexpr (is_coupling_params_v<std::decay_t<Pack>> && !is_physics_fields_v<Pack>) {
+    return std::apply(
+        [](auto... pts) {
+          auto prefix = [](auto pt) {
+            pt.name = "param_" + pt.name;
+            return pt;
+          };
+          return std::make_tuple(prefix(pts)...);
+        },
+        pack.fields);
+  } else {
+    return std::tuple{};
+  }
+}
+
+/// Collect non-self fields from all packs into a single CouplingParams.
+/// Order: physics coupling fields first (in pack order), then parameter fields.
+template <typename TargetRule, typename... Packs>
+auto collectCouplingFields(const Packs&... packs)
+{
+  auto physics = std::tuple_cat(collectPhysicsFromPack<TargetRule>(packs)...);
+  auto params = std::tuple_cat(collectParamsFromPack(packs)...);
+  auto combined = std::tuple_cat(physics, params);
+  return std::apply([](auto&... all) { return CouplingParams{all...}; }, combined);
+}
+
+/// Register parameter fields from a CouplingParams pack (not PhysicsFields) into a FieldStore.
+template <typename Pack>
+void registerParamsIfNeeded(std::shared_ptr<FieldStore> fs, const Pack& pack)
+{
+  if constexpr (is_coupling_params_v<std::decay_t<Pack>> && !is_physics_fields_v<Pack>) {
+    std::apply(
+        [&](auto... pts) {
+          auto prefix_and_add = [&](auto pt) {
+            pt.name = "param_" + pt.name;
+            fs->addParameter(pt);
+          };
+          (prefix_and_add(pts), ...);
+        },
+        pack.fields);
+  }
+}
 
 /**
  * @brief Produce TimeRuleParams<Rule, Space, CS..., Tail...> from a CouplingParams<CS...>.
@@ -74,6 +216,11 @@ struct TimeRuleParamsWithCoupling<Rule, Space, CouplingParams<CS...>, Tail...> {
   using type = TimeRuleParams<Rule, Space, CS..., Tail...>;
 };
 
+template <typename Rule, typename Space, typename R, typename... CS, typename... Tail>
+struct TimeRuleParamsWithCoupling<Rule, Space, PhysicsFields<R, CS...>, Tail...> {
+  using type = TimeRuleParams<Rule, Space, CS..., Tail...>;
+};
+
 /**
  * @brief Append coupling spaces (CS...) and Tail... onto a base Parameters<Fixed...> type.
  *
@@ -85,6 +232,11 @@ struct AppendCouplingToParams;
 
 template <typename... CS, typename... Fixed, typename... Tail>
 struct AppendCouplingToParams<CouplingParams<CS...>, Parameters<Fixed...>, Tail...> {
+  using type = Parameters<Fixed..., CS..., Tail...>;
+};
+
+template <typename R, typename... CS, typename... Fixed, typename... Tail>
+struct AppendCouplingToParams<PhysicsFields<R, CS...>, Parameters<Fixed...>, Tail...> {
   using type = Parameters<Fixed..., CS..., Tail...>;
 };
 

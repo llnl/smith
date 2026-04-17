@@ -82,9 +82,9 @@ struct SystemBase {
                                                       const std::vector<FieldState>& states_for_reactions) const;
 };
 
-inline std::shared_ptr<SystemBase> makeSubSystem(std::shared_ptr<FieldStore> field_store,
-                                                 std::shared_ptr<SystemSolver> solver,
-                                                 std::vector<std::shared_ptr<WeakForm>> weak_forms)
+inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_store,
+                                              std::shared_ptr<SystemSolver> solver,
+                                              std::vector<std::shared_ptr<WeakForm>> weak_forms)
 {
   return std::make_shared<SystemBase>(std::move(field_store), std::move(solver), std::move(weak_forms));
 }
