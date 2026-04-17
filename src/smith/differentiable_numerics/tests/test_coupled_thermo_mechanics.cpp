@@ -377,12 +377,12 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto solid_coupling_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
   auto thermal_coupling_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
 
-  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store, thermal_coupling_fields, nullptr, solid_opts);
+  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(field_store, thermal_coupling_fields,
+                                                                                nullptr, solid_opts);
   auto solid = solid_res.system;
 
-  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
-      field_store, solid_coupling_fields, nullptr, thermal_opts);
+  auto thermal_res =
+      buildThermalSystem<dim, temperature_order, TempRule>(field_store, solid_coupling_fields, nullptr, thermal_opts);
   auto thermal = thermal_res.system;
 
   auto [coupled, coupled_cz] = combineSystems(solver_ptr, solid, thermal);

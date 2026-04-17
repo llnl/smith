@@ -26,8 +26,7 @@ std::vector<FieldState> CombinedSystem::solve(const TimeInfo& time_info) const
       auto sub_unknowns = sub->solve(time_info);
 
       for (size_t i = 0; i < sub->weak_forms.size(); ++i) {
-        const std::string reaction_name =
-            field_store->getWeakFormReaction(sub->weak_forms[i]->name());
+        const std::string reaction_name = field_store->getWeakFormReaction(sub->weak_forms[i]->name());
         size_t u_idx = field_store->getFieldIndex(reaction_name);
         field_store->setField(u_idx, sub_unknowns[i]);
       }

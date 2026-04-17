@@ -54,8 +54,7 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
 };
 
 inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(
-    std::shared_ptr<SystemBase> system,
-    std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
+    std::shared_ptr<SystemBase> system, std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
     std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})
 {
   return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_system),

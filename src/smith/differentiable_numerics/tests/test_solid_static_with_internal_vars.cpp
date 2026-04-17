@@ -108,7 +108,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
 
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_static_with_internal_vars_");
-  
+
   QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
   BackwardEulerFirstOrderTimeIntegrationRule state_rule;
   registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(field_store, disp_rule, state_rule);
@@ -158,7 +158,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   staggered_solver->addSubsystemSolver({1}, state_solver, 1.0);
 
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_staggered_relaxation_");
-  
+
   QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
   BackwardEulerFirstOrderTimeIntegrationRule state_rule;
   registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(field_store, disp_rule, state_rule);
@@ -189,7 +189,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
   auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "body_force_test_");
-  
+
   QuasiStaticSecondOrderTimeIntegrationRule disp_rule;
   BackwardEulerFirstOrderTimeIntegrationRule state_rule;
   registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(field_store, disp_rule, state_rule);

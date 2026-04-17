@@ -58,7 +58,7 @@ TEST(LinearSolverNone, Identity)
 
   mfem::Vector x(size);
   x = 1.0;  // Initial guess
-  // Residual will be f(x) = x. 
+  // Residual will be f(x) = x.
   // x_new = x - [df/dx]^-1 * f(x) = x - I^-1 * x = 0.
 
   solver.solve(x);
@@ -77,7 +77,7 @@ TEST(LinearSolverNone, Jacobi)
 
   LinearSolverOptions linear_opts;
   linear_opts.linear_solver = LinearSolver::None;
-  linear_opts.preconditioner = Preconditioner::None; // We'll set this manually if needed, but wait.
+  linear_opts.preconditioner = Preconditioner::None;  // We'll set this manually if needed, but wait.
   // Actually, Preconditioner::None with LinearSolver::None should be Identity.
   // Let's test that first.
 
@@ -89,7 +89,7 @@ TEST(LinearSolverNone, Jacobi)
   solver.setOperator(op);
 
   mfem::Vector x(size);
-  x = 1.0; 
+  x = 1.0;
   // f(x) = 2x. df/dx = 2I.
   // If LinearSolver::None and Preconditioner::None, it uses identity:
   // x_new = x - I * (2x) = x - 2x = -x.

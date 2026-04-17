@@ -116,9 +116,8 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
     auto captured_disp_rule = solid->disp_time_rule;
     auto captured_temp_rule = thermal->temperature_time_rule;
     solid->solid_weak_form->addBodyIntegral(
-        mesh_->entireBodyName(),
-        [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto temperature_ss,
-            auto temperature_old) {
+        mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old,
+                                     auto temperature_ss, auto temperature_old) {
           auto [u_c, v_c, a_c] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
           auto T = captured_temp_rule->value(t_info, temperature_ss, temperature_old);
 
@@ -138,27 +137,26 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   {
     auto captured_temp_rule = thermal->temperature_time_rule;
     const double kappa = 0.05, C_v = 1.0, heat_source = 0.5;
-    thermal->thermal_weak_form->addBodyIntegral(
-        mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto T, auto T_old) {
-          auto [T_c, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
-          auto q = kappa * get<DERIVATIVE>(T_c);
-          return smith::tuple{C_v * get<VALUE>(T_dot) - heat_source, -q};
-        });
+    thermal->thermal_weak_form->addBodyIntegral(mesh_->entireBodyName(),
+                                                [=](auto t_info, auto /*X*/, auto T, auto T_old) {
+                                                  auto [T_c, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
+                                                  auto q = kappa * get<DERIVATIVE>(T_c);
+                                                  return smith::tuple{C_v * get<VALUE>(T_dot) - heat_source, -q};
+                                                });
   }
 
   // State (damage): evolves as d_dot = (1 - d) * eps_norm.
   // addStateEvolution lambda args: (t_info, alpha_val, alpha_dot, disp_ss, displacement, velocity, acceleration)
   {
     auto captured_disp_rule = solid->disp_time_rule;
-    state_sys->addStateEvolution(
-        mesh_->entireBodyName(),
-        [=](auto t_info, auto alpha_val, auto alpha_dot, auto u_ss, auto u, auto v, auto a) {
-          auto [u_c, v_c, a_c] = captured_disp_rule->interpolate(t_info, u_ss, u, v, a);
-          auto eps = sym(get<DERIVATIVE>(u_c));
-          using std::sqrt;
-          auto eps_norm = sqrt(inner(eps, eps) + 1e-16);
-          return alpha_dot - (1.0 - alpha_val) * eps_norm;
-        });
+    state_sys->addStateEvolution(mesh_->entireBodyName(),
+                                 [=](auto t_info, auto alpha_val, auto alpha_dot, auto u_ss, auto u, auto v, auto a) {
+                                   auto [u_c, v_c, a_c] = captured_disp_rule->interpolate(t_info, u_ss, u, v, a);
+                                   auto eps = sym(get<DERIVATIVE>(u_c));
+                                   using std::sqrt;
+                                   auto eps_norm = sqrt(inner(eps, eps) + 1e-16);
+                                   return alpha_dot - (1.0 - alpha_val) * eps_norm;
+                                 });
   }
 
   // Phase 4: boundary conditions.

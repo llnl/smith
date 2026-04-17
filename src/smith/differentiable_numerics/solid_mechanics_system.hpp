@@ -75,7 +75,7 @@ struct SolidMechanicsSystem : public SystemBase {
 
   std::shared_ptr<StressOutputWeakFormType> stress_weak_form;  ///< Stress projection weak form (nullptr if disabled).
   std::shared_ptr<SystemBase> stress_output_system;            ///< Post-solve system for stress projection.
-  bool output_cauchy_stress = false;  ///< Project Cauchy stress instead of PK1 when true.
+  bool output_cauchy_stress = false;                           ///< Project Cauchy stress instead of PK1 when true.
 
   /**
    * @brief Set the material model for a domain, defining integrals for the solid weak form.
@@ -390,8 +390,7 @@ template <int dim, int order, typename DisplacementTimeRule, typename... paramet
 auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
                                   FieldType<parameter_space>... parameter_types)
 {
-  return registerSolidMechanicsFields<dim, order>(field_store, DisplacementTimeRule{},
-                                                  std::move(parameter_types)...);
+  return registerSolidMechanicsFields<dim, order>(field_store, DisplacementTimeRule{}, std::move(parameter_types)...);
 }
 
 /**
@@ -573,14 +572,14 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, const Co
                                std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
                                FieldType<parameter_space>... parameter_types)
 {
-  ([&](auto& pt) {
-    pt.name = "param_" + pt.name;
-    field_store->addParameter(pt);
-  }(parameter_types),
-   ...);
+  (
+      [&](auto& pt) {
+        pt.name = "param_" + pt.name;
+        field_store->addParameter(pt);
+      }(parameter_types),
+      ...);
 
-  auto combined = std::apply(
-      [&](auto... cfs) { return CouplingParams{cfs..., parameter_types...}; }, coupling.fields);
+  auto combined = std::apply([&](auto... cfs) { return CouplingParams{cfs..., parameter_types...}; }, coupling.fields);
 
   auto [sys, cz, ends] =
       buildSolidMechanicsSystem<dim, order>(field_store, DisplacementTimeRule{}, combined, solver, options);

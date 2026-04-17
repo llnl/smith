@@ -88,8 +88,7 @@ struct CombinedSystem : public SystemBase {
    * @tparam MaterialType  The material type.
    */
   template <typename SubSystemType, typename MaterialType>
-  void setMaterialOn(std::shared_ptr<SubSystemType> sub, const MaterialType& material,
-                     const std::string& domain_name)
+  void setMaterialOn(std::shared_ptr<SubSystemType> sub, const MaterialType& material, const std::string& domain_name)
   {
     sub->setMaterial(material, domain_name);
   }
@@ -227,4 +226,3 @@ std::vector<std::shared_ptr<SystemBase>> mergeSystems(Vectors&&... vectors)
 }
 
 }  // namespace smith
-

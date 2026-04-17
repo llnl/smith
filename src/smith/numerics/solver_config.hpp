@@ -102,13 +102,13 @@ struct TimesteppingOptions {
 /// Linear solution method indicator
 enum class LinearSolver
 {
-  CG,        /**< Conjugate gradient */
-  GMRES,     /**< Generalized minimal residual method */
-  SuperLU,   /**< SuperLU MPI-enabled direct nodal solver */
-  Strumpack, /**< Strumpack MPI-enabled direct frontal solver*/
-  PetscCG,   /**< PETSc MPI-enabled conjugate gradient solver */
+  CG,         /**< Conjugate gradient */
+  GMRES,      /**< Generalized minimal residual method */
+  SuperLU,    /**< SuperLU MPI-enabled direct nodal solver */
+  Strumpack,  /**< Strumpack MPI-enabled direct frontal solver*/
+  PetscCG,    /**< PETSc MPI-enabled conjugate gradient solver */
   PetscGMRES, /**< PETSc MPI-enabled generalize minimal residual solver */
-  None       /**< Preconditioner application only, No linear solver Krylov iterations */
+  None        /**< Preconditioner application only, No linear solver Krylov iterations */
 };
 // _linear_solvers_end
 

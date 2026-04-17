@@ -52,12 +52,12 @@ struct ThermalStaticFixture : public testing::Test {
 
     auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
-    
+
     using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
     registerThermalFields<2, temp_order, TempRule>(field_store);
 
-    auto thermal_res = buildThermalSystem<2, temp_order, TempRule>(
-        field_store, CouplingParams<>{}, coupled_solver, ThermalOptions{});
+    auto thermal_res =
+        buildThermalSystem<2, temp_order, TempRule>(field_store, CouplingParams<>{}, coupled_solver, ThermalOptions{});
     auto thermal_system = thermal_res.system;
     auto cz_sys = thermal_res.cycle_zero_system;
     auto end_steps = thermal_res.end_step_systems;
@@ -151,12 +151,12 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
 
   FieldType<L2<0>> conductivity_param("conductivity");
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
-  
+
   using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
   registerThermalFields<2, 1, TempRule>(field_store, conductivity_param);
 
-  auto thermal_res = buildThermalSystem<2, 1, TempRule>(
-      field_store, CouplingParams<>{}, coupled_solver, ThermalOptions{}, conductivity_param);
+  auto thermal_res = buildThermalSystem<2, 1, TempRule>(field_store, CouplingParams<>{}, coupled_solver,
+                                                        ThermalOptions{}, conductivity_param);
   auto thermal_system = thermal_res.system;
   auto cz_sys = thermal_res.cycle_zero_system;
   auto end_steps = thermal_res.end_step_systems;

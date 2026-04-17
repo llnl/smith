@@ -55,23 +55,20 @@ namespace smith {
  * @tparam InternalVarTimeRule Time integration rule (must have num_states == 2).
  * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: none).
  */
-template <int dim, typename StateSpace,
-          typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
+template <int dim, typename StateSpace, typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
           typename Coupling = CouplingParams<>>
 struct StateVariableSystem : public SystemBase {
   using SystemBase::SystemBase;
 
-  static_assert(InternalVarTimeRule::num_states == 2,
-                "StateVariableSystem requires a 2-state time integration rule");
+  static_assert(InternalVarTimeRule::num_states == 2, "StateVariableSystem requires a 2-state time integration rule");
 
   /// State weak form: (alpha, alpha_old, coupling_fields..., params...)
   using StateWeakFormType = TimeDiscretizedWeakForm<
-      dim, StateSpace,
-      typename detail::TimeRuleParamsWithCoupling<InternalVarTimeRule, StateSpace, Coupling>::type>;
+      dim, StateSpace, typename detail::TimeRuleParamsWithCoupling<InternalVarTimeRule, StateSpace, Coupling>::type>;
 
-  std::shared_ptr<StateWeakFormType> state_weak_form;          ///< Internal variable weak form.
-  std::shared_ptr<DirichletBoundaryConditions> state_bc;       ///< Internal variable boundary conditions.
-  std::shared_ptr<InternalVarTimeRule> state_time_rule;        ///< Time integration rule.
+  std::shared_ptr<StateWeakFormType> state_weak_form;     ///< Internal variable weak form.
+  std::shared_ptr<DirichletBoundaryConditions> state_bc;  ///< Internal variable boundary conditions.
+  std::shared_ptr<InternalVarTimeRule> state_time_rule;   ///< Time integration rule.
 
   /**
    * @brief Register an ODE evolution law for the internal variable.
@@ -122,10 +119,8 @@ struct StateVariableOptions {};
  *         suitable for injection into another physics system.
  */
 template <typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
-auto registerStateVariableFields(
-    std::shared_ptr<FieldStore> field_store,
-    InternalVarTimeRule /*rule*/,
-    FieldType<parameter_space>... parameter_types)
+auto registerStateVariableFields(std::shared_ptr<FieldStore> field_store, InternalVarTimeRule /*rule*/,
+                                 FieldType<parameter_space>... parameter_types)
 {
   auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>();
   FieldType<StateSpace> state_type("state_solve_state");
@@ -138,11 +133,8 @@ auto registerStateVariableFields(
   };
   (prefix_param(parameter_types), ...);
 
-  return CouplingParams{
-      FieldType<StateSpace>(field_store->prefix("state_solve_state")),
-      FieldType<StateSpace>(field_store->prefix("state")),
-      parameter_types...
-  };
+  return CouplingParams{FieldType<StateSpace>(field_store->prefix("state_solve_state")),
+                        FieldType<StateSpace>(field_store->prefix("state")), parameter_types...};
 }
 
 // ---------------------------------------------------------------------------
@@ -159,12 +151,9 @@ auto registerStateVariableFields(
  */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
-auto buildStateVariableSystem(
-    std::shared_ptr<FieldStore> field_store,
-    InternalVarTimeRule /*rule*/,
-    const Coupling& coupling,
-    std::shared_ptr<SystemSolver> solver,
-    const StateVariableOptions& /*options*/)
+auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, InternalVarTimeRule /*rule*/,
+                              const Coupling& coupling, std::shared_ptr<SystemSolver> solver,
+                              const StateVariableOptions& /*options*/)
 {
   auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>();
 
@@ -201,20 +190,17 @@ auto buildStateVariableSystem(
  * Parameters (if any) are wrapped into a CouplingParams so the system sees them.
  */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
-auto buildStateVariableSystem(
-    std::shared_ptr<FieldStore> field_store,
-    InternalVarTimeRule rule,
-    std::shared_ptr<SystemSolver> solver,
-    const StateVariableOptions& options,
-    FieldType<parameter_space>... parameter_types)
+auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, InternalVarTimeRule rule,
+                              std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
+                              FieldType<parameter_space>... parameter_types)
 {
   auto prefix_param = [&](auto& pt) {
     pt.name = "param_" + pt.name;
     field_store->addParameter(pt);
   };
   (prefix_param(parameter_types), ...);
-  return buildStateVariableSystem<dim, StateSpace>(
-      field_store, rule, CouplingParams{parameter_types...}, solver, options);
+  return buildStateVariableSystem<dim, StateSpace>(field_store, rule, CouplingParams{parameter_types...}, solver,
+                                                   options);
 }
 
 }  // namespace smith
