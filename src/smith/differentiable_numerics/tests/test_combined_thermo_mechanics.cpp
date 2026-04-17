@@ -17,6 +17,7 @@
 #include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/thermal_system.hpp"
+#include "smith/differentiable_numerics/thermo_mechanical_system.hpp"
 #include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
@@ -96,59 +97,6 @@ struct ThermoelasticMaterialNoParam {
     return smith::tuple{Piola, C_v, s0, q0};
   }
 };
-
-template <int disp_order_, int temp_order_, typename DispRule, typename TempRule, typename... P, typename MaterialType>
-void setCoupledThermoMechanicsMaterial(
-    std::shared_ptr<SolidMechanicsSystem<dim, disp_order_, DispRule,
-                                         CouplingParams<H1<temp_order_>, H1<temp_order_>, P...>>>
-        solid,
-    std::shared_ptr<ThermalSystem<dim, temp_order_, TempRule,
-                                  CouplingParams<H1<disp_order_, dim>, H1<disp_order_, dim>, H1<disp_order_, dim>,
-                                                 H1<disp_order_, dim>, P...>>>
-        thermal,
-    const MaterialType& material, const std::string& domain_name)
-{
-  auto captured_disp_rule = solid->disp_time_rule;
-  auto captured_temp_rule = thermal->temperature_time_rule;
-
-  // Solid contribution: inertia + PK1 stress
-  solid->solid_weak_form->addBodyIntegral(
-      domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto temperature,
-                       auto temperature_old, auto... params) {
-        auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-        auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-
-        typename MaterialType::State state;
-        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
-                                          get<VALUE>(T), get<DERIVATIVE>(T), params...);
-        return smith::tuple{get<VALUE>(a_current) * material.density, pk};
-      });
-
-  // Cycle-zero
-  if (solid->cycle_zero_solid_weak_form) {
-    solid->cycle_zero_solid_weak_form->addBodyIntegral(
-        domain_name,
-        [=](auto t_info, auto /*X*/, auto u, auto v, auto a, auto temperature, auto temperature_old, auto... params) {
-          auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          typename MaterialType::State state;
-          auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                            get<DERIVATIVE>(T), params...);
-          return smith::tuple{get<VALUE>(a) * material.density, pk};
-        });
-  }
-
-  // Thermal contribution
-  thermal->thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp,
-                                                               auto disp_old, auto v_old, auto a_old, auto... params) {
-    auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
-    auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
-
-    typename MaterialType::State state;
-    auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
-                                      get<DERIVATIVE>(T_current), params...);
-    return smith::tuple{C_v * get<VALUE>(T_dot) - s0, -q0};
-  });
-}
 
 struct ThermoMechanicsMeshFixture : public testing::Test {
   void SetUp()
@@ -492,6 +440,64 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
 
   EXPECT_TRUE(converged);
   EXPECT_GT(lateral_deflection, 1e-5);
+}
+
+// Simple linear elastic material for stress output test (file scope — templates cannot be in local classes)
+struct StressOutputLinearElastic {
+  double density = 1.0;
+  using State = Empty;
+  template <typename DerivType>
+  auto operator()(State&, DerivType grad_u) const
+  {
+    double E = 100.0, nu = 0.25;
+    double lam = E * nu / ((1 + nu) * (1 - 2 * nu));
+    double mu = E / (2 * (1 + nu));
+    auto eps = sym(grad_u);
+    static constexpr auto I = Identity<dim>();
+    return lam * tr(eps) * I + 2.0 * mu * eps;
+  }
+};
+
+// 5. CauchyStressOutput
+// Verifies that enable_stress_output + output_cauchy_stress writes a non-zero stress field.
+TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
+{
+  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
+  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
+                                            .relative_tol = 1e-10,
+                                            .absolute_tol = 1e-10,
+                                            .max_iterations = 6};
+
+  auto solid_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
+
+  auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
+
+  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+
+  SolidMechanicsOptions solid_opts{.enable_stress_output = true, .output_cauchy_stress = true};
+
+  registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
+  auto [sys, cz, end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store, CouplingParams<>{}, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+
+  sys->setMaterial(StressOutputLinearElastic{}, mesh_->entireBodyName());
+
+  sys->setDisplacementBC(mesh_->domain("left"));
+  sys->addTraction("right", [](double, auto X, auto, auto, auto, auto) {
+    auto t = 0.0 * X;
+    t[0] = -0.01;
+    return t;
+  });
+
+  auto physics = makeDifferentiablePhysics(sys, "cauchy_physics", cz, end_steps);
+  physics->advanceTimestep(1.0);
+
+  // The stress projection system should have run and produced a non-zero stress field.
+  ASSERT_FALSE(end_steps.empty()) << "Stress output system should be present";
+  auto states = physics->getFieldStates();
+  size_t stress_idx = field_store->getFieldIndex("stress_solve_state");
+  double stress_norm = norm(*states[stress_idx].get());
+  EXPECT_GT(stress_norm, 1e-8) << "Cauchy stress field should be non-zero after deformation";
 }
 
 }  // namespace smith

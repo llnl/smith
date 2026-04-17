@@ -75,6 +75,7 @@ struct SolidMechanicsSystem : public SystemBase {
 
   std::shared_ptr<StressOutputWeakFormType> stress_weak_form;  ///< Stress projection weak form (nullptr if disabled).
   std::shared_ptr<SystemBase> stress_output_system;            ///< Post-solve system for stress projection.
+  bool output_cauchy_stress = false;  ///< Project Cauchy stress instead of PK1 when true.
 
   /**
    * @brief Set the material model for a domain, defining integrals for the solid weak form.
@@ -113,6 +114,7 @@ struct SolidMechanicsSystem : public SystemBase {
     // variable so the solver builds the mass matrix against it, and the (- pk_stress) term
     // becomes the RHS.
     if (stress_weak_form) {
+      bool do_cauchy = this->output_cauchy_stress;
       stress_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto stress, auto u, auto u_old,
                                                          auto v_old, auto a_old, auto... params) {
         auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
@@ -120,9 +122,18 @@ struct SolidMechanicsSystem : public SystemBase {
         typename MaterialType::State state;
         auto pk_stress = material(state, get<DERIVATIVE>(u_current), params...);
 
-        // Flatten dim x dim stress tensor into dim*dim vector, subtract from current stress unknown
-        auto pk_flat = make_tensor<dim * dim>([&](int i) { return pk_stress[i / dim][i % dim]; });
-        return smith::tuple{get<VALUE>(stress) - pk_flat, tensor<double, dim * dim, dim>{}};
+        // Flatten the chosen stress into a dim*dim vector and subtract from the unknown.
+        auto flat_stress = [&]() {
+          if (do_cauchy) {
+            static constexpr auto I_ = Identity<dim>();
+            auto F = get<DERIVATIVE>(u_current) + I_;
+            auto J = det(F);
+            auto sigma = (1.0 / J) * dot(pk_stress, transpose(F));
+            return make_tensor<dim * dim>([&](int i) { return sigma[i / dim][i % dim]; });
+          }
+          return make_tensor<dim * dim>([&](int i) { return pk_stress[i / dim][i % dim]; });
+        }();
+        return smith::tuple{get<VALUE>(stress) - flat_stress, tensor<double, dim * dim, dim>{}};
       });
     }
   }
@@ -323,6 +334,7 @@ struct SolidMechanicsSystem : public SystemBase {
 
 struct SolidMechanicsOptions {
   bool enable_stress_output = false;
+  bool output_cauchy_stress = false;  ///< When true, project Cauchy stress (sigma) instead of PK1 (P).
 };
 
 /**
@@ -337,7 +349,7 @@ template <int dim, int order, typename DisplacementTimeRule>
 auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule /*rule*/)
 {
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  if (!field_store->hasField(shape_disp_type.name)) {
+  if (!field_store->hasField(field_store->prefix(shape_disp_type.name))) {
     field_store->addShapeDisp(shape_disp_type);
   }
 
@@ -396,7 +408,7 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, Displ
                                   FieldType<parameter_space>... parameter_types)
 {
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  if (!field_store->hasField(shape_disp_type.name)) {
+  if (!field_store->hasField(field_store->prefix(shape_disp_type.name))) {
     field_store->addShapeDisp(shape_disp_type);
   }
 
@@ -462,6 +474,7 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, Displace
   sys->disp_bc = disp_bc;
   sys->disp_time_rule = disp_time_rule_ptr;
   sys->solid_weak_form = solid_weak_form;
+  sys->output_cauchy_stress = options.output_cauchy_stress;
 
   std::shared_ptr<SystemBase> cycle_zero_system;
   std::vector<std::shared_ptr<SystemBase>> end_step_systems;

@@ -89,9 +89,17 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
                                                 nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
-void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>&)
+void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>& us)
 {
-  // TODO: eventually may need something like: initializeSolver(&nonlinear_solver_->preconditioner(), u);
+  if (us.empty() || !nonlinear_solver_) return;
+  if (!retained_linear_options_ || retained_linear_options_->preconditioner == Preconditioner::None) return;
+
+  // Pick the field with the highest vdim (typically the displacement field for vector problems).
+  const FieldT* best = &us[0];
+  for (const auto& u : us) {
+    if (u.space().GetVDim() > best->space().GetVDim()) best = &u;
+  }
+  initializeSolver(&nonlinear_solver_->preconditioner(), *best);
 }
 
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,

@@ -384,7 +384,7 @@ auto registerSolidMechanicsWithInternalVarsFields(
     FieldType<parameter_space>... parameter_types)
 {
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  if (!field_store->hasField(shape_disp_type.name)) {
+  if (!field_store->hasField(field_store->prefix(shape_disp_type.name))) {
     field_store->addShapeDisp(shape_disp_type);
   }
 

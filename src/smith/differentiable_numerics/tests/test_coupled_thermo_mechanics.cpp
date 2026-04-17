@@ -17,6 +17,7 @@
 #include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/thermal_system.hpp"
+#include "smith/differentiable_numerics/thermo_mechanical_system.hpp"
 #include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
@@ -96,55 +97,6 @@ struct ThermoelasticMaterialNoParam {
     return smith::tuple{Piola, C_v, s0, q0};
   }
 };
-
-template <int disp_order_, int temp_order_, typename DispRule, typename TempRule, typename SolidCoupling,
-          typename ThermalCoupling, typename MaterialType>
-void setCoupledThermoMechanicsMaterial(
-    std::shared_ptr<SolidMechanicsSystem<dim, disp_order_, DispRule, SolidCoupling>> solid,
-    std::shared_ptr<ThermalSystem<dim, temp_order_, TempRule, ThermalCoupling>> thermal, const MaterialType& material,
-    const std::string& domain_name)
-{
-  auto captured_disp_rule = solid->disp_time_rule;
-  auto captured_temp_rule = thermal->temperature_time_rule;
-
-  // Solid contribution: inertia + PK1 stress
-  solid->solid_weak_form->addBodyIntegral(
-      domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto temperature,
-                       auto temperature_old, auto... params) {
-        auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-        auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-
-        typename MaterialType::State state;
-        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
-                                          get<VALUE>(T), get<DERIVATIVE>(T), params...);
-        return smith::tuple{get<VALUE>(a_current) * material.density, pk};
-      });
-
-  // Cycle-zero
-  if (solid->cycle_zero_solid_weak_form) {
-    solid->cycle_zero_solid_weak_form->addBodyIntegral(
-        domain_name,
-        [=](auto t_info, auto /*X*/, auto u, auto v, auto a, auto temperature, auto temperature_old, auto... params) {
-          auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          typename MaterialType::State state;
-          auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                            get<DERIVATIVE>(T), params...);
-          return smith::tuple{get<VALUE>(a) * material.density, pk};
-        });
-  }
-
-  // Thermal contribution
-  thermal->thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp,
-                                                               auto disp_old, auto v_old, auto a_old, auto... params) {
-    auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
-    auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
-
-    typename MaterialType::State state;
-    auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
-                                      get<DERIVATIVE>(T_current), params...);
-    return smith::tuple{C_v * get<VALUE>(T_dot) - s0, -q0};
-  });
-}
 
 struct ThermoMechanicsMeshFixture : public testing::Test {
   void SetUp()
