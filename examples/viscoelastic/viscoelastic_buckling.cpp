@@ -124,9 +124,6 @@ int main(int argc, char* argv[])
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
 
-  // Initialize and automatically finalize MPI and other libraries
-  smith::ApplicationManager applicationManager(argc, argv);
-
     // Create DataStore
   std::string name = "viscoelastic_buckling";
   std::string mesh_tag = "mesh";
