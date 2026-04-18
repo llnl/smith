@@ -5,21 +5,59 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 
-#include <set>
-#include <string>
 #include <cmath>
+#include <fstream>
 #include <memory>
-#include <utility>
+#include <string>
+
+// for debugging nans
+#include <signal.h>
+#include <fenv.h>
+#include <cstdlib>
+#include <cstdio>
 
 #include "axom/slic.hpp"
 #include "axom/inlet.hpp"
 #include "axom/CLI11.hpp"
 #include "mfem.hpp"
+
 #include "smith/numerics/functional/functional.hpp"
+#include "smith/numerics/functional/geometry.hpp"
+#include "smith/physics/boundary_conditions/components.hpp"
 #include "smith/physics/common.hpp"
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/physics/materials/viscoelastic.hpp"
+#include "smith/physics/state/finite_element_state.hpp"
 #include "smith/smith.hpp"
+
+static void fpe_signal_handler(int sig, siginfo_t *sip, void *scp)
+{
+    int fe_code = sip->si_code;
+
+    printf("In signal handler : ");
+
+    if (fe_code == ILL_ILLTRP)
+        printf("Illegal trap detected\n");
+    else
+        printf("Code detected : %d\n",fe_code);
+
+    abort();
+}
+
+void enable_floating_point_exceptions()
+{
+    fenv_t env;
+    fegetenv(&env);
+
+    env.__fpcr = env.__fpcr | __fpcr_trap_invalid | __fpcr_trap_divbyzero;
+    fesetenv(&env);
+
+    struct sigaction act;
+    act.sa_sigaction = fpe_signal_handler;
+    sigemptyset (&act.sa_mask);
+    act.sa_flags = SA_SIGINFO;
+    sigaction(SIGILL, &act, NULL);
+}
 
 using namespace smith;
 
@@ -30,8 +68,9 @@ using namespace smith;
  */
 int main(int argc, char* argv[])
 {
+  //enable_floating_point_exceptions();
   constexpr int dim = 3;
-  constexpr int p = 1;
+  constexpr int p = 2;
 
   // Command line arguments
   // Mesh options
@@ -47,7 +86,7 @@ int main(int argc, char* argv[])
   nonlinear_options.min_iterations = 1;
   nonlinear_options.max_iterations = 500;
   nonlinear_options.max_line_search_iterations = 20;
-  nonlinear_options.print_level = 1;
+  nonlinear_options.print_level = 2;
 
   LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   linear_options.linear_solver = smith::LinearSolver::CG;
@@ -85,6 +124,9 @@ int main(int argc, char* argv[])
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
 
+  // Initialize and automatically finalize MPI and other libraries
+  smith::ApplicationManager applicationManager(argc, argv);
+
     // Create DataStore
   std::string name = "viscoelastic_buckling";
   std::string mesh_tag = "mesh";
@@ -92,8 +134,11 @@ int main(int argc, char* argv[])
   smith::StateManager::initialize(datastore, name + "_data");
 
   // Create and refine mesh
-  std::string filename = SMITH_REPO_DIR "/data/meshes/cap.g";
+  std::string filename = SMITH_REPO_DIR "/data/meshes/cap_coarse.g";
   auto mesh = std::make_shared<smith::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
+  mesh->mfemParMesh().Print();
+  auto mesh_coord_order = mesh->mfemParMesh().GetNodes()->FESpace()->GetMaxElementOrder();
+  SLIC_WARNING_ROOT_IF(p != mesh_coord_order, axom::fmt::format("Displacement order p does not match mesh coord order at runtime, p = {}, mesh.p = {}", p, mesh_coord_order));
 
   // Surfaces for boundary conditions
   mesh->addDomainOfBoundaryElements("zsymm", smith::by_attr<dim>(1));
@@ -105,16 +150,23 @@ int main(int argc, char* argv[])
   smith::FiniteElementState temperature(mesh->mfemParMesh(), smith::L2<0>{}, "temperature");
   temperature = 300.0;
 
+  std::cout << "Nonlinear solver = " << nonlinear_options.nonlin_solver << std::endl;
+
   // Create solver
   smith::SolidMechanics<p, dim, smith::Parameters<smith::L2<0>>> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name,
-      mesh, {"temperature"});
+      mesh, {"temperature"}, 0, 0.0, false, false);
   
   solid_solver.setParameter(0, temperature);
 
+  // solver with no parameters
+  // smith::SolidMechanics<p, dim> solid_solver(
+  //     nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name,
+  //     mesh, {}, 0, 0.0, false, false);
+
   solid_solver.setTraction(
-    [&](auto, auto, double t) { 
-      return smith::vec3{0, -std::sin(M_PI*t), 0}; 
+    [&](auto, auto, double t) {
+      return smith::vec3{0, -1e-1*std::sin(M_PI*t), 0}; 
     },
      mesh->domain("top"));
 
@@ -125,23 +177,30 @@ int main(int argc, char* argv[])
   double K = 2.0/3.0*G_g*(1.0 + nu_g)/(1.0 - 2.0*nu_g);
   double tau_0 = 10.0;
   double eta_0 = G_0*tau_0;
-  // solid_mechanics::NeoHookean mat{.density = 1.0, .K = (3 * lambda + 2 * G) / 3, .G = G};
-  // solid_solver->setMaterial(mat, mesh->entireBody());
-  solid_mechanics::ViscoelasticOldInterface mat(K, G_inf, 0.0, 300.0, G_0, eta_0, 300.0, 0.0, 50.0, 1.0);
-  auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
-  solid_solver.setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
+  
+  // VISCOELASTIC
+  // solid_mechanics::ViscoelasticOldInterface mat(K, G_inf, 0.0, 300.0, G_0, eta_0, 300.0, 0.0, 50.0, 1.0);
+  // auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
+  // solid_solver.setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
 
   // NOTE: somehow J2 material works fine
   // using Hardening = solid_mechanics::LinearHardening;
   // Hardening hardening{.sigma_y = 10.0,  .Hi= G_inf/100.0, .eta = 0.0};
   // solid_mechanics::J2SmallStrain<Hardening> mat2{.E = G_inf, .nu = 0.25, .hardening = hardening, .Hk = 0.0, .density = 1.0};
-  // auto internal_states = solid_solver->createQuadratureDataBuffer(smith::solid_mechanics::J2SmallStrain<Hardening>::State{}, mesh->entireBody());
-  // solid_solver->setRateDependentMaterial(mat2, mesh->entireBody(), internal_states);
+  // auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::J2SmallStrain<Hardening>::State{}, mesh->entireBody());
+  // solid_solver.setRateDependentMaterial(mat2, mesh->entireBody(), internal_states);
+
+  // NEOHOOKEAN
+  solid_mechanics::NeoHookean mat{.density = 1.0, .K = K, .G = G_inf};
+  axom::fmt::print("K = {}, G = {}\n", K, G_inf);
+  solid_solver.setMaterial(mat, mesh->entireBody());
   
 
-  // Set up essential boundary conditions
-  // Bottom of cylinder is fixed
   solid_solver.setFixedBCs(mesh->domain("bottom"));
+  solid_solver.setFixedBCs(mesh->domain("xsymm"), smith::Component::X);
+  solid_solver.setFixedBCs(mesh->domain("zsymm"), smith::Component::Z);
+
+  std::cout << "Num of elements in domain['bottom'] = " << mesh->domain("bottom").total_elements() << std::endl;
 
 #if 0
   // displacement control, for comparison
@@ -157,14 +216,32 @@ int main(int argc, char* argv[])
   // Finalize the data structures
   solid_solver.completeSetup();
 
+  // post-processing functions
+  mfem::Array<int> force_dof_list = mesh->domain("bottom").dof_list(&solid_solver.displacement().space());
+  solid_solver.displacement().space().DofsToVDofs(1, force_dof_list);
+  auto compute_net_force = [&force_dof_list](const smith::FiniteElementDual& reaction) -> double {
+    double R{};
+    for (int i = 0; i < force_dof_list.Size(); i++) {
+      R += reaction(force_dof_list[i]);
+    }
+    return R;
+  };
+
+  smith::Functional<double(H1<p, dim>)> applied_displacement({&solid_solver.displacement().space()});
+  double area = 0.1256;
+  applied_displacement.AddBoundaryIntegral(smith::Dimension<dim - 1>{}, DependsOn<0>{}, 
+                                           [area](double, auto, auto u) { return get<0>(u)/area; }, mesh->domain("top"));
+  
+  std::ofstream file("force_displacement.csv");
+  file << "# time displacement force\n";
+
   // Save initial state
   std::string paraview_name = name + "_paraview";
   solid_solver.outputStateToDisk(paraview_name);
 
-  // Perform the quasi-static solve
+  // Qusi-static timestepping
   SLIC_INFO_ROOT(axom::fmt::format("Snap-through of viscoelastic shell\n{} displacement dofs",
                                    solid_solver.displacement().GlobalSize()));
-  SLIC_INFO_ROOT("Starting pseudo-timestepping.");
   smith::logger::flush();
   while (solid_solver.time() < 1.0 && std::abs(solid_solver.time() - 1) > DBL_EPSILON) {
     SLIC_INFO_ROOT("---------------------------------------------");
@@ -173,9 +250,13 @@ int main(int argc, char* argv[])
 
     solid_solver.advanceTimestep(dt);
 
-    // Output the sidre-based plot files
+    // Output
     solid_solver.outputStateToDisk(paraview_name);
+    double u = applied_displacement(solid_solver.time(), solid_solver.displacement());
+    double f = compute_net_force(solid_solver.dual("reactions"));
+    file << solid_solver.time() << " " << u << " " << f << "\n";
   }
+  file.close();
   SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver.time()));
 
   return 0;

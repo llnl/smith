@@ -12,6 +12,7 @@
 
 #include "smith/infrastructure/accelerator.hpp"
 #include "smith/numerics/functional/tensor.hpp"
+#include "smith/numerics/functional/tuple_tensor_dual_functions.hpp"
 
 
 #pragma once
@@ -92,18 +93,15 @@ struct Viscoelastic {
     // temperature, but the updated stress does through the shift factor.
     auto Ee = 0.5*log_symm(transpose(Fe)*Fe) - 0.0*theta*Identity<dim>();
     auto devM = 2.0*G_0*dev(Ee);
-    auto tau_bar = std::sqrt(0.5)*norm(devM);
-    // Guard against division by zero.
-    // Value of the denominator in the tau_bar = 0 case is unimportant,
-    // since nothing evolves in that case.
-    auto denom = (tau_bar > 0)? (tau_bar) : (1.0 + tau_bar);
-    auto N = 0.5*devM/denom;
+    double nrm = norm(get_value(devM));
+    auto tau_bar = nrm > 0 ? std::sqrt(0.5)*norm(devM) : std::sqrt(0.5)*norm(devM + 1e-8*Identity<dim>());
+    auto N = 0.5*devM/tau_bar;
     
     auto a = shift_factor(theta);
     // Change in equivalent shear strain across dashpot.
     // If the viscosity relation is made nonlinear, this explicit relation will
     // be replaced with a nonlinear solve.
-    auto dg = tau_bar/(a*eta_0/dt + G_0);
+    auto dg = tau_bar/(a*eta_0/(dt + 1e-6) + G_0);
     // update elastic trial stress
     auto M = devM - (2*G_0*dg)*N;
     // update inelastic distortion tensor
