@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <cmath>
+#include <limits>
+
 #include "mfem.hpp"
 
 #include "smith/numerics/functional/tuple.hpp"
@@ -1014,8 +1017,8 @@ template <typename T>
 auto log_symm(tensor<T, 3, 3> A)
 {
   auto g = [](double lam1, double lam2) {
-    if (lam1 == lam2) {
-      return 1 / lam1;
+    if (std::abs(lam1 - lam2) < std::numeric_limits<double>::epsilon()) {
+      return 1.0 / lam1;
     } else {
       double y = lam1 / lam2;
       return (std::log(y) / (y - 1.0)) / lam2;
@@ -1067,8 +1070,8 @@ template <typename T>
 auto logIp_symm(tensor<T, 3, 3> A)
 {
   auto g = [](double lam1, double lam2) {
-    if (lam1 == lam2) {
-      return 1 / (lam1 + 1.0);
+    if (std::abs(lam1 - lam2) < std::numeric_limits<double>::epsilon()) {
+      return 1.0 / (lam1 + 1.0);
     } else {
       double y = (1.0 + lam1) / (1.0 + lam2);
       return (std::log(y) / (y - 1.0)) / (1.0 + lam2);
