@@ -224,18 +224,10 @@ auto registerThermalFields(std::shared_ptr<FieldStore> field_store, FieldType<pa
  */
 template <int dim, int temp_order, typename TemperatureTimeRule, typename... parameter_space>
   requires(sizeof...(parameter_space) > 0)
-auto registerThermalFields(std::shared_ptr<FieldStore> field_store, TemperatureTimeRule /*rule*/,
+auto registerThermalFields(std::shared_ptr<FieldStore> field_store, TemperatureTimeRule rule,
                            FieldType<parameter_space>... parameter_types)
 {
-  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  if (!field_store->hasField(field_store->prefix(shape_disp_type.name))) {
-    field_store->addShapeDisp(shape_disp_type);
-  }
-
-  auto temperature_time_rule_ptr = std::make_shared<TemperatureTimeRule>();
-  FieldType<H1<temp_order>> temperature_type("temperature_solve_state");
-  field_store->addIndependent(temperature_type, temperature_time_rule_ptr);
-  field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, "temperature");
+  registerThermalFields<dim, temp_order>(field_store, rule);
 
   auto prefix_param = [&](auto& pt) {
     pt.name = "param_" + pt.name;

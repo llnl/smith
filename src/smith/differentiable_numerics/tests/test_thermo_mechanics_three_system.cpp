@@ -164,7 +164,10 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   thermal->setTemperatureBC(mesh_->domain("left"));
 
   // Compressive traction on right face.
-  solid->addTraction("right", [](double, auto X, auto, auto, auto, auto, auto, auto) {
+  // Lambda args from addTraction: (t, X, n, u, v, a, temp_ss, temp_old)
+  // — 6 self fields + 2 thermal coupling fields forwarded as trailing args.
+  solid->addTraction("right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto /*temp_ss*/,
+                                 auto /*temp_old*/) {
     auto t = 0.0 * X;
     t[0] = -0.005;
     return t;

@@ -403,21 +403,10 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
  */
 template <int dim, int order, typename DisplacementTimeRule, typename... parameter_space>
   requires(sizeof...(parameter_space) > 0)
-auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule /*rule*/,
+auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule rule,
                                   FieldType<parameter_space>... parameter_types)
 {
-  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  if (!field_store->hasField(field_store->prefix(shape_disp_type.name))) {
-    field_store->addShapeDisp(shape_disp_type);
-  }
-
-  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>();
-  FieldType<H1<order, dim>> disp_type("displacement_solve_state");
-  field_store->addIndependent(disp_type, disp_time_rule_ptr);
-
-  field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, "displacement");
-  field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, "velocity");
-  field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration");
+  registerSolidMechanicsFields<dim, order>(field_store, rule);
 
   auto prefix_param = [&](auto& pt) {
     pt.name = "param_" + pt.name;
