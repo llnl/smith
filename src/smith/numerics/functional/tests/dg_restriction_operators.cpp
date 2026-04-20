@@ -298,7 +298,7 @@ void parametrized_test(int permutation)
   mfem::Mesh bmesh = generate_permuted_mesh(geom, permutation);
   auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
 
-  Domain interior_faces = InteriorFaces(*mesh);
+  Domain interior_faces = EntireInteriorBoundary(*mesh);
 
   // each one of these meshes should have two elements
   // and a single "face" that separates them
