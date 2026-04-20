@@ -110,6 +110,20 @@ class ContactInteraction {
   std::unique_ptr<mfem::BlockOperator> jacobian() const;
 
   /**
+   * @brief Get the Smith-processed Jacobian contribution for this interaction
+   *
+   * This method post-processes the Tribol Jacobian for Smith's assembly conventions:
+   * - For penalty enforcement, it folds the (df/dp, dg/dx) blocks into df/dx via:
+   *     df/dx += penalty * (df/dp)^T * dg/dx
+   *   and returns a BlockOperator with only the (0,0) block populated (pressure block has size 0).
+   * - For Lagrange multiplier enforcement, it returns (0,0), (1,0), and (0,1) blocks (with inactive dofs eliminated),
+   *   leaving construction of the merged (1,1) inactive-dof identity to ContactData.
+   *
+   * @return A new BlockOperator whose blocks are owned by the returned object.
+   */
+  std::unique_ptr<mfem::BlockOperator> jacobianContribution() const;
+
+  /**
    * @brief Get the finite element space of the pressure DOFs
    *
    * @return mfem::ParFiniteElementSpace of the pressure DOFs

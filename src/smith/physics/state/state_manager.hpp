@@ -69,9 +69,9 @@ class StateManager {
   static FiniteElementState newState(FunctionSpace space, const std::string& state_name, const std::string& mesh_tag)
   {
     SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
-    SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
+    SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag '{}' not found in the data store", mesh_tag));
     SLIC_ERROR_ROOT_IF(hasState(state_name),
-                       axom::fmt::format("StateManager already contains a state named '{}'", state_name));
+                       std::format("StateManager already contains a state named '{}'", state_name));
 
     FiniteElementState state(mesh(mesh_tag), space, state_name);
 
@@ -107,7 +107,7 @@ class StateManager {
   {
     SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
     SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag),
-                       axom::fmt::format("Smith's state manager does not have a mesh with given tag '{}'", mesh_tag));
+                       std::format("Smith's state manager does not have a mesh with given tag '{}'", mesh_tag));
 
     constexpr const char* qds_group_name = "quadraturedatas";
 
@@ -152,29 +152,22 @@ class StateManager {
           // Note: this data is not owned by Sidre and the array should have been created at this point but
           // the previous data has not been loaded yet into the array.
           SLIC_ERROR_ROOT_IF(!bp_group->hasGroup(qds_group_name),
-                             axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Datas"));
+                             std::format("Loaded Sidre Datastore did not have group for Quadrature Datas"));
           axom::sidre::Group* qdatas_group = bp_group->getGroup(qds_group_name);
           SLIC_ERROR_ROOT_IF(
               !qdatas_group->hasGroup(std::string(geom_name)),
-              axom::fmt::format("Loaded Sidre Datastore did not have group for Quadrature Data geometry type '{}'",
-                                std::string(geom_name)));
+              std::format("Loaded Sidre Datastore did not have group for Quadrature Data geometry type '{}'",
+                          std::string(geom_name)));
           axom::sidre::Group* geom_group = qdatas_group->getGroup(std::string(geom_name));
 
-          // Verify size correctness
-          auto verify_size = [](axom::sidre::Group* group, axom::IndexType value, const std::string& view_name,
-                                const std::string& err_msg) {
-            SLIC_ERROR_IF(
-                !group->hasView(view_name),
-                axom::fmt::format("Loaded Sidre Datastore does not have value '{}' for Quadrature Data.", view_name));
-            auto prev_value = group->getView(view_name)->getData<axom::IndexType>();
-            SLIC_ERROR_IF(value != prev_value, axom::fmt::format(err_msg, value, prev_value));
-          };
-          verify_size(geom_group, num_states, "num_states",
-                      "Current number of Quadrature Data States '{}' does not match value in restart '{}'.");
-          verify_size(geom_group, state_size, "state_size",
-                      "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
-          verify_size(geom_group, total_size, "total_size",
-                      "Current total size of Quadrature Data States '{}' does not match value in restart '{}'.");
+          verifyQuadratureDataSize(
+              geom_group, num_states, "num_states",
+              "Current number of Quadrature Data States '{}' does not match value in restart '{}'.");
+          verifyQuadratureDataSize(geom_group, state_size, "state_size",
+                                   "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
+          verifyQuadratureDataSize(
+              geom_group, total_size, "total_size",
+              "Current total size of Quadrature Data States '{}' does not match value in restart '{}'.");
 
           // Tell Sidre where the external array is
           SLIC_ERROR_ROOT_IF(!geom_group->hasView("states"),
@@ -184,7 +177,7 @@ class StateManager {
 
           // TODO: swap this code for the one below after updating Axom
           // Load this set of quadrature data only
-          // std::string group_name_to_load = axom::fmt::format("{0}/{1}", qds_group_name, geom_name);
+          // std::string group_name_to_load = std::format("{0}/{1}", qds_group_name, geom_name);
           // datacoll.LoadExternalData("", group_name_to_load);
         }
       }
@@ -257,9 +250,8 @@ class StateManager {
   static FiniteElementDual newDual(FunctionSpace space, const std::string& dual_name, const std::string& mesh_tag)
   {
     SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
-    SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
-    SLIC_ERROR_ROOT_IF(hasDual(dual_name),
-                       axom::fmt::format("StateManager already contains a dual named '{}'", dual_name));
+    SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag '{}' not found in the data store", mesh_tag));
+    SLIC_ERROR_ROOT_IF(hasDual(dual_name), std::format("StateManager already contains a dual named '{}'", dual_name));
 
     auto dual = FiniteElementDual(mesh(mesh_tag), space, dual_name);
 
@@ -293,7 +285,7 @@ class StateManager {
   static void updateState(const FiniteElementState& state)
   {
     SLIC_ERROR_ROOT_IF(!hasState(state.name()),
-                       axom::fmt::format("State manager does not contain state named '{}'", state.name()));
+                       std::format("State manager does not contain state named '{}'", state.name()));
 
     state.fillGridFunction(*named_states_[state.name()]);
   }
@@ -309,7 +301,7 @@ class StateManager {
   static void updateDual(const FiniteElementDual& dual)
   {
     SLIC_ERROR_ROOT_IF(!hasDual(dual.name()),
-                       axom::fmt::format("State manager does not contain dual named '{}'", dual.name()));
+                       std::format("State manager does not contain dual named '{}'", dual.name()));
 
     dual.space().GetRestrictionMatrix()->MultTranspose(dual, *named_duals_[dual.name()]);
   }
@@ -453,6 +445,23 @@ class StateManager {
   static double time(std::string mesh_tag);
 
  private:
+  /**
+   * @brief Verifies the current and restart size of Quadrature Data and errors
+   *   with a helpful error message.
+   * @param[in] group Sidre Group that holds the Quadrature Datas
+   * @param[in] value Desired size of the Quadrature Data
+   * @param[in] view_name Name of the view that holds the specific Quadrature Data
+   * @param[in] err_msg Format string for helpful error message
+   */
+  static void verifyQuadratureDataSize(axom::sidre::Group* group, axom::IndexType value, const char* view_name,
+                                       const char* err_msg)
+  {
+    SLIC_ERROR_IF(!group->hasView(view_name),
+                  std::format("Loaded Sidre Datastore does not have value '{}' for Quadrature Data.", view_name));
+    auto prev_value = group->getView(view_name)->getData<axom::IndexType>();
+    SLIC_ERROR_IF(value != prev_value, std::vformat(err_msg, std::make_format_args(value, prev_value)));
+  }
+
   /**
    * @brief Creates a new datacollection based on a registered mesh
    * @param[in] mesh_tag The mesh name used to name the new datacollection

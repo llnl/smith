@@ -7,13 +7,13 @@
 #include "smith/infrastructure/about.hpp"
 #include "smith/smith_config.hpp"
 
+#include <format>
 #include <string_view>
 #include <vector>
 
 #include "mpi.h"
 #include "axom/config.hpp"
 #include "axom/core.hpp"
-#include "axom/fmt.hpp"
 
 #include "camp/config.hpp"
 
@@ -55,27 +55,26 @@ namespace smith {
 
 std::string about()
 {
-  using namespace axom::fmt;
   [[maybe_unused]] constexpr std::string_view on = "ON";
   [[maybe_unused]] constexpr std::string_view off = "OFF";
 
   std::string about = "\n";
 
   // Version info
-  about += format("Smith Version:    {0}\n", version());
+  about += std::format("Smith Version:    {0}\n", version());
   about += "\n";
 
   // General configuration
 #ifdef SMITH_DEBUG
-  about += format("Debug Build:      {0}\n", on);
+  about += std::format("Debug Build:      {0}\n", on);
 #else
-  about += format("Debug Build:      {0}\n", off);
+  about += std::format("Debug Build:      {0}\n", off);
 #endif
 
 #ifdef SMITH_USE_CUDA
-  about += format("CUDA:             {0}\n", on);
+  about += std::format("CUDA:             {0}\n", on);
 #else
-  about += format("CUDA:             {0}\n", off);
+  about += std::format("CUDA:             {0}\n", off);
 #endif
 
   about += "\n";
@@ -91,21 +90,21 @@ std::string about()
   about += "Enabled Libraries:\n";
 
   // Axom
-  about += format("Axom Version:     {0}\n", axom::getVersion());
+  about += std::format("Axom Version:     {0}\n", axom::getVersion());
 
   // Camp
-  about += format("Camp Version:     {0}\n", CAMP_VERSION);
+  about += std::format("Camp Version:     {0}\n", CAMP_VERSION);
 
   // Caliper
 #ifdef SMITH_USE_CALIPER
-  about += format("Caliper Version:  {0}\n", CALIPER_VERSION);
+  about += std::format("Caliper Version:  {0}\n", CALIPER_VERSION);
 #else
   disabled_libs.push_back("Caliper");
 #endif
 
   // Conduit
 #ifdef SMITH_USE_CONDUIT
-  about += format("Conduit Version:  {0}\n", CONDUIT_VERSION);
+  about += std::format("Conduit Version:  {0}\n", CONDUIT_VERSION);
 #else
   disabled_libs.push_back("Conduit");
 #endif
@@ -117,9 +116,9 @@ std::string about()
   if (H5get_libversion(&h5_maj, &h5_min, &h5_rel) < 0) {
     SLIC_ERROR("Failed to retrieve HDF5 version.");
   } else {
-    h5_version = format("{0}.{1}.{2}", h5_maj, h5_min, h5_rel);
+    h5_version = std::format("{0}.{1}.{2}", h5_maj, h5_min, h5_rel);
   }
-  about += format("HDF5 Version:     {0}\n", h5_version);
+  about += std::format("HDF5 Version:     {0}\n", h5_version);
 #else
   disabled_libs.push_back("HDF5");
 #endif
@@ -130,7 +129,7 @@ std::string about()
   if (axom::utilities::string::startsWith(lua_version, "Lua ")) {
     lua_version.erase(0, 4);
   }
-  about += format("Lua Version:      {0}\n", lua_version);
+  about += std::format("Lua Version:      {0}\n", lua_version);
 #else
   disabled_libs.push_back("Lua");
 #endif
@@ -149,28 +148,29 @@ std::string about()
     mfem_full_version.erase(0, 5);
   }
   if (mfem_sha[0] != '\0') {
-    mfem_full_version += format(" (Git SHA: {0})", mfem_sha);
+    mfem_full_version += std::format(" (Git SHA: {0})", mfem_sha);
   }
-  about += format("MFEM Version:     {0}\n", mfem_full_version);
+  about += std::format("MFEM Version:     {0}\n", mfem_full_version);
 
   // RAJA
 #ifdef SMITH_USE_RAJA
-  about += format("RAJA Version:     {0}.{1}.{2}\n", RAJA_VERSION_MAJOR, RAJA_VERSION_MINOR, RAJA_VERSION_PATCHLEVEL);
+  about +=
+      std::format("RAJA Version:     {0}.{1}.{2}\n", RAJA_VERSION_MAJOR, RAJA_VERSION_MINOR, RAJA_VERSION_PATCHLEVEL);
 #else
   disabled_libs.push_back("RAJA");
 #endif
 
   // Tribol
 #ifdef SMITH_USE_TRIBOL
-  about += format("Tribol Version:     {0}\n", TRIBOL_VERSION_FULL);
+  about += std::format("Tribol Version:     {0}\n", TRIBOL_VERSION_FULL);
 #else
   disabled_libs.push_back("Tribol");
 #endif
 
   // Umpire
 #ifdef SMITH_USE_UMPIRE
-  about += format("Umpire Version:   {0}.{1}.{2}\n", umpire::get_major_version(), umpire::get_minor_version(),
-                  umpire::get_patch_version());
+  about += std::format("Umpire Version:   {0}.{1}.{2}\n", umpire::get_major_version(), umpire::get_minor_version(),
+                       umpire::get_patch_version());
 #else
   disabled_libs.push_back("Umpire");
 #endif
@@ -194,18 +194,18 @@ std::string gitSHA() { return SMITH_GIT_SHA; }
 void printRunInfo()
 {
   // Add header
-  std::string infoMsg = axom::fmt::format("{:*^80}\n", "*");
+  std::string infoMsg = std::format("{:*^80}\n", "*");
 
-  infoMsg += axom::fmt::format("{0}: {1}\n", "Smith Version", version());
-  infoMsg += axom::fmt::format("{0}: {1}\n", "Build Type", buildType());
-  infoMsg += axom::fmt::format("{0}: {1}\n", "User Name", axom::utilities::getUserName());
-  infoMsg += axom::fmt::format("{0}: {1}\n", "Host Name", axom::utilities::getHostName());
+  infoMsg += std::format("{0}: {1}\n", "Smith Version", version());
+  infoMsg += std::format("{0}: {1}\n", "Build Type", buildType());
+  infoMsg += std::format("{0}: {1}\n", "User Name", axom::utilities::getUserName());
+  infoMsg += std::format("{0}: {1}\n", "Host Name", axom::utilities::getHostName());
 
   auto [count, rank] = getMPIInfo();
-  infoMsg += axom::fmt::format("{0}: {1}\n", "MPI Rank Count", count);
+  infoMsg += std::format("{0}: {1}\n", "MPI Rank Count", count);
 
   // Add footer
-  infoMsg += axom::fmt::format("{:*^80}\n", "*");
+  infoMsg += std::format("{:*^80}\n", "*");
 
   SLIC_INFO_ROOT(infoMsg);
   smith::logger::flush();
@@ -213,8 +213,7 @@ void printRunInfo()
 
 std::string version(bool add_SHA)
 {
-  std::string version =
-      axom::fmt::format("v{0}.{1}.{2}", SMITH_VERSION_MAJOR, SMITH_VERSION_MINOR, SMITH_VERSION_PATCH);
+  std::string version = std::format("v{0}.{1}.{2}", SMITH_VERSION_MAJOR, SMITH_VERSION_MINOR, SMITH_VERSION_PATCH);
 
   std::string sha = gitSHA();
   if (add_SHA && !sha.empty()) {
@@ -224,7 +223,7 @@ std::string version(bool add_SHA)
   return version;
 }
 
-std::string compiler() { return axom::fmt::format("{0} version {1}", SMITH_COMPILER_NAME, SMITH_COMPILER_VERSION); }
+std::string compiler() { return std::format("{0} version {1}", SMITH_COMPILER_NAME, SMITH_COMPILER_VERSION); }
 
 std::string buildType()
 {

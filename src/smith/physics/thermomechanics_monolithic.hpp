@@ -128,8 +128,8 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   {
     SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(mfemParMesh().Dimension() != dim,
-                       axom::fmt::format("Compile time dimension, {0}, and runtime mesh dimension, {1}, mismatch", dim,
-                                         mfemParMesh().Dimension()));
+                       std::format("Compile time dimension, {0}, and runtime mesh dimension, {1}, mismatch", dim,
+                                   mfemParMesh().Dimension()));
     SLIC_ERROR_ROOT_IF(!nonlin_solver_,
                        "EquationSolver argument is nullptr in ThermoMechanics constructor. It is possible that it was "
                        "previously moved.");
@@ -152,8 +152,8 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(parameter_space) != parameter_names.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(parameter_space), parameter_names.size()));
+        std::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
+                    sizeof...(parameter_space), parameter_names.size()));
 
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
@@ -914,7 +914,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   FiniteElementDual computeTimestepSensitivity(size_t parameter_field) override
   {
     SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
-                    axom::fmt::format("Invalid parameter index '{}' requested for sensitivity."));
+                    std::format("Invalid parameter index '{}' requested for sensitivity.", parameter_field));
 
     auto dr1_dparam = smith::get<DERIVATIVE>(d_residual_T_d_[parameter_field](time_end_step_));
     auto dr2_dparam = smith::get<DERIVATIVE>(d_residual_u_d_[parameter_field](time_end_step_));
@@ -955,8 +955,8 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     } else if (state_name == "displacement") {
       return displacement_;
     } else {
-      SLIC_ERROR_ROOT(axom::fmt::format("State '{}' requested from thermomechanics solver '{}', but it doesn't exist",
-                                        state_name, name_));
+      SLIC_ERROR_ROOT(std::format("State '{}' requested from thermomechanics solver '{}', but it doesn't exist",
+                                  state_name, name_));
     }
 
     return temperature_;
@@ -972,9 +972,9 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
       return;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format(
-        "setState for state name '{}' requested from thermomechanics module '{}', but it doesn't exist", state_name,
-        name_));
+    SLIC_ERROR_ROOT(
+        std::format("setState for state name '{}' requested from thermomechanics module '{}', but it doesn't exist",
+                    state_name, name_));
   }
 
   std::vector<std::string> stateNames() const override
@@ -989,8 +989,8 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
     } else if (state_name == "displacement") {
       return displacement_adjoint_;
     } else {
-      SLIC_ERROR_ROOT(axom::fmt::format("adjoint '{}' requested from thermomechanics solver '{}', but it doesn't exist",
-                                        state_name, name_));
+      SLIC_ERROR_ROOT(std::format("adjoint '{}' requested from thermomechanics solver '{}', but it doesn't exist",
+                                  state_name, name_));
     }
 
     return temperature_adjoint_;

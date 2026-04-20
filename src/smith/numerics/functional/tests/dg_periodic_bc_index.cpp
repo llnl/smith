@@ -60,7 +60,7 @@ void L2_periodic_index_test(mfem::Element::Type element_type)
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(test_fespace.get(), {trial_fespace.get()});
 
-  Domain periodic_faces = Domain::ofInteriorFaces(*mesh, by_attr<dim>({1, 2, 3, 4, 5, 6}));
+  Domain periodic_faces = Domain::ofInteriorBoundaryElements(*mesh, by_attr<dim>({1, 2, 3, 4, 5, 6}));
 
   // Define the integral of jumps over all interior faces
   residual.AddInteriorFaceIntegral(
