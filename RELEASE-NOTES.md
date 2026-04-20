@@ -19,6 +19,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ### Added
 
+- Added this release notes file to track changes in project
+
 ### Removed
 
 ### Deprecated
@@ -26,11 +28,6 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ### Changed
 
 ### Fixed
-
-## [Version 0.1.0] - Release date 2026-04-14
-
-### Added
-- This release notes file, marking the beginning of semantic versioning.
 
 ## Legend for sections
 
@@ -51,9 +48,3 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ###  Security
 - Use this section in case of vulnerabilities
-
-[Unreleased]:    https://github.com/LLNL/smith/compare/v0.1.0...develop
-[comment]: # (subsequent version links will use "compare" e.g.)
-[comment]: # (https://github.com/LLNL/smith/compare/v0.1.0...v0.2.0)
-[comment]: # (remove this comment on next release)
-[Version 0.1.0]: https://github.com/LLNL/smith/tree/v0.1.0
