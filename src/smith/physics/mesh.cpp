@@ -82,7 +82,7 @@ void Mesh::createDomains()
 {
   domains_.insert({entireBodyName(), smith::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), smith::EntireBoundary(*mfem_mesh_)});
-  domains_.insert({internalBoundaryName(), smith::InteriorFaces(*mfem_mesh_)});
+  domains_.insert({internalBoundaryName(), smith::EntireInteriorBoundary(*mfem_mesh_)});
 }
 
 void Mesh::errorIfDomainExists(const std::string& domain_name) const
@@ -124,6 +124,22 @@ smith::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
 {
   errorIfDomainExists(domain_name);
   domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
+smith::Domain& Mesh::addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                         std::function<bool(std::vector<vec2>, int)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofInteriorBoundaryElements(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
+smith::Domain& Mesh::addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                         std::function<bool(std::vector<vec3>, int)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofInteriorBoundaryElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
 

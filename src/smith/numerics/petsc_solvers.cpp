@@ -306,6 +306,7 @@ void PetscPCSolver::SetOperator(const mfem::Operator& op)
   PetscCallAbort(GetComm(), MatCreateVecs(A22, &zero, nullptr));
   PetscCallAbort(GetComm(), VecSet(zero, 0));
   PetscCallAbort(GetComm(), MatDiagonalSet(A22, zero, ADD_VALUES));
+  PetscCallAbort(GetComm(), VecDestroy(&zero));
   if (delete_pA) {
     delete pA;
   }
@@ -664,6 +665,23 @@ PetscKSPSolver::PetscKSPSolver(const mfem::HypreParMatrix& A, KSPType ksp_type, 
   PetscCallAbort(GetComm(), KSPSetPreSolve(*this, convertKSPPreSolve, this));
   clcustom = false;
   Customize();
+}
+
+PetscKSPSolver::~PetscKSPSolver()
+{
+  if (pA_) {
+    delete pA_;
+  }
+  if (X) {
+    delete X;
+  }
+  if (B) {
+    delete B;
+  }
+
+  pA_ = nullptr;
+  X = nullptr;
+  B = nullptr;
 }
 
 void PetscKSPSolver::SetTolerances()
