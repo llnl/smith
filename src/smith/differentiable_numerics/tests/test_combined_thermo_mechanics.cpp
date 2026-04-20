@@ -188,16 +188,15 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   SolidMechanicsOptions solid_opts;
   ThermalOptions thermal_opts;
 
-  auto thermal_coupling = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store, youngs_modulus);
-  auto solid_coupling = registerThermalFields<dim, temperature_order, TempRule>(field_store);
+  auto param_fields = registerParameterFields(youngs_modulus);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
 
-  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store, solid_coupling, std::make_shared<SystemSolver>(solid_block_solver), solid_opts, youngs_modulus);
-  auto solid = solid_res.system;
+  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      std::make_shared<SystemSolver>(solid_block_solver), solid_opts, param_fields, solid_fields, thermal_fields);
 
-  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
-      field_store, thermal_coupling, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
-  auto thermal = thermal_res.system;
+  auto [thermal, thermal_cz, thermal_end_steps] = buildThermalSystem<dim, temperature_order, TempRule>(
+      std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts, param_fields, thermal_fields, solid_fields);
 
   auto [coupled, coupled_cz] = combineSystems(solid, thermal);
 
@@ -207,8 +206,8 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   coupled->field_store->getParameterFields()[0].get()->setFromFieldFunction(
       [=](smith::tensor<double, dim>) { return 100.0; });
 
-  solid->disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
-  thermal->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+  solid->setDisplacementBC(mesh_->domain("left"));
+  thermal->setTemperatureBC(mesh_->domain("left"));
 
   solid->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
     auto traction = 0.0 * X;

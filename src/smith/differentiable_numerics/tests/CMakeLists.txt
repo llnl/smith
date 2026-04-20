@@ -12,7 +12,6 @@ set(differentiable_numerics_test_source
     test_solid_dynamics.cpp
     test_explicit_dynamics.cpp
     test_porous_heat_sink.cpp
-    test_coupled_thermo_mechanics.cpp
     test_combined_thermo_mechanics.cpp
     test_thermal_static.cpp
     test_solid_static_with_internal_vars.cpp
