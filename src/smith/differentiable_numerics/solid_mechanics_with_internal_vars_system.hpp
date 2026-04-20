@@ -372,8 +372,7 @@ struct SolidMechanicsWithInternalVarsOptions {};
 template <int dim, int order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
           typename... parameter_space>
 auto registerSolidMechanicsWithInternalVarsFields(std::shared_ptr<FieldStore> field_store,
-                                                  DisplacementTimeRule disp_rule,
-                                                  InternalVarTimeRule state_rule,
+                                                  DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
                                                   FieldType<parameter_space>... parameter_types)
 {
   registerSolidMechanicsFields<dim, order>(field_store, disp_rule);

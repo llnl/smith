@@ -166,12 +166,12 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   // Compressive traction on right face.
   // Lambda args from addTraction: (t, X, n, u, v, a, temp_ss, temp_old)
   // — 6 self fields + 2 thermal coupling fields forwarded as trailing args.
-  solid->addTraction("right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto /*temp_ss*/,
-                                 auto /*temp_old*/) {
-    auto t = 0.0 * X;
-    t[0] = -0.005;
-    return t;
-  });
+  solid->addTraction(
+      "right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto /*temp_ss*/, auto /*temp_old*/) {
+        auto t = 0.0 * X;
+        t[0] = -0.005;
+        return t;
+      });
 
   // Phase 5: combine and solve.
   auto [combined, combined_cz] = combineSystems(solid, thermal, state_sys);
