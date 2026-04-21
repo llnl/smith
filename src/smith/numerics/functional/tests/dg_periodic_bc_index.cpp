@@ -22,20 +22,40 @@
 using namespace smith;
 using namespace smith::profiling;
 
+// This test is only for translational periodic meshes
+// At xmax, the mfem mesh nodal coordinates are (xmax, y) | (xmin, y). Therefore, u1 - u2 = xmax - xmin = L
+// and n = {1, 0}. Consequently, dot(u1 - u2, n) = L. The same logic applies to other periodic boundaries.
 template <int dim, int p>
-void L2_periodic_index_test(mfem::Element::Type element_type)
+void L2_periodic_index_test(std::string meshfile)
 {
   using test_space = L2<p, dim>;
   using trial_space = L2<p, dim>;
 
-  auto initial_mesh = mfem::Mesh(mfem::Mesh::MakeCartesian3D(4, 4, 4, element_type, 1.0, 1.0, 1.0));
+  auto initial_mesh = buildMeshFromFile(meshfile);
+  initial_mesh.UniformRefinement();
+  initial_mesh.UniformRefinement();
 
-  mfem::Vector x_translation({1.0, 0.0, 0.0});
-  mfem::Vector y_translation({0.0, 1.0, 0.0});
-  mfem::Vector z_translation({0.0, 0.0, 1.0});
-  std::vector<mfem::Vector> translations = {x_translation, y_translation, z_translation};
+  // 2D patch mesh has side length of 1.0 and 3D patch mesh has side length of 2.0
+  std::vector<mfem::Vector> translations;
+  if (dim == 2) {
+    mfem::Vector x_translation({1.0, 0.0});
+    mfem::Vector y_translation({0.0, 1.0});
+
+    translations.push_back(x_translation);
+    translations.push_back(y_translation);
+  } else if (dim == 3) {
+    mfem::Vector x_translation({2.0, 0.0, 0.0});
+    mfem::Vector y_translation({0.0, 2.0, 0.0});
+    mfem::Vector z_translation({0.0, 0.0, 2.0});
+
+    translations.push_back(x_translation);
+    translations.push_back(y_translation);
+    translations.push_back(z_translation);
+  } else {
+    SLIC_ERROR_ROOT("This test is only for 2D and 3D meshes");
+  }
+
   double tol = 1e-6;
-
   std::vector<int> periodicMap = initial_mesh.CreatePeriodicVertexMapping(translations, tol);
 
   auto mesh = mesh::refineAndDistribute(mfem::Mesh::MakePeriodic(initial_mesh, periodicMap));
@@ -60,7 +80,7 @@ void L2_periodic_index_test(mfem::Element::Type element_type)
   // Construct the new functional object using the specified test and trial spaces
   Functional<test_space(trial_space)> residual(test_fespace.get(), {trial_fespace.get()});
 
-  Domain periodic_faces = Domain::ofInteriorFaces(*mesh, by_attr<dim>({1, 2, 3, 4, 5, 6}));
+  Domain periodic_faces = Domain::ofInteriorBoundaryElements(*mesh, by_attr<dim>({1, 2, 3, 4, 5, 6}));
 
   // Define the integral of jumps over all interior faces
   residual.AddInteriorFaceIntegral(
@@ -77,7 +97,8 @@ void L2_periodic_index_test(mfem::Element::Type element_type)
         SLIC_INFO(axom::fmt::format("One side = {}, The other side = {}, Jump = {}", axom::fmt::streamed(u_1),
                                     axom::fmt::streamed(u_2), axom::fmt::streamed(u_1 - u_2)));
 
-        auto a = dot(u_1 - u_2, n) - 1.0;
+        // The (dim - 1.0) is because 2D patch mesh has side length of 1.0 and 3D patch mesh has side length of 2.0
+        auto a = dot(u_1 - u_2, n) - (dim - 1.0);
 
         auto f_1 = u_1 * a;
         auto f_2 = u_2 * a;
@@ -91,9 +112,17 @@ void L2_periodic_index_test(mfem::Element::Type element_type)
   EXPECT_NEAR(0., value.Norml2(), 1.e-12);
 }
 
-TEST(periodic_index, L2_test_tets_linear) { L2_periodic_index_test<3, 1>(mfem::Element::Type::TETRAHEDRON); }
+TEST(periodic_index, L2_test_tris_linear) { L2_periodic_index_test<2, 1>(SMITH_REPO_DIR "/data/meshes/patch2D_tris.mesh"); }
+TEST(periodic_index, L2_test_tris_quadratic) { L2_periodic_index_test<2, 2>(SMITH_REPO_DIR "/data/meshes/patch2D_tris.mesh"); }
 
-TEST(periodic_index, L2_test_hex_linear) { L2_periodic_index_test<3, 1>(mfem::Element::Type::HEXAHEDRON); }
+TEST(periodic_index, L2_test_quads_linear) { L2_periodic_index_test<2, 1>(SMITH_REPO_DIR "/data/meshes/patch2D_quads.mesh"); }
+TEST(periodic_index, L2_test_quads_quadratic) { L2_periodic_index_test<2, 2>(SMITH_REPO_DIR "/data/meshes/patch2D_quads.mesh"); }
+
+TEST(periodic_index, L2_test_tets_linear) { L2_periodic_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh"); }
+TEST(periodic_index, L2_test_tets_quadratic) { L2_periodic_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh"); }
+
+TEST(periodic_index, L2_test_hex_linear) { L2_periodic_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh"); }
+TEST(periodic_index, L2_test_hex_quadratic) { L2_periodic_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh"); }
 
 int main(int argc, char* argv[])
 {

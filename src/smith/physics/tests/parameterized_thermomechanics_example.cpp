@@ -172,7 +172,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
       mesh->domain("top_surface"));
 
   double initial_qoi = qoi(time, simulation.displacement());
-  SLIC_INFO_ROOT(axom::fmt::format("vertical displacement integrated over the top surface: {}", initial_qoi));
+  SLIC_INFO_ROOT(std::format("vertical displacement integrated over the top surface: {}", initial_qoi));
   EXPECT_NEAR(initial_qoi, 0.000883477, 1e-5);
 
   Functional<double(H1<p, dim>)> area({&simulation.displacement().space()});
@@ -181,20 +181,20 @@ TEST(Thermomechanics, ParameterizedMaterial)
 
   double top_area = area(time, simulation.displacement());
 
-  SLIC_INFO_ROOT(axom::fmt::format("total area of the top surface: {}", top_area));
+  SLIC_INFO_ROOT(std::format("total area of the top surface: {}", top_area));
 
   double exact_area = M_PI_4 * ((outer_radius * outer_radius) - (inner_radius * inner_radius));
 
-  SLIC_INFO_ROOT(axom::fmt::format("exact area of the top surface: {}", exact_area));
+  SLIC_INFO_ROOT(std::format("exact area of the top surface: {}", exact_area));
   EXPECT_NEAR(top_area, exact_area, 1e-3);
 
   double avg_disp = qoi(time, simulation.displacement()) / area(time, simulation.displacement());
 
-  SLIC_INFO_ROOT(axom::fmt::format("average vertical displacement: {}", avg_disp));
+  SLIC_INFO_ROOT(std::format("average vertical displacement: {}", avg_disp));
 
   double exact_avg_disp = alpha0 * deltaT * height;
 
-  SLIC_INFO_ROOT(axom::fmt::format("expected average vertical displacement: {}", exact_avg_disp));
+  SLIC_INFO_ROOT(std::format("expected average vertical displacement: {}", exact_avg_disp));
   EXPECT_NEAR(avg_disp, exact_avg_disp, 1e-5);
 
   smith::FiniteElementDual adjoint_load(simulation.displacement().space(), "adjoint_load");
@@ -228,9 +228,8 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double fd_qoi_derivative = (final_qoi - initial_qoi) / epsilon;
 
   // compare the expected change in the QoI to the actual change:
-  SLIC_INFO_ROOT(
-      axom::fmt::format("directional derivative of QoI by adjoint-state method: {}", adjoint_qoi_derivative));
-  SLIC_INFO_ROOT(axom::fmt::format("directional derivative of QoI by finite-difference:    {}", fd_qoi_derivative));
+  SLIC_INFO_ROOT(std::format("directional derivative of QoI by adjoint-state method: {}", adjoint_qoi_derivative));
+  SLIC_INFO_ROOT(std::format("directional derivative of QoI by finite-difference:    {}", fd_qoi_derivative));
 
   EXPECT_NEAR(fd_qoi_derivative, adjoint_qoi_derivative, fd_qoi_derivative * 3.0e-5);
 }

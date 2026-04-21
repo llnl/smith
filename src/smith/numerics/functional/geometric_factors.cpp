@@ -84,7 +84,7 @@ GeometricFactors::GeometricFactors(const Domain& domain, int q, mfem::Geometry::
   // to fill the entries in [ nodes->Size(), nodes->Size() + nodes->FaceNbrData().Size() ) range. This is because
   // we only need one set of coordinates to compute geometric factor in H1 interpolation and we will only use
   // the set local to the processor.
-  if (domain.type_ == Domain::Type::InteriorFaces && fes->IsDGSpace()) {
+  if (domain.type_ == Domain::Type::InteriorBoundaryElements && fes->IsDGSpace()) {
     mfem::Vector nodes_L(nodes->Size() + nodes->FaceNbrData().Size());
     nodes_L.SetVector(*nodes, 0);
 
@@ -96,7 +96,7 @@ GeometricFactors::GeometricFactors(const Domain& domain, int q, mfem::Geometry::
   // For periodic meshes, the mesh nodes are in DG space, which will double the nodes_per_elem for interior faces.
   // Therefore, we must discard half of the entries to recover H1 coordinates and correctly compute geometric factor.
   // Note that faces on periodic boundaries in mfem mesh are considered interior faces with boundary attributes.
-  if (domain.type_ == Domain::Type::InteriorFaces && fes->IsDGSpace()) {
+  if (domain.type_ == Domain::Type::InteriorBoundaryElements && fes->IsDGSpace()) {
     const uint64_t new_nodes_per_elem = restriction.nodes_per_elem / 2;
     mfem::Vector X_h1(X_e.Size() / 2);
 

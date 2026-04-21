@@ -619,6 +619,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endif()
 
         add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
+
+        # Suppresses Tribol compiler warnings during build
+        blt_convert_to_system_includes(TARGET tribol)
         
         if(TRIBOL_ENABLE_PROFILING)
             unset(CALIPER_DIR CACHE)
@@ -692,6 +695,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             if(TARGET ${_target})
                 message(STATUS "Adding MPI link directory to target [${_target}]")
                 target_link_directories(${_target} BEFORE INTERFACE ${_mpi_lib_dir})
+                if (ENABLE_FORTRAN)
+                    target_link_libraries(${_target} INTERFACE "-lmpifort")
+                endif()
             endif()
         endforeach()
     endif()

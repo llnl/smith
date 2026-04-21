@@ -58,8 +58,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(InputSpaces) != input_mfem_spaces.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} input mfem spaces were supplied.",
-                          sizeof...(InputSpaces), input_mfem_spaces.size()));
+        std::format("{} parameter spaces given in the template argument but {} input mfem spaces were supplied.",
+                    sizeof...(InputSpaces), input_mfem_spaces.size()));
 
     if constexpr (sizeof...(InputSpaces) > 0) {
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
@@ -407,10 +407,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     using JacFuncType = std::function<decltype((*weak_form_)(DifferentiateWRT<1>{}, time, *shape_disp, *fs[i]...))(
         double, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<JacFuncType, sizeof...(i)>{
-        [=](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
+        [this](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
           return (*weak_form_)(DifferentiateWRT<i + 1>{}, _time, *_shape_disp, *_fs[i]...);
         }...};
-  };
+  }
 
   /// @brief Utility to get array of jvp functions, one for each input field in fs
   template <int... i>
@@ -421,10 +421,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         std::function<decltype((*v_dot_weak_form_residual_)(DifferentiateWRT<1>{}, time, *shape_disp, *v, *fs[i]...))(
             double, ConstFieldPtr, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<GradFuncType, sizeof...(i)>{
-        [=](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
+        [this](double _time, ConstFieldPtr _shape_disp, ConstFieldPtr _v, const std::vector<ConstFieldPtr>& _fs) {
           return (*v_dot_weak_form_residual_)(DifferentiateWRT<i + 2>{}, _time, *_shape_disp, *_v, *_fs[i]...);
         }...};
-  };
+  }
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications
   mutable double dt_ = std::numeric_limits<double>::max();

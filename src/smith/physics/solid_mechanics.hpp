@@ -214,8 +214,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   {
     SMITH_MARK_FUNCTION;
     SLIC_ERROR_ROOT_IF(mfemParMesh().Dimension() != dim,
-                       axom::fmt::format("Compile time dimension, {0}, and runtime mesh dimension, {1}, mismatch", dim,
-                                         mfemParMesh().Dimension()));
+                       std::format("Compile time dimension, {0}, and runtime mesh dimension, {1}, mismatch", dim,
+                                   mfemParMesh().Dimension()));
 
     SLIC_ERROR_ROOT_IF(!nonlin_solver_,
                        "EquationSolver argument is nullptr in SolidMechanics constructor. It is possible that it was "
@@ -250,8 +250,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(parameter_space) != parameter_names.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(parameter_space), parameter_names.size()));
+        std::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
+                    sizeof...(parameter_space), parameter_names.size()));
 
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
@@ -472,8 +472,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       return acceleration_;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("State '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                                      state_name, name_));
+    SLIC_ERROR_ROOT(
+        std::format("State '{}' requested from solid mechanics module '{}', but it doesn't exist", state_name, name_));
     return displacement_;
   }
 
@@ -502,9 +502,9 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       return;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format(
-        "setState for state named '{}' requested from solid mechanics module '{}', but it doesn't exist", state_name,
-        name_));
+    SLIC_ERROR_ROOT(
+        std::format("setState for state named '{}' requested from solid mechanics module '{}', but it doesn't exist",
+                    state_name, name_));
   }
 
   /// @overload
@@ -558,8 +558,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       return adjoint_displacement_;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("adjoint '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                                      state_name, name_));
+    SLIC_ERROR_ROOT(std::format("adjoint '{}' requested from solid mechanics module '{}', but it doesn't exist",
+                                state_name, name_));
     return adjoint_displacement_;
   }
 
@@ -573,8 +573,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       return reactions_;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("dual '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                                      dual_name, name_));
+    SLIC_ERROR_ROOT(
+        std::format("dual '{}' requested from solid mechanics module '{}', but it doesn't exist", dual_name, name_));
     return reactions_;
   }
 
@@ -585,8 +585,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       return reactions_adjoint_bcs_;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format(
-        "dualAdjoint '{}' requested from solid mechanics module '{}', but it doesn't exist", dual_name, name_));
+    SLIC_ERROR_ROOT(std::format("dualAdjoint '{}' requested from solid mechanics module '{}', but it doesn't exist",
+                                dual_name, name_));
     return reactions_adjoint_bcs_;
   }
 
@@ -610,8 +610,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     }
 
     SLIC_ERROR_ROOT(
-        axom::fmt::format("loadCheckpointedDual '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                          dual_name, name_));
+        std::format("loadCheckpointedDual '{}' requested from solid mechanics module '{}', but it doesn't exist",
+                    dual_name, name_));
     return reactions_;
   }
 
@@ -1327,7 +1327,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   FiniteElementDual computeTimestepSensitivity(size_t parameter_field) override
   {
     SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
-                    axom::fmt::format("Invalid parameter index '{}' requested for sensitivity."));
+                    std::format("Invalid parameter index '{}' requested for sensitivity.", parameter_field));
 
     auto drdparam = smith::get<DERIVATIVE>(d_residual_d_[parameter_field](time_end_step_));
     auto drdparam_mat = assemble(drdparam);
