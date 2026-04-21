@@ -332,8 +332,11 @@ struct SolidMechanicsSystem : public SystemBase {
   }
 };
 
+/**
+ * @brief Optional auxiliary systems and outputs for solid mechanics.
+ */
 struct SolidMechanicsOptions {
-  bool enable_stress_output = false;
+  bool enable_stress_output = false;  ///< Build post-solve stress projection system.
   bool output_cauchy_stress = false;  ///< When true, project Cauchy stress (sigma) instead of PK1 (P).
 };
 
@@ -564,6 +567,13 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, std::sha
   return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule>(field_store, CouplingParams<>{}, solver, options);
 }
 
+/**
+ * @brief Build a solid mechanics system from registered field packs.
+ *
+ * One `PhysicsFields` pack must come from the solid registration. Other `PhysicsFields` packs are
+ * treated as coupling inputs, while non-physics `CouplingParams` packs are registered as parameter
+ * fields.
+ */
 template <int dim, int order, typename DisplacementTimeRule, typename... FieldPacks>
   requires(sizeof...(FieldPacks) > 0 && (detail::is_physics_fields_v<FieldPacks> || ...) &&
            !(std::is_same_v<std::decay_t<FieldPacks>, SolidMechanicsOptions> || ...))

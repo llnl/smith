@@ -51,15 +51,22 @@ using TimeRuleParams =
  */
 struct SystemBase {
   // --- equations ---
-  std::vector<std::shared_ptr<WeakForm>> weak_forms;
+  std::vector<std::shared_ptr<WeakForm>> weak_forms;  ///< Weak forms solved together by this system.
 
   // --- infrastructure ---
-  std::shared_ptr<FieldStore> field_store;  ///< Field store managing the system's fields.
-  std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
-  std::shared_ptr<SystemBase> cycle_zero_system;
-  std::vector<std::shared_ptr<SystemBase>> post_solve_systems;
+  std::shared_ptr<FieldStore> field_store;        ///< Field store managing the system's fields.
+  std::shared_ptr<SystemSolver> solver;           ///< The solver for the system.
+  std::shared_ptr<SystemBase> cycle_zero_system;  ///< Optional startup solve executed before first timestep.
+  std::vector<std::shared_ptr<SystemBase>> post_solve_systems;  ///< Optional systems solved after main state update.
 
+  /// @brief Construct an empty system shell.
   SystemBase() = default;
+  /**
+   * @brief Construct a system from a field store, solver, and weak forms.
+   * @param fs Field store shared by all weak forms.
+   * @param sol Solver used for `solve`.
+   * @param wfs Weak forms owned by this system.
+   */
   explicit SystemBase(std::shared_ptr<FieldStore> fs, std::shared_ptr<SystemSolver> sol = nullptr,
                       std::vector<std::shared_ptr<WeakForm>> wfs = {})
       : weak_forms(std::move(wfs)), field_store(std::move(fs)), solver(std::move(sol))
@@ -84,6 +91,9 @@ struct SystemBase {
                                                       const std::vector<FieldState>& states_for_reactions) const;
 };
 
+/**
+ * @brief Convenience factory for a plain `SystemBase`.
+ */
 inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_store,
                                               std::shared_ptr<SystemSolver> solver,
                                               std::vector<std::shared_ptr<WeakForm>> weak_forms)
@@ -102,9 +112,9 @@ inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_
  */
 template <typename SysType>
 struct SystemBuildResult {
-  std::shared_ptr<SysType> system;
-  std::shared_ptr<SystemBase> cycle_zero_system;
-  std::vector<std::shared_ptr<SystemBase>> end_step_systems;
+  std::shared_ptr<SysType> system;                            ///< Main system returned by the factory.
+  std::shared_ptr<SystemBase> cycle_zero_system;              ///< Optional startup system.
+  std::vector<std::shared_ptr<SystemBase>> end_step_systems;  ///< Optional systems solved after each main step.
 };
 
 }  // namespace smith

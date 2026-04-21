@@ -62,7 +62,7 @@ namespace smith {
  * via the template setMaterial below.
  */
 struct CombinedSystem : public SystemBase {
-  std::vector<std::shared_ptr<SystemBase>> subsystems;
+  std::vector<std::shared_ptr<SystemBase>> subsystems;  ///< Ordered sub-systems solved during each staggered sweep.
 
   /// @brief Construct a CombinedSystem.  weak_forms is populated by combineSystems.
   using SystemBase::SystemBase;
@@ -178,6 +178,7 @@ SystemBuildResult<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... 
  * concatenates all weak forms and solves them simultaneously using a single global SystemSolver.
  */
 struct MonolithicCombinedSystem : public SystemBase {
+  /// @brief Inherit `SystemBase` constructors for monolithic wrappers.
   using SystemBase::SystemBase;
 };
 

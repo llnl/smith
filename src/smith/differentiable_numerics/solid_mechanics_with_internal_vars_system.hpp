@@ -71,6 +71,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
   // Primary weak form: residual for displacement (u).
   // Inputs: u, u_old, v_old, a_old, alpha, alpha_old, coupling_fields..., params...
+  /// @brief Weak form type for displacement residual assembly.
   using SolidWeakFormType =
       TimeDiscretizedWeakForm<dim, H1<disp_order, dim>,
                               typename detail::AppendCouplingToParams<
@@ -79,6 +80,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
 
   // State weak form: residual for internal variable (alpha).
   // Inputs: alpha, alpha_old, u, u_old, v_old, a_old, coupling_fields..., params...
+  /// @brief Weak form type for internal-variable residual assembly.
   using StateWeakFormType =
       TimeDiscretizedWeakForm<dim, StateSpace,
                               typename detail::AppendCouplingToParams<
@@ -86,6 +88,7 @@ struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
                                                        H1<disp_order, dim>, H1<disp_order, dim>>>::type>;
 
   // Cycle-zero weak form: test field = acceleration, inputs: u, v, a, alpha, coupling_fields..., params...
+  /// @brief Weak form type for cycle-zero acceleration solve.
   using CycleZeroSolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
       typename detail::AppendCouplingToParams<

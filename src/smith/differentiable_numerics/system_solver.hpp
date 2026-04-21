@@ -75,8 +75,10 @@ class SystemSolver {
   /// Prefers constructing a fresh solver instance when the underlying stage solver retains rebuildable config.
   std::shared_ptr<SystemSolver> singleBlockSolver(size_t block_index) const;
 
+  /// @brief Maximum number of staggered sweeps allowed for this solver.
   int maxStaggeredIterations() const { return max_staggered_iterations_; }
 
+  /// @brief Whether solver always performs exactly `maxStaggeredIterations()` sweeps.
   bool exactStaggeredSteps() const { return exact_staggered_steps_; }
 
  private:

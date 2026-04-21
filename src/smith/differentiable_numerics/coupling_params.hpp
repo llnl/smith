@@ -39,18 +39,27 @@ namespace smith {
  */
 template <typename... Spaces>
 struct CouplingParams {
-  static constexpr std::size_t num_coupling_fields = sizeof...(Spaces);
-  std::tuple<FieldType<Spaces>...> fields;
+  static constexpr std::size_t num_coupling_fields = sizeof...(Spaces);  ///< Number of borrowed or parameter fields.
+  std::tuple<FieldType<Spaces>...> fields;  ///< Coupling field descriptors in weak-form argument order.
+  /// @brief Construct a coupling pack from field descriptors.
   CouplingParams(FieldType<Spaces>... fs) : fields(std::move(fs)...) {}
 };
 
-/// Deduction guide: CouplingParams{FieldType<A>("a"), FieldType<B>("b")} -> CouplingParams<A, B>
+/**
+ * @brief Deduction guide for `CouplingParams`.
+ *
+ * Example:
+ * @code
+ *   CouplingParams{FieldType<A>("a"), FieldType<B>("b")}
+ * @endcode
+ * yields `CouplingParams<A, B>`.
+ */
 template <typename... Spaces>
 CouplingParams(FieldType<Spaces>...) -> CouplingParams<Spaces...>;
 
 /// Sentinel: no time integration rule (used for parameter-only packs).
 struct NoTimeRule {
-  static constexpr int num_states = 0;
+  static constexpr int num_states = 0;  ///< Number of time states contributed by this sentinel rule.
 };
 
 /**
@@ -65,13 +74,14 @@ struct NoTimeRule {
  */
 template <typename TimeRule, typename... Spaces>
 struct PhysicsFields {
-  using time_rule_type = TimeRule;
-  static constexpr std::size_t num_rule_states = TimeRule::num_states;
-  static constexpr std::size_t num_fields = sizeof...(Spaces);
-  static constexpr std::size_t num_coupling_fields = sizeof...(Spaces);
-  std::shared_ptr<FieldStore> field_store;
-  std::tuple<FieldType<Spaces>...> fields;
+  using time_rule_type = TimeRule;  ///< Time integration rule governing these fields.
+  static constexpr std::size_t num_rule_states = TimeRule::num_states;   ///< Number of state slots from `TimeRule`.
+  static constexpr std::size_t num_fields = sizeof...(Spaces);           ///< Total number of exported fields.
+  static constexpr std::size_t num_coupling_fields = sizeof...(Spaces);  ///< Number of fields exposed for coupling.
+  std::shared_ptr<FieldStore> field_store;                               ///< Store owning the registered fields.
+  std::tuple<FieldType<Spaces>...> fields;  ///< Exported field descriptors in registration order.
 
+  /// @brief Construct a registered-physics field pack.
   PhysicsFields(std::shared_ptr<FieldStore> fs, FieldType<Spaces>... f)
       : field_store(std::move(fs)), fields(std::move(f)...)
   {
@@ -104,7 +114,8 @@ template <typename R, typename... Spaces>
 struct is_coupling_params_impl<PhysicsFields<R, Spaces...>> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_coupling_params_v = is_coupling_params_impl<std::decay_t<T>>::value;
+inline constexpr bool is_coupling_params_v =
+    is_coupling_params_impl<std::decay_t<T>>::value;  ///< True for `CouplingParams` and `PhysicsFields`.
 
 /// Type trait: true if T is a PhysicsFields<...> specialization.
 template <typename T>
@@ -114,7 +125,8 @@ template <typename R, typename... S>
 struct is_physics_fields_impl<PhysicsFields<R, S...>> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_physics_fields_v = is_physics_fields_impl<std::decay_t<T>>::value;
+inline constexpr bool is_physics_fields_v =
+    is_physics_fields_impl<std::decay_t<T>>::value;  ///< True only for `PhysicsFields`.
 
 /// True if T is a PhysicsFields with a real time rule (not NoTimeRule).
 template <typename T, typename = void>
@@ -213,13 +225,17 @@ template <typename Rule, typename Space, typename Coupling, typename... Tail>
 struct TimeRuleParamsWithCoupling;
 
 template <typename Rule, typename Space, typename... CS, typename... Tail>
+/// @brief Specialization for coupling packs expressed as `CouplingParams`.
 struct TimeRuleParamsWithCoupling<Rule, Space, CouplingParams<CS...>, Tail...> {
-  using type = TimeRuleParams<Rule, Space, CS..., Tail...>;
+  using type = TimeRuleParams<Rule, Space, CS...,
+                              Tail...>;  ///< Expanded parameter list with coupling inserted after rule states.
 };
 
 template <typename Rule, typename Space, typename R, typename... CS, typename... Tail>
+/// @brief Specialization for coupling packs expressed as `PhysicsFields`.
 struct TimeRuleParamsWithCoupling<Rule, Space, PhysicsFields<R, CS...>, Tail...> {
-  using type = TimeRuleParams<Rule, Space, CS..., Tail...>;
+  using type = TimeRuleParams<Rule, Space, CS...,
+                              Tail...>;  ///< Expanded parameter list with coupling inserted after rule states.
 };
 
 /**
@@ -232,13 +248,17 @@ template <typename Coupling, typename FixedParams, typename... Tail>
 struct AppendCouplingToParams;
 
 template <typename... CS, typename... Fixed, typename... Tail>
+/// @brief Specialization appending `CouplingParams` field spaces after fixed weak-form parameters.
 struct AppendCouplingToParams<CouplingParams<CS...>, Parameters<Fixed...>, Tail...> {
-  using type = Parameters<Fixed..., CS..., Tail...>;
+  using type =
+      Parameters<Fixed..., CS..., Tail...>;  ///< Base parameter list extended with coupling and trailing parameters.
 };
 
 template <typename R, typename... CS, typename... Fixed, typename... Tail>
+/// @brief Specialization appending `PhysicsFields` field spaces after fixed weak-form parameters.
 struct AppendCouplingToParams<PhysicsFields<R, CS...>, Parameters<Fixed...>, Tail...> {
-  using type = Parameters<Fixed..., CS..., Tail...>;
+  using type =
+      Parameters<Fixed..., CS..., Tail...>;  ///< Base parameter list extended with coupling and trailing parameters.
 };
 
 }  // namespace detail

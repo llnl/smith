@@ -363,6 +363,9 @@ struct FieldStore {
    */
   void shareBoundaryConditions(const std::string& name, std::shared_ptr<DirichletBoundaryConditions> source_bc);
 
+  /**
+   * @brief Check whether a field with the given fully-qualified name exists.
+   */
   bool hasField(const std::string& field_name) const;
 
   /**
@@ -455,6 +458,9 @@ struct FieldStore {
    */
   std::vector<ReactionInfo> getReactionInfos() const;
 
+  /**
+   * @brief Get associated mesh shared by all registered fields.
+   */
   const std::shared_ptr<smith::Mesh>& getMesh() const;
 
   /**

@@ -28,6 +28,12 @@ class BoundaryConditionManager;
  */
 class MultiphysicsTimeIntegrator : public StateAdvancer {
  public:
+  /**
+   * @brief Construct a multiphysics advancer around main and auxiliary systems.
+   * @param system Main system solved every timestep.
+   * @param cycle_zero_system Optional startup system solved before first regular step.
+   * @param post_solve_systems Optional systems solved after the main step.
+   */
   MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
                              std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
                              std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {});
@@ -53,6 +59,12 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems_;
 };
 
+/**
+ * @brief Build a `MultiphysicsTimeIntegrator` from system-owned or explicit auxiliary systems.
+ *
+ * Missing optional arguments fall back to `system->cycle_zero_system` and
+ * `system->post_solve_systems`.
+ */
 inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(
     std::shared_ptr<SystemBase> system, std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
     std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})

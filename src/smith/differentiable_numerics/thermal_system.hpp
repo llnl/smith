@@ -309,6 +309,13 @@ auto buildThermalSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr
   return buildThermalSystem<dim, temp_order, TemperatureTimeRule>(field_store, CouplingParams<>{}, solver, options);
 }
 
+/**
+ * @brief Build a thermal system from registered field packs.
+ *
+ * One `PhysicsFields` pack must come from the thermal registration. Other `PhysicsFields` packs are
+ * treated as coupling inputs, while non-physics `CouplingParams` packs are registered as parameter
+ * fields.
+ */
 template <int dim, int temp_order, typename TemperatureTimeRule, typename... FieldPacks>
   requires(sizeof...(FieldPacks) > 0 && (detail::is_physics_fields_v<FieldPacks> || ...) &&
            !(std::is_same_v<std::decay_t<FieldPacks>, ThermalOptions> || ...))
