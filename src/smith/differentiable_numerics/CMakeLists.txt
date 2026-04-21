@@ -16,7 +16,6 @@ set(differentiable_numerics_sources
     evaluate_objective.cpp
     dirichlet_boundary_conditions.cpp
     multiphysics_time_integrator.cpp
-    combined_system.cpp
     )
 
 set(differentiable_numerics_headers
