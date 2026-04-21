@@ -310,14 +310,14 @@ TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShape
   auto compute_contact_force_qoi = [&](SolidMechT& solver) -> double {
     solver.resetStates();
     solver.advanceTimestep(1.0);
-    const auto f = solver.dual(axom::fmt::format("contact_force_{}", contact_interaction_id));
+    const auto f = solver.dual(std::format("contact_force_{}", contact_interaction_id));
     return 0.5 * innerProduct(f, f);
   };
 
   (void)compute_contact_force_qoi(*solid_solver);
 
   // Compute adjoint/shape sensitivity for this QoI.
-  const auto f_base = solid_solver->dual(axom::fmt::format("contact_force_{}", contact_interaction_id));
+  const auto f_base = solid_solver->dual(std::format("contact_force_{}", contact_interaction_id));
   const auto interaction_jacobian = solid_solver->contactInteraction(contact_interaction_id).jacobianContribution();
   auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
   SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
@@ -390,7 +390,7 @@ TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdj
   FiniteElementDual zero_load(solver->state("displacement").space(), "zero_load");
   zero_load = 0.0;
   solver->setAdjointLoad({{"displacement", zero_load}});
-  solver->setDualAdjointBcs({{axom::fmt::format("contact_force_{}", contact_interaction_id), dJ_df}});
+  solver->setDualAdjointBcs({{std::format("contact_force_{}", contact_interaction_id), dJ_df}});
   solver->reverseAdjointTimestep();
 
   FiniteElementState lambda_from_seed(solver->adjoint("displacement"));

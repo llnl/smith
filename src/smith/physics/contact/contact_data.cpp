@@ -7,9 +7,9 @@
 #include "smith/physics/contact/contact_data.hpp"
 
 #include <cstddef>
+#include <format>
 #include <memory>
 
-#include "axom/fmt.hpp"
 #include "axom/slic.hpp"
 #include "mpi.h"
 
@@ -43,7 +43,7 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
   // Disallow duplicate ids globally: Tribol coupling schemes are keyed by cs_id (interaction_id) globally.
   auto* cs = tribol::CouplingSchemeManager::getInstance().findData(static_cast<tribol::IndexT>(interaction_id));
   SLIC_ERROR_ROOT_IF(cs != nullptr,
-                     axom::fmt::format("Contact interaction id {} is already registered with Tribol.", interaction_id));
+                     std::format("Contact interaction id {} is already registered with Tribol.", interaction_id));
 
   interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_, contact_opts);
   if (contact_opts.enforcement == ContactEnforcement::LagrangeMultiplier) {

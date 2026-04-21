@@ -56,18 +56,35 @@ class PreconditionerOnlySolver : public mfem::IterativeSolver {
   // Note: mfem::IterativeSolver already has a 'prec' member (mfem::Solver*)
 };
 
+class SolverWithPreconditioner : public mfem::Solver {
+ public:
+  SolverWithPreconditioner(std::unique_ptr<mfem::Solver> linear_solver, std::unique_ptr<mfem::Solver> preconditioner)
+      : linear_solver_(std::move(linear_solver)), preconditioner_(std::move(preconditioner))
+  {
+    SLIC_ERROR_IF(!linear_solver_, "SolverWithPreconditioner requires a non-null linear solver");
+  }
+
+  void SetOperator(const mfem::Operator& op) override
+  {
+    height = op.Height();
+    width = op.Width();
+    linear_solver_->SetOperator(op);
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override { linear_solver_->Mult(x, y); }
+
+ private:
+  std::unique_ptr<mfem::Solver> linear_solver_;
+  std::unique_ptr<mfem::Solver> preconditioner_;
+};
+
 bool preconditionerSupportsBlockOperator(Preconditioner preconditioner)
 {
   switch (preconditioner) {
     case Preconditioner::None:
     case Preconditioner::BlockDiagonal:
-    case Preconditioner::BlockTriangularLower:
-    case Preconditioner::BlockTriangularUpper:
-    case Preconditioner::BlockTriangularSymmetric:
-    case Preconditioner::BlockSchurDiagonal:
-    case Preconditioner::BlockSchurLower:
-    case Preconditioner::BlockSchurUpper:
-    case Preconditioner::BlockSchurFull:
+    case Preconditioner::BlockTriangular:
+    case Preconditioner::BlockSchur:
       return true;
     default:
       return false;
@@ -112,7 +129,7 @@ bool monolithicizeOperatorIfNeeded(const LinearSolverOptions& linear_options, mf
   SLIC_DEBUG_ROOT(
       axom::fmt::format("Automatically monolithicizing block Jacobian for linear solver {} with "
                         "preconditioner {}",
-                        linear_options.linear_solver, linear_options.preconditioner));
+                        linearName(linear_options.linear_solver), preconditionerName(linear_options.preconditioner)));
   return true;
 }
 
@@ -1497,13 +1514,8 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     amgfcontact_preconditioner->GetAMG().SetSystemsOptions(amgfcontact_opts.dim_systems_options);
     amgfcontact_preconditioner->GetAMG().SetRelaxType(amgfcontact_opts.relax_type);
     preconditioner_solver = std::move(amgfcontact_preconditioner);
-  } else if (preconditioner == Preconditioner::BlockDiagonal ||
-             preconditioner == Preconditioner::BlockTriangularLower ||
-             preconditioner == Preconditioner::BlockTriangularUpper ||
-             preconditioner == Preconditioner::BlockTriangularSymmetric ||
-             preconditioner == Preconditioner::BlockSchurDiagonal ||
-             preconditioner == Preconditioner::BlockSchurLower || preconditioner == Preconditioner::BlockSchurUpper ||
-             preconditioner == Preconditioner::BlockSchurFull) {
+  } else if (preconditioner == Preconditioner::BlockDiagonal || preconditioner == Preconditioner::BlockTriangular ||
+             preconditioner == Preconditioner::BlockSchur) {
     std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
     for (const auto& opt : linear_opts.sub_block_linear_solver_options) {
       auto [lin, prec] = buildLinearSolverAndPreconditioner(opt, comm);
@@ -1512,27 +1524,12 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 
     if (preconditioner == Preconditioner::BlockDiagonal) {
       preconditioner_solver = std::make_unique<BlockDiagonalPreconditioner>(std::move(inner_solvers));
-    } else if (preconditioner == Preconditioner::BlockTriangularLower) {
+    } else if (preconditioner == Preconditioner::BlockTriangular) {
       preconditioner_solver =
-          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Lower);
-    } else if (preconditioner == Preconditioner::BlockTriangularUpper) {
-      preconditioner_solver =
-          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Upper);
-    } else if (preconditioner == Preconditioner::BlockTriangularSymmetric) {
-      preconditioner_solver =
-          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), BlockTriangularType::Symmetric);
-    } else if (preconditioner == Preconditioner::BlockSchurDiagonal) {
-      preconditioner_solver =
-          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Diagonal);
-    } else if (preconditioner == Preconditioner::BlockSchurLower) {
-      preconditioner_solver =
-          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Lower);
-    } else if (preconditioner == Preconditioner::BlockSchurUpper) {
-      preconditioner_solver =
-          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Upper);
-    } else if (preconditioner == Preconditioner::BlockSchurFull) {
-      preconditioner_solver =
-          std::make_unique<BlockSchurPreconditioner>(std::move(inner_solvers), BlockSchurType::Full);
+          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), linear_opts.block_triangular_type);
+    } else if (preconditioner == Preconditioner::BlockSchur) {
+      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(
+          std::move(inner_solvers), linear_opts.block_schur_type, linear_opts.schur_approx_type);
     }
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");
@@ -1608,7 +1605,7 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
   } else if (solver_type == "cg") {
     options.linear_solver = smith::LinearSolver::CG;
   } else {
-    std::string msg = axom::fmt::format("Unknown Linear solver type given: '{0}'", solver_type);
+    std::string msg = std::format("Unknown Linear solver type given: '{0}'", solver_type);
     SLIC_ERROR_ROOT(msg);
   }
   const std::string prec_type = config["prec_type"];
@@ -1635,7 +1632,7 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
   } else if (prec_type == "AMGFContact") {
     options.preconditioner = smith::Preconditioner::AMGFContact;
   } else {
-    std::string msg = axom::fmt::format("Unknown preconditioner type given: '{0}'", prec_type);
+    std::string msg = std::format("Unknown preconditioner type given: '{0}'", prec_type);
     SLIC_ERROR_ROOT(msg);
   }
 
@@ -1659,7 +1656,7 @@ smith::NonlinearSolverOptions FromInlet<smith::NonlinearSolverOptions>::operator
   } else if (solver_type == "KINPicard") {
     options.nonlin_solver = smith::NonlinearSolver::KINPicard;
   } else {
-    SLIC_ERROR_ROOT(axom::fmt::format("Unknown nonlinear solver type given: '{0}'", solver_type));
+    SLIC_ERROR_ROOT(std::format("Unknown nonlinear solver type given: '{0}'", solver_type));
   }
   return options;
 }

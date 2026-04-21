@@ -7,21 +7,22 @@
 set(numerics_test_dependencies smith_numerics smith_boundary_conditions gtest)
 
 set(numerics_serial_test_sources
-    equationsolver.cpp
-    operator.cpp
-    odes.cpp
+    test_equationsolver.cpp
+    test_operator.cpp
+    test_odes.cpp
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
     test_linear_solver_none.cpp
+    test_block_preconditioner_custom_operators.cpp
     )
 
-smith_add_tests( SOURCES       ${numerics_serial_test_sources}
+smith_add_tests(SOURCES       ${numerics_serial_test_sources}
                  DEPENDS_ON    ${numerics_test_dependencies}
                  NUM_MPI_TASKS 1)
 
 if(PETSC_FOUND)
     set(petsc_solver_tests
-        equationsolver_petsc.cpp
+        test_equationsolver_petsc.cpp
         )
     smith_add_tests(SOURCES       ${petsc_solver_tests}
                     DEPENDS_ON    ${numerics_test_dependencies}
@@ -29,7 +30,7 @@ if(PETSC_FOUND)
 
     if(SLEPC_FOUND)
         set(slepc_solver_tests
-            eigensolver.cpp
+            test_eigensolver.cpp
             test_trust_region_solver.cpp
             )
         smith_add_tests(SOURCES       ${slepc_solver_tests}
