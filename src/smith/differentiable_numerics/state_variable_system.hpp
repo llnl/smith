@@ -127,11 +127,13 @@ auto registerStateVariableFields(std::shared_ptr<FieldStore> field_store, Intern
   field_store->addIndependent(state_type, state_time_rule_ptr);
   field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, "state");
 
-  auto prefix_param = [&](auto& pt) {
-    pt.name = "param_" + pt.name;
-    field_store->addParameter(pt);
-  };
-  (prefix_param(parameter_types), ...);
+  if constexpr (sizeof...(parameter_space) > 0) {
+    auto prefix_param = [&](auto& pt) {
+      pt.name = "param_" + pt.name;
+      field_store->addParameter(pt);
+    };
+    (prefix_param(parameter_types), ...);
+  }
 
   return CouplingParams{FieldType<StateSpace>(field_store->prefix("state_solve_state")),
                         FieldType<StateSpace>(field_store->prefix("state")), parameter_types...};
@@ -194,11 +196,13 @@ auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, InternalV
                               std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
                               FieldType<parameter_space>... parameter_types)
 {
-  auto prefix_param = [&](auto& pt) {
-    pt.name = "param_" + pt.name;
-    field_store->addParameter(pt);
-  };
-  (prefix_param(parameter_types), ...);
+  if constexpr (sizeof...(parameter_space) > 0) {
+    auto prefix_param = [&](auto& pt) {
+      pt.name = "param_" + pt.name;
+      field_store->addParameter(pt);
+    };
+    (prefix_param(parameter_types), ...);
+  }
   return buildStateVariableSystem<dim, StateSpace>(field_store, rule, CouplingParams{parameter_types...}, solver,
                                                    options);
 }
