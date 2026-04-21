@@ -184,9 +184,11 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
   auto [thermal, thermal_cycle_zero, thermal_end_steps] = buildThermalSystem<dim, temperature_order, TempRule>(
       makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, param_fields, thermal_fields, solid_fields);
 
-  auto [coupled, coupled_cycle_zero] = combineSystems(solid, thermal);
+  auto combined = combineSystems(solid, thermal);
+  auto coupled = combined.system;
+  auto coupled_cycle_zero = combined.cycle_zero_system;
 
-  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cycle_zero);
+  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics");
   const auto& solid_dual_space = physics->dual("reactions").space();
   const auto& solid_state_space = physics->state("displacement_solve_state").space();
   const auto& thermal_dual_space = physics->dual("thermal_flux").space();
@@ -220,7 +222,9 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   auto [thermal, thermal_cycle_zero, thermal_end_steps] = buildThermalSystem<dim, temperature_order, TempRule>(
       makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, param_fields, thermal_fields, solid_fields);
 
-  auto [coupled, coupled_cycle_zero] = combineSystems(solid, thermal);
+  auto combined = combineSystems(solid, thermal);
+  auto coupled = combined.system;
+  auto coupled_cycle_zero = combined.cycle_zero_system;
 
   ParameterizedGreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
@@ -237,7 +241,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
     return traction;
   });
 
-  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cycle_zero);
+  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics");
 
   double dt = 1.0;
   for (int step = 0; step < 2; ++step) {
@@ -288,7 +292,9 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
   auto [thermal, thermal_cycle_zero, thermal_end] = buildThermalSystem<dim, temperature_order, TempRule>(
       field_store_, solid_fields, makeSolver(therm_nonlin_opts, therm_lin_opts), ThermalOptions{});
 
-  auto [coupled, coupled_cycle_zero] = combineSystems(solid, thermal);
+  auto combined = combineSystems(solid, thermal);
+  auto coupled = combined.system;
+  auto coupled_cycle_zero = combined.cycle_zero_system;
 
   ThermoelasticMaterialNoParam material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
@@ -318,7 +324,9 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto [thermal, thermal_cycle_zero, thermal_end] =
       buildThermalSystem<dim, temperature_order, TempRule>(field_store_, solid_fields, nullptr, ThermalOptions{});
 
-  auto [coupled, coupled_cycle_zero] = combineSystems(solver_ptr, solid, thermal);
+  auto combined = combineSystems(solver_ptr, solid, thermal);
+  auto coupled = combined.system;
+  auto coupled_cycle_zero = combined.cycle_zero_system;
 
   ThermoelasticMaterialNoParam material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
@@ -372,6 +380,25 @@ TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
   size_t stress_idx = field_store_->getFieldIndex("stress_solve_state");
   double stress_norm = norm(*states[stress_idx].get());
   EXPECT_GT(stress_norm, 1e-8) << "Cauchy stress field should be non-zero after deformation";
+}
+
+TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesPostSolveSystems)
+{
+  SolidMechanicsOptions solid_opts{.enable_stress_output = true};
+
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
+
+  auto [solid, solid_cycle_zero, solid_end] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store_, thermal_fields, makeSolver(newtonNonlinOpts, directLinOpts), solid_opts);
+  auto [thermal, thermal_cycle_zero, thermal_end] = buildThermalSystem<dim, temperature_order, TempRule>(
+      field_store_, solid_fields, makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{});
+
+  auto combined = combineSystems(solid, thermal);
+
+  ASSERT_EQ(combined.end_step_systems.size(), solid_end.size());
+  ASSERT_EQ(combined.system->post_solve_systems.size(), solid_end.size());
+  EXPECT_FALSE(combined.end_step_systems.empty());
 }
 
 }  // namespace smith

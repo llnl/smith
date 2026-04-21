@@ -56,6 +56,8 @@ struct SystemBase {
   // --- infrastructure ---
   std::shared_ptr<FieldStore> field_store;  ///< Field store managing the system's fields.
   std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
+  std::shared_ptr<SystemBase> cycle_zero_system;
+  std::vector<std::shared_ptr<SystemBase>> post_solve_systems;
 
   SystemBase() = default;
   explicit SystemBase(std::shared_ptr<FieldStore> fs, std::shared_ptr<SystemSolver> sol = nullptr,

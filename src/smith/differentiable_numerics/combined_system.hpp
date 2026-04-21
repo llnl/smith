@@ -63,19 +63,9 @@ namespace smith {
  */
 struct CombinedSystem : public SystemBase {
   std::vector<std::shared_ptr<SystemBase>> subsystems;
-  int max_stagger_iters = 10;
-  double stagger_tolerance = 1e-8;
 
   /// @brief Construct a CombinedSystem.  weak_forms is populated by combineSystems.
   using SystemBase::SystemBase;
-
-  /**
-   * @brief Staggered solve: iterate over sub-systems, writing each result to the shared
-   * FieldStore before the next sub-system reads it.
-   *
-   * Returns one FieldState per combined weak_form (same contract as SystemBase::solve).
-   */
-  std::vector<FieldState> solve(const TimeInfo& time_info) const override;
 
   /**
    * @brief Set a coupled material on all sub-systems.
@@ -108,8 +98,7 @@ struct CombinedSystem : public SystemBase {
  * @param subs  Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
-std::pair<std::shared_ptr<CombinedSystem>, std::shared_ptr<SystemBase>> combineSystems(
-    std::shared_ptr<SubSystems>... subs)
+SystemBuildResult<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... subs)
 {
   static_assert(sizeof...(subs) >= 2, "combineSystems requires at least two sub-systems");
 
@@ -119,37 +108,67 @@ std::pair<std::shared_ptr<CombinedSystem>, std::shared_ptr<SystemBase>> combineS
   auto combined = std::make_shared<CombinedSystem>();
   combined->field_store = field_store;
 
+  int max_stagger_iters = 1;
+  bool exact_staggered_steps = false;
+
   std::vector<std::shared_ptr<SystemBase>> cycle_zero_subs;
+  std::vector<std::shared_ptr<SystemBase>> post_solve_systems;
+  std::vector<std::vector<size_t>> subsystem_global_block_indices;
 
   (
       [&](auto& sub) {
+        std::vector<size_t> global_block_indices;
         combined->subsystems.push_back(sub);
         for (auto& wf : sub->weak_forms) {
+          global_block_indices.push_back(combined->weak_forms.size());
           combined->weak_forms.push_back(wf);
+        }
+        subsystem_global_block_indices.push_back(global_block_indices);
+        if (sub->solver) {
+          max_stagger_iters = std::max(max_stagger_iters, sub->solver->maxStaggeredIterations());
+          exact_staggered_steps = exact_staggered_steps || sub->solver->exactStaggeredSteps();
         }
         if constexpr (requires { sub->cycle_zero_system; }) {
           if (sub->cycle_zero_system) {
             cycle_zero_subs.push_back(sub->cycle_zero_system);
           }
         }
+        if constexpr (requires { sub->post_solve_systems; }) {
+          post_solve_systems.insert(post_solve_systems.end(), sub->post_solve_systems.begin(),
+                                    sub->post_solve_systems.end());
+        }
       }(subs),
       ...);
+
+  combined->solver = std::make_shared<SystemSolver>(max_stagger_iters, exact_staggered_steps);
+  for (size_t i = 0; i < combined->subsystems.size(); ++i) {
+    const auto& sub = combined->subsystems[i];
+    SLIC_ERROR_IF(!sub->solver, "Combined subsystem must have a solver");
+    combined->solver->appendRemappedStages(*sub->solver, subsystem_global_block_indices[i]);
+  }
 
   std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
   if (!cycle_zero_subs.empty()) {
     auto cycle_zero = std::make_shared<CombinedSystem>();
     cycle_zero->field_store = field_store;
-    cycle_zero->max_stagger_iters = 1;  // Cycle-zero solves are one-shot
+    cycle_zero->solver = std::make_shared<SystemSolver>(1, true);
     for (auto& sub : cycle_zero_subs) {
+      std::vector<size_t> global_block_indices;
       cycle_zero->subsystems.push_back(sub);
       for (auto& wf : sub->weak_forms) {
+        global_block_indices.push_back(cycle_zero->weak_forms.size());
         cycle_zero->weak_forms.push_back(wf);
       }
+      SLIC_ERROR_IF(!sub->solver, "Combined cycle-zero subsystem must have a solver");
+      cycle_zero->solver->appendRemappedStages(*sub->solver, global_block_indices);
     }
     cycle_zero_combined = cycle_zero;
   }
 
-  return {combined, cycle_zero_combined};
+  combined->cycle_zero_system = cycle_zero_combined;
+  combined->post_solve_systems = post_solve_systems;
+
+  return {combined, cycle_zero_combined, post_solve_systems};
 }
 
 /**
@@ -178,8 +197,8 @@ struct MonolithicCombinedSystem : public SystemBase {
  * @param subs    Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
-std::pair<std::shared_ptr<MonolithicCombinedSystem>, std::shared_ptr<SystemBase>> combineSystems(
-    std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSystems>... subs)
+SystemBuildResult<MonolithicCombinedSystem> combineSystems(std::shared_ptr<SystemSolver> solver,
+                                                           std::shared_ptr<SubSystems>... subs)
 {
   static_assert(sizeof...(subs) >= 2, "combineSystems requires at least two sub-systems");
 
@@ -187,6 +206,7 @@ std::pair<std::shared_ptr<MonolithicCombinedSystem>, std::shared_ptr<SystemBase>
 
   std::vector<std::shared_ptr<WeakForm>> wfs;
   std::vector<std::shared_ptr<WeakForm>> cycle_zero_wfs;
+  std::vector<std::shared_ptr<SystemBase>> post_solve_systems;
 
   (
       [&](auto& sub) {
@@ -200,6 +220,10 @@ std::pair<std::shared_ptr<MonolithicCombinedSystem>, std::shared_ptr<SystemBase>
             }
           }
         }
+        if constexpr (requires { sub->post_solve_systems; }) {
+          post_solve_systems.insert(post_solve_systems.end(), sub->post_solve_systems.begin(),
+                                    sub->post_solve_systems.end());
+        }
       }(subs),
       ...);
 
@@ -209,7 +233,10 @@ std::pair<std::shared_ptr<MonolithicCombinedSystem>, std::shared_ptr<SystemBase>
     cycle_zero_combined = std::make_shared<SystemBase>(field_store, solver, cycle_zero_wfs);
   }
 
-  return {combined, cycle_zero_combined};
+  combined->cycle_zero_system = cycle_zero_combined;
+  combined->post_solve_systems = post_solve_systems;
+
+  return {combined, cycle_zero_combined, post_solve_systems};
 }
 
 /**

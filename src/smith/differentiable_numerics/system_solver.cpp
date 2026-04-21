@@ -40,6 +40,28 @@ void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
   stages_.push_back(Stage{block_indices, std::move(solver), relaxation_factor});
 }
 
+void SystemSolver::appendRemappedStages(const SystemSolver& subsystem_solver,
+                                        const std::vector<size_t>& global_block_indices)
+{
+  SLIC_ERROR_IF(global_block_indices.empty(), "Global block index map must be non-empty");
+
+  for (const auto& stage : subsystem_solver.stages_) {
+    std::vector<size_t> remapped_block_indices;
+    if (stage.block_indices.empty()) {
+      remapped_block_indices = global_block_indices;
+    } else {
+      remapped_block_indices.reserve(stage.block_indices.size());
+      for (size_t local_block_index : stage.block_indices) {
+        SLIC_ERROR_IF(local_block_index >= global_block_indices.size(),
+                      axom::fmt::format("Local block index {} exceeds subsystem size {}", local_block_index,
+                                        global_block_indices.size()));
+        remapped_block_indices.push_back(global_block_indices[local_block_index]);
+      }
+    }
+    addSubsystemSolver(remapped_block_indices, stage.solver, stage.relaxation_factor);
+  }
+}
+
 std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
                                             const std::vector<std::vector<size_t>>& block_indices,
                                             const FieldState& shape_disp,

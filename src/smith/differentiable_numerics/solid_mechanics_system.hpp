@@ -496,6 +496,8 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, Displace
     end_step_systems.push_back(sys->stress_output_system);
   }
 
+  sys->post_solve_systems = end_step_systems;
+
   return std::make_tuple(sys, cycle_zero_system, end_step_systems);
 }
 

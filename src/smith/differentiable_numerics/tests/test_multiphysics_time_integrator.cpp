@@ -293,6 +293,63 @@ TEST(SystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
   StateManager::reset();
 }
 
+TEST(SystemSolver, AppendsRemappedStagesForCombinedSubsystems)
+{
+  auto first_solver = std::make_shared<NoOpNonlinearBlockSolver>();
+  auto second_solver = std::make_shared<NoOpNonlinearBlockSolver>();
+
+  SystemSolver subsystem_a(3, false);
+  subsystem_a.addSubsystemSolver({0}, first_solver, 0.5);
+
+  SystemSolver subsystem_b(3, false);
+  subsystem_b.addSubsystemSolver({0, 1}, second_solver, 1.0);
+
+  SystemSolver combined(3, false);
+  combined.appendRemappedStages(subsystem_a, {2});
+  combined.appendRemappedStages(subsystem_b, {4, 5});
+
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "combined_solver_stage_mapping");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "combined_solver_stage_mapping_mesh");
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
+
+  auto quasi_static = std::make_shared<QuasiStaticRule>();
+  FieldType<H1<1>> field0_type("field0");
+  FieldType<H1<1>> field1_type("field1");
+  FieldType<H1<1>> field2_type("field2");
+  field_store->addIndependent(field0_type, quasi_static);
+  field_store->addIndependent(field1_type, quasi_static);
+  field_store->addIndependent(field2_type, quasi_static);
+
+  auto wf0 = buildScalarDiffusionWeakForm("wf0", mesh, field_store, field0_type);
+  auto wf1 = buildScalarDiffusionWeakForm("wf1", mesh, field_store, field1_type);
+  auto wf2 = buildScalarDiffusionWeakForm("wf2", mesh, field_store, field2_type);
+
+  const std::vector<WeakForm*> residuals = {wf0.get(), wf1.get(), wf2.get()};
+  const std::vector<std::string> residual_names = {"wf0", "wf1", "wf2"};
+  const auto block_indices = field_store->indexMap(residual_names);
+  const std::vector<std::vector<FieldState>> states = {field_store->getStates("wf0"), field_store->getStates("wf1"),
+                                                       field_store->getStates("wf2")};
+  const std::vector<std::vector<FieldState>> params(residuals.size());
+  const auto bc_managers = field_store->getBoundaryConditionManagers(residual_names);
+
+  auto solved_states = combined.solve(residuals, block_indices, field_store->getShapeDisp(), states, params,
+                                      TimeInfo(0.0, 1.0, 0), bc_managers);
+
+  EXPECT_EQ(solved_states.size(), 3);
+  EXPECT_EQ(first_solver->solveCalls(), 1);
+  EXPECT_EQ(first_solver->lastNumUnknowns(), 1);
+  EXPECT_EQ(second_solver->solveCalls(), 1);
+  EXPECT_EQ(second_solver->lastNumUnknowns(), 2);
+
+  StateManager::reset();
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])

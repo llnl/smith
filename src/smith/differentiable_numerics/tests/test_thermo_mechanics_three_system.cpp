@@ -174,7 +174,9 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
       });
 
   // Phase 5: combine and solve.
-  auto [combined, combined_cycle_zero] = combineSystems(solid, thermal, state_sys);
+  auto combined_res = combineSystems(solid, thermal, state_sys);
+  auto combined = combined_res.system;
+  auto combined_cycle_zero = combined_res.cycle_zero_system;
 
   double dt = 1.0, time = 0.0;
   auto shape_disp = field_store->getShapeDisp();

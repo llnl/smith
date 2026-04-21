@@ -51,6 +51,11 @@ class SystemSolver {
   void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolverBase> solver,
                           double relaxation_factor = 1.0);
 
+  /// @brief Append stages from another solver, remapped onto global block indices.
+  /// @param subsystem_solver Source solver whose stages operate on subsystem-local block indices.
+  /// @param global_block_indices Mapping from subsystem-local block index to global block index.
+  void appendRemappedStages(const SystemSolver& subsystem_solver, const std::vector<size_t>& global_block_indices);
+
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.
   /// @param block_indices Block indices for each residual evaluation.
@@ -69,6 +74,10 @@ class SystemSolver {
   /// @brief Build a single-block solver from the stage responsible for @p block_index.
   /// Prefers constructing a fresh solver instance when the underlying stage solver retains rebuildable config.
   std::shared_ptr<SystemSolver> singleBlockSolver(size_t block_index) const;
+
+  int maxStaggeredIterations() const { return max_staggered_iterations_; }
+
+  bool exactStaggeredSteps() const { return exact_staggered_steps_; }
 
  private:
   int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
