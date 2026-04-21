@@ -100,7 +100,8 @@ struct SolidMechanicsMeshFixture : public testing::Test {
 // produce a non-null cycle_zero_system; rules that don't (QuasiStatic) produce nullptr.
 TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
 {
-  auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
+  auto solver =
+      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
 
   {
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "impl");
@@ -130,8 +131,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
 
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
-  auto param_fields = registerParameterFields(FieldType<ScalarParameterSpace>("bulk"),
-                                              FieldType<ScalarParameterSpace>("shear"));
+  auto param_fields =
+      registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
 
   auto [system, cycle_zero_sys, end_steps] = buildSolidMechanicsSystem<dim, order, TimeRule>(
@@ -237,8 +238,8 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   auto field_store = std::make_shared<FieldStore>(mesh, 100, physics_name);
 
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
-  auto param_fields = registerParameterFields(FieldType<ScalarParameterSpace>("bulk"),
-                                              FieldType<ScalarParameterSpace>("shear"));
+  auto param_fields =
+      registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
 
   auto [system, cycle_zero_sys, end_steps] = buildSolidMechanicsSystem<dim, order, TimeRule>(

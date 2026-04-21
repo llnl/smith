@@ -444,18 +444,18 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, Displace
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
 
     NonlinearSolverOptions cycle_zero_nonlin{.nonlin_solver = NonlinearSolver::Newton,
-                                     .relative_tol = 1e-14,
-                                     .absolute_tol = 1e-14,
-                                     .max_iterations = 2,
-                                     .print_level = 0};
+                                             .relative_tol = 1e-14,
+                                             .absolute_tol = 1e-14,
+                                             .max_iterations = 2,
+                                             .print_level = 0};
     LinearSolverOptions cycle_zero_lin{.linear_solver = LinearSolver::CG,
-                               .preconditioner = Preconditioner::HypreJacobi,
-                               .relative_tol = 1e-14,
-                               .absolute_tol = 1e-14,
-                               .max_iterations = 1000,
-                               .print_level = 0};
-    auto cycle_zero_solver =
-        std::make_shared<SystemSolver>(buildNonlinearBlockSolver(cycle_zero_nonlin, cycle_zero_lin, *field_store->getMesh()));
+                                       .preconditioner = Preconditioner::HypreJacobi,
+                                       .relative_tol = 1e-14,
+                                       .absolute_tol = 1e-14,
+                                       .max_iterations = 1000,
+                                       .print_level = 0};
+    auto cycle_zero_solver = std::make_shared<SystemSolver>(
+        buildNonlinearBlockSolver(cycle_zero_nonlin, cycle_zero_lin, *field_store->getMesh()));
 
     sys->cycle_zero_system = makeSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form});
     cycle_zero_system = sys->cycle_zero_system;

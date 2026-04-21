@@ -183,8 +183,8 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   std::vector<ReactionState> reactions;
 
   for (size_t step = 0; step < 2; ++step) {
-    std::tie(states, reactions) =
-        makeAdvancer(combined, combined_cycle_zero)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+    std::tie(states, reactions) = makeAdvancer(combined, combined_cycle_zero)
+                                      ->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
   }
 

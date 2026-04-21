@@ -120,15 +120,15 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
 
   // Advance one step, return final states + lateral deflection.
   template <typename System>
-  double advanceOneStepAndGetLateralDeflection(std::shared_ptr<System> coupled, std::shared_ptr<SystemBase> coupled_cycle_zero,
-                                               double dt = 1.0)
+  double advanceOneStepAndGetLateralDeflection(std::shared_ptr<System> coupled,
+                                               std::shared_ptr<SystemBase> coupled_cycle_zero, double dt = 1.0)
   {
     auto shape_disp = field_store_->getShapeDisp();
     auto states = field_store_->getStateFields();
     auto params = field_store_->getParameterFields();
     std::vector<ReactionState> reactions;
-    std::tie(states, reactions) =
-        makeAdvancer(coupled, coupled_cycle_zero)->advanceState(smith::TimeInfo(0.0, dt, 0), shape_disp, states, params);
+    std::tie(states, reactions) = makeAdvancer(coupled, coupled_cycle_zero)
+                                      ->advanceState(smith::TimeInfo(0.0, dt, 0), shape_disp, states, params);
 
     mfem::Vector final_disp(*states[field_store_->getFieldIndex("displacement_solve_state")].get());
     double deflection = 0.0;
