@@ -12,7 +12,7 @@
  *   auto state_coupling_fields = registerStateVariableFields<StateSpace>(
  *       field_store, state_rule, params...);
  *
- *   auto [state_sys, cz, ends] = buildStateVariableSystem<dim, StateSpace>(
+ *   auto [state_sys, cycle_zero, ends] = buildStateVariableSystem<dim, StateSpace>(
  *       field_store, state_rule, [solid_coupling,] solver, opts, params...);
  *
  * The returned CouplingParams from registerStateVariableFields carries field tokens

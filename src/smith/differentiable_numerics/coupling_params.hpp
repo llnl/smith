@@ -155,18 +155,19 @@ auto collectPhysicsFromPack(const Pack& pack)
   }
 }
 
-/// Extract parameter fields (CouplingParams packs that are NOT PhysicsFields), with "param_" prefix.
+/// Extract parameter fields (CouplingParams packs that are NOT PhysicsFields) with fully-qualified
+/// names matching what the FieldStore uses: `{store_prefix}param_{name}`.
 template <typename Pack>
-auto collectParamsFromPack(const Pack& pack)
+auto collectParamsFromPack(const std::shared_ptr<FieldStore>& fs, const Pack& pack)
 {
   if constexpr (is_coupling_params_v<std::decay_t<Pack>> && !is_physics_fields_v<Pack>) {
     return std::apply(
-        [](auto... pts) {
-          auto prefix = [](auto pt) {
-            pt.name = "param_" + pt.name;
+        [&](auto... pts) {
+          auto qualify = [&](auto pt) {
+            pt.name = fs->prefix("param_" + pt.name);
             return pt;
           };
-          return std::make_tuple(prefix(pts)...);
+          return std::make_tuple(qualify(pts)...);
         },
         pack.fields);
   } else {
@@ -177,10 +178,10 @@ auto collectParamsFromPack(const Pack& pack)
 /// Collect non-self fields from all packs into a single CouplingParams.
 /// Order: physics coupling fields first (in pack order), then parameter fields.
 template <typename TargetRule, typename... Packs>
-auto collectCouplingFields(const Packs&... packs)
+auto collectCouplingFields(const std::shared_ptr<FieldStore>& fs, const Packs&... packs)
 {
   auto physics = std::tuple_cat(collectPhysicsFromPack<TargetRule>(packs)...);
-  auto params = std::tuple_cat(collectParamsFromPack(packs)...);
+  auto params = std::tuple_cat(collectParamsFromPack(fs, packs)...);
   auto combined = std::tuple_cat(physics, params);
   return std::apply([](auto&... all) { return CouplingParams{all...}; }, combined);
 }

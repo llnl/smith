@@ -41,27 +41,6 @@ double skewMatrixNorm(std::unique_ptr<mfem::HypreParMatrix>& K)
   return Hfronorm;
 }
 
-/// @brief Initialize mfem solver if near-nullspace is needed
-void initializeSolver(mfem::Solver* mfem_solver, const smith::FiniteElementState& u)
-{
-  // If the user wants the AMG preconditioner with a linear solver, set the pfes
-  // to be the displacement
-  auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
-  if (amg_prec) {
-    amg_prec->SetSystemsOptions(u.space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
-  }
-
-#ifdef SMITH_USE_PETSC
-  auto* space_dep_pc = dynamic_cast<smith::mfem_ext::PetscPreconditionerSpaceDependent*>(mfem_solver);
-  if (space_dep_pc) {
-    // This call sets the displacement ParFiniteElementSpace used to get the spatial coordinates and to
-    // generate the near null space for the PCGAMG preconditioner
-    mfem::ParFiniteElementSpace* space = const_cast<mfem::ParFiniteElementSpace*>(&u.space());
-    space_dep_pc->SetFESpace(space);
-  }
-#endif
-}
-
 NonlinearBlockSolver::NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol,
                                            double rel_tol,
                                            std::optional<NonlinearSolverOptions> retained_nonlinear_options,
@@ -99,7 +78,23 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>& us)
   for (const auto& u : us) {
     if (u.space().GetVDim() > best->space().GetVDim()) best = &u;
   }
-  initializeSolver(&nonlinear_solver_->preconditioner(), *best);
+
+  auto* mfem_solver = &nonlinear_solver_->preconditioner();
+
+  auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
+  if (amg_prec) {
+    amg_prec->SetSystemsOptions(best->space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
+  }
+
+#ifdef SMITH_USE_PETSC
+  auto* space_dep_pc = dynamic_cast<smith::mfem_ext::PetscPreconditionerSpaceDependent*>(mfem_solver);
+  if (space_dep_pc) {
+    // This call sets the displacement ParFiniteElementSpace used to get the spatial coordinates and to
+    // generate the near null space for the PCGAMG preconditioner
+    auto* space = const_cast<mfem::ParFiniteElementSpace*>(&best->space());
+    space_dep_pc->SetFESpace(space);
+  }
+#endif
 }
 
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,

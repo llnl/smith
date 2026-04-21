@@ -31,6 +31,9 @@ static constexpr int dim = 3;
 static constexpr int displacement_order = 1;
 static constexpr int temperature_order = 1;
 
+using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
+
 template <typename T, int dim_>
 auto greenStrain(const tensor<T, dim_, dim_>& grad_u)
 {
@@ -107,48 +110,83 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
         mfem::Mesh::MakeCartesian3D(24, 2, 2, mfem::Element::HEXAHEDRON, 1.2, 0.03, 0.03), "mesh", 0, 0);
     mesh_->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
     mesh_->addDomainOfBoundaryElements("right", smith::by_attr<dim>(5));
+    field_store_ = std::make_shared<FieldStore>(mesh_, 100, "");
   }
+
+  std::shared_ptr<SystemSolver> makeSolver(const NonlinearSolverOptions& nonlin, const LinearSolverOptions& lin)
+  {
+    return std::make_shared<SystemSolver>(buildNonlinearBlockSolver(nonlin, lin, *mesh_));
+  }
+
+  // Advance one step, return final states + lateral deflection.
+  template <typename System>
+  double advanceOneStepAndGetLateralDeflection(std::shared_ptr<System> coupled, std::shared_ptr<SystemBase> coupled_cycle_zero,
+                                               double dt = 1.0)
+  {
+    auto shape_disp = field_store_->getShapeDisp();
+    auto states = field_store_->getStateFields();
+    auto params = field_store_->getParameterFields();
+    std::vector<ReactionState> reactions;
+    std::tie(states, reactions) =
+        makeAdvancer(coupled, coupled_cycle_zero)->advanceState(smith::TimeInfo(0.0, dt, 0), shape_disp, states, params);
+
+    mfem::Vector final_disp(*states[field_store_->getFieldIndex("displacement_solve_state")].get());
+    double deflection = 0.0;
+    for (int i = 1; i < final_disp.Size(); i += dim) {
+      deflection = std::max(deflection, std::abs(final_disp(i)));
+    }
+    return deflection;
+  }
+
+  template <typename Solid, typename Thermal>
+  void applyBucklingLoads(Solid& solid, Thermal& thermal, double compressive_traction, double lateral_body_force,
+                          double thermal_source)
+  {
+    solid->setDisplacementBC(mesh_->domain("left"));
+    thermal->setTemperatureBC(mesh_->domain("left"));
+    thermal->setTemperatureBC(mesh_->domain("right"));
+
+    solid->addTraction("right", [=](auto, auto X, auto, auto, auto, auto, auto... /*args*/) {
+      auto traction = 0.0 * X;
+      traction[0] = -compressive_traction;
+      return traction;
+    });
+    solid->addBodyForce(mesh_->entireBodyName(), [=](auto, auto X, auto, auto, auto, auto, auto... /*args*/) {
+      auto force = 0.0 * X;
+      force[1] = lateral_body_force;
+      return force;
+    });
+    thermal->addHeatSource(mesh_->entireBodyName(), [=](auto, auto, auto, auto... /*args*/) { return thermal_source; });
+  }
+
   std::unique_ptr<axom::sidre::DataStore> datastore_;
   std::shared_ptr<smith::Mesh> mesh_;
+  std::shared_ptr<FieldStore> field_store_;
 };
+
+// Defaults used by multiple tests.
+static const LinearSolverOptions directLinOpts{.linear_solver = LinearSolver::SuperLU};
+static const NonlinearSolverOptions newtonNonlinOpts{
+    .nonlin_solver = NonlinearSolver::Newton, .relative_tol = 1e-10, .absolute_tol = 1e-10, .max_iterations = 4};
 
 // 1. CreateDifferentiablePhysicsAllocatesReactionInfo
 TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionInfo)
 {
-  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
-  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
-                                            .relative_tol = 1e-10,
-                                            .absolute_tol = 1e-10,
-                                            .max_iterations = 4};
-
-  auto solid_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
-  auto thermal_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
-
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
-  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
-  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
+  auto param_fields = registerParameterFields(youngs_modulus);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  SolidMechanicsOptions solid_opts;
-  ThermalOptions thermal_opts;
+  auto [solid, solid_cycle_zero, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{}, param_fields, solid_fields, thermal_fields);
 
-  auto solid_coupling_fields =
-      registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store, youngs_modulus);
-  auto thermal_coupling_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
+  auto [thermal, thermal_cycle_zero, thermal_end_steps] = buildThermalSystem<dim, temperature_order, TempRule>(
+      makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, param_fields, thermal_fields, solid_fields);
 
-  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store, thermal_coupling_fields, std::make_shared<SystemSolver>(solid_block_solver), solid_opts,
-      youngs_modulus);
-  auto solid = solid_res.system;
+  auto [coupled, coupled_cycle_zero] = combineSystems(solid, thermal);
 
-  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
-      field_store, solid_coupling_fields, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
-  auto thermal = thermal_res.system;
-
-  auto [coupled, coupled_cz] = combineSystems(solid, thermal);
-
-  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cz);
+  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cycle_zero);
   const auto& solid_dual_space = physics->dual("reactions").space();
   const auto& solid_state_space = physics->state("displacement_solve_state").space();
   const auto& thermal_dual_space = physics->dual("thermal_flux").space();
@@ -170,35 +208,19 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
 // 2. BackpropagateThroughPhysics
 TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
 {
-  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
-  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
-                                            .relative_tol = 1e-10,
-                                            .absolute_tol = 1e-10,
-                                            .max_iterations = 4};
-
-  auto solid_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
-  auto thermal_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
-
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
-  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
-  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
-
-  SolidMechanicsOptions solid_opts;
-  ThermalOptions thermal_opts;
-
   auto param_fields = registerParameterFields(youngs_modulus);
-  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
-  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto [solid, solid_cz, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      std::make_shared<SystemSolver>(solid_block_solver), solid_opts, param_fields, solid_fields, thermal_fields);
+  auto [solid, solid_cycle_zero, solid_end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{}, param_fields, solid_fields, thermal_fields);
 
-  auto [thermal, thermal_cz, thermal_end_steps] = buildThermalSystem<dim, temperature_order, TempRule>(
-      std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts, param_fields, thermal_fields, solid_fields);
+  auto [thermal, thermal_cycle_zero, thermal_end_steps] = buildThermalSystem<dim, temperature_order, TempRule>(
+      makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, param_fields, thermal_fields, solid_fields);
 
-  auto [coupled, coupled_cz] = combineSystems(solid, thermal);
+  auto [coupled, coupled_cycle_zero] = combineSystems(solid, thermal);
 
   ParameterizedGreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
@@ -215,9 +237,8 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
     return traction;
   });
 
-  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cz);
+  auto physics = makeDifferentiablePhysics(coupled, "coupled_physics", coupled_cycle_zero);
 
-  // Run forward
   double dt = 1.0;
   for (int step = 0; step < 2; ++step) {
     physics->advanceTimestep(dt);
@@ -233,215 +254,83 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   EXPECT_TRUE(param_sens->Norml2() > 0.0);
 }
 
+// Shared buckling-load magnitudes (used by staggered + monolithic buckling tests).
+static constexpr double kBucklingTraction = 0.015;
+static constexpr double kBucklingBodyForce = 2.5e-5;
+static constexpr double kBucklingHeatSource = 1.0;
+
 // 3. StaggeredBucklingChallenge
-// Replaces MonolithicBucklingChallenge: verifies convergence and displacement of the staggered combined solver.
 TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
 {
-  constexpr double compressive_traction = 0.015;
-  constexpr double lateral_body_force = 2.5e-5;
-  constexpr double thermal_source = 1.0;
+  LinearSolverOptions mech_lin_opts{.linear_solver = LinearSolver::CG,
+                                    .preconditioner = Preconditioner::HypreAMG,
+                                    .relative_tol = 1e-6,
+                                    .absolute_tol = 1e-10,
+                                    .max_iterations = 120};
+  NonlinearSolverOptions mech_nonlin_opts{
+      .nonlin_solver = NonlinearSolver::TrustRegion, .relative_tol = 1e-6, .absolute_tol = 1e-7, .max_iterations = 25};
+  LinearSolverOptions therm_lin_opts{.linear_solver = LinearSolver::GMRES,
+                                     .preconditioner = Preconditioner::HypreAMG,
+                                     .relative_tol = 1e-6,
+                                     .absolute_tol = 1e-10,
+                                     .max_iterations = 80};
+  NonlinearSolverOptions therm_nonlin_opts{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
+                                           .relative_tol = 1e-7,
+                                           .absolute_tol = 1e-7,
+                                           .max_iterations = 12,
+                                           .max_line_search_iterations = 6};
 
-  smith::LinearSolverOptions mech_lin_opts{.linear_solver = smith::LinearSolver::CG,
-                                           .preconditioner = smith::Preconditioner::HypreAMG,
-                                           .relative_tol = 1e-6,
-                                           .absolute_tol = 1e-10,
-                                           .max_iterations = 120,
-                                           .print_level = 0};
-  smith::NonlinearSolverOptions mech_nonlin_opts{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
-                                                 .relative_tol = 1e-6,
-                                                 .absolute_tol = 1e-7,
-                                                 .max_iterations = 25,
-                                                 .print_level = 0};
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  smith::LinearSolverOptions therm_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
-                                            .preconditioner = smith::Preconditioner::HypreAMG,
-                                            .relative_tol = 1e-6,
-                                            .absolute_tol = 1e-10,
-                                            .max_iterations = 80,
-                                            .print_level = 0};
-  smith::NonlinearSolverOptions therm_nonlin_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
-                                                  .relative_tol = 1e-7,
-                                                  .absolute_tol = 1e-7,
-                                                  .max_iterations = 12,
-                                                  .max_line_search_iterations = 6,
-                                                  .print_level = 0};
+  auto [solid, solid_cycle_zero, solid_end] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store_, thermal_fields, makeSolver(mech_nonlin_opts, mech_lin_opts), SolidMechanicsOptions{});
+  auto [thermal, thermal_cycle_zero, thermal_end] = buildThermalSystem<dim, temperature_order, TempRule>(
+      field_store_, solid_fields, makeSolver(therm_nonlin_opts, therm_lin_opts), ThermalOptions{});
 
-  auto solid_block_solver = buildNonlinearBlockSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
-  auto thermal_block_solver = buildNonlinearBlockSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
-
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
-
-  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
-  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
-
-  SolidMechanicsOptions solid_opts;
-  ThermalOptions thermal_opts;
-
-  auto thermal_coupling = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
-  auto solid_coupling = registerThermalFields<dim, temperature_order, TempRule>(field_store);
-
-  auto solid_res = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store, solid_coupling, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
-  auto solid = solid_res.system;
-
-  auto thermal_res = buildThermalSystem<dim, temperature_order, TempRule>(
-      field_store, thermal_coupling, std::make_shared<SystemSolver>(thermal_block_solver), thermal_opts);
-  auto thermal = thermal_res.system;
-
-  auto [coupled, coupled_cz] = combineSystems(solid, thermal);
+  auto [coupled, coupled_cycle_zero] = combineSystems(solid, thermal);
 
   ThermoelasticMaterialNoParam material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
-  solid->disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
-  thermal->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
-  thermal->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+  applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
 
-  solid->addTraction("right", [=](auto, auto X, auto, auto, auto, auto, auto... /*args*/) {
-    auto traction = 0.0 * X;
-    traction[0] = -compressive_traction;
-    return traction;
-  });
-  solid->addBodyForce(mesh_->entireBodyName(), [=](auto, auto X, auto, auto, auto, auto, auto... /*args*/) {
-    auto force = 0.0 * X;
-    force[1] = lateral_body_force;
-    return force;
-  });
-  thermal->addHeatSource(mesh_->entireBodyName(), [=](auto, auto, auto, auto... /*args*/) { return thermal_source; });
+  double deflection = advanceOneStepAndGetLateralDeflection(coupled, coupled_cycle_zero);
 
-  SLIC_INFO_ROOT("Starting staggered thermo-mechanics solve");
-
-  double dt = 1.0;
-  double time = 0.0;
-  auto shape_disp = field_store->getShapeDisp();
-  auto states = field_store->getStateFields();
-  auto params = field_store->getParameterFields();
-  std::vector<ReactionState> reactions;
-  for (size_t step = 0; step < 1; ++step) {
-    std::tie(states, reactions) =
-        makeAdvancer(coupled, coupled_cz)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
-    time += dt;
-  }
-
-  mfem::Vector final_disp(*states[field_store->getFieldIndex("displacement_solve_state")].get());
-
-  bool staggered_solid_converged = solid_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
-  int staggered_solid_iterations = solid_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
-  bool staggered_thermal_converged = thermal_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
-  int staggered_thermal_iterations = thermal_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
-
-  double staggered_lateral_deflection = 0.0;
-  for (int i = 1; i < final_disp.Size(); i += dim) {
-    staggered_lateral_deflection = std::max(staggered_lateral_deflection, std::abs(final_disp(i)));
-  }
-
-  SLIC_INFO_ROOT("Staggered solid converged: " << staggered_solid_converged
-                                               << ", iterations: " << staggered_solid_iterations);
-  SLIC_INFO_ROOT("Staggered thermal converged: " << staggered_thermal_converged
-                                                 << ", iterations: " << staggered_thermal_iterations);
-  SLIC_INFO_ROOT("Staggered max lateral deflection: " << staggered_lateral_deflection);
-
-  EXPECT_TRUE(staggered_solid_converged);
-  EXPECT_TRUE(staggered_thermal_converged);
-  EXPECT_GT(staggered_lateral_deflection, 1e-5);
+  EXPECT_GT(deflection, 1e-5);
 }
 
 // 4. MonolithicBucklingChallenge
-// Verifies convergence and displacement of the monolithic combined solver.
 TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
 {
-  constexpr double compressive_traction = 0.015;
-  constexpr double lateral_body_force = 2.5e-5;
-  constexpr double thermal_source = 1.0;
+  LinearSolverOptions lin_opts{
+      .linear_solver = LinearSolver::SuperLU, .relative_tol = 1e-6, .absolute_tol = 1e-10, .max_iterations = 80};
+  NonlinearSolverOptions nonlin_opts{
+      .nonlin_solver = NonlinearSolver::Newton, .relative_tol = 1e-7, .absolute_tol = 1e-7, .max_iterations = 12};
 
-  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU,
-                                      .relative_tol = 1e-6,
-                                      .absolute_tol = 1e-10,
-                                      .max_iterations = 80,
-                                      .print_level = 0};
-  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
-                                            .relative_tol = 1e-7,
-                                            .absolute_tol = 1e-7,
-                                            .max_iterations = 12,
-                                            .print_level = 0};
+  auto solver_ptr = makeSolver(nonlin_opts, lin_opts);
 
-  auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
-  auto solver_ptr = std::make_shared<SystemSolver>(block_solver);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
+  auto [solid, solid_cycle_zero, solid_end] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store_, thermal_fields, nullptr, SolidMechanicsOptions{});
+  auto [thermal, thermal_cycle_zero, thermal_end] =
+      buildThermalSystem<dim, temperature_order, TempRule>(field_store_, solid_fields, nullptr, ThermalOptions{});
 
-  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
-  using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
-
-  // Notice that the block_solver is the SAME solver for the whole system
-
-  SolidMechanicsOptions solid_opts;
-  ThermalOptions thermal_opts;
-
-  auto thermal_coupling = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
-  auto solid_coupling = registerThermalFields<dim, temperature_order, TempRule>(field_store);
-
-  auto solid_res =
-      buildSolidMechanicsSystem<dim, displacement_order, DispRule>(field_store, solid_coupling, nullptr, solid_opts);
-  auto solid = solid_res.system;
-
-  auto thermal_res =
-      buildThermalSystem<dim, temperature_order, TempRule>(field_store, thermal_coupling, nullptr, thermal_opts);
-  auto thermal = thermal_res.system;
-
-  auto [coupled, coupled_cz] = combineSystems(solver_ptr, solid, thermal);
+  auto [coupled, coupled_cycle_zero] = combineSystems(solver_ptr, solid, thermal);
 
   ThermoelasticMaterialNoParam material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
-  solid->disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
-  thermal->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
-  thermal->temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+  applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
 
-  solid->addTraction("right", [=](auto, auto X, auto, auto, auto, auto, auto... /*args*/) {
-    auto traction = 0.0 * X;
-    traction[0] = -compressive_traction;
-    return traction;
-  });
-  solid->addBodyForce(mesh_->entireBodyName(), [=](auto, auto X, auto, auto, auto, auto, auto... /*args*/) {
-    auto force = 0.0 * X;
-    force[1] = lateral_body_force;
-    return force;
-  });
-  thermal->addHeatSource(mesh_->entireBodyName(), [=](auto, auto, auto, auto... /*args*/) { return thermal_source; });
+  double deflection = advanceOneStepAndGetLateralDeflection(coupled, coupled_cycle_zero);
 
-  SLIC_INFO_ROOT("Starting monolithic thermo-mechanics solve");
-
-  double dt = 1.0;
-  double time = 0.0;
-  auto shape_disp = field_store->getShapeDisp();
-  auto states = field_store->getStateFields();
-  auto params = field_store->getParameterFields();
-  std::vector<ReactionState> reactions;
-  for (size_t step = 0; step < 1; ++step) {
-    std::tie(states, reactions) =
-        makeAdvancer(coupled, coupled_cz)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
-    time += dt;
-  }
-
-  mfem::Vector final_disp(*states[field_store->getFieldIndex("displacement_solve_state")].get());
-
-  bool converged = block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
-  int iterations = block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
-
-  double lateral_deflection = 0.0;
-  for (int i = 1; i < final_disp.Size(); i += dim) {
-    lateral_deflection = std::max(lateral_deflection, std::abs(final_disp(i)));
-  }
-
-  SLIC_INFO_ROOT("Monolithic converged: " << converged << ", iterations: " << iterations);
-  SLIC_INFO_ROOT("Monolithic max lateral deflection: " << lateral_deflection);
-
-  EXPECT_TRUE(converged);
-  EXPECT_GT(lateral_deflection, 1e-5);
+  EXPECT_GT(deflection, 1e-5);
 }
 
-// Simple linear elastic material for stress output test (file scope — templates cannot be in local classes)
+// Simple linear elastic material for stress output test.
 struct StressOutputLinearElastic {
   double density = 1.0;
   using State = Empty;
@@ -458,26 +347,13 @@ struct StressOutputLinearElastic {
 };
 
 // 5. CauchyStressOutput
-// Verifies that enable_stress_output + output_cauchy_stress writes a non-zero stress field.
 TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
 {
-  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
-  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
-                                            .relative_tol = 1e-10,
-                                            .absolute_tol = 1e-10,
-                                            .max_iterations = 6};
-
-  auto solid_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
-
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100, "");
-
-  using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
-
   SolidMechanicsOptions solid_opts{.enable_stress_output = true, .output_cauchy_stress = true};
 
-  registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
-  auto [sys, cz, end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store, CouplingParams<>{}, std::make_shared<SystemSolver>(solid_block_solver), solid_opts);
+  registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto [sys, cycle_zero, end_steps] = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      field_store_, makeSolver(newtonNonlinOpts, directLinOpts), solid_opts);
 
   sys->setMaterial(StressOutputLinearElastic{}, mesh_->entireBodyName());
 
@@ -488,13 +364,12 @@ TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
     return t;
   });
 
-  auto physics = makeDifferentiablePhysics(sys, "cauchy_physics", cz, end_steps);
+  auto physics = makeDifferentiablePhysics(sys, "cauchy_physics", cycle_zero, end_steps);
   physics->advanceTimestep(1.0);
 
-  // The stress projection system should have run and produced a non-zero stress field.
   ASSERT_FALSE(end_steps.empty()) << "Stress output system should be present";
   auto states = physics->getFieldStates();
-  size_t stress_idx = field_store->getFieldIndex("stress_solve_state");
+  size_t stress_idx = field_store_->getFieldIndex("stress_solve_state");
   double stress_norm = norm(*states[stress_idx].get());
   EXPECT_GT(stress_norm, 1e-8) << "Cauchy stress field should be non-zero after deformation";
 }

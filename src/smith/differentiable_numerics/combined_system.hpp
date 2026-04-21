@@ -137,16 +137,16 @@ std::pair<std::shared_ptr<CombinedSystem>, std::shared_ptr<SystemBase>> combineS
 
   std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
   if (!cycle_zero_subs.empty()) {
-    auto cz = std::make_shared<CombinedSystem>();
-    cz->field_store = field_store;
-    cz->max_stagger_iters = 1;  // Cycle-zero solves are one-shot
+    auto cycle_zero = std::make_shared<CombinedSystem>();
+    cycle_zero->field_store = field_store;
+    cycle_zero->max_stagger_iters = 1;  // Cycle-zero solves are one-shot
     for (auto& sub : cycle_zero_subs) {
-      cz->subsystems.push_back(sub);
+      cycle_zero->subsystems.push_back(sub);
       for (auto& wf : sub->weak_forms) {
-        cz->weak_forms.push_back(wf);
+        cycle_zero->weak_forms.push_back(wf);
       }
     }
-    cycle_zero_combined = cz;
+    cycle_zero_combined = cycle_zero;
   }
 
   return {combined, cycle_zero_combined};
@@ -195,8 +195,8 @@ std::pair<std::shared_ptr<MonolithicCombinedSystem>, std::shared_ptr<SystemBase>
         }
         if constexpr (requires { sub->cycle_zero_system; }) {
           if (sub->cycle_zero_system) {
-            for (auto& cz_wf : sub->cycle_zero_system->weak_forms) {
-              cycle_zero_wfs.push_back(cz_wf);
+            for (auto& cycle_zero_wf : sub->cycle_zero_system->weak_forms) {
+              cycle_zero_wfs.push_back(cycle_zero_wf);
             }
           }
         }

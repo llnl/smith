@@ -55,19 +55,19 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
                   });
 
   if (time_info.cycle() == 0 && cycle_zero_system_ && requires_cycle_zero_solve) {
-    auto cz_unknowns = cycle_zero_system_->solve(time_info);
+    auto cycle_zero_unknowns = cycle_zero_system_->solve(time_info);
 
     // Cycle zero system solves for the initial acceleration, but by convention the solved value
     // is returned through the first (and only) block of the cycle-zero subsystem — the weak form
     // uses an aliased unknown trial space that matches the acceleration test space. Copy that
     // single result into the acceleration state slot for the main solve.
-    SLIC_ERROR_ROOT_IF(cz_unknowns.size() != 1,
+    SLIC_ERROR_ROOT_IF(cycle_zero_unknowns.size() != 1,
                        "Cycle zero system is expected to be a single-block solve producing one unknown");
     std::string test_field_name =
         system_->field_store->getWeakFormReaction(cycle_zero_system_->weak_forms.front()->name());
     size_t test_field_state_idx = system_->field_store->getFieldIndex(test_field_name);
-    current_states[test_field_state_idx] = cz_unknowns[0];
-    system_->field_store->setField(test_field_state_idx, cz_unknowns[0]);
+    current_states[test_field_state_idx] = cycle_zero_unknowns[0];
+    system_->field_store->setField(test_field_state_idx, cycle_zero_unknowns[0]);
   }
 
   std::vector<FieldState> primary_unknowns = system_->solve(time_info);

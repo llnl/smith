@@ -92,7 +92,7 @@ inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_
 /**
  * @brief Return type for physics system build functions.
  *
- * Replaces the previous std::tuple<system, cz, end_steps> return so callers can write
+ * Replaces the previous std::tuple<system, cycle_zero, end_steps> return so callers can write
  * @code
  *   auto res = buildSolidMechanicsSystem<dim, order, Rule>(...);
  *   auto system = res.system;

@@ -175,12 +175,12 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
   main_system->weak_forms = {temperature_wf, displacement_wf};
   main_system->solver = main_solver;
 
-  auto cz_system = std::make_shared<SystemBase>();
-  cz_system->field_store = field_store;
-  cz_system->weak_forms = {cycle_zero_wf};
-  cz_system->solver = cycle_zero_solver;
+  auto cycle_zero_system = std::make_shared<SystemBase>();
+  cycle_zero_system->field_store = field_store;
+  cycle_zero_system->weak_forms = {cycle_zero_wf};
+  cycle_zero_system->solver = cycle_zero_solver;
 
-  MultiphysicsTimeIntegrator advancer(main_system, cz_system);
+  MultiphysicsTimeIntegrator advancer(main_system, cycle_zero_system);
 
   auto [new_states, reactions] =
       advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
@@ -231,12 +231,12 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   main_system->weak_forms = {main_wf};
   main_system->solver = main_solver;
 
-  auto cz_system = std::make_shared<SystemBase>();
-  cz_system->field_store = field_store;
-  cz_system->weak_forms = {cycle_zero_wf};
-  cz_system->solver = cycle_zero_solver;
+  auto cycle_zero_system = std::make_shared<SystemBase>();
+  cycle_zero_system->field_store = field_store;
+  cycle_zero_system->weak_forms = {cycle_zero_wf};
+  cycle_zero_system->solver = cycle_zero_solver;
 
-  MultiphysicsTimeIntegrator advancer(main_system, cz_system);
+  MultiphysicsTimeIntegrator advancer(main_system, cycle_zero_system);
 
   auto [new_states, reactions] =
       advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});

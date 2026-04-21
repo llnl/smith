@@ -96,15 +96,15 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   // Phase 2: build each system.
 
   // Solid receives thermal coupling (temperature_solve_state, temperature).
-  auto [solid, solid_cz, solid_end] = buildSolidMechanicsSystem<dim3, disp_ord, DispRule>(
+  auto [solid, solid_cycle_zero, solid_end] = buildSolidMechanicsSystem<dim3, disp_ord, DispRule>(
       field_store, thermal_exported, std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{});
 
   // Thermal is standalone (no coupling back from solid for this test).
-  auto [thermal, thermal_cz, thermal_end] = buildThermalSystem<dim3, temp_ord, TempRule>(
+  auto [thermal, thermal_cycle_zero, thermal_end] = buildThermalSystem<dim3, temp_ord, TempRule>(
       field_store, CouplingParams<>{}, std::make_shared<SystemSolver>(thermal_block_solver), ThermalOptions{});
 
   // StateVariable receives solid displacement coupling (4 fields: disp_ss, displacement, velocity, acceleration).
-  auto [state_sys, state_cz, state_end] = buildStateVariableSystem<dim3, ThreeSystemStateSpace>(
+  auto [state_sys, state_cycle_zero, state_end] = buildStateVariableSystem<dim3, ThreeSystemStateSpace>(
       field_store, state_rule, solid_exported, std::make_shared<SystemSolver>(state_block_solver),
       StateVariableOptions{});
 
@@ -174,7 +174,7 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
       });
 
   // Phase 5: combine and solve.
-  auto [combined, combined_cz] = combineSystems(solid, thermal, state_sys);
+  auto [combined, combined_cycle_zero] = combineSystems(solid, thermal, state_sys);
 
   double dt = 1.0, time = 0.0;
   auto shape_disp = field_store->getShapeDisp();
@@ -184,7 +184,7 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
 
   for (size_t step = 0; step < 2; ++step) {
     std::tie(states, reactions) =
-        makeAdvancer(combined, combined_cz)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+        makeAdvancer(combined, combined_cycle_zero)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
   }
 

@@ -113,7 +113,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   BackwardEulerFirstOrderTimeIntegrationRule state_rule;
   registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(field_store, disp_rule, state_rule);
 
-  auto [system, cz_sys, end_steps] = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
+  auto [system, cycle_zero_sys, end_steps] = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
       field_store, disp_rule, state_rule, coupled_solver, SolidMechanicsWithInternalVarsOptions{});
 
   // Material and Evolution
@@ -133,7 +133,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
     return u;
   });
 
-  auto physics = makeDifferentiablePhysics(system, "physics", cz_sys, end_steps);
+  auto physics = makeDifferentiablePhysics(system, "physics", cycle_zero_sys, end_steps);
 
   // Create ParaView writer
   auto writer = createParaviewWriter(*mesh, system->field_store->getOutputFieldStates(), "solid_state_output");
@@ -163,7 +163,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   BackwardEulerFirstOrderTimeIntegrationRule state_rule;
   registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(field_store, disp_rule, state_rule);
 
-  auto [system, cz_sys, end_steps] = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
+  auto [system, cycle_zero_sys, end_steps] = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
       field_store, disp_rule, state_rule, staggered_solver, SolidMechanicsWithInternalVarsOptions{});
 
   system->setMaterial(DamageMaterial{}, mesh->entireBodyName());
@@ -177,7 +177,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
     return u;
   });
 
-  auto physics = makeDifferentiablePhysics(system, "physics_relaxed", cz_sys, end_steps);
+  auto physics = makeDifferentiablePhysics(system, "physics_relaxed", cycle_zero_sys, end_steps);
   for (int step = 1; step <= 3; ++step) {
     physics->advanceTimestep(1.0);
     SLIC_INFO("Staggered relaxation step " << step << " completed");
@@ -194,7 +194,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
   BackwardEulerFirstOrderTimeIntegrationRule state_rule;
   registerSolidMechanicsWithInternalVarsFields<dim, disp_order, StateSpace>(field_store, disp_rule, state_rule);
 
-  auto [system, cz_sys, end_steps] = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
+  auto [system, cycle_zero_sys, end_steps] = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
       field_store, disp_rule, state_rule, coupled_solver, SolidMechanicsWithInternalVarsOptions{});
 
   system->setMaterial(DamageMaterial{}, mesh->entireBodyName());
@@ -219,7 +219,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
     return t;
   });
 
-  auto physics = makeDifferentiablePhysics(system, "physics_bf", cz_sys, end_steps);
+  auto physics = makeDifferentiablePhysics(system, "physics_bf", cycle_zero_sys, end_steps);
   physics->advanceTimestep(1.0);
 
   // Check that the displacement field is non-zero (the body force + traction produced deformation)
