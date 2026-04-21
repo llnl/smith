@@ -587,7 +587,7 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetFaceDofs(const smith::f
           int ghost_orientation;
           if (mesh->Dimension() == 2) {
             // In 2D, orientations[i] sometimes is inverted as compared to the ones from GetFaceInformation
-            // In this case, we previous discard orientations obtained by GetElementEdges and use the ones from
+            // In this case, we previously discarded orientations obtained by GetElementEdges and use the ones from
             // GetFaceInformation, which is strictly CCW. Then, we set ghost orientation to be exactly the opposite
             // of the original orientation
             ghost_orientation = (orientation == 0) ? 1 : 0;

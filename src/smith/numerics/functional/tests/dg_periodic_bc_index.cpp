@@ -112,17 +112,41 @@ void L2_periodic_index_test(std::string meshfile)
   EXPECT_NEAR(0., value.Norml2(), 1.e-12);
 }
 
-TEST(periodic_index, L2_test_tris_linear) { L2_periodic_index_test<2, 1>(SMITH_REPO_DIR "/data/meshes/patch2D_tris.mesh"); }
-TEST(periodic_index, L2_test_tris_quadratic) { L2_periodic_index_test<2, 2>(SMITH_REPO_DIR "/data/meshes/patch2D_tris.mesh"); }
+TEST(periodic_index, L2_test_tris_linear)
+{
+  L2_periodic_index_test<2, 1>(SMITH_REPO_DIR "/data/meshes/patch2D_tris.mesh");
+}
+TEST(periodic_index, L2_test_tris_quadratic)
+{
+  L2_periodic_index_test<2, 2>(SMITH_REPO_DIR "/data/meshes/patch2D_tris.mesh");
+}
 
-TEST(periodic_index, L2_test_quads_linear) { L2_periodic_index_test<2, 1>(SMITH_REPO_DIR "/data/meshes/patch2D_quads.mesh"); }
-TEST(periodic_index, L2_test_quads_quadratic) { L2_periodic_index_test<2, 2>(SMITH_REPO_DIR "/data/meshes/patch2D_quads.mesh"); }
+TEST(periodic_index, L2_test_quads_linear)
+{
+  L2_periodic_index_test<2, 1>(SMITH_REPO_DIR "/data/meshes/patch2D_quads.mesh");
+}
+TEST(periodic_index, L2_test_quads_quadratic)
+{
+  L2_periodic_index_test<2, 2>(SMITH_REPO_DIR "/data/meshes/patch2D_quads.mesh");
+}
 
-TEST(periodic_index, L2_test_tets_linear) { L2_periodic_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh"); }
-TEST(periodic_index, L2_test_tets_quadratic) { L2_periodic_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh"); }
+TEST(periodic_index, L2_test_tets_linear)
+{
+  L2_periodic_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh");
+}
+TEST(periodic_index, L2_test_tets_quadratic)
+{
+  L2_periodic_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh");
+}
 
-TEST(periodic_index, L2_test_hex_linear) { L2_periodic_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh"); }
-TEST(periodic_index, L2_test_hex_quadratic) { L2_periodic_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh"); }
+TEST(periodic_index, L2_test_hex_linear)
+{
+  L2_periodic_index_test<3, 1>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh");
+}
+TEST(periodic_index, L2_test_hex_quadratic)
+{
+  L2_periodic_index_test<3, 2>(SMITH_REPO_DIR "/data/meshes/patch3D_hexes.mesh");
+}
 
 int main(int argc, char* argv[])
 {
