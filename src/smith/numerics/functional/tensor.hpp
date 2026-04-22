@@ -54,10 +54,7 @@ struct tensor<T, m, n...> {
   SMITH_HOST_DEVICE constexpr auto& operator[](int i) { return data[i]; }
   SMITH_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
-  /// the type of data
-  using inner_type = tensor<T, n...>;
-
-  inner_type data[m];
+  tensor<T, n...> data[m];
 };
 
 template <typename T, int m>
@@ -87,10 +84,7 @@ struct tensor<T, m> {
     return data[0];
   }
 
-  /// the type of data
-  using inner_type = T;
-
-  inner_type data[m];
+  T data[m];
 };
 /// @endcond
 
