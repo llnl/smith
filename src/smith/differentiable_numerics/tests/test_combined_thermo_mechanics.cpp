@@ -221,9 +221,9 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
   auto solid = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store_, makeSolver(mech_nonlin_opts, mech_lin_opts), SolidMechanicsOptions{}, thermal_fields);
+      makeSolver(mech_nonlin_opts, mech_lin_opts), SolidMechanicsOptions{}, solid_fields, thermal_fields);
   auto thermal = buildThermalSystem<dim, temperature_order, TempRule>(
-      field_store_, makeSolver(therm_nonlin_opts, therm_lin_opts), ThermalOptions{}, solid_fields);
+      makeSolver(therm_nonlin_opts, therm_lin_opts), ThermalOptions{}, thermal_fields, solid_fields);
 
   auto combined = combineSystems(solid, thermal);
   auto coupled = combined.system;
@@ -250,10 +250,11 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto solid = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(field_store_, nullptr,
-                                                                            SolidMechanicsOptions{}, thermal_fields);
-  auto thermal =
-      buildThermalSystem<dim, temperature_order, TempRule>(field_store_, nullptr, ThermalOptions{}, solid_fields);
+  auto solid =
+      buildSolidMechanicsSystem<dim, displacement_order, DispRule>(nullptr, SolidMechanicsOptions{}, solid_fields,
+                                                                   thermal_fields);
+  auto thermal = buildThermalSystem<dim, temperature_order, TempRule>(nullptr, ThermalOptions{}, thermal_fields,
+                                                                       solid_fields);
 
   auto combined = combineSystems(solver_ptr, solid, thermal);
   auto coupled = combined.system;
@@ -272,9 +273,9 @@ TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
 {
   SolidMechanicsOptions solid_opts{.enable_stress_output = true, .output_cauchy_stress = true};
 
-  registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_, solid_opts);
   auto sys = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store_, makeSolver(newtonNonlinOpts, directLinOpts), solid_opts);
+      makeSolver(newtonNonlinOpts, directLinOpts), solid_opts, solid_fields);
 
   constexpr double E = 100.0;
   constexpr double nu = 0.25;
@@ -304,13 +305,13 @@ TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesPostSolveSystems)
 {
   SolidMechanicsOptions solid_opts{.enable_stress_output = true};
 
-  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_, solid_opts);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
   auto solid = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
-      field_store_, makeSolver(newtonNonlinOpts, directLinOpts), solid_opts, thermal_fields);
+      makeSolver(newtonNonlinOpts, directLinOpts), solid_opts, solid_fields, thermal_fields);
   auto thermal = buildThermalSystem<dim, temperature_order, TempRule>(
-      field_store_, makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, solid_fields);
+      makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, thermal_fields, solid_fields);
 
   auto combined = combineSystems(solid, thermal);
 

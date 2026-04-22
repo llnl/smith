@@ -170,13 +170,13 @@ struct ThermalOptions {};
 /**
  * @brief Register all thermal fields into a FieldStore.
  *
- * Phase 1 of the two-phase initialization. Pass an instance of the desired time integration rule
- * so its type is deduced; only `<dim, temp_order>` need be specified explicitly.
+ * Phase 1 of the two-phase initialization.
  *
  * @return PhysicsFields carrying the exported field tokens and time rule type.
  */
 template <int dim, int temp_order, typename TemperatureTimeRule>
-auto registerThermalFields(std::shared_ptr<FieldStore> field_store, TemperatureTimeRule /*rule*/)
+auto registerThermalFields(std::shared_ptr<FieldStore> field_store,
+                           const ThermalOptions& /*options*/ = ThermalOptions{})
 {
   FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
   if (!field_store->hasField(field_store->prefix(shape_disp_type.name))) {
@@ -194,20 +194,9 @@ auto registerThermalFields(std::shared_ptr<FieldStore> field_store, TemperatureT
 }
 
 /**
- * @brief Register thermal fields (no rule instance - Rule given as explicit template param).
- */
-template <int dim, int temp_order, typename TemperatureTimeRule>
-auto registerThermalFields(std::shared_ptr<FieldStore> field_store)
-{
-  return registerThermalFields<dim, temp_order>(field_store, TemperatureTimeRule{});
-}
-
-/**
  * @brief Internal thermal builder after coupling fields are assembled.
  *
- * Phase 2 of the two-phase initialization. Pass the same rule instance used in
- * registerThermalFields so the type is deduced; only `<dim, temp_order>` need be specified.
- *
+ * Phase 2 of the two-phase initialization.
  */
 namespace detail {
 
@@ -228,11 +217,11 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
 
   std::string thermal_flux_name = field_store->prefix("thermal_flux");
   auto thermal_weak_form = std::apply(
-      [&](auto&... cfs) {
+      [&](auto&... coupling_fields) {
         return std::make_shared<typename SystemType::ThermalWeakFormType>(
             thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
             field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
-                                      cfs...));
+                                      coupling_fields...));
       },
       coupling.fields);
 
@@ -257,16 +246,19 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
  * Usage:
  * @code
  *   auto thermal = buildThermalSystem<dim, order, TempRule>(
- *       field_store, solver, opts, solid_fields);
+ *       solver, opts, thermal_fields, solid_fields);
  * @endcode
  */
-template <int dim, int temp_order, typename TemperatureTimeRule, typename... FieldPacks>
-  requires(sizeof...(FieldPacks) > 0 && (detail::is_coupling_params_v<FieldPacks> || ...))
-auto buildThermalSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr<SystemSolver> solver,
-                        const ThermalOptions& options, const FieldPacks&... field_packs)
+template <int dim, int temp_order, typename TemperatureTimeRule, typename SelfFields, typename... OtherPacks>
+  requires(detail::is_physics_fields_v<SelfFields> &&
+           std::is_same_v<typename std::decay_t<SelfFields>::time_rule_type, TemperatureTimeRule> &&
+           (detail::is_coupling_params_v<OtherPacks> && ...))
+auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
+                        const SelfFields& self_fields, const OtherPacks&... other_packs)
 {
-  (detail::registerParamsIfNeeded(field_store, field_packs), ...);
-  auto coupling = detail::collectCouplingFields<TemperatureTimeRule>(field_store, field_packs...);
+  auto field_store = self_fields.field_store;
+  (detail::registerParamsIfNeeded(field_store, other_packs), ...);
+  auto coupling = detail::collectCouplingFields<TemperatureTimeRule>(field_store, self_fields, other_packs...);
   return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
 }
 
@@ -280,38 +272,7 @@ auto buildThermalSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr
  * Usage:
  * @code
  *   auto thermal = buildThermalSystem<dim, temp_order, TempRule>(
- *       solver, opts, param_fields, thermal_fields, solid_fields);
+ *       solver, opts, thermal_fields, param_fields, solid_fields);
  * @endcode
  */
-/**
- * @brief Build a standalone ThermalSystem with no coupling and no parameters.
- *
- * Convenience overload for single-physics tests and demos - avoids the `CouplingParams<>{}`
- * placeholder at the call site.
- */
-template <int dim, int temp_order, typename TemperatureTimeRule>
-auto buildThermalSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr<SystemSolver> solver,
-                        const ThermalOptions& options)
-{
-  return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, CouplingParams<>{}, solver,
-                                                                              options);
-}
-
-/**
- * @brief Build a thermal system from registered field packs.
- *
- * One `PhysicsFields` pack must come from the thermal registration. Other `PhysicsFields` packs are
- * treated as coupling inputs, while non-physics `CouplingParams` packs are registered as parameter
- * fields.
- */
-template <int dim, int temp_order, typename TemperatureTimeRule, typename... FieldPacks>
-  requires(sizeof...(FieldPacks) > 0 && (detail::is_physics_fields_v<FieldPacks> || ...) &&
-           !(std::is_same_v<std::decay_t<FieldPacks>, ThermalOptions> || ...))
-auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
-                        const FieldPacks&... field_packs)
-{
-  auto field_store = detail::findFieldStore(field_packs...);
-  return buildThermalSystem<dim, temp_order, TemperatureTimeRule>(field_store, solver, options, field_packs...);
-}
-
 }  // namespace smith

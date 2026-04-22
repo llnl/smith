@@ -15,17 +15,14 @@
  * Usage:
  * @code
  *   auto field_store = std::make_shared<FieldStore>(mesh, 100, "coupled");
- *
- *   CouplingParams solid_coupling{FieldType<H1<temp_order>>("temperature"),
- *                               FieldType<H1<temp_order>>("temperature_old")};
- *   CouplingParams thermal_coupling{FieldType<H1<disp_order,dim>>("displacement_solve_state"),
- *                                 FieldType<H1<disp_order,dim>>("displacement")};
+ *   auto solid_fields = registerSolidMechanicsFields<dim, disp_order, DispRule>(field_store);
+ *   auto thermal_fields = registerThermalFields<dim, temp_order, TempRule>(field_store);
  *
  *   auto solid = buildSolidMechanicsSystem<dim, disp_order, DispRule>(
- *       field_store, solid_solver, solid_opts, params..., solid_coupling);
+ *       solid_solver, solid_opts, solid_fields, params..., thermal_fields);
  *
  *   auto thermal = buildThermalSystem<dim, temp_order, TempRule>(
- *       field_store, thermal_solver, thermal_opts, thermal_coupling);
+ *       thermal_solver, thermal_opts, thermal_fields, solid_fields);
  *
  *   auto coupled = combineSystems(solid, thermal);
  *   coupled->setMaterial(thermo_mech_material, domain);   // tight coupling

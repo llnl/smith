@@ -36,6 +36,8 @@ static constexpr int disp_order = 1;
 static constexpr int state_order = 0;
 
 using StateSpace = L2<state_order>;
+using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
+using InternalVariableRule = BackwardEulerFirstOrderTimeIntegrationRule;
 
 struct SolidStaticWithInternalVarsFixture : public testing::Test {
   void SetUp() override
@@ -100,48 +102,67 @@ struct StrainNormEvolution {
   }
 };
 
-TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
+std::shared_ptr<SystemSolver> makeSystemSolver(const Mesh& mesh)
 {
-  auto solid_solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
-  auto state_solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
-  auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-  auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
+  return std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, mesh));
+}
 
-  auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_static_with_internal_vars_");
+auto registerFields(const std::shared_ptr<FieldStore>& field_store)
+{
+  return std::tuple{registerSolidMechanicsFields<dim, disp_order, DispRule>(field_store),
+                    registerInternalVariableFields<StateSpace, InternalVariableRule>(field_store)};
+}
 
-  auto solid_fields =
-      registerSolidMechanicsFields<dim, disp_order>(field_store, QuasiStaticSecondOrderTimeIntegrationRule{});
-  auto state_fields =
-      registerStateVariableFields<StateSpace>(field_store, BackwardEulerFirstOrderTimeIntegrationRule{});
+template <typename SolidFields, typename InternalVariableFields>
+auto buildSystems(const std::shared_ptr<SystemSolver>& solid_solver,
+                  const std::shared_ptr<SystemSolver>& internal_variable_solver, const SolidFields& solid_fields,
+                  const InternalVariableFields& internal_variable_fields)
+{
+  return std::tuple{
+      buildSolidMechanicsSystem<dim, disp_order, DispRule>(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                           internal_variable_fields),
+      buildInternalVariableSystem<dim, StateSpace, InternalVariableRule>(internal_variable_solver,
+                                                                         InternalVariableOptions{},
+                                                                         internal_variable_fields, solid_fields)};
+}
 
-  auto solid = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
-      field_store, solid_solver, SolidMechanicsOptions{}, state_fields);
-  auto state = buildStateVariableSystem<dim, StateSpace, BackwardEulerFirstOrderTimeIntegrationRule>(
-      field_store, state_solver, StateVariableOptions{}, solid_fields);
+template <typename SolidSystemType, typename InternalVariableSystemType>
+void setDamageCoupling(const std::shared_ptr<SolidSystemType>& solid,
+                       const std::shared_ptr<InternalVariableSystemType>& internal_variables,
+                       const std::shared_ptr<Mesh>& mesh)
+{
+  setCoupledSolidMechanicsInternalVariableMaterial(solid, internal_variables, DamageMaterial{}, mesh->entireBodyName());
+  setCoupledInternalVariableMaterial(internal_variables, solid, StrainNormEvolution{}, mesh->entireBodyName());
+}
 
-  auto combined = combineSystems(coupled_solver, solid, state);
-  auto system = combined.system;
-
-  // Material and Evolution
-  setCoupledSolidMechanicsInternalVarsMaterial(solid, state, DamageMaterial{}, mesh->entireBodyName());
-  state->addStateEvolution(mesh->entireBodyName(), [](auto t_info, auto isv, auto isv_dot, auto u, auto... /*unused*/) {
-    return StrainNormEvolution{}(t_info, isv, isv_dot, get<DERIVATIVE>(u));
-  });
-
-  // Boundary Conditions
-
-  // Fix bottom face
-  solid->disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
-
-  // Pull top face
-  double pull_rate = 0.05;
-  solid->disp_bc->setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
+template <typename SolidSystemType>
+void setPullBoundaryConditions(const std::shared_ptr<SolidSystemType>& solid, const std::shared_ptr<Mesh>& mesh,
+                               double pull_rate)
+{
+  solid->disp_bc->template setFixedVectorBCs<dim>(mesh->domain("bottom"));
+  solid->disp_bc->template setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
     tensor<double, dim> u{};
     u[2] = pull_rate * t;
     return u;
   });
+}
+
+TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
+{
+  auto solid_solver = makeSystemSolver(*mesh);
+  auto internal_variable_solver = makeSystemSolver(*mesh);
+  auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_static_with_internal_vars_");
+  auto [solid_fields, internal_variable_fields] = registerFields(field_store);
+  auto [solid, internal_variables] =
+      buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
+
+  auto combined = combineSystems(coupled_solver, solid, internal_variables);
+  auto system = combined.system;
+
+  setDamageCoupling(solid, internal_variables, mesh);
+  setPullBoundaryConditions(solid, mesh, 0.05);
 
   auto physics = makeDifferentiablePhysics(system, "physics");
 
@@ -158,46 +179,27 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 
 TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 {
-  auto solid_system_solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
-  auto state_system_solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
+  auto solid_solver = makeSystemSolver(*mesh);
+  auto internal_variable_solver = makeSystemSolver(*mesh);
   auto disp_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-  auto state_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto internal_variable_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
-  // Staggered solver: stage 0 solves displacement (block 0), stage 1 solves state (block 1).
+  // Staggered solver: stage 0 solves displacement, stage 1 solves internal variable.
   // Use relaxation_factor = 0.5 on the displacement stage to exercise the relaxation path.
   auto staggered_solver = std::make_shared<SystemSolver>(20);
   staggered_solver->addSubsystemSolver({0}, disp_solver, 0.5);
-  staggered_solver->addSubsystemSolver({1}, state_block_solver, 1.0);
+  staggered_solver->addSubsystemSolver({1}, internal_variable_block_solver, 1.0);
 
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_staggered_relaxation_");
+  auto [solid_fields, internal_variable_fields] = registerFields(field_store);
+  auto [solid, internal_variables] =
+      buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
 
-  auto solid_fields =
-      registerSolidMechanicsFields<dim, disp_order>(field_store, QuasiStaticSecondOrderTimeIntegrationRule{});
-  auto state_fields =
-      registerStateVariableFields<StateSpace>(field_store, BackwardEulerFirstOrderTimeIntegrationRule{});
-
-  auto solid = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
-      field_store, solid_system_solver, SolidMechanicsOptions{}, state_fields);
-  auto state = buildStateVariableSystem<dim, StateSpace, BackwardEulerFirstOrderTimeIntegrationRule>(
-      field_store, state_system_solver, StateVariableOptions{}, solid_fields);
-
-  auto combined = combineSystems(staggered_solver, solid, state);
+  auto combined = combineSystems(staggered_solver, solid, internal_variables);
   auto system = combined.system;
 
-  setCoupledSolidMechanicsInternalVarsMaterial(solid, state, DamageMaterial{}, mesh->entireBodyName());
-  state->addStateEvolution(mesh->entireBodyName(), [](auto t_info, auto isv, auto isv_dot, auto u, auto... /*unused*/) {
-    return StrainNormEvolution{}(t_info, isv, isv_dot, get<DERIVATIVE>(u));
-  });
-
-  solid->disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
-  double pull_rate = 0.05;
-  solid->disp_bc->setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
-    tensor<double, dim> u{};
-    u[2] = pull_rate * t;
-    return u;
-  });
+  setDamageCoupling(solid, internal_variables, mesh);
+  setPullBoundaryConditions(solid, mesh, 0.05);
 
   auto physics = makeDifferentiablePhysics(system, "physics_relaxed");
   for (int step = 1; step <= 3; ++step) {
@@ -208,31 +210,19 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 
 TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 {
-  auto solid_solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
-  auto state_solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
+  auto solid_solver = makeSystemSolver(*mesh);
+  auto internal_variable_solver = makeSystemSolver(*mesh);
   auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "body_force_test_");
+  auto [solid_fields, internal_variable_fields] = registerFields(field_store);
+  auto [solid, internal_variables] =
+      buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
 
-  auto solid_fields =
-      registerSolidMechanicsFields<dim, disp_order>(field_store, QuasiStaticSecondOrderTimeIntegrationRule{});
-  auto state_fields =
-      registerStateVariableFields<StateSpace>(field_store, BackwardEulerFirstOrderTimeIntegrationRule{});
-
-  auto solid = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
-      field_store, solid_solver, SolidMechanicsOptions{}, state_fields);
-  auto state = buildStateVariableSystem<dim, StateSpace, BackwardEulerFirstOrderTimeIntegrationRule>(
-      field_store, state_solver, StateVariableOptions{}, solid_fields);
-
-  auto combined = combineSystems(coupled_solver, solid, state);
+  auto combined = combineSystems(coupled_solver, solid, internal_variables);
   auto system = combined.system;
 
-  setCoupledSolidMechanicsInternalVarsMaterial(solid, state, DamageMaterial{}, mesh->entireBodyName());
-  state->addStateEvolution(mesh->entireBodyName(), [](auto t_info, auto isv, auto isv_dot, auto u, auto... /*unused*/) {
-    return StrainNormEvolution{}(t_info, isv, isv_dot, get<DERIVATIVE>(u));
-  });
+  setDamageCoupling(solid, internal_variables, mesh);
 
   // Fix bottom face
   solid->disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));

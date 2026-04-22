@@ -106,7 +106,7 @@ void setCoupledThermoMechanicsMaterial(
           auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
               material, t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T),
               params...);
-          return smith::tuple{get<VALUE>(a) * material.density, pk};
+          return detail::makeScaledCycleZeroResidual(t_info, get<VALUE>(a) * material.density, pk);
         });
   }
 

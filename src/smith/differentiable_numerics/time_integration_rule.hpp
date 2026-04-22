@@ -153,6 +153,53 @@ class QuasiStaticRule : public TimeIntegrationRule {
   }
 };
 
+/// @brief encodes rules for static postprocessing fields with zero time derivatives.
+class StaticTimeIntegrationRule : public TimeIntegrationRule {
+ public:
+  static constexpr int num_states = 1;  ///< number of states required by this rule (compile-time)
+
+  int num_args() const override { return num_states; }
+
+  template <typename T1>
+  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
+  {
+    return field_new;
+  }
+
+  template <typename T1>
+  SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
+  {
+    return zero{};
+  }
+
+  template <typename T1>
+  SMITH_HOST_DEVICE auto ddot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
+  {
+    return zero{};
+  }
+
+  template <typename T1>
+  SMITH_HOST_DEVICE auto interpolate(const TimeInfo& t, const T1& field_new) const
+  {
+    return std::make_tuple(value(t, field_new), dot(t, field_new), ddot(t, field_new));
+  }
+
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
+    return value(t, states[0]);
+  }
+
+  FieldState corrected_dot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    return zeroCopy(states[0]);
+  }
+
+  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    return zeroCopy(states[0]);
+  }
+};
+
 /// @brief Alias for BackwardEulerFirstOrderTimeIntegrationRule for convenience.  Quasi-static still should compute
 /// velocities (viscosities) using backward Euler.
 using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeIntegrationRule;
