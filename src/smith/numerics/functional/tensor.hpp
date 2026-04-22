@@ -51,9 +51,6 @@ struct tensor<T, m, n...> {
     return data[i](jklm...);
   }
 
-  /// return the number of elements in data
-  SMITH_HOST_DEVICE constexpr static int outer_size() { return m; }
-
   SMITH_HOST_DEVICE constexpr auto& operator[](int i) { return data[i]; }
   SMITH_HOST_DEVICE constexpr const auto& operator[](int i) const { return data[i]; }
 
@@ -92,9 +89,6 @@ struct tensor<T, m> {
   {
     return data[0];
   }
-
-  /// return the number of elements in data
-  SMITH_HOST_DEVICE constexpr static int outer_size() { return m; }
 
   /// return the order of the tensor
   SMITH_HOST_DEVICE constexpr static int order()
@@ -282,6 +276,13 @@ template <typename T>
 SMITH_HOST_DEVICE constexpr zero dot(zero, const T&)
 {
   return zero{};
+}
+
+/** @brief return the size of the leftmost tensor dimension */
+template <typename T, int m, int... n>
+SMITH_HOST_DEVICE constexpr int outer_size(tensor<T, m, n...>)
+{
+  return m;
 }
 
 /**
