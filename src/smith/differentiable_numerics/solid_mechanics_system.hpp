@@ -69,7 +69,6 @@ struct SolidMechanicsSystem : public SystemBase {
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
   std::shared_ptr<CycleZeroSolidWeakFormType>
       cycle_zero_solid_weak_form;                        ///< Typed cycle zero solid mechanics weak form.
-  std::shared_ptr<SystemBase> cycle_zero_system;         ///< Cycle-zero system for initial acceleration solve.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
 
@@ -372,7 +371,7 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store, Displ
 }
 
 /**
- * @brief Register all solid mechanics fields (no rule instance — Rule given as explicit template param).
+ * @brief Register all solid mechanics fields (no rule instance - Rule given as explicit template param).
  *
  * Preferred form: Rule is deduced from the PhysicsFields type rather than a runtime instance.
  * Equivalent to the rule-instance overload but avoids requiring a dummy rule object.
@@ -384,20 +383,18 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store)
 }
 
 /**
- * @brief Build a SolidMechanicsSystem with coupling, assuming fields are already registered.
+ * @brief Internal solid mechanics builder after coupling fields are assembled.
  *
  * Phase 2 of the two-phase initialization. Pass the same rule instance used in
  * registerSolidMechanicsFields so the type is deduced; only `<dim, order>` need be specified.
  *
- * Returns `{system, cycle_zero_system, end_step_systems}` as a tuple.
- * `cycle_zero_system` is nullptr unless the rule requires an initial acceleration solve.
- * `end_step_systems` contains the stress output system when `enable_stress_output` is set.
  */
+namespace detail {
+
 template <int dim, int order, typename DisplacementTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
-auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, DisplacementTimeRule /*rule*/,
-                               const Coupling& coupling, std::shared_ptr<SystemSolver> solver,
-                               const SolidMechanicsOptions& options)
+auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
+                                   std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options)
 {
   auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>();
 
@@ -426,9 +423,6 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, Displace
   sys->disp_time_rule = disp_time_rule_ptr;
   sys->solid_weak_form = solid_weak_form;
   sys->output_cauchy_stress = options.output_cauchy_stress;
-
-  std::shared_ptr<SystemBase> cycle_zero_system;
-  std::vector<std::shared_ptr<SystemBase>> end_step_systems;
 
   if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
     std::string cycle_zero_name = field_store->prefix("solid_reaction");
@@ -461,7 +455,6 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, Displace
         buildNonlinearBlockSolver(cycle_zero_nonlin, cycle_zero_lin, *field_store->getMesh()));
 
     sys->cycle_zero_system = makeSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form});
-    cycle_zero_system = sys->cycle_zero_system;
   }
 
   if (options.enable_stress_output) {
@@ -496,49 +489,36 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, Displace
         std::make_shared<SystemSolver>(buildNonlinearBlockSolver(stress_nonlin, stress_lin, *field_store->getMesh()));
 
     sys->stress_output_system = makeSystem(field_store, stress_solver, {sys->stress_weak_form});
-    end_step_systems.push_back(sys->stress_output_system);
+    sys->post_solve_systems.push_back(sys->stress_output_system);
   }
 
-  sys->post_solve_systems = end_step_systems;
-
-  return std::make_tuple(sys, cycle_zero_system, end_step_systems);
+  return sys;
 }
 
+}  // namespace detail
+
 /**
- * @brief Build a SolidMechanicsSystem from a coupling pack and optional parameter fields.
+ * @brief Build a SolidMechanicsSystem from already-registered field packs.
  *
  * Preferred API: Rule is given as explicit template param (no rule instance needed).
- * The coupling argument carries the fields borrowed from another physics (or CouplingParams<> for none).
- * Additional parameter_types are registered and appended after the coupling fields.
- *
- * Returns a @c SystemBuildResult so callers can write @c res.system, @c res.cycle_zero_system, etc.
+ * Additional parameter packs are registered as parameters. Coupling packs are taken from
+ * the trailing field-pack arguments.
  *
  * Usage:
  * @code
- *   auto res = buildSolidMechanicsSystem<dim, order, DispRule>(
- *       field_store, thermal_fields, solver, opts, youngs_modulus);
- *   auto solid = res.system;
+ *   auto solid = buildSolidMechanicsSystem<dim, order, DispRule>(
+ *       field_store, solver, opts, youngs_modulus, thermal_fields);
  * @endcode
  */
-template <int dim, int order, typename DisplacementTimeRule, typename Coupling, typename... parameter_space>
-  requires detail::is_coupling_params_v<Coupling>
-auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
-                               std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
-                               FieldType<parameter_space>... parameter_types)
+template <int dim, int order, typename DisplacementTimeRule, typename... FieldPacks>
+  requires(sizeof...(FieldPacks) > 0 && (detail::is_coupling_params_v<FieldPacks> || ...))
+auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr<SystemSolver> solver,
+                               const SolidMechanicsOptions& options, const FieldPacks&... field_packs)
 {
-  (
-      [&](auto& pt) {
-        pt.name = "param_" + pt.name;
-        field_store->addParameter(pt);
-      }(parameter_types),
-      ...);
-
-  auto combined = std::apply([&](auto... cfs) { return CouplingParams{cfs..., parameter_types...}; }, coupling.fields);
-
-  auto [sys, cycle_zero, ends] =
-      buildSolidMechanicsSystem<dim, order>(field_store, DisplacementTimeRule{}, combined, solver, options);
-  using SysType = typename decltype(sys)::element_type;
-  return SystemBuildResult<SysType>{std::move(sys), std::move(cycle_zero), std::move(ends)};
+  (detail::registerParamsIfNeeded(field_store, field_packs), ...);
+  auto coupling = detail::collectCouplingFields<DisplacementTimeRule>(field_store, field_packs...);
+  return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver,
+                                                                                 options);
 }
 
 /**
@@ -550,21 +530,22 @@ auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, const Co
  *
  * Usage:
  * @code
- *   auto [solid, cycle_zero, end] = buildSolidMechanicsSystem<dim, order, DispRule>(
+ *   auto solid = buildSolidMechanicsSystem<dim, order, DispRule>(
  *       solver, opts, param_fields, solid_fields, thermal_fields);
  * @endcode
  */
 /**
  * @brief Build a standalone SolidMechanicsSystem with no coupling and no parameters.
  *
- * Convenience overload for single-physics tests and demos — avoids the `CouplingParams<>{}`
+ * Convenience overload for single-physics tests and demos - avoids the `CouplingParams<>{}`
  * placeholder at the call site.
  */
 template <int dim, int order, typename DisplacementTimeRule>
 auto buildSolidMechanicsSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr<SystemSolver> solver,
                                const SolidMechanicsOptions& options)
 {
-  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule>(field_store, CouplingParams<>{}, solver, options);
+  return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, CouplingParams<>{},
+                                                                                 solver, options);
 }
 
 /**
@@ -581,9 +562,7 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
                                const FieldPacks&... field_packs)
 {
   auto field_store = detail::findFieldStore(field_packs...);
-  (detail::registerParamsIfNeeded(field_store, field_packs), ...);
-  auto coupling = detail::collectCouplingFields<DisplacementTimeRule>(field_store, field_packs...);
-  return buildSolidMechanicsSystem<dim, order>(field_store, DisplacementTimeRule{}, coupling, solver, options);
+  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule>(field_store, solver, options, field_packs...);
 }
 
 }  // namespace smith

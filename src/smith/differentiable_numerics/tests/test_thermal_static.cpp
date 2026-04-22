@@ -56,10 +56,7 @@ struct ThermalStaticFixture : public testing::Test {
     using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
     registerThermalFields<2, temp_order, TempRule>(field_store);
 
-    auto thermal_res = buildThermalSystem<2, temp_order, TempRule>(field_store, coupled_solver, ThermalOptions{});
-    auto thermal_system = thermal_res.system;
-    auto cycle_zero_sys = thermal_res.cycle_zero_system;
-    auto end_steps = thermal_res.end_step_systems;
+    auto thermal_system = buildThermalSystem<2, temp_order, TempRule>(field_store, coupled_solver, ThermalOptions{});
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
@@ -79,7 +76,7 @@ struct ThermalStaticFixture : public testing::Test {
                                                              [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
     TimeInfo t_info(0.0, 1.0);
-    auto [new_states, reactions] = makeAdvancer(thermal_system, cycle_zero_sys, end_steps)
+    auto [new_states, reactions] = makeAdvancer(thermal_system)
                                        ->advanceState(t_info, thermal_system->field_store->getShapeDisp(),
                                                       thermal_system->field_store->getAllFields(),
                                                       thermal_system->field_store->getParameterFields());
@@ -155,7 +152,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   auto param_fields = registerParameterFields(conductivity_param);
   auto thermal_fields = registerThermalFields<2, 1, TempRule>(field_store);
 
-  auto [thermal_system, cycle_zero_sys, end_steps] =
+  auto thermal_system =
       buildThermalSystem<2, 1, TempRule>(coupled_solver, ThermalOptions{}, param_fields, thermal_fields);
 
   // Set the conductivity parameter field to k=1.0
@@ -182,7 +179,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
                                                            [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
   TimeInfo t_info(0.0, 1.0);
-  auto [new_states, reactions] = makeAdvancer(thermal_system, cycle_zero_sys, end_steps)
+  auto [new_states, reactions] = makeAdvancer(thermal_system)
                                      ->advanceState(t_info, thermal_system->field_store->getShapeDisp(),
                                                     thermal_system->field_store->getAllFields(),
                                                     thermal_system->field_store->getParameterFields());

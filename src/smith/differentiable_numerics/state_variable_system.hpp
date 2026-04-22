@@ -12,8 +12,8 @@
  *   auto state_coupling_fields = registerStateVariableFields<StateSpace>(
  *       field_store, state_rule, params...);
  *
- *   auto [state_sys, cycle_zero, ends] = buildStateVariableSystem<dim, StateSpace>(
- *       field_store, state_rule, [solid_coupling,] solver, opts, params...);
+ *   auto state_sys = buildStateVariableSystem<dim, StateSpace>(
+ *       field_store, solver, opts, params..., solid_coupling);
  *
  * The returned CouplingParams from registerStateVariableFields carries field tokens
  * (state_solve_state, state) that can be injected into another physics system
@@ -46,7 +46,7 @@ namespace smith {
 /**
  * @brief System for a single internal variable using a two-state first-order rule.
  *
- * Field layout: (state_solve_state, state) — 2 fields.
+ * Field layout: (state_solve_state, state) - 2 fields.
  * With a non-empty Coupling, coupling fields appear after the two state fields,
  * before user parameter fields.
  *
@@ -149,13 +149,15 @@ auto registerStateVariableFields(std::shared_ptr<FieldStore> field_store, Intern
  * Pass the same rule instance used in registerStateVariableFields so its type is deduced;
  * only `<dim, StateSpace>` need be specified.
  *
- * Returns `{system, nullptr, {}}` as a tuple (no cycle-zero or end-step systems).
+ * Additional parameter packs are registered as parameters. Coupling packs are taken from
+ * the trailing field-pack arguments.
  */
+namespace detail {
+
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
-auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, InternalVarTimeRule /*rule*/,
-                              const Coupling& coupling, std::shared_ptr<SystemSolver> solver,
-                              const StateVariableOptions& /*options*/)
+auto buildStateVariableSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
+                                  std::shared_ptr<SystemSolver> solver, const StateVariableOptions& /*options*/)
 {
   auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>();
 
@@ -180,31 +182,42 @@ auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, InternalV
   sys->state_time_rule = state_time_rule_ptr;
   sys->state_weak_form = state_weak_form;
 
-  std::shared_ptr<SystemBase> cycle_zero_system;
-  std::vector<std::shared_ptr<SystemBase>> end_step_systems;
-  return std::make_tuple(sys, cycle_zero_system, end_step_systems);
+  return sys;
 }
+
+}  // namespace detail
 
 /**
  * @brief Build a StateVariableSystem without coupling.
  *
- * Overload for the common case of no inter-physics coupling.
- * Parameters (if any) are wrapped into a CouplingParams so the system sees them.
+ * Overload for already-registered field packs.
  */
-template <int dim, typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
-auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, InternalVarTimeRule rule,
-                              std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
-                              FieldType<parameter_space>... parameter_types)
+template <int dim, typename StateSpace, typename InternalVarTimeRule, typename... FieldPacks>
+  requires(sizeof...(FieldPacks) > 0 && (detail::is_coupling_params_v<FieldPacks> || ...))
+auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr<SystemSolver> solver,
+                              const StateVariableOptions& options, const FieldPacks&... field_packs)
 {
-  if constexpr (sizeof...(parameter_space) > 0) {
-    auto prefix_param = [&](auto& pt) {
-      pt.name = "param_" + pt.name;
-      field_store->addParameter(pt);
-    };
-    (prefix_param(parameter_types), ...);
-  }
-  return buildStateVariableSystem<dim, StateSpace>(field_store, rule, CouplingParams{parameter_types...}, solver,
-                                                   options);
+  (detail::registerParamsIfNeeded(field_store, field_packs), ...);
+  auto coupling = detail::collectCouplingFields<InternalVarTimeRule>(field_store, field_packs...);
+  return detail::buildStateVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver,
+                                                                                    options);
+}
+
+template <int dim, typename StateSpace, typename InternalVarTimeRule>
+auto buildStateVariableSystem(std::shared_ptr<FieldStore> field_store, std::shared_ptr<SystemSolver> solver,
+                              const StateVariableOptions& options)
+{
+  return detail::buildStateVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, CouplingParams<>{},
+                                                                                    solver, options);
+}
+
+template <int dim, typename StateSpace, typename InternalVarTimeRule, typename... FieldPacks>
+  requires(sizeof...(FieldPacks) > 0 && (detail::is_physics_fields_v<FieldPacks> || ...))
+auto buildStateVariableSystem(std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
+                              const FieldPacks&... field_packs)
+{
+  auto field_store = detail::findFieldStore(field_packs...);
+  return buildStateVariableSystem<dim, StateSpace, InternalVarTimeRule>(field_store, solver, options, field_packs...);
 }
 
 }  // namespace smith

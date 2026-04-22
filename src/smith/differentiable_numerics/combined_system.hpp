@@ -21,13 +21,11 @@
  *   CouplingParams thermal_coupling{FieldType<H1<disp_order,dim>>("displacement_solve_state"),
  *                                 FieldType<H1<disp_order,dim>>("displacement")};
  *
- *   auto solid_res = buildSolidMechanicsSystem<dim, disp_order, DispRule>(
- *       field_store, disp_rule, solid_coupling, solid_solver, solid_opts, params...);
- *   auto solid = solid_res.system;
+ *   auto solid = buildSolidMechanicsSystem<dim, disp_order, DispRule>(
+ *       field_store, solid_solver, solid_opts, params..., solid_coupling);
  *
- *   auto thermal_res = buildThermalSystem<dim, temp_order, TempRule>(
- *       field_store, temp_rule, thermal_coupling, thermal_solver, thermal_opts);
- *   auto thermal = thermal_res.system;
+ *   auto thermal = buildThermalSystem<dim, temp_order, TempRule>(
+ *       field_store, thermal_solver, thermal_opts, thermal_coupling);
  *
  *   auto coupled = combineSystems(solid, thermal);
  *   coupled->setMaterial(thermo_mech_material, domain);   // tight coupling
@@ -98,7 +96,7 @@ struct CombinedSystem : public SystemBase {
  * @param subs  Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
-SystemBuildResult<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... subs)
+auto combineSystems(std::shared_ptr<SubSystems>... subs)
 {
   static_assert(sizeof...(subs) >= 2, "combineSystems requires at least two sub-systems");
 
@@ -168,7 +166,13 @@ SystemBuildResult<CombinedSystem> combineSystems(std::shared_ptr<SubSystems>... 
   combined->cycle_zero_system = cycle_zero_combined;
   combined->post_solve_systems = post_solve_systems;
 
-  return {combined, cycle_zero_combined, post_solve_systems};
+  struct CombinedSystemResult {
+    std::shared_ptr<CombinedSystem> system;
+    std::shared_ptr<SystemBase> cycle_zero_system;
+    std::vector<std::shared_ptr<SystemBase>> end_step_systems;
+  };
+
+  return CombinedSystemResult{combined, cycle_zero_combined, post_solve_systems};
 }
 
 /**
@@ -198,8 +202,7 @@ struct MonolithicCombinedSystem : public SystemBase {
  * @param subs    Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
-SystemBuildResult<MonolithicCombinedSystem> combineSystems(std::shared_ptr<SystemSolver> solver,
-                                                           std::shared_ptr<SubSystems>... subs)
+auto combineSystems(std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSystems>... subs)
 {
   static_assert(sizeof...(subs) >= 2, "combineSystems requires at least two sub-systems");
 
@@ -237,7 +240,13 @@ SystemBuildResult<MonolithicCombinedSystem> combineSystems(std::shared_ptr<Syste
   combined->cycle_zero_system = cycle_zero_combined;
   combined->post_solve_systems = post_solve_systems;
 
-  return {combined, cycle_zero_combined, post_solve_systems};
+  struct MonolithicCombinedSystemResult {
+    std::shared_ptr<MonolithicCombinedSystem> system;
+    std::shared_ptr<SystemBase> cycle_zero_system;
+    std::vector<std::shared_ptr<SystemBase>> end_step_systems;
+  };
+
+  return MonolithicCombinedSystemResult{combined, cycle_zero_combined, post_solve_systems};
 }
 
 /**

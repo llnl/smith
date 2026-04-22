@@ -107,17 +107,15 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "impl");
     using ImplicitRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
     registerSolidMechanicsFields<dim, order, ImplicitRule>(field_store);
-    auto [sys, cycle_zero, ends] =
-        buildSolidMechanicsSystem<dim, order, ImplicitRule>(field_store, solver, SolidMechanicsOptions{});
-    EXPECT_NE(cycle_zero, nullptr) << "ImplicitNewmark should emit a cycle-zero initial acceleration solve";
+    auto sys = buildSolidMechanicsSystem<dim, order, ImplicitRule>(field_store, solver, SolidMechanicsOptions{});
+    EXPECT_NE(sys->cycle_zero_system, nullptr) << "ImplicitNewmark should emit a cycle-zero initial acceleration solve";
   }
   {
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "qs");
     using QsRule = QuasiStaticSecondOrderTimeIntegrationRule;
     registerSolidMechanicsFields<dim, order, QsRule>(field_store);
-    auto [sys, cycle_zero, ends] =
-        buildSolidMechanicsSystem<dim, order, QsRule>(field_store, solver, SolidMechanicsOptions{});
-    EXPECT_EQ(cycle_zero, nullptr) << "QuasiStatic has no initial acceleration solve";
+    auto sys = buildSolidMechanicsSystem<dim, order, QsRule>(field_store, solver, SolidMechanicsOptions{});
+    EXPECT_EQ(sys->cycle_zero_system, nullptr) << "QuasiStatic has no initial acceleration solve";
   }
 }
 
@@ -135,7 +133,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
       registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
 
-  auto [system, cycle_zero_sys, end_steps] = buildSolidMechanicsSystem<dim, order, TimeRule>(
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(
       coupled_solver, SolidMechanicsOptions{.enable_stress_output = true}, param_fields, solid_fields);
 
   static constexpr double gravity = -9.0;
@@ -178,7 +176,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   size_t cycle = 0;
   std::vector<ReactionState> reactions;
 
-  auto advancer = makeAdvancer(system, cycle_zero_sys, end_steps);
+  auto advancer = makeAdvancer(system);
 
   for (size_t m = 0; m < num_steps_; ++m) {
     TimeInfo t_info(time, dt_, cycle);
@@ -242,10 +240,10 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
       registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
 
-  auto [system, cycle_zero_sys, end_steps] = buildSolidMechanicsSystem<dim, order, TimeRule>(
-      coupled_solver, SolidMechanicsOptions{}, param_fields, solid_fields);
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(coupled_solver, SolidMechanicsOptions{}, param_fields,
+                                                                solid_fields);
 
-  auto physics = makeDifferentiablePhysics(system, physics_name, cycle_zero_sys, end_steps);
+  auto physics = makeDifferentiablePhysics(system, physics_name);
   auto bcs = system->disp_bc;
 
   bcs->setFixedVectorBCs<dim>(mesh->domain("right"));

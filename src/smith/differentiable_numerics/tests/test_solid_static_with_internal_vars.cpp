@@ -96,8 +96,6 @@ struct StrainNormEvolution {
     using std::sqrt;
     auto epsilon = sym(deriv_u);
     auto eps_norm = sqrt(inner(epsilon, epsilon) + 1e-16);
-
-    // ODE: isv_dot = (1 - isv) * eps_norm
     return isv_dot - (1.0 - isv) * eps_norm;
   }
 };
@@ -118,16 +116,13 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto state_fields =
       registerStateVariableFields<StateSpace>(field_store, BackwardEulerFirstOrderTimeIntegrationRule{});
 
-  auto solid_res = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
-      field_store, state_fields, solid_solver, SolidMechanicsOptions{});
-  auto solid = solid_res.system;
-  auto [state, state_cycle_zero, state_end_steps] = buildStateVariableSystem<dim, StateSpace>(
-      field_store, BackwardEulerFirstOrderTimeIntegrationRule{}, solid_fields, state_solver, StateVariableOptions{});
+  auto solid = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
+      field_store, solid_solver, SolidMechanicsOptions{}, state_fields);
+  auto state = buildStateVariableSystem<dim, StateSpace, BackwardEulerFirstOrderTimeIntegrationRule>(
+      field_store, state_solver, StateVariableOptions{}, solid_fields);
 
   auto combined = combineSystems(coupled_solver, solid, state);
   auto system = combined.system;
-  auto cycle_zero_sys = combined.cycle_zero_system;
-  auto end_steps = combined.end_step_systems;
 
   // Material and Evolution
   setCoupledSolidMechanicsInternalVarsMaterial(solid, state, DamageMaterial{}, mesh->entireBodyName());
@@ -148,7 +143,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
     return u;
   });
 
-  auto physics = makeDifferentiablePhysics(system, "physics", cycle_zero_sys, end_steps);
+  auto physics = makeDifferentiablePhysics(system, "physics");
 
   // Create ParaView writer
   auto writer = createParaviewWriter(*mesh, system->field_store->getOutputFieldStates(), "solid_state_output");
@@ -183,17 +178,13 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   auto state_fields =
       registerStateVariableFields<StateSpace>(field_store, BackwardEulerFirstOrderTimeIntegrationRule{});
 
-  auto solid_res = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
-      field_store, state_fields, solid_system_solver, SolidMechanicsOptions{});
-  auto solid = solid_res.system;
-  auto [state, state_cycle_zero, state_end_steps] =
-      buildStateVariableSystem<dim, StateSpace>(field_store, BackwardEulerFirstOrderTimeIntegrationRule{}, solid_fields,
-                                                state_system_solver, StateVariableOptions{});
+  auto solid = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
+      field_store, solid_system_solver, SolidMechanicsOptions{}, state_fields);
+  auto state = buildStateVariableSystem<dim, StateSpace, BackwardEulerFirstOrderTimeIntegrationRule>(
+      field_store, state_system_solver, StateVariableOptions{}, solid_fields);
 
   auto combined = combineSystems(staggered_solver, solid, state);
   auto system = combined.system;
-  auto cycle_zero_sys = combined.cycle_zero_system;
-  auto end_steps = combined.end_step_systems;
 
   setCoupledSolidMechanicsInternalVarsMaterial(solid, state, DamageMaterial{}, mesh->entireBodyName());
   state->addStateEvolution(mesh->entireBodyName(), [](auto t_info, auto isv, auto isv_dot, auto u, auto... /*unused*/) {
@@ -208,7 +199,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
     return u;
   });
 
-  auto physics = makeDifferentiablePhysics(system, "physics_relaxed", cycle_zero_sys, end_steps);
+  auto physics = makeDifferentiablePhysics(system, "physics_relaxed");
   for (int step = 1; step <= 3; ++step) {
     physics->advanceTimestep(1.0);
     SLIC_INFO("Staggered relaxation step " << step << " completed");
@@ -230,16 +221,13 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
   auto state_fields =
       registerStateVariableFields<StateSpace>(field_store, BackwardEulerFirstOrderTimeIntegrationRule{});
 
-  auto solid_res = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
-      field_store, state_fields, solid_solver, SolidMechanicsOptions{});
-  auto solid = solid_res.system;
-  auto [state, state_cycle_zero, state_end_steps] = buildStateVariableSystem<dim, StateSpace>(
-      field_store, BackwardEulerFirstOrderTimeIntegrationRule{}, solid_fields, state_solver, StateVariableOptions{});
+  auto solid = buildSolidMechanicsSystem<dim, disp_order, QuasiStaticSecondOrderTimeIntegrationRule>(
+      field_store, solid_solver, SolidMechanicsOptions{}, state_fields);
+  auto state = buildStateVariableSystem<dim, StateSpace, BackwardEulerFirstOrderTimeIntegrationRule>(
+      field_store, state_solver, StateVariableOptions{}, solid_fields);
 
   auto combined = combineSystems(coupled_solver, solid, state);
   auto system = combined.system;
-  auto cycle_zero_sys = combined.cycle_zero_system;
-  auto end_steps = combined.end_step_systems;
 
   setCoupledSolidMechanicsInternalVarsMaterial(solid, state, DamageMaterial{}, mesh->entireBodyName());
   state->addStateEvolution(mesh->entireBodyName(), [](auto t_info, auto isv, auto isv_dot, auto u, auto... /*unused*/) {
@@ -265,7 +253,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
     return t;
   });
 
-  auto physics = makeDifferentiablePhysics(system, "physics_bf", cycle_zero_sys, end_steps);
+  auto physics = makeDifferentiablePhysics(system, "physics_bf");
   physics->advanceTimestep(1.0);
 
   // Check that the displacement field is non-zero (the body force + traction produced deformation)

@@ -40,7 +40,7 @@ static constexpr int dim3 = 3;
 static constexpr int disp_ord = 1;
 static constexpr int temp_ord = 1;
 static constexpr int state_ord = 0;
-using ThreeSystemStateSpace = L2<state_ord>;
+using StateSpace = L2<state_ord>;
 
 struct ThreeSystemMeshFixture : public testing::Test {
   void SetUp() override
@@ -91,22 +91,21 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   // the displacement field tokens available for thermal coupling.
   auto solid_exported = registerSolidMechanicsFields<dim3, disp_ord, DispRule>(field_store);
   auto thermal_exported = registerThermalFields<dim3, temp_ord>(field_store, temp_rule);
-  registerStateVariableFields<ThreeSystemStateSpace>(field_store, state_rule);
+  registerStateVariableFields<StateSpace>(field_store, state_rule);
 
   // Phase 2: build each system.
 
   // Solid receives thermal coupling (temperature_solve_state, temperature).
-  auto [solid, solid_cycle_zero, solid_end] = buildSolidMechanicsSystem<dim3, disp_ord, DispRule>(
-      field_store, thermal_exported, std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{});
+  auto solid = buildSolidMechanicsSystem<dim3, disp_ord, DispRule>(
+      field_store, std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{}, thermal_exported);
 
   // Thermal is standalone (no coupling back from solid for this test).
-  auto [thermal, thermal_cycle_zero, thermal_end] = buildThermalSystem<dim3, temp_ord, TempRule>(
-      field_store, CouplingParams<>{}, std::make_shared<SystemSolver>(thermal_block_solver), ThermalOptions{});
+  auto thermal = buildThermalSystem<dim3, temp_ord, TempRule>(
+      field_store, std::make_shared<SystemSolver>(thermal_block_solver), ThermalOptions{});
 
   // StateVariable receives solid displacement coupling (4 fields: disp_ss, displacement, velocity, acceleration).
-  auto [state_sys, state_cycle_zero, state_end] = buildStateVariableSystem<dim3, ThreeSystemStateSpace>(
-      field_store, state_rule, solid_exported, std::make_shared<SystemSolver>(state_block_solver),
-      StateVariableOptions{});
+  auto state_sys = buildStateVariableSystem<dim3, StateSpace, StateRule>(
+      field_store, std::make_shared<SystemSolver>(state_block_solver), StateVariableOptions{}, solid_exported);
 
   // Phase 3: register material integrands.
 
