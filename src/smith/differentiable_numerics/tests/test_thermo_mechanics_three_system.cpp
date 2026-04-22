@@ -162,9 +162,7 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
       });
 
   // Phase 5: combine and solve.
-  auto combined_res = combineSystems(solid, thermal, internal_variables);
-  auto combined = combined_res.system;
-  auto combined_cycle_zero = combined_res.cycle_zero_system;
+  auto combined = combineSystems(solid, thermal, internal_variables);
 
   double dt = 1.0, time = 0.0;
   auto shape_disp = field_store->getShapeDisp();
@@ -173,7 +171,7 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   std::vector<ReactionState> reactions;
 
   for (size_t step = 0; step < 2; ++step) {
-    std::tie(states, reactions) = makeAdvancer(combined, combined_cycle_zero)
+    std::tie(states, reactions) = makeAdvancer(combined)
                                       ->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
   }

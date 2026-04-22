@@ -158,8 +158,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto [solid, internal_variables] =
       buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
 
-  auto combined = combineSystems(coupled_solver, solid, internal_variables);
-  auto system = combined.system;
+  auto system = combineSystems(coupled_solver, solid, internal_variables);
 
   setDamageCoupling(solid, internal_variables, mesh);
   setPullBoundaryConditions(solid, mesh, 0.05);
@@ -195,8 +194,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   auto [solid, internal_variables] =
       buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
 
-  auto combined = combineSystems(staggered_solver, solid, internal_variables);
-  auto system = combined.system;
+  auto system = combineSystems(staggered_solver, solid, internal_variables);
 
   setDamageCoupling(solid, internal_variables, mesh);
   setPullBoundaryConditions(solid, mesh, 0.05);
@@ -219,8 +217,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
   auto [solid, internal_variables] =
       buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
 
-  auto combined = combineSystems(coupled_solver, solid, internal_variables);
-  auto system = combined.system;
+  auto system = combineSystems(coupled_solver, solid, internal_variables);
 
   setDamageCoupling(solid, internal_variables, mesh);
 

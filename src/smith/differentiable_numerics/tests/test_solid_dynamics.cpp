@@ -119,6 +119,36 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
   }
 }
 
+TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverUsesOwnedSingleStepPolicy)
+{
+  auto main_stage_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto solver = std::make_shared<SystemSolver>(7, false);
+  solver->addSubsystemSolver({0}, main_stage_solver, 0.8);
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "cycle_zero_policy");
+  using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
+  auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(solver, SolidMechanicsOptions{}, solid_fields);
+
+  ASSERT_NE(system->cycle_zero_system, nullptr);
+  ASSERT_NE(system->cycle_zero_system->solver, nullptr);
+  EXPECT_EQ(system->cycle_zero_system->solver->maxStaggeredIterations(), 1);
+  EXPECT_TRUE(system->cycle_zero_system->solver->exactStaggeredSteps());
+}
+
+TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverFallbackBuildsWithoutMainSolver)
+{
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "cycle_zero_fallback");
+  using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
+  auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(nullptr, SolidMechanicsOptions{}, solid_fields);
+
+  ASSERT_NE(system->cycle_zero_system, nullptr);
+  ASSERT_NE(system->cycle_zero_system->solver, nullptr);
+  EXPECT_EQ(system->cycle_zero_system->solver->maxStaggeredIterations(), 1);
+  EXPECT_FALSE(system->cycle_zero_system->solver->exactStaggeredSteps());
+}
+
 TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;

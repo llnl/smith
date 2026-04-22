@@ -56,14 +56,14 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
   // Advance one step, return final states + lateral deflection.
   template <typename System>
   double advanceOneStepAndGetLateralDeflection(std::shared_ptr<System> coupled,
-                                               std::shared_ptr<SystemBase> coupled_cycle_zero, double dt = 1.0)
+                                               double dt = 1.0)
   {
     auto shape_disp = field_store_->getShapeDisp();
     auto params = field_store_->getParameterFields();
     std::vector<ReactionState> reactions;
     std::tie(std::ignore, reactions) =
-        makeAdvancer(coupled, coupled_cycle_zero)
-            ->advanceState(smith::TimeInfo(0.0, dt, 0), shape_disp, field_store_->getStateFields(), params);
+        makeAdvancer(coupled)->advanceState(smith::TimeInfo(0.0, dt, 0), shape_disp, field_store_->getStateFields(),
+                                            params);
 
     mfem::Vector final_disp(
         *field_store_->getStateFields()[field_store_->getFieldIndex("displacement_solve_state")].get());
@@ -120,8 +120,7 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
   auto thermal = buildThermalSystem<dim, temperature_order, TempRule>(
       makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, thermal_fields, param_fields, solid_fields);
 
-  auto combined = combineSystems(solid, thermal);
-  auto coupled = combined.system;
+  auto coupled = combineSystems(solid, thermal);
   auto physics = makeDifferentiablePhysics(coupled, "coupled_physics");
   const auto& solid_dual_space = physics->dual("reactions").space();
   const auto& solid_state_space = physics->state("displacement_solve_state").space();
@@ -156,8 +155,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   auto thermal = buildThermalSystem<dim, temperature_order, TempRule>(
       makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, thermal_fields, param_fields, solid_fields);
 
-  auto combined = combineSystems(solid, thermal);
-  auto coupled = combined.system;
+  auto coupled = combineSystems(solid, thermal);
   thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
                                                                                0.0025, 0.0,   0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
@@ -225,14 +223,13 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
   auto thermal = buildThermalSystem<dim, temperature_order, TempRule>(
       makeSolver(therm_nonlin_opts, therm_lin_opts), ThermalOptions{}, thermal_fields, solid_fields);
 
-  auto combined = combineSystems(solid, thermal);
-  auto coupled = combined.system;
+  auto coupled = combineSystems(solid, thermal);
   thermomechanics::GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
 
-  double deflection = advanceOneStepAndGetLateralDeflection(coupled, combined.cycle_zero_system);
+  double deflection = advanceOneStepAndGetLateralDeflection(coupled);
 
   EXPECT_GT(deflection, 1e-5);
 }
@@ -256,14 +253,13 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto thermal = buildThermalSystem<dim, temperature_order, TempRule>(nullptr, ThermalOptions{}, thermal_fields,
                                                                        solid_fields);
 
-  auto combined = combineSystems(solver_ptr, solid, thermal);
-  auto coupled = combined.system;
+  auto coupled = combineSystems(solver_ptr, solid, thermal);
   thermomechanics::GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
 
-  double deflection = advanceOneStepAndGetLateralDeflection(coupled, combined.cycle_zero_system);
+  double deflection = advanceOneStepAndGetLateralDeflection(coupled);
 
   EXPECT_GT(deflection, 1e-5);
 }
@@ -274,8 +270,11 @@ TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
   SolidMechanicsOptions solid_opts{.enable_stress_output = true, .output_cauchy_stress = true};
 
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_, solid_opts);
+  EXPECT_TRUE(field_store_->hasField(field_store_->prefix("stress_solve_state")));
+  EXPECT_TRUE(field_store_->hasField(field_store_->prefix("stress")));
   auto sys = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
       makeSolver(newtonNonlinOpts, directLinOpts), solid_opts, solid_fields);
+  ASSERT_EQ(sys->post_solve_systems.size(), 1u);
 
   constexpr double E = 100.0;
   constexpr double nu = 0.25;
@@ -301,6 +300,17 @@ TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
   EXPECT_GT(stress_norm, 1e-8) << "Cauchy stress field should be non-zero after deformation";
 }
 
+TEST_F(ThermoMechanicsMeshFixture, StressOutputRegistrationDisabledByDefault)
+{
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
+  EXPECT_FALSE(field_store_->hasField(field_store_->prefix("stress_solve_state")));
+  EXPECT_FALSE(field_store_->hasField(field_store_->prefix("stress")));
+
+  auto sys = buildSolidMechanicsSystem<dim, displacement_order, DispRule>(
+      makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{}, solid_fields);
+  EXPECT_TRUE(sys->post_solve_systems.empty());
+}
+
 TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesPostSolveSystems)
 {
   SolidMechanicsOptions solid_opts{.enable_stress_output = true};
@@ -315,9 +325,8 @@ TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesPostSolveSystems)
 
   auto combined = combineSystems(solid, thermal);
 
-  ASSERT_EQ(combined.end_step_systems.size(), solid->post_solve_systems.size());
-  ASSERT_EQ(combined.system->post_solve_systems.size(), solid->post_solve_systems.size());
-  EXPECT_FALSE(combined.end_step_systems.empty());
+  ASSERT_EQ(combined->post_solve_systems.size(), solid->post_solve_systems.size());
+  EXPECT_FALSE(combined->post_solve_systems.empty());
 }
 
 }  // namespace smith

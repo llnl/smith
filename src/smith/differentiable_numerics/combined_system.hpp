@@ -86,10 +86,6 @@ struct CombinedSystem : public SystemBase {
  *  - All sub-systems share the same FieldStore (built via registerXxxFields + buildXxxFromStore).
  *  - Sub-system weak_forms are already populated (registerXxx was called before buildXxx).
  *
- * The returned pair contains:
- *  - first: The combined main system (staggered).
- *  - second: The combined cycle-zero system (staggered, max_stagger_iters=1), or nullptr if none.
- *
  * @param subs  Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
@@ -163,13 +159,7 @@ auto combineSystems(std::shared_ptr<SubSystems>... subs)
   combined->cycle_zero_system = cycle_zero_combined;
   combined->post_solve_systems = post_solve_systems;
 
-  struct CombinedSystemResult {
-    std::shared_ptr<CombinedSystem> system;
-    std::shared_ptr<SystemBase> cycle_zero_system;
-    std::vector<std::shared_ptr<SystemBase>> end_step_systems;
-  };
-
-  return CombinedSystemResult{combined, cycle_zero_combined, post_solve_systems};
+  return combined;
 }
 
 /**
@@ -189,10 +179,6 @@ struct MonolithicCombinedSystem : public SystemBase {
  * Preconditions:
  *  - All sub-systems share the same FieldStore.
  *  - Sub-system weak_forms are already populated.
- *
- * The returned pair contains:
- *  - first: The combined main system (monolithic).
- *  - second: The combined cycle-zero system (monolithic), or nullptr if none.
  *
  * @param solver  The monolithic SystemSolver that will solve the combined block system,
  *                including the aggregated cycle-zero system if any sub-systems have one.
@@ -237,13 +223,7 @@ auto combineSystems(std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSys
   combined->cycle_zero_system = cycle_zero_combined;
   combined->post_solve_systems = post_solve_systems;
 
-  struct MonolithicCombinedSystemResult {
-    std::shared_ptr<MonolithicCombinedSystem> system;
-    std::shared_ptr<SystemBase> cycle_zero_system;
-    std::vector<std::shared_ptr<SystemBase>> end_step_systems;
-  };
-
-  return MonolithicCombinedSystemResult{combined, cycle_zero_combined, post_solve_systems};
+  return combined;
 }
 
 /**
