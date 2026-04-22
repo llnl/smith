@@ -338,6 +338,25 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(MFEM_USE_UMPIRE OFF CACHE BOOL "")
         endif()
 
+        if(APPLE AND ENABLE_ASAN)
+            # Temporarily unset asan flags when finding blas, in order to avoid conflicts with fortran and asan.
+
+            set(TMP_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
+            set(TMP_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+            set(TMP_CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS})
+
+            unset(CMAKE_C_FLAGS)
+            unset(CMAKE_CXX_FLAGS)
+            unset(CMAKE_EXE_LINKER_FLAGS)
+
+            find_package(BLAS REQUIRED)
+            find_package(LAPACK REQUIRED)
+
+            set(CMAKE_C_FLAGS ${TMP_CMAKE_C_FLAGS})
+            set(CMAKE_CXX_FLAGS ${TMP_CMAKE_CXX_FLAGS})
+            set(CMAKE_EXE_LINKER_FLAGS ${TMP_CMAKE_EXE_LINKER_FLAGS})
+        endif()
+
         #### MFEM Configuration Options
 
         # Prefix the "check" targets
