@@ -41,6 +41,7 @@ set(differentiable_numerics_headers
     solid_mechanics_with_internal_vars_system.hpp
     state_variable_system.hpp
     thermal_system.hpp
+    thermo_mechanical_system.hpp
     coupling_params.hpp
     combined_system.hpp
     system_base.hpp

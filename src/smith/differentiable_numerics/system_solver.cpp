@@ -79,6 +79,10 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
       stage.block_indices.resize(num_residuals);
       std::iota(stage.block_indices.begin(), stage.block_indices.end(), 0);
     }
+    for (size_t block_index : stage.block_indices) {
+      SLIC_ERROR_IF(block_index >= num_residuals,
+                    axom::fmt::format("Stage block index {} exceeds residual count {}", block_index, num_residuals));
+    }
   }
   // Set the inner tolerance factor based on the number of stages.  For single-stage
   // solves, we don't want to reduce the tolerances as that's pointless and

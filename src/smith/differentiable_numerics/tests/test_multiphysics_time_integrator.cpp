@@ -305,8 +305,8 @@ TEST(SystemSolver, AppendsRemappedStagesForCombinedSubsystems)
   subsystem_b.addSubsystemSolver({0, 1}, second_solver, 1.0);
 
   SystemSolver combined(3, false);
-  combined.appendRemappedStages(subsystem_a, {2});
-  combined.appendRemappedStages(subsystem_b, {4, 5});
+  combined.appendRemappedStages(subsystem_a, {0});
+  combined.appendRemappedStages(subsystem_b, {1, 2});
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "combined_solver_stage_mapping");

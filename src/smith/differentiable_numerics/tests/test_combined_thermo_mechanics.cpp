@@ -12,6 +12,7 @@
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/mesh.hpp"
+#include "smith/physics/materials/green_saint_venant_thermoelastic.hpp"
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/system_solver.hpp"
@@ -33,73 +34,6 @@ static constexpr int temperature_order = 1;
 
 using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
 using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
-
-template <typename T, int dim_>
-auto greenStrain(const tensor<T, dim_, dim_>& grad_u)
-{
-  return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
-}
-
-// Material with E parameter
-struct ParameterizedGreenSaintVenantThermoelasticMaterial {
-  double density;
-  double E0;
-  double nu;
-  double C_v;
-  double alpha;
-  double theta_ref;
-  double kappa;
-  using State = Empty;
-  template <typename T1, typename T2, typename T3, typename T4, typename T5>
-  auto operator()(double, State&, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v, T3 theta,
-                  const tensor<T4, dim>& grad_theta, const T5& E_param) const
-  {
-    auto E = E0 + get<0>(E_param);
-    const auto K = E / (3.0 * (1.0 - 2.0 * nu));
-    const auto G = 0.5 * E / (1.0 + nu);
-    const auto Eg = greenStrain<T1, dim>(grad_u);
-    const auto trEg = tr(Eg);
-    static constexpr auto I = Identity<dim>();
-    const auto S = 2.0 * G * dev(Eg) + K * (trEg - dim * alpha * (theta - theta_ref)) * I;
-    auto F = grad_u + I;
-    const auto Piola = dot(F, S);
-    auto greenStrainRate =
-        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-    const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate) + 0.0 * E;
-    const auto q0 = -kappa * grad_theta;
-    return smith::tuple{Piola, C_v, s0, q0};
-  }
-};
-
-// Material without user parameters
-struct ThermoelasticMaterialNoParam {
-  double density;
-  double E;
-  double nu;
-  double C_v;
-  double alpha;
-  double theta_ref;
-  double kappa;
-  using State = Empty;
-  template <typename T1, typename T2, typename T3, typename T4>
-  auto operator()(double, State&, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v, T3 theta,
-                  const tensor<T4, dim>& grad_theta) const
-  {
-    const auto K = E / (3.0 * (1.0 - 2.0 * nu));
-    const auto G = 0.5 * E / (1.0 + nu);
-    const auto Eg = greenStrain<T1, dim>(grad_u);
-    const auto trEg = tr(Eg);
-    static constexpr auto I = Identity<dim>();
-    const auto S = 2.0 * G * dev(Eg) + K * (trEg - dim * alpha * (theta - theta_ref)) * I;
-    auto F = grad_u + I;
-    const auto Piola = dot(F, S);
-    auto greenStrainRate =
-        0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-    const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
-    const auto q0 = -kappa * grad_theta;
-    return smith::tuple{Piola, C_v, s0, q0};
-  }
-};
 
 struct ThermoMechanicsMeshFixture : public testing::Test {
   void SetUp()
@@ -124,13 +58,14 @@ struct ThermoMechanicsMeshFixture : public testing::Test {
                                                std::shared_ptr<SystemBase> coupled_cycle_zero, double dt = 1.0)
   {
     auto shape_disp = field_store_->getShapeDisp();
-    auto states = field_store_->getStateFields();
     auto params = field_store_->getParameterFields();
     std::vector<ReactionState> reactions;
-    std::tie(states, reactions) = makeAdvancer(coupled, coupled_cycle_zero)
-                                      ->advanceState(smith::TimeInfo(0.0, dt, 0), shape_disp, states, params);
+    std::tie(std::ignore, reactions) =
+        makeAdvancer(coupled, coupled_cycle_zero)
+            ->advanceState(smith::TimeInfo(0.0, dt, 0), shape_disp, field_store_->getStateFields(), params);
 
-    mfem::Vector final_disp(*states[field_store_->getFieldIndex("displacement_solve_state")].get());
+    mfem::Vector final_disp(
+        *field_store_->getStateFields()[field_store_->getFieldIndex("displacement_solve_state")].get());
     double deflection = 0.0;
     for (int i = 1; i < final_disp.Size(); i += dim) {
       deflection = std::max(deflection, std::abs(final_disp(i)));
@@ -172,9 +107,9 @@ static const NonlinearSolverOptions newtonNonlinOpts{
 // 1. CreateDifferentiablePhysicsAllocatesReactionInfo
 TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionInfo)
 {
-  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  FieldType<L2<0>> thermal_expansion_scaling("thermal_expansion_scaling");
 
-  auto param_fields = registerParameterFields(youngs_modulus);
+  auto param_fields = registerParameterFields(thermal_expansion_scaling);
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
@@ -226,14 +161,15 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   auto coupled = combined.system;
   auto coupled_cycle_zero = combined.cycle_zero_system;
 
-  ParameterizedGreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
+                                                                               0.0025, 0.0,   0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   coupled->field_store->getParameterFields()[0].get()->setFromFieldFunction(
-      [=](smith::tensor<double, dim>) { return 100.0; });
+      [=](smith::tensor<double, dim>) { return 1.0; });
 
   solid->setDisplacementBC(mesh_->domain("left"));
-  thermal->setTemperatureBC(mesh_->domain("left"));
+  thermal->setTemperatureBC(mesh_->domain("left"), [](auto, auto) { return 1.0; });
 
   solid->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
     auto traction = 0.0 * X;
@@ -296,7 +232,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
   auto coupled = combined.system;
   auto coupled_cycle_zero = combined.cycle_zero_system;
 
-  ThermoelasticMaterialNoParam material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  thermomechanics::GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
@@ -328,7 +264,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto coupled = combined.system;
   auto coupled_cycle_zero = combined.cycle_zero_system;
 
-  ThermoelasticMaterialNoParam material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  thermomechanics::GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);

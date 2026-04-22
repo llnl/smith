@@ -180,6 +180,10 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
     }
   }
 
+  for (size_t i = 0; i < new_states.size(); ++i) {
+    system_->field_store->setField(i, new_states[i]);
+  }
+
   return {new_states, reactions};
 }
 

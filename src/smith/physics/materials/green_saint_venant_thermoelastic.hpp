@@ -20,6 +20,50 @@ auto greenStrain(const tensor<T, dim, dim>& grad_u)
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
 
+/**
+ * @brief Compute isotropic bulk modulus from Young's modulus and Poisson ratio.
+ */
+template <typename EType>
+auto bulkModulus(EType E, double nu)
+{
+  return E / (3.0 * (1.0 - 2.0 * nu));
+}
+
+/**
+ * @brief Compute isotropic shear modulus from Young's modulus and Poisson ratio.
+ */
+template <typename EType>
+auto shearModulus(EType E, double nu)
+{
+  return 0.5 * E / (1.0 + nu);
+}
+
+/**
+ * @brief Compute first Piola stress for Green-Saint Venant thermoelasticity.
+ */
+template <typename EType, typename AlphaType, typename TGradU, typename TTheta, int dim>
+auto greenSaintVenantPiola(EType E, double nu, AlphaType alpha, double theta_ref,
+                           const tensor<TGradU, dim, dim>& grad_u, TTheta theta)
+{
+  const auto K = bulkModulus(E, nu);
+  const auto G = shearModulus(E, nu);
+  static constexpr auto I = Identity<dim>();
+  auto F = grad_u + I;
+  const auto Eg = greenStrain(grad_u);
+  const auto trEg = tr(Eg);
+  const auto S = 2.0 * G * dev(Eg) + K * (trEg - static_cast<double>(dim) * alpha * (theta - theta_ref)) * I;
+  return dot(F, S);
+}
+
+/**
+ * @brief Compute referential Fourier heat flux.
+ */
+template <typename TGradTheta, int dim>
+auto fourierHeatFlux(double kappa, const tensor<TGradTheta, dim>& grad_theta)
+{
+  return -kappa * grad_theta;
+}
+
 /// @brief Green-Saint Venant isotropic thermoelastic model
 struct GreenSaintVenantThermoelasticMaterial {
   double density;    ///< density
@@ -56,22 +100,11 @@ struct GreenSaintVenantThermoelasticMaterial {
   template <typename T1, typename T2, typename T3, int dim>
   auto operator()(State& state, const tensor<T1, dim, dim>& grad_u, T2 theta, const tensor<T3, dim>& grad_theta) const
   {
-    const double K = E / (3.0 * (1.0 - 2.0 * nu));
-    const double G = 0.5 * E / (1.0 + nu);
-    static constexpr auto I = Identity<dim>();
-    auto F = grad_u + I;
     const auto Eg = greenStrain(grad_u);
     const auto trEg = tr(Eg);
-
-    // stress
-    const auto S = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
-    const auto Piola = dot(F, S);
-
-    // internal heat source
-    const auto s0 = -3.0 * K * alpha * theta * (trEg - state.strain_trace);
-
-    // heat flux
-    const auto q0 = -kappa * grad_theta;
+    const auto Piola = greenSaintVenantPiola(E, nu, alpha, theta_ref, grad_u, theta);
+    const auto s0 = -3.0 * bulkModulus(E, nu) * alpha * theta * (trEg - state.strain_trace);
+    const auto q0 = fourierHeatFlux(kappa, grad_theta);
 
     state.strain_trace = get_value(trEg);
 
@@ -139,23 +172,12 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
                   T4 thermal_expansion_scaling) const
   {
     auto [scale, unused] = thermal_expansion_scaling;
-    const double K = E / (3.0 * (1.0 - 2.0 * nu));
-    const double G = 0.5 * E / (1.0 + nu);
-    static constexpr auto I = Identity<dim>();
-    auto F = grad_u + I;
     const auto Eg = greenStrain(grad_u);
     const auto trEg = tr(Eg);
     auto alpha = alpha0 * scale;
-
-    // stress
-    const auto S = 2.0 * G * dev(Eg) + K * (trEg - 3.0 * alpha * (theta - theta_ref)) * I;
-    const auto Piola = dot(F, S);
-
-    // internal heat source
-    const auto s0 = -3.0 * K * alpha * theta * (trEg - state.strain_trace);
-
-    // heat flux
-    const auto q0 = -kappa * grad_theta;
+    const auto Piola = greenSaintVenantPiola(E, nu, alpha, theta_ref, grad_u, theta);
+    const auto s0 = -3.0 * bulkModulus(E, nu) * alpha * theta * (trEg - state.strain_trace);
+    const auto q0 = fourierHeatFlux(kappa, grad_theta);
 
     state.strain_trace = get_value(trEg);
 
@@ -172,11 +194,11 @@ struct ParameterizedGreenSaintVenantThermoelasticMaterial {
   auto calculateFreeEnergy(const tensor<T1, dim, dim>& grad_u, T2 theta, T3 thermal_expansion_scaling) const
   {
     auto [scale, unused] = thermal_expansion_scaling;
-    const double K = E / (3.0 * (1.0 - 2.0 * nu));
-    const double G = 0.5 * E / (1.0 + nu);
+    const double K = bulkModulus(E, nu);
+    const double G = shearModulus(E, nu);
     auto strain = greenStrain(grad_u);
     auto trE = tr(strain);
-    const double alpha = alpha0 * scale;
+    const auto alpha = alpha0 * scale;
     auto psi_1 = G * squared_norm(dev(strain)) + 0.5 * K * trE * trE;
     using std::log;
     auto logT = log(theta / theta_ref);

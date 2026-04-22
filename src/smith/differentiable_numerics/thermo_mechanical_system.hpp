@@ -16,6 +16,31 @@
 
 namespace smith {
 
+namespace detail {
+
+/**
+ * @brief Dispatch to either coupled-rate or established thermoelastic material signatures.
+ *
+ * Supports materials that accept `(dt, state, grad_u, grad_v, theta, grad_theta, params...)`
+ * and materials that accept `(state, grad_u, theta, grad_theta, params...)`.
+ */
+template <typename MaterialType, typename DT, typename StateType, typename GradUType, typename GradVType,
+          typename ThetaType, typename GradThetaType, typename... ParamTypes>
+auto evaluateCoupledThermoMechanicsMaterial(const MaterialType& material, DT dt, StateType& state,
+                                            const GradUType& grad_u, const GradVType& grad_v, ThetaType theta,
+                                            const GradThetaType& grad_theta, ParamTypes&&... params)
+{
+  if constexpr (requires {
+                  material(dt, state, grad_u, grad_v, theta, grad_theta, std::forward<ParamTypes>(params)...);
+                }) {
+    return material(dt, state, grad_u, grad_v, theta, grad_theta, std::forward<ParamTypes>(params)...);
+  } else {
+    return material(state, grad_u, theta, grad_theta, std::forward<ParamTypes>(params)...);
+  }
+}
+
+}  // namespace detail
+
 /**
  * @brief Register a coupled thermo-mechanical material integrand on a SolidMechanicsSystem
  *        and ThermalSystem that were built with mutual coupling fields.
@@ -64,9 +89,10 @@ void setCoupledThermoMechanicsMaterial(
         auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
         auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
 
-        typename MaterialType::State state;
-        auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
-                                          get<VALUE>(T), get<DERIVATIVE>(T), params...);
+        typename MaterialType::State state{};
+        auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
+            material, t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), get<VALUE>(T),
+            get<DERIVATIVE>(T), params...);
         return smith::tuple{get<VALUE>(a_current) * material.density, pk};
       });
 
@@ -76,9 +102,10 @@ void setCoupledThermoMechanicsMaterial(
         domain_name,
         [=](auto t_info, auto /*X*/, auto u, auto v, auto a, auto temperature, auto temperature_old, auto... params) {
           auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          typename MaterialType::State state;
-          auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T),
-                                            get<DERIVATIVE>(T), params...);
+          typename MaterialType::State state{};
+          auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
+              material, t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T),
+              params...);
           return smith::tuple{get<VALUE>(a) * material.density, pk};
         });
   }
@@ -89,9 +116,10 @@ void setCoupledThermoMechanicsMaterial(
     auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
     auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
 
-    typename MaterialType::State state;
-    auto [pk, C_v, s0, q0] = material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
-                                      get<DERIVATIVE>(T_current), params...);
+    typename MaterialType::State state{};
+    auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
+        material, t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
+        get<DERIVATIVE>(T_current), params...);
     return smith::tuple{C_v * get<VALUE>(T_dot) - s0, -q0};
   });
 }
