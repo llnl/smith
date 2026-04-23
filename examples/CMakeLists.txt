@@ -23,6 +23,9 @@ install(
 # Add the conduction examples
 add_subdirectory(conduction)
 
+# Add the thermo-mechanics examples
+add_subdirectory(thermo_mechanics)
+
 # Add the contact examples
 add_subdirectory(contact)
 

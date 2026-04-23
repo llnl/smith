@@ -20,9 +20,9 @@ namespace detail {
 
 template <typename MaterialType, typename TimeInfoType, typename AlphaType, typename AlphaDotType, typename DerivType,
           typename... ParamTypes>
-auto evaluateCoupledInternalVariableMaterial(const MaterialType& material, const TimeInfoType& t_info,
-                                             AlphaType alpha, AlphaDotType alpha_dot, DerivType deriv_u,
-                                             ParamTypes&&... params)
+/// @brief Dispatch internal-variable material calls with or without explicit `TimeInfo`.
+auto evaluateCoupledInternalVariableMaterial(const MaterialType& material, const TimeInfoType& t_info, AlphaType alpha,
+                                             AlphaDotType alpha_dot, DerivType deriv_u, ParamTypes&&... params)
 {
   if constexpr (requires { material(t_info, alpha, alpha_dot, deriv_u, std::forward<ParamTypes>(params)...); }) {
     return material(t_info, alpha, alpha_dot, deriv_u, std::forward<ParamTypes>(params)...);
@@ -104,6 +104,13 @@ void setCoupledInternalVariableMaterial(
 
 template <int dim, int disp_order, typename DispRule, typename SolidCoupling, typename StateSpace, typename StateRule,
           typename StateCoupling, typename MaterialType>
+/**
+ * @brief Backward-compatible alias for `setCoupledSolidMechanicsInternalVariableMaterial`.
+ * @param solid Solid system receiving internal-variable coupling.
+ * @param state Backward-compatible internal-variable system alias.
+ * @param material Material model.
+ * @param domain_name Domain on which to apply the material.
+ */
 void setCoupledSolidMechanicsInternalVarsMaterial(
     std::shared_ptr<SolidMechanicsSystem<dim, disp_order, DispRule, SolidCoupling>> solid,
     std::shared_ptr<StateVariableSystem<dim, StateSpace, StateRule, StateCoupling>> state, const MaterialType& material,

@@ -135,12 +135,12 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   auto solid = buildSolidMechanicsSystem<dim3, disp_ord, DispRule>(
       std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{}, solid_fields, thermal_fields);
 
-  auto thermal = buildThermalSystem<dim3, temp_ord, TempRule>(
-      std::make_shared<SystemSolver>(thermal_block_solver), ThermalOptions{}, thermal_fields, solid_fields);
+  auto thermal = buildThermalSystem<dim3, temp_ord, TempRule>(std::make_shared<SystemSolver>(thermal_block_solver),
+                                                              ThermalOptions{}, thermal_fields, solid_fields);
 
   auto internal_variables = buildInternalVariableSystem<dim3, StateSpace, InternalVariableRule>(
-      std::make_shared<SystemSolver>(internal_variable_block_solver), InternalVariableOptions{}, internal_variable_fields,
-      solid_fields);
+      std::make_shared<SystemSolver>(internal_variable_block_solver), InternalVariableOptions{},
+      internal_variable_fields, solid_fields);
 
   // Phase 3: register material integrands.
   setCoupledThermoMechanicsMaterial(solid, thermal, SimpleThermoelasticMaterial{}, mesh_->entireBodyName());
@@ -171,8 +171,8 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   std::vector<ReactionState> reactions;
 
   for (size_t step = 0; step < 2; ++step) {
-    std::tie(states, reactions) = makeAdvancer(combined)
-                                      ->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+    std::tie(states, reactions) =
+        makeAdvancer(combined)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
   }
 

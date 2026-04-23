@@ -114,6 +114,7 @@ class QuasiStaticRule : public TimeIntegrationRule {
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1>
+  /// @brief Return the static field value.
   SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
   {
     return field_new;
@@ -121,6 +122,7 @@ class QuasiStaticRule : public TimeIntegrationRule {
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1>
+  /// @brief Return zero first derivative for a static field.
   SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
   {
     return zero{};
@@ -160,24 +162,36 @@ class StaticTimeIntegrationRule : public TimeIntegrationRule {
 
   int num_args() const override { return num_states; }
 
+  /**
+   * @brief Return the static field value.
+   */
   template <typename T1>
   SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
   {
     return field_new;
   }
 
+  /**
+   * @brief Return zero first derivative for a static field.
+   */
   template <typename T1>
   SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
   {
     return zero{};
   }
 
+  /**
+   * @brief Return zero second derivative for a static field.
+   */
   template <typename T1>
   SMITH_HOST_DEVICE auto ddot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
   {
     return zero{};
   }
 
+  /**
+   * @brief Return value, first derivative, and second derivative for a static field.
+   */
   template <typename T1>
   SMITH_HOST_DEVICE auto interpolate(const TimeInfo& t, const T1& field_new) const
   {

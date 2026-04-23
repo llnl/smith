@@ -60,7 +60,8 @@ template <int dim, typename StateSpace, typename InternalVarTimeRule = BackwardE
 struct InternalVariableSystem : public SystemBase {
   using SystemBase::SystemBase;
 
-  static_assert(InternalVarTimeRule::num_states == 2, "InternalVariableSystem requires a 2-state time integration rule");
+  static_assert(InternalVarTimeRule::num_states == 2,
+                "InternalVariableSystem requires a 2-state time integration rule");
 
   /// State weak form: (alpha, alpha_old, coupling_fields..., params...)
   using InternalVariableWeakFormType = TimeDiscretizedWeakForm<
@@ -98,12 +99,14 @@ struct InternalVariableSystem : public SystemBase {
   }
 
   template <typename MaterialType>
+  /// @brief Register an internal-variable material or evolution law on a domain.
   void setMaterial(const MaterialType& material, const std::string& domain_name)
   {
     addEvolution(domain_name, material);
   }
 
   template <typename EvolutionType>
+  /// @brief Backward-compatible alias for `addEvolution`.
   void addStateEvolution(const std::string& domain_name, EvolutionType evolution_law)
   {
     addEvolution(domain_name, evolution_law);
@@ -114,7 +117,9 @@ struct InternalVariableSystem : public SystemBase {
 // Options
 // ---------------------------------------------------------------------------
 
+/// @brief Options for building an `InternalVariableSystem`.
 struct InternalVariableOptions {};
+/// @brief Backward-compatible alias for `InternalVariableOptions`.
 using StateVariableOptions = InternalVariableOptions;
 
 // ---------------------------------------------------------------------------
@@ -152,6 +157,7 @@ auto registerInternalVariableFields(std::shared_ptr<FieldStore> field_store,
 }
 
 template <typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
+/// @brief Backward-compatible alias for `registerInternalVariableFields`.
 auto registerStateVariableFields(std::shared_ptr<FieldStore> field_store, FieldType<parameter_space>... parameter_types)
 {
   return registerInternalVariableFields<StateSpace, InternalVarTimeRule>(field_store, parameter_types...);
@@ -166,11 +172,13 @@ auto registerStateVariableFields(std::shared_ptr<FieldStore> field_store, FieldT
  */
 namespace detail {
 
+/**
+ * @brief Internal builder for an internal-variable system after public registration and coupling collection.
+ */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
 auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
-                                     std::shared_ptr<SystemSolver> solver,
-                                     const InternalVariableOptions& /*options*/)
+                                     std::shared_ptr<SystemSolver> solver, const InternalVariableOptions& /*options*/)
 {
   auto internal_variable_time_rule = std::make_shared<InternalVarTimeRule>();
 
@@ -185,14 +193,15 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
   auto internal_variable_weak_form = std::apply(
       [&](auto&... coupling_fields) {
         return std::make_shared<typename SystemType::InternalVariableWeakFormType>(
-            internal_variable_residual_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
+            internal_variable_residual_name, field_store->getMesh(),
+            field_store->getField(state_type.name).get()->space(),
             field_store->createSpaces(internal_variable_residual_name, state_type.name, state_type, state_old_type,
                                       coupling_fields...));
       },
       coupling.fields);
 
-  auto sys =
-      std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{internal_variable_weak_form});
+  auto sys = std::make_shared<SystemType>(field_store, solver,
+                                          std::vector<std::shared_ptr<WeakForm>>{internal_variable_weak_form});
   sys->internal_variable_bc = internal_variable_bc;
   sys->internal_variable_time_rule = internal_variable_time_rule;
   sys->internal_variable_weak_form = internal_variable_weak_form;
@@ -219,6 +228,9 @@ auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const Int
                                                                                        options);
 }
 
+/**
+ * @brief Backward-compatible alias for `buildInternalVariableSystem`.
+ */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename SelfFields, typename... OtherPacks>
   requires(detail::is_physics_fields_v<SelfFields> &&
            std::is_same_v<typename std::decay_t<SelfFields>::time_rule_type, InternalVarTimeRule> &&
@@ -227,11 +239,12 @@ auto buildStateVariableSystem(std::shared_ptr<SystemSolver> solver, const StateV
                               const SelfFields& self_fields, const OtherPacks&... other_packs)
 {
   return buildInternalVariableSystem<dim, StateSpace, InternalVarTimeRule>(solver, options, self_fields,
-                                                                            other_packs...);
+                                                                           other_packs...);
 }
 
 template <int dim, typename StateSpace, typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
           typename Coupling = CouplingParams<>>
+/// @brief Backward-compatible alias for `InternalVariableSystem`.
 using StateVariableSystem = InternalVariableSystem<dim, StateSpace, InternalVarTimeRule, Coupling>;
 
 }  // namespace smith

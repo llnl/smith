@@ -258,6 +258,66 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   EXPECT_NEAR(0.0, u_err, 1e-14);
 }
 
+TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditions)
+{
+  auto solver =
+      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "freefall_");
+
+  using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
+  SolidMechanicsOptions solid_options{.enable_stress_output = true};
+  auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store, solid_options);
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(solver, solid_options, solid_fields);
+
+  static constexpr double gravity = -9.0;
+  double E = 100.0;
+  double nu = 0.25;
+  auto K = E / (3.0 * (1.0 - 2.0 * nu));
+  auto G = E / (2.0 * (1.0 + nu));
+  system->setMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = K, .G = G}, mesh->entireBodyName());
+
+  system->addBodyForce(mesh->entireBodyName(), [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/) {
+    tensor<double, dim> b{};
+    b[1] = gravity;
+    return b;
+  });
+
+  system->disp_bc->setFixedVectorBCs<dim>(mesh->entireBoundary(), std::vector<int>{0, 2});
+
+  auto physics = makeDifferentiablePhysics(system, "freefall");
+  for (size_t step = 0; step < num_steps_; ++step) {
+    physics->advanceTimestep(dt_);
+  }
+
+  auto states = physics->getFieldStates();
+  auto shape_disp = physics->getShapeDispFieldState();
+  double time = num_steps_ * dt_;
+  double a_exact = gravity;
+  double v_exact = gravity * time;
+  double u_exact = 0.5 * gravity * time * time;
+
+  auto vector_error = [&](const std::string& name, size_t state_index, double y_exact) {
+    FunctionalObjective<dim, Parameters<VectorSpace>> error(name, mesh, spaces({states[state_index]}));
+    error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [y_exact](auto /*t*/, auto /*X*/, auto U) {
+      auto u = get<VALUE>(U);
+      return u[0] * u[0] + (u[1] - y_exact) * (u[1] - y_exact) + u[2] * u[2];
+    });
+    return error.evaluate(TimeInfo(0.0, dt_, num_steps_), shape_disp.get().get(),
+                          getConstFieldPointers({states[state_index]}));
+  };
+
+  EXPECT_NEAR(0.0, vector_error("freefall_acceleration_error", 3, a_exact), 1e-12);
+  EXPECT_NEAR(0.0, vector_error("freefall_velocity_error", 2, v_exact), 1e-12);
+  EXPECT_NEAR(0.0, vector_error("freefall_displacement_error", 0, u_exact), 1e-12);
+
+  auto stress_it = std::find_if(states.begin(), states.end(), [](const auto& state) {
+    return state.get()->name().find("stress_solve_state") != std::string::npos;
+  });
+  ASSERT_NE(stress_it, states.end());
+  double stress_norm = norm(*stress_it->get().get());
+  EXPECT_LT(stress_norm, 1e-8);
+}
+
 auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
 {
   std::shared_ptr<NonlinearBlockSolver> solid_block_solver =

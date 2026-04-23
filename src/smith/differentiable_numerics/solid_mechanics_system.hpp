@@ -28,12 +28,14 @@ namespace smith {
 namespace detail {
 
 template <typename ValueType>
+/// @brief Scale a cycle-zero residual contribution by `dt*dt`.
 auto scaleCycleZeroTerm(const TimeInfo& t_info, ValueType value)
 {
   return (t_info.dt() * t_info.dt()) * value;
 }
 
 template <typename InertiaType, typename StressType>
+/// @brief Package scaled inertia and stress terms for the cycle-zero weak form.
 auto makeScaledCycleZeroResidual(const TimeInfo& t_info, InertiaType inertia, StressType stress)
 {
   return smith::tuple{scaleCycleZeroTerm(t_info, inertia), scaleCycleZeroTerm(t_info, stress)};
@@ -381,10 +383,10 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
 
   auto physics_fields =
       PhysicsFields<DisplacementTimeRule, H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>>{
-      field_store, FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
-      FieldType<H1<order, dim>>(field_store->prefix("displacement")),
-      FieldType<H1<order, dim>>(field_store->prefix("velocity")),
-      FieldType<H1<order, dim>>(field_store->prefix("acceleration"))};
+          field_store, FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
+          FieldType<H1<order, dim>>(field_store->prefix("displacement")),
+          FieldType<H1<order, dim>>(field_store->prefix("velocity")),
+          FieldType<H1<order, dim>>(field_store->prefix("acceleration"))};
 
   if (options.enable_stress_output) {
     auto stress_time_rule = std::make_shared<StaticTimeIntegrationRule>();
@@ -402,11 +404,13 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
  */
 namespace detail {
 
+/// @brief Return true when stress output fields were registered during phase 1.
 inline bool hasRegisteredStressOutput(const std::shared_ptr<FieldStore>& field_store)
 {
   return field_store->hasField(field_store->prefix("stress_solve_state"));
 }
 
+/// @brief Build a cycle-zero solver from the main solver when possible, else use fallback defaults.
 inline std::shared_ptr<SystemSolver> makeCycleZeroSolver(std::shared_ptr<SystemSolver> solver, const Mesh& mesh)
 {
   if (solver) {
@@ -429,6 +433,9 @@ inline std::shared_ptr<SystemSolver> makeCycleZeroSolver(std::shared_ptr<SystemS
   return std::make_shared<SystemSolver>(buildNonlinearBlockSolver(cycle_zero_nonlin, cycle_zero_lin, mesh));
 }
 
+/**
+ * @brief Internal solid builder after public registration and coupling collection.
+ */
 template <int dim, int order, typename DisplacementTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
 auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
@@ -542,8 +549,8 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
   (detail::registerParamsIfNeeded(field_store, other_packs), ...);
   auto coupling = detail::collectCouplingFields<DisplacementTimeRule>(field_store, self_fields, other_packs...);
   bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
-  return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver,
-                                                                                 options, has_stress_output);
+  return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
+                                                                                 has_stress_output);
 }
 
 /**
