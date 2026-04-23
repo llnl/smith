@@ -107,14 +107,14 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "impl");
     using ImplicitRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
     auto solid_fields = registerSolidMechanicsFields<dim, order, ImplicitRule>(field_store);
-    auto sys = buildSolidMechanicsSystem<dim, order, ImplicitRule>(solver, SolidMechanicsOptions{}, solid_fields);
+    auto sys = buildSolidMechanicsSystem<dim, order>(solver, SolidMechanicsOptions{}, solid_fields);
     EXPECT_NE(sys->cycle_zero_system, nullptr) << "ImplicitNewmark should emit a cycle-zero initial acceleration solve";
   }
   {
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "qs");
     using QsRule = QuasiStaticSecondOrderTimeIntegrationRule;
     auto solid_fields = registerSolidMechanicsFields<dim, order, QsRule>(field_store);
-    auto sys = buildSolidMechanicsSystem<dim, order, QsRule>(solver, SolidMechanicsOptions{}, solid_fields);
+    auto sys = buildSolidMechanicsSystem<dim, order>(solver, SolidMechanicsOptions{}, solid_fields);
     EXPECT_EQ(sys->cycle_zero_system, nullptr) << "QuasiStatic has no initial acceleration solve";
   }
 }
@@ -128,7 +128,7 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverUsesOwnedSingleStepPolicy)
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "cycle_zero_policy");
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
-  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(solver, SolidMechanicsOptions{}, solid_fields);
+  auto system = buildSolidMechanicsSystem<dim, order>(solver, SolidMechanicsOptions{}, solid_fields);
 
   ASSERT_NE(system->cycle_zero_system, nullptr);
   ASSERT_NE(system->cycle_zero_system->solver, nullptr);
@@ -141,7 +141,7 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverFallbackBuildsWithoutMainSolver
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "cycle_zero_fallback");
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
-  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(nullptr, SolidMechanicsOptions{}, solid_fields);
+  auto system = buildSolidMechanicsSystem<dim, order>(nullptr, SolidMechanicsOptions{}, solid_fields);
 
   ASSERT_NE(system->cycle_zero_system, nullptr);
   ASSERT_NE(system->cycle_zero_system->solver, nullptr);
@@ -164,7 +164,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(
       field_store, SolidMechanicsOptions{.enable_stress_output = true});
 
-  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(
+  auto system = buildSolidMechanicsSystem<dim, order>(
       coupled_solver, SolidMechanicsOptions{.enable_stress_output = true}, solid_fields, param_fields);
 
   static constexpr double gravity = -9.0;
@@ -267,7 +267,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
   SolidMechanicsOptions solid_options{.enable_stress_output = true};
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store, solid_options);
-  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(solver, solid_options, solid_fields);
+  auto system = buildSolidMechanicsSystem<dim, order>(solver, solid_options, solid_fields);
 
   static constexpr double gravity = -9.0;
   double E = 100.0;
@@ -331,8 +331,8 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
       registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
 
-  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(coupled_solver, SolidMechanicsOptions{}, solid_fields,
-                                                                param_fields);
+  auto system =
+      buildSolidMechanicsSystem<dim, order>(coupled_solver, SolidMechanicsOptions{}, solid_fields, param_fields);
 
   auto physics = makeDifferentiablePhysics(system, physics_name);
   auto bcs = system->disp_bc;

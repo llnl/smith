@@ -528,7 +528,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
 /**
  * @brief Build a SolidMechanicsSystem from already-registered field packs.
  *
- * Preferred API: Rule is given as explicit template param (no rule instance needed).
+ * Explicit-rule API: rule is given as template param.
  * Additional parameter packs are registered as parameters. Coupling packs are taken from
  * the trailing field-pack arguments.
  *
@@ -551,6 +551,26 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
   bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
   return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
                                                                                  has_stress_output);
+}
+
+/**
+ * @brief Build a SolidMechanicsSystem from already-registered field packs.
+ *
+ * Preferred API: deduce rule from `self_fields`.
+ *
+ * Usage:
+ * @code
+ *   auto solid = buildSolidMechanicsSystem<dim, order>(
+ *       solver, opts, solid_fields, youngs_modulus, thermal_fields);
+ * @endcode
+ */
+template <int dim, int order, typename SelfFields, typename... OtherPacks>
+  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
+                               const SelfFields& self_fields, const OtherPacks&... other_packs)
+{
+  using DisplacementTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule>(solver, options, self_fields, other_packs...);
 }
 
 /**

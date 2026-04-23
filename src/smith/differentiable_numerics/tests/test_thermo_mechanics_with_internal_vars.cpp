@@ -5,13 +5,13 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file test_thermo_mechanics_three_system.cpp
- * @brief Tests 3-system coupling: SolidMechanicsSystem + ThermalSystem + InternalVariableSystem.
+ * @file test_thermo_mechanics_with_internal_vars.cpp
+ * @brief Tests thermo-mechanics with internal variables using three composed systems.
  *
  * Validates N>2 system coupling end-to-end via combineSystems.
  *
  * Layout:
- *  - Solid: receives temperature coupling (1-way: temperature affects elastic modulus via expansion).
+ *  - Solid: receives temperature and alpha coupling.
  *  - Thermal: standalone heat diffusion with a heat source.
  *  - Internal variable (damage): receives solid displacement coupling; damage evolves with strain norm.
  */
@@ -38,7 +38,7 @@
 
 namespace smith {
 
-static constexpr int dim3 = 3;
+static constexpr int dim = 3;
 static constexpr int disp_ord = 1;
 static constexpr int temp_ord = 1;
 static constexpr int state_ord = 0;
@@ -55,18 +55,34 @@ struct SimpleThermoelasticMaterial {
   double heat_capacity = 1.0;
   double heat_source = 0.5;
 
-  template <typename DT, typename StateType, typename GradUType, typename GradVType, typename ThetaType,
-            typename GradThetaType, typename... Params>
-  SMITH_HOST_DEVICE auto operator()(DT /*dt*/, StateType /*state*/, GradUType grad_u, GradVType /*grad_v*/,
-                                    ThetaType theta, GradThetaType grad_theta, Params... /*params*/) const
+  template <typename AlphaType>
+  SMITH_HOST_DEVICE auto effectiveYoungsModulus(AlphaType alpha) const
   {
-    double lam = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
-    double mu = E / (2.0 * (1.0 + nu));
-    static constexpr auto I = Identity<dim3>();
+    return E * (1.0 - 0.8 * alpha);
+  }
+
+  template <typename DT, typename StateType, typename GradUType, typename GradVType, typename ThetaType,
+            typename GradThetaType, typename AlphaType, typename... Params>
+  SMITH_HOST_DEVICE auto operator()(DT /*dt*/, StateType /*state*/, GradUType grad_u, GradVType /*grad_v*/,
+                                    ThetaType theta, GradThetaType grad_theta, AlphaType alpha,
+                                    Params... /*params*/) const
+  {
+    auto E_eff = effectiveYoungsModulus(alpha);
+    auto lam = E_eff * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
+    auto mu = E_eff / (2.0 * (1.0 + nu));
+    static constexpr auto I = Identity<dim>();
     auto eps = sym(grad_u);
     auto pk = lam * (tr(eps) - 3.0 * alpha_th * theta) * I + 2.0 * mu * eps;
     auto q0 = kappa * grad_theta;
     return smith::tuple{pk, heat_capacity, heat_source, q0};
+  }
+
+  template <typename DT, typename StateType, typename GradUType, typename GradVType, typename ThetaType,
+            typename GradThetaType, typename... Params>
+  SMITH_HOST_DEVICE auto operator()(DT dt, StateType state, GradUType grad_u, GradVType grad_v, ThetaType theta,
+                                    GradThetaType grad_theta, Params... params) const
+  {
+    return (*this)(dt, state, grad_u, grad_v, theta, grad_theta, 0.0, params...);
   }
 };
 
@@ -86,19 +102,18 @@ struct ThreeSystemMeshFixture : public testing::Test {
   void SetUp() override
   {
     datastore_ = std::make_unique<axom::sidre::DataStore>();
-    smith::StateManager::initialize(*datastore_, "three_system");
+    smith::StateManager::initialize(*datastore_, "thermo_mechanics_with_internal_vars");
     mesh_ = std::make_shared<smith::Mesh>(
         mfem::Mesh::MakeCartesian3D(4, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 0.1, 0.1), "mesh", 0, 0);
-    mesh_->addDomainOfBoundaryElements("left", smith::by_attr<dim3>(3));
-    mesh_->addDomainOfBoundaryElements("right", smith::by_attr<dim3>(5));
+    mesh_->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
+    mesh_->addDomainOfBoundaryElements("right", smith::by_attr<dim>(5));
   }
 
   std::unique_ptr<axom::sidre::DataStore> datastore_;
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
-// 3-system staggered: solid + thermal + internal variable.
-TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
+TEST_F(ThreeSystemMeshFixture, StronglyCoupledThreeSystems)
 {
   smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU,
                                       .relative_tol = 1e-8,
@@ -116,7 +131,7 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   auto thermal_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
   auto internal_variable_block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
 
-  auto field_store = std::make_shared<FieldStore>(mesh_, 100, "three");
+  auto field_store = std::make_shared<FieldStore>(mesh_, 100);
 
   using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
   using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
@@ -125,25 +140,63 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   // Phase 1: register all fields.
   // registerSolidMechanicsFields must come before registerThermalFields to get
   // the displacement field tokens available for thermal coupling.
-  auto solid_fields = registerSolidMechanicsFields<dim3, disp_ord, DispRule>(field_store);
-  auto thermal_fields = registerThermalFields<dim3, temp_ord, TempRule>(field_store);
+  auto solid_fields = registerSolidMechanicsFields<dim, disp_ord, DispRule>(field_store);
+  auto thermal_fields = registerThermalFields<dim, temp_ord, TempRule>(field_store);
   auto internal_variable_fields = registerInternalVariableFields<StateSpace, InternalVariableRule>(field_store);
 
   // Phase 2: build each system.
 
-  // Solid receives thermal coupling (temperature_solve_state, temperature).
-  auto solid = buildSolidMechanicsSystem<dim3, disp_ord, DispRule>(
-      std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{}, solid_fields, thermal_fields);
+  // Solid receives thermal and alpha coupling.
+  auto solid = buildSolidMechanicsSystem<dim, disp_ord>(
+      std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{}, solid_fields, thermal_fields,
+      internal_variable_fields);
 
-  auto thermal = buildThermalSystem<dim3, temp_ord, TempRule>(std::make_shared<SystemSolver>(thermal_block_solver),
-                                                              ThermalOptions{}, thermal_fields, solid_fields);
+  auto thermal = buildThermalSystem<dim, temp_ord>(std::make_shared<SystemSolver>(thermal_block_solver),
+                                                    ThermalOptions{}, thermal_fields, solid_fields);
 
-  auto internal_variables = buildInternalVariableSystem<dim3, StateSpace, InternalVariableRule>(
+  auto internal_variables = buildInternalVariableSystem<dim, StateSpace>(
       std::make_shared<SystemSolver>(internal_variable_block_solver), InternalVariableOptions{},
       internal_variable_fields, solid_fields);
 
   // Phase 3: register material integrands.
-  setCoupledThermoMechanicsMaterial(solid, thermal, SimpleThermoelasticMaterial{}, mesh_->entireBodyName());
+  auto material = SimpleThermoelasticMaterial{};
+  auto disp_rule = solid->disp_time_rule;
+  auto temp_rule = thermal->temperature_time_rule;
+  auto alpha_rule = internal_variables->internal_variable_time_rule;
+
+  solid->solid_weak_form->addBodyIntegral(
+      mesh_->entireBodyName(),
+      [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto temperature, auto temperature_old,
+          auto alpha, auto alpha_old) {
+        auto [u_current, v_current, a_current] = disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
+        auto T = temp_rule->value(t_info, temperature, temperature_old);
+        auto alpha_current = alpha_rule->value(t_info, alpha, alpha_old);
+
+        SimpleThermoelasticMaterial::State state{};
+        auto response =
+            material(t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), get<VALUE>(T),
+                     get<DERIVATIVE>(T), get<VALUE>(alpha_current));
+        auto pk = get<0>(response);
+        return smith::tuple{get<VALUE>(a_current) * material.density, pk};
+      });
+
+  thermal->thermal_weak_form->addBodyIntegral(
+      mesh_->entireBodyName(),
+      [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp, auto disp_old, auto v_old, auto a_old) {
+        auto [T_current, T_dot] = temp_rule->interpolate(t_info, T, T_old);
+        auto [u_current, v_current, a_current] = disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
+        (void)a_current;
+
+        SimpleThermoelasticMaterial::State state{};
+        auto response =
+            material(t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), get<VALUE>(T_current),
+                     get<DERIVATIVE>(T_current));
+        auto C_v = get<1>(response);
+        auto s0 = get<2>(response);
+        auto q0 = get<3>(response);
+        return smith::tuple{C_v * get<VALUE>(T_dot) - s0, -q0};
+      });
+
   setCoupledInternalVariableMaterial(internal_variables, solid, StrainDrivenInternalVariableMaterial{},
                                      mesh_->entireBodyName());
 
@@ -152,10 +205,11 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
   thermal->setTemperatureBC(mesh_->domain("left"));
 
   // Compressive traction on right face.
-  // Lambda args from addTraction: (t, X, n, u, v, a, temp_ss, temp_old)
-  // — 6 self fields + 2 thermal coupling fields forwarded as trailing args.
+  // Lambda args from addTraction: (t, X, n, u, v, a, temp_ss, temp_old, alpha_ss, alpha_old)
   solid->addTraction(
-      "right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto /*temp_ss*/, auto /*temp_old*/) {
+      "right",
+      [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto /*temp_ss*/, auto /*temp_old*/,
+         auto /*alpha_ss*/, auto /*alpha_old*/) {
         auto t = 0.0 * X;
         t[0] = -0.005;
         return t;
@@ -185,19 +239,16 @@ TEST_F(ThreeSystemMeshFixture, StaggeredThreeSystems)
       << "Internal-variable solver did not converge";
 
   // Displacement should be non-zero (compressive traction).
-  mfem::Vector final_disp(*states[field_store->getFieldIndex("three_displacement_solve_state")].get());
-  double max_disp = final_disp.Normlinf();
-  EXPECT_GT(max_disp, 1e-8) << "Displacement should be non-zero under compressive traction";
+  auto final_disp = states[field_store->getFieldIndex("displacement_solve_state")].get();
+  EXPECT_GT(final_disp->Normlinf(), 1e-8) << "Displacement should be non-zero under compressive traction";
 
   // Temperature should be non-zero (heat source applied).
-  mfem::Vector final_temp(*states[field_store->getFieldIndex("three_temperature_solve_state")].get());
-  double max_temp = final_temp.Normlinf();
-  EXPECT_GT(max_temp, 1e-10) << "Temperature should be non-zero under heat source";
+  auto final_temp = states[field_store->getFieldIndex("temperature")].get();
+  EXPECT_GT(final_temp->Normlinf(), 1e-10) << "Temperature should be non-zero under heat source";
 
   // Damage should be non-zero (driven by strain norm).
-  mfem::Vector final_state(*states[field_store->getFieldIndex("three_state_solve_state")].get());
-  double max_state = final_state.Normlinf();
-  EXPECT_GT(max_state, 1e-10) << "Damage state should grow under deformation";
+  auto final_state = states[field_store->getFieldIndex("state")].get();
+  EXPECT_GT(final_state->Normlinf(), 1e-10) << "Damage state should grow under deformation";
 }
 
 }  // namespace smith

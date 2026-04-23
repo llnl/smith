@@ -118,9 +118,9 @@ auto buildSystems(const std::shared_ptr<SystemSolver>& solid_solver,
                   const std::shared_ptr<SystemSolver>& internal_variable_solver, const SolidFields& solid_fields,
                   const InternalVariableFields& internal_variable_fields)
 {
-  return std::tuple{buildSolidMechanicsSystem<dim, disp_order, DispRule>(solid_solver, SolidMechanicsOptions{},
-                                                                         solid_fields, internal_variable_fields),
-                    buildInternalVariableSystem<dim, StateSpace, InternalVariableRule>(
+  return std::tuple{buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                               internal_variable_fields),
+                    buildInternalVariableSystem<dim, StateSpace>(
                         internal_variable_solver, InternalVariableOptions{}, internal_variable_fields, solid_fields)};
 }
 

@@ -211,9 +211,6 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
 
 }  // namespace detail
 
-/**
- * @brief Build an internal-variable system from registered field packs.
- */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename SelfFields, typename... OtherPacks>
   requires(detail::is_physics_fields_v<SelfFields> &&
            std::is_same_v<typename std::decay_t<SelfFields>::time_rule_type, InternalVarTimeRule> &&
@@ -238,6 +235,32 @@ template <int dim, typename StateSpace, typename InternalVarTimeRule, typename S
 auto buildStateVariableSystem(std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
                               const SelfFields& self_fields, const OtherPacks&... other_packs)
 {
+  return buildInternalVariableSystem<dim, StateSpace, InternalVarTimeRule>(solver, options, self_fields,
+                                                                           other_packs...);
+}
+
+/**
+ * @brief Build an internal-variable system from registered field packs.
+ */
+template <int dim, typename StateSpace, typename SelfFields, typename... OtherPacks>
+  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const InternalVariableOptions& options,
+                                 const SelfFields& self_fields, const OtherPacks&... other_packs)
+{
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  return buildInternalVariableSystem<dim, StateSpace, InternalVarTimeRule>(solver, options, self_fields,
+                                                                           other_packs...);
+}
+
+/**
+ * @brief Backward-compatible alias for `buildInternalVariableSystem`.
+ */
+template <int dim, typename StateSpace, typename SelfFields, typename... OtherPacks>
+  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+auto buildStateVariableSystem(std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
+                              const SelfFields& self_fields, const OtherPacks&... other_packs)
+{
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   return buildInternalVariableSystem<dim, StateSpace, InternalVarTimeRule>(solver, options, self_fields,
                                                                            other_packs...);
 }

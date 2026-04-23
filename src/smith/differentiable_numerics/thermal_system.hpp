@@ -239,7 +239,7 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
 /**
  * @brief Build a ThermalSystem from already-registered field packs.
  *
- * Preferred API: Rule is given as explicit template param (no rule instance needed).
+ * Explicit-rule API: rule is given as template param.
  * Additional parameter packs are registered as parameters. Coupling packs are taken from
  * the trailing field-pack arguments.
  *
@@ -260,6 +260,26 @@ auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptio
   (detail::registerParamsIfNeeded(field_store, other_packs), ...);
   auto coupling = detail::collectCouplingFields<TemperatureTimeRule>(field_store, self_fields, other_packs...);
   return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
+}
+
+/**
+ * @brief Build a ThermalSystem from already-registered field packs.
+ *
+ * Preferred API: deduce rule from `self_fields`.
+ *
+ * Usage:
+ * @code
+ *   auto thermal = buildThermalSystem<dim, order>(
+ *       solver, opts, thermal_fields, solid_fields);
+ * @endcode
+ */
+template <int dim, int temp_order, typename SelfFields, typename... OtherPacks>
+  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
+                        const SelfFields& self_fields, const OtherPacks&... other_packs)
+{
+  using TemperatureTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  return buildThermalSystem<dim, temp_order, TemperatureTimeRule>(solver, options, self_fields, other_packs...);
 }
 
 /**
