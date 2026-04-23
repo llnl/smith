@@ -61,8 +61,9 @@ struct DamageMaterial {
   double nu = 0.3;
   double density = 1.0;
 
-  template <typename StateType, typename DerivType, typename ISVType, typename... Params>
-  SMITH_HOST_DEVICE auto operator()(StateType /*state*/, DerivType deriv_u, ISVType isv, Params... /*params*/) const
+  template <typename StateType, typename DerivType, typename GradVType, typename ISVType, typename... Params>
+  SMITH_HOST_DEVICE auto operator()(const TimeInfo& /*t_info*/, StateType /*state*/, DerivType deriv_u,
+                                    GradVType /*grad_v*/, ISVType isv, Params... /*params*/) const
   {
     auto epsilon = sym(deriv_u);
     auto tr_eps = tr(epsilon);
@@ -120,8 +121,8 @@ auto buildSystems(const std::shared_ptr<SystemSolver>& solid_solver,
 {
   return std::tuple{buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
                                                                internal_variable_fields),
-                    buildInternalVariableSystem<dim, StateSpace>(
-                        internal_variable_solver, InternalVariableOptions{}, internal_variable_fields, solid_fields)};
+                    buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, InternalVariableOptions{},
+                                                                 internal_variable_fields, solid_fields)};
 }
 
 template <typename SolidSystemType, typename InternalVariableSystemType>

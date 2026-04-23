@@ -335,8 +335,14 @@ const std::vector<FieldState>& FieldStore::getStateFields() const { return state
 std::vector<FieldState> FieldStore::getOutputFieldStates() const
 {
   std::vector<FieldState> output;
+  std::set<std::string> public_static_fields;
+  for (const auto& [rule, mapping] : time_integration_rules_) {
+    if (mapping.history_name.empty() && mapping.dot_name.empty() && mapping.ddot_name.empty()) {
+      public_static_fields.insert(mapping.primary_name);
+    }
+  }
   for (size_t i = 0; i < states_.size(); ++i) {
-    if (!is_solve_state_[i]) {
+    if (!is_solve_state_[i] || public_static_fields.count(states_[i].get()->name()) > 0) {
       output.push_back(states_[i]);
     }
   }

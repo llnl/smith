@@ -21,6 +21,7 @@
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/thermal_system.hpp"
 #include "smith/differentiable_numerics/thermo_mechanical_system.hpp"
+#include "smith/differentiable_numerics/time_info_thermo_mechanical_materials.hpp"
 #include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/materials/green_saint_venant_thermoelastic.hpp"
@@ -36,6 +37,8 @@ int main(int argc, char* argv[])
 
   // _mesh_start
   constexpr int dim = 3;
+  constexpr int order = 1;
+
   auto mesh = std::make_shared<smith::Mesh>(
       mfem::Mesh::MakeCartesian3D(8, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 0.1, 0.1), "mesh", 0, 0);
   mesh->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
@@ -55,13 +58,13 @@ int main(int argc, char* argv[])
                                                   .max_line_search_iterations = 6,
                                                   .print_level = 0};
 
-  auto field_store = std::make_shared<smith::FieldStore>(mesh, 100, "tutorial_");
+  auto field_store = std::make_shared<smith::FieldStore>(mesh, 100);
 
   using DispRule = smith::QuasiStaticSecondOrderTimeIntegrationRule;
   using TempRule = smith::BackwardEulerFirstOrderTimeIntegrationRule;
 
-  auto solid_fields = smith::registerSolidMechanicsFields<dim, 1, DispRule>(field_store);
-  auto thermal_fields = smith::registerThermalFields<dim, 1, TempRule>(field_store);
+  auto solid_fields = smith::registerSolidMechanicsFields<dim, order, DispRule>(field_store);
+  auto thermal_fields = smith::registerThermalFields<dim, order, TempRule>(field_store);
   // _solver_end
 
   // _build_start
@@ -70,33 +73,34 @@ int main(int argc, char* argv[])
   auto thermal_solver =
       std::make_shared<smith::SystemSolver>(smith::buildNonlinearBlockSolver(nonlinear_options, linear_options, *mesh));
 
-  auto solid = smith::buildSolidMechanicsSystem<dim, 1, DispRule>(solid_solver, smith::SolidMechanicsOptions{},
-                                                                  solid_fields, thermal_fields);
-  auto thermal = smith::buildThermalSystem<dim, 1, TempRule>(thermal_solver, smith::ThermalOptions{}, thermal_fields,
-                                                             solid_fields);
+  auto solid_system = smith::buildSolidMechanicsSystem<dim, order>(solid_solver, smith::SolidMechanicsOptions{},
+                                                                   solid_fields, thermal_fields);
+  auto thermal_system =
+      smith::buildThermalSystem<dim, order>(thermal_solver, smith::ThermalOptions{}, thermal_fields, solid_fields);
 
-  smith::thermomechanics::GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
-  smith::setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh->entireBodyName());
+  smith::thermomechanics::TimeInfoGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
+                                                                                 0.0025, 0.0,   0.05};
+  smith::setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh->entireBodyName());
 
-  auto coupled = smith::combineSystems(solid, thermal);
+  auto coupled_system = smith::combineSystems(solid_system, thermal_system);
   // _build_end
 
   // _bc_start
-  solid->setDisplacementBC(mesh->domain("left"));
-  thermal->setTemperatureBC(mesh->domain("left"), [](auto, auto) { return 1.0; });
-  thermal->setTemperatureBC(mesh->domain("right"), [](auto, auto) { return 0.0; });
+  solid_system->setDisplacementBC(mesh->domain("left"));
+  thermal_system->setTemperatureBC(mesh->domain("left"), [](auto, auto) { return 1.0; });
+  thermal_system->setTemperatureBC(mesh->domain("right"), [](auto, auto) { return 0.0; });
 
-  solid->addTraction("right", [](double, auto X, auto, auto, auto, auto, auto... /*unused*/) {
+  solid_system->addTraction("right", [](double, auto X, auto, auto, auto, auto, auto... /*unused*/) {
     auto traction = 0.0 * X;
     traction[0] = -0.01;
     return traction;
   });
 
-  thermal->addHeatSource(mesh->entireBodyName(), [](auto, auto, auto, auto... /*unused*/) { return 0.5; });
+  thermal_system->addHeatSource(mesh->entireBodyName(), [](auto, auto, auto, auto... /*unused*/) { return 0.5; });
   // _bc_end
 
   // _run_start
-  auto physics = smith::makeDifferentiablePhysics(coupled, "composable_thermo_mechanics");
+  auto physics = smith::makeDifferentiablePhysics(coupled_system, "composable_thermo_mechanics");
   for (int step = 0; step < 2; ++step) {
     physics->advanceTimestep(1.0);
   }

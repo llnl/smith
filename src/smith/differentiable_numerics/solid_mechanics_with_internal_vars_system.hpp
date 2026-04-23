@@ -18,10 +18,9 @@ namespace smith {
 
 namespace detail {
 
-template <typename MaterialType, typename TimeInfoType, typename AlphaType, typename AlphaDotType, typename DerivType,
-          typename... ParamTypes>
+template <typename MaterialType, typename AlphaType, typename AlphaDotType, typename DerivType, typename... ParamTypes>
 /// @brief Dispatch internal-variable material calls with or without explicit `TimeInfo`.
-auto evaluateCoupledInternalVariableMaterial(const MaterialType& material, const TimeInfoType& t_info, AlphaType alpha,
+auto evaluateCoupledInternalVariableMaterial(const MaterialType& material, const TimeInfo& t_info, AlphaType alpha,
                                              AlphaDotType alpha_dot, DerivType deriv_u, ParamTypes&&... params)
 {
   if constexpr (requires { material(t_info, alpha, alpha_dot, deriv_u, std::forward<ParamTypes>(params)...); }) {
@@ -30,6 +29,38 @@ auto evaluateCoupledInternalVariableMaterial(const MaterialType& material, const
     return material(alpha, alpha_dot, deriv_u, std::forward<ParamTypes>(params)...);
   }
 }
+
+template <typename MaterialType, typename StateType, typename GradUType, typename GradVType, typename AlphaType,
+          typename... ParamTypes>
+/// @brief Evaluate solid/internal-variable material using TimeInfo-aware signature.
+auto evaluateSolidInternalVariableMaterial(const MaterialType& material, const TimeInfo& t_info, StateType& state,
+                                           const GradUType& grad_u, const GradVType& grad_v, AlphaType alpha,
+                                           ParamTypes&&... params)
+{
+  return material(t_info, state, grad_u, grad_v, alpha, std::forward<ParamTypes>(params)...);
+}
+
+template <typename MaterialType, typename InternalVariableRulePtr>
+/// @brief Adapts coupled internal-variable solids to solid-system material interface.
+struct CoupledSolidInternalVariableMaterialAdapter {
+  /// Material state type forwarded to solid system.
+  using State = typename MaterialType::State;
+
+  MaterialType material;                                ///< Wrapped constitutive model.
+  InternalVariableRulePtr internal_variable_time_rule;  ///< Time rule used to recover current internal variable.
+  double density;                                       ///< Material density exposed for solid residual.
+
+  template <typename StateType, typename GradUType, typename GradVType, typename AlphaType, typename AlphaOldType,
+            typename... ParamTypes>
+  /// @brief Evaluate wrapped material with current internal-variable value.
+  auto operator()(const TimeInfo& t_info, StateType& state, GradUType grad_u, GradVType grad_v, AlphaType alpha,
+                  AlphaOldType alpha_old, ParamTypes&&... params) const
+  {
+    auto alpha_current = internal_variable_time_rule->value(t_info, alpha, alpha_old);
+    return evaluateSolidInternalVariableMaterial(material, t_info, state, grad_u, grad_v, get<VALUE>(alpha_current),
+                                                 std::forward<ParamTypes>(params)...);
+  }
+};
 
 }  // namespace detail
 
@@ -44,7 +75,7 @@ auto evaluateCoupledInternalVariableMaterial(const MaterialType& material, const
  *    (first 4 coupling positions: displacement_solve_state, displacement, velocity, acceleration).
  *
  * Solid material callable must satisfy:
- *   material(state, grad_u, alpha_value, params...) -> PK1
+ *   material(t_info, state, grad_u, grad_v, alpha_value, params...) -> PK1
  */
 template <int dim, int disp_order, typename DispRule, typename SolidCoupling, typename StateSpace, typename StateRule,
           typename StateCoupling, typename MaterialType>
@@ -53,28 +84,12 @@ void setCoupledSolidMechanicsInternalVariableMaterial(
     std::shared_ptr<InternalVariableSystem<dim, StateSpace, StateRule, StateCoupling>> internal_variables,
     const MaterialType& material, const std::string& domain_name)
 {
-  auto captured_disp_rule = solid->disp_time_rule;
   auto captured_internal_variable_rule = internal_variables->internal_variable_time_rule;
+  auto solid_material =
+      detail::CoupledSolidInternalVariableMaterialAdapter<MaterialType, decltype(captured_internal_variable_rule)>{
+          material, captured_internal_variable_rule, material.density};
 
-  solid->solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old,
-                                                           auto a_old, auto alpha, auto alpha_old, auto... params) {
-    auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-    auto alpha_current = captured_internal_variable_rule->value(t_info, alpha, alpha_old);
-
-    typename MaterialType::State material_state;
-    auto pk_stress = material(material_state, get<DERIVATIVE>(u_current), get<VALUE>(alpha_current), params...);
-
-    return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
-  });
-
-  if (solid->cycle_zero_solid_weak_form) {
-    solid->cycle_zero_solid_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto u, auto /*v*/, auto a, auto alpha, auto... params) {
-          typename MaterialType::State material_state;
-          auto pk_stress = material(material_state, get<DERIVATIVE>(u), get<VALUE>(alpha), params...);
-          return detail::makeScaledCycleZeroResidual(t_info, get<VALUE>(a) * material.density, pk_stress);
-        });
-  }
+  solid->setMaterial(solid_material, domain_name);
 }
 
 /**

@@ -224,16 +224,14 @@ template <typename SystemType>
  *
  * @param system Main system to wrap.
  * @param physics_name Name exposed through the `BasePhysics` interface.
- * @param cycle_zero_system Optional startup solve system.
  * @param post_solve_systems Optional systems solved after each main step.
  */
 std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(
     std::shared_ptr<SystemType> system, const std::string& physics_name,
-    std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
     std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})
 {
   return makeDifferentiablePhysics(
-      system, makeAdvancer(system, std::move(cycle_zero_system), std::move(post_solve_systems)), physics_name);
+      system, makeAdvancer(system, system->cycle_zero_system, std::move(post_solve_systems)), physics_name);
 }
 
 }  // namespace smith

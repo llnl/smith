@@ -28,6 +28,7 @@
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
+#include "smith/differentiable_numerics/time_info_solid_materials.hpp"
 
 namespace smith {
 
@@ -173,7 +174,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2.0 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  using MaterialType = solid_mechanics::TimeInfoParameterizedNeoHookeanSolid;
   MaterialType material{.density = 1.0, .K0 = K, .G0 = G};
 
   // Set parameters
@@ -274,7 +275,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2.0 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  system->setMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = K, .G = G}, mesh->entireBodyName());
+  system->setMaterial(solid_mechanics::TimeInfoNeoHookean{.density = 1.0, .K = K, .G = G}, mesh->entireBodyName());
 
   system->addBodyForce(mesh->entireBodyName(), [](double /*time*/, auto /*X*/, auto /*u*/, auto /*v*/, auto /*a*/) {
     tensor<double, dim> b{};
@@ -311,7 +312,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
   EXPECT_NEAR(0.0, vector_error("freefall_displacement_error", 0, u_exact), 1e-12);
 
   auto stress_it = std::find_if(states.begin(), states.end(), [](const auto& state) {
-    return state.get()->name().find("stress_solve_state") != std::string::npos;
+    return state.get()->name().find("stress") != std::string::npos;
   });
   ASSERT_NE(stress_it, states.end());
   double stress_norm = norm(*stress_it->get().get());
@@ -349,7 +350,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = solid_mechanics::ParameterizedNeoHookeanSolid;
+  using MaterialType = solid_mechanics::TimeInfoParameterizedNeoHookeanSolid;
   MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
 
   system->setMaterial(material, mesh->entireBodyName());
@@ -554,7 +555,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
   }
 
   // Compare initial condition sensitivities
-  std::vector<std::string> state_suffixes = {"displacement_solve_state", "displacement", "velocity", "acceleration"};
+  std::vector<std::string> state_suffixes = {"displacement", "velocity", "acceleration"};
   for (const auto& suffix : state_suffixes) {
     std::string nameG = physics_name + "_gretl_" + suffix;
     std::string nameB = physics_name + "_base_" + suffix;

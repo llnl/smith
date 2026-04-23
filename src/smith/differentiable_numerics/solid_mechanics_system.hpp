@@ -95,7 +95,7 @@ struct SolidMechanicsSystem : public SystemBase {
   bool output_cauchy_stress = false;                           ///< Project Cauchy stress instead of PK1 when true.
 
   /**
-   * @brief Set the material model for a domain, defining integrals for the solid weak form.
+   * @brief Set material model for domain.
    * @tparam MaterialType The material model type.
    * @param material The material model instance.
    * @param domain_name The name of the domain to apply the material to.
@@ -109,7 +109,7 @@ struct SolidMechanicsSystem : public SystemBase {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
 
           typename MaterialType::State state;
-          auto pk_stress = material(state, get<DERIVATIVE>(u_current), params...);
+          auto pk_stress = material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), params...);
 
           return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
         });
@@ -119,7 +119,7 @@ struct SolidMechanicsSystem : public SystemBase {
       cycle_zero_solid_weak_form->addBodyIntegral(
           domain_name, [=](auto t_info, auto /*X*/, auto u, auto /*v_old*/, auto a, auto... params) {
             typename MaterialType::State state;
-            auto pk_stress = material(state, get<DERIVATIVE>(u), params...);
+            auto pk_stress = material(t_info, state, get<DERIVATIVE>(u), tensor<double, dim, dim>{}, params...);
 
             return detail::makeScaledCycleZeroResidual(t_info, get<VALUE>(a) * material.density, pk_stress);
           });
@@ -137,7 +137,7 @@ struct SolidMechanicsSystem : public SystemBase {
         auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
 
         typename MaterialType::State state;
-        auto pk_stress = material(state, get<DERIVATIVE>(u_current), params...);
+        auto pk_stress = material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), params...);
 
         // Flatten the chosen stress into a dim*dim vector and subtract from the unknown.
         auto flat_stress = [&]() {
@@ -168,18 +168,17 @@ struct SolidMechanicsSystem : public SystemBase {
                     BodyForceType force_function)
   {
     auto captured_rule = disp_time_rule;
-    solid_weak_form->addBodySource(
-        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+    solid_weak_form->template addBodySource<0, 1, 2, 3, (4 + active_parameters)...>(
+        DependsOn<0, 1, 2, 3, (4 + active_parameters)...>{}, domain_name,
+        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
           return force_function(t_info.time(), X, u_current, v_current, a_current, params...);
         });
 
     addCycleZeroBodySourceImpl(
-        domain_name,
-        [=](auto t_info, auto X, auto u, auto v_old, auto a, auto... params) {
+        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto v_old, auto a, auto... params) {
           return detail::scaleCycleZeroTerm(t_info, force_function(t_info.time(), X, u, v_old, a, params...));
-        },
-        std::make_index_sequence<3 + Coupling::num_coupling_fields>{});
+        });
   }
 
   /**
@@ -191,7 +190,7 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename BodyForceType>
   void addBodyForce(const std::string& domain_name, BodyForceType force_function)
   {
-    addBodyForceAllParams(domain_name, force_function, std::make_index_sequence<4 + Coupling::num_coupling_fields>{});
+    addBodyForceAllParams(domain_name, force_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
   }
 
   /**
@@ -207,19 +206,17 @@ struct SolidMechanicsSystem : public SystemBase {
                    TractionType traction_function)
   {
     auto captured_rule = disp_time_rule;
-    solid_weak_form->addBoundaryFlux(
-        depends_on, domain_name,
+    solid_weak_form->template addBoundaryFlux<0, 1, 2, 3, (4 + active_parameters)...>(
+        DependsOn<0, 1, 2, 3, (4 + active_parameters)...>{}, domain_name,
         [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
           return traction_function(t_info.time(), X, n, u_current, v_current, a_current, params...);
         });
 
     addCycleZeroBoundaryFluxImpl(
-        domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto v_old, auto a, auto... params) {
+        depends_on, domain_name, [=](auto t_info, auto X, auto n, auto u, auto v_old, auto a, auto... params) {
           return detail::scaleCycleZeroTerm(t_info, traction_function(t_info.time(), X, n, u, v_old, a, params...));
-        },
-        std::make_index_sequence<3 + Coupling::num_coupling_fields>{});
+        });
   }
 
   /**
@@ -231,7 +228,7 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename TractionType>
   void addTraction(const std::string& domain_name, TractionType traction_function)
   {
-    addTractionAllParams(domain_name, traction_function, std::make_index_sequence<4 + Coupling::num_coupling_fields>{});
+    addTractionAllParams(domain_name, traction_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
   }
 
   /**
@@ -247,8 +244,9 @@ struct SolidMechanicsSystem : public SystemBase {
                    PressureType pressure_function)
   {
     auto captured_rule = disp_time_rule;
-    solid_weak_form->addBoundaryIntegral(
-        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+    solid_weak_form->template addBoundaryIntegral<0, 1, 2, 3, (4 + active_parameters)...>(
+        DependsOn<0, 1, 2, 3, (4 + active_parameters)...>{}, domain_name,
+        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
 
           auto x_current = X + u_current;
@@ -261,8 +259,7 @@ struct SolidMechanicsSystem : public SystemBase {
         });
 
     addCycleZeroBoundaryIntegralImpl(
-        domain_name,
-        [=](auto t_info, auto X, auto u, auto /*v_old*/, auto /*a*/, auto... params) {
+        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto /*v_old*/, auto /*a*/, auto... params) {
           auto u_current = u;
 
           auto x_current = X + u_current;
@@ -272,8 +269,7 @@ struct SolidMechanicsSystem : public SystemBase {
           auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
 
           return detail::scaleCycleZeroTerm(t_info, pressure * n_deformed * (1.0 / n_shape_norm));
-        },
-        std::make_index_sequence<3 + Coupling::num_coupling_fields>{});
+        });
   }
 
   /**
@@ -285,7 +281,7 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename PressureType>
   void addPressure(const std::string& domain_name, PressureType pressure_function)
   {
-    addPressureAllParams(domain_name, pressure_function, std::make_index_sequence<4 + Coupling::num_coupling_fields>{});
+    addPressureAllParams(domain_name, pressure_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
   }
 
   /// Set zero-displacement Dirichlet BC on all components.
@@ -323,28 +319,31 @@ struct SolidMechanicsSystem : public SystemBase {
     addPressure(DependsOn<static_cast<int>(Is)...>{}, domain_name, pressure_function);
   }
 
-  // Cycle-zero helpers: always use all-params DependsOn with the 3-state cycle-zero form count
-  template <typename IntegrandType, std::size_t... Is>
-  void addCycleZeroBodySourceImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
+  // Cycle-zero helpers always include the 3 cycle-zero state slots, followed by the selected tail args.
+  template <int... active_parameters, typename IntegrandType>
+  void addCycleZeroBodySourceImpl(DependsOn<active_parameters...>, const std::string& name, IntegrandType f)
   {
     if (cycle_zero_solid_weak_form) {
-      cycle_zero_solid_weak_form->addBodySource(DependsOn<static_cast<int>(Is)...>{}, name, f);
+      cycle_zero_solid_weak_form->template addBodySource<0, 1, 2, (3 + active_parameters)...>(
+          DependsOn<0, 1, 2, (3 + active_parameters)...>{}, name, f);
     }
   }
 
-  template <typename IntegrandType, std::size_t... Is>
-  void addCycleZeroBoundaryFluxImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
+  template <int... active_parameters, typename IntegrandType>
+  void addCycleZeroBoundaryFluxImpl(DependsOn<active_parameters...>, const std::string& name, IntegrandType f)
   {
     if (cycle_zero_solid_weak_form) {
-      cycle_zero_solid_weak_form->addBoundaryFlux(DependsOn<static_cast<int>(Is)...>{}, name, f);
+      cycle_zero_solid_weak_form->template addBoundaryFlux<0, 1, 2, (3 + active_parameters)...>(
+          DependsOn<0, 1, 2, (3 + active_parameters)...>{}, name, f);
     }
   }
 
-  template <typename IntegrandType, std::size_t... Is>
-  void addCycleZeroBoundaryIntegralImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
+  template <int... active_parameters, typename IntegrandType>
+  void addCycleZeroBoundaryIntegralImpl(DependsOn<active_parameters...>, const std::string& name, IntegrandType f)
   {
     if (cycle_zero_solid_weak_form) {
-      cycle_zero_solid_weak_form->addBoundaryIntegral(DependsOn<static_cast<int>(Is)...>{}, name, f);
+      cycle_zero_solid_weak_form->template addBoundaryIntegral<0, 1, 2, (3 + active_parameters)...>(
+          DependsOn<0, 1, 2, (3 + active_parameters)...>{}, name, f);
     }
   }
 };
@@ -390,9 +389,8 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
 
   if (options.enable_stress_output) {
     auto stress_time_rule = std::make_shared<StaticTimeIntegrationRule>();
-    FieldType<L2<0, dim * dim>> stress_type("stress_solve_state");
+    FieldType<L2<0, dim * dim>> stress_type("stress");
     field_store->addIndependent(stress_type, stress_time_rule);
-    field_store->addDependent(stress_type, FieldStore::TimeDerivative::VAL, "stress");
   }
 
   return physics_fields;
@@ -407,7 +405,7 @@ namespace detail {
 /// @brief Return true when stress output fields were registered during phase 1.
 inline bool hasRegisteredStressOutput(const std::shared_ptr<FieldStore>& field_store)
 {
-  return field_store->hasField(field_store->prefix("stress_solve_state"));
+  return field_store->hasField(field_store->prefix("stress"));
 }
 
 /// @brief Build a cycle-zero solver from the main solver when possible, else use fallback defaults.
@@ -490,7 +488,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
   }
 
   if (has_stress_output) {
-    FieldType<L2<0, dim * dim>> stress_type(field_store->prefix("stress_solve_state"), true);
+    FieldType<L2<0, dim * dim>> stress_type(field_store->prefix("stress"), true);
     FieldType<H1<order, dim>> disp_as_input(disp_type.name);
     std::string stress_name = field_store->prefix("stress_projection");
     sys->stress_weak_form = std::apply(

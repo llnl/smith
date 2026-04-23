@@ -211,6 +211,9 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
 
 }  // namespace detail
 
+/**
+ * @brief Build an internal-variable system from explicitly typed field packs.
+ */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename SelfFields, typename... OtherPacks>
   requires(detail::is_physics_fields_v<SelfFields> &&
            std::is_same_v<typename std::decay_t<SelfFields>::time_rule_type, InternalVarTimeRule> &&

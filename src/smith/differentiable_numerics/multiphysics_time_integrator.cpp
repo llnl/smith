@@ -166,7 +166,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
     }
   }
 
-  // Copy solve-state → history for post-solve fields (e.g. stress_solve_state → stress).
+  // Copy solve-state → history for post-solve fields when a public history field exists.
   // The main loop skipped these rules; their primary fields are already correct in new_states
   // (populated from all_current_states above), so only the history field needs updating.
   for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {

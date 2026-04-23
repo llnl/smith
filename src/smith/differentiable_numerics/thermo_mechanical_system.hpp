@@ -19,25 +19,40 @@ namespace smith {
 namespace detail {
 
 /**
- * @brief Dispatch to either coupled-rate or established thermoelastic material signatures.
- *
- * Supports materials that accept `(dt, state, grad_u, grad_v, theta, grad_theta, params...)`
- * and materials that accept `(state, grad_u, theta, grad_theta, params...)`.
+ * @brief Evaluate coupled thermo-mechanical material using TimeInfo-aware signature.
  */
-template <typename MaterialType, typename DT, typename StateType, typename GradUType, typename GradVType,
-          typename ThetaType, typename GradThetaType, typename... ParamTypes>
-auto evaluateCoupledThermoMechanicsMaterial(const MaterialType& material, DT dt, StateType& state,
+template <typename MaterialType, typename StateType, typename GradUType, typename GradVType, typename ThetaType,
+          typename GradThetaType, typename... ParamTypes>
+auto evaluateCoupledThermoMechanicsMaterial(const MaterialType& material, const TimeInfo& t_info, StateType& state,
                                             const GradUType& grad_u, const GradVType& grad_v, ThetaType theta,
                                             const GradThetaType& grad_theta, ParamTypes&&... params)
 {
-  if constexpr (requires {
-                  material(dt, state, grad_u, grad_v, theta, grad_theta, std::forward<ParamTypes>(params)...);
-                }) {
-    return material(dt, state, grad_u, grad_v, theta, grad_theta, std::forward<ParamTypes>(params)...);
-  } else {
-    return material(state, grad_u, theta, grad_theta, std::forward<ParamTypes>(params)...);
-  }
+  return material(t_info, state, grad_u, grad_v, theta, grad_theta, std::forward<ParamTypes>(params)...);
 }
+
+template <typename MaterialType, typename TemperatureRulePtr>
+/// @brief Adapts coupled thermo-mechanical material to solid-system material interface.
+struct CoupledSolidThermoMechanicsMaterialAdapter {
+  /// Material state type forwarded to solid system.
+  using State = typename MaterialType::State;
+
+  MaterialType material;                     ///< Wrapped thermo-mechanical material.
+  TemperatureRulePtr temperature_time_rule;  ///< Time rule used to recover current temperature value.
+  double density;                            ///< Material density exposed for solid residual.
+
+  template <typename StateType, typename GradUType, typename GradVType, typename TemperatureType,
+            typename TemperatureOldType, typename... ParamTypes>
+  /// @brief Evaluate wrapped material and return solid PK1 contribution.
+  auto operator()(const TimeInfo& t_info, StateType& state, GradUType grad_u, GradVType grad_v,
+                  TemperatureType temperature, TemperatureOldType temperature_old, ParamTypes&&... params) const
+  {
+    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
+    auto [pk, C_v, s0, q0] =
+        evaluateCoupledThermoMechanicsMaterial(material, t_info, state, grad_u, grad_v, get<VALUE>(T),
+                                               get<DERIVATIVE>(T), std::forward<ParamTypes>(params)...);
+    return pk;
+  }
+};
 
 }  // namespace detail
 
@@ -51,13 +66,8 @@ auto evaluateCoupledThermoMechanicsMaterial(const MaterialType& material, DT dt,
  *  - thermal was built with solid displacement fields as the leading coupling fields
  *    (first 4 coupling positions: displacement_solve_state, displacement, velocity, acceleration).
  *
- * The solid integrand lambda receives:
- *   (t_info, X, u, u_old, v_old, a_old, temperature_ss, temperature_old, ...params)
- * The thermal integrand lambda receives:
- *   (t_info, X, T, T_old, disp_ss, displacement, velocity, acceleration, ...params)
- *
  * The material callable must satisfy:
- *   material(dt, state, grad_u, grad_v, T_value, grad_T, params...) -> tuple{PK1, C_v, s0, q0}
+ *   material(t_info, state, grad_u, grad_v, T_value, grad_T, params...) -> tuple{PK1, C_v, s0, q0}
  *
  * @tparam dim            Spatial dimension (deduced from SolidMechanicsSystem template arg).
  * @tparam disp_order_    Displacement polynomial order.
@@ -82,45 +92,32 @@ void setCoupledThermoMechanicsMaterial(
   auto captured_disp_rule = solid->disp_time_rule;
   auto captured_temp_rule = thermal->temperature_time_rule;
 
-  // Solid contribution: inertia + PK1 stress
-  solid->solid_weak_form->addBodyIntegral(
-      domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old, auto temperature,
-                       auto temperature_old, auto... params) {
-        auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-        auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
+  auto solid_material = detail::CoupledSolidThermoMechanicsMaterialAdapter<MaterialType, decltype(captured_temp_rule)>{
+      material, captured_temp_rule, material.density};
 
+  solid->setMaterial(solid_material, domain_name);
+
+  thermal->setMaterial(
+      [=](const TimeInfo& t_info, auto temperature, auto grad_temperature, auto disp, auto disp_old, auto v_old,
+          auto a_old, auto... params) {
+        auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
         typename MaterialType::State state{};
         auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
-            material, t_info.dt(), state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), get<VALUE>(T),
-            get<DERIVATIVE>(T), params...);
-        return smith::tuple{get<VALUE>(a_current) * material.density, pk};
-      });
+            material, t_info, state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), temperature, grad_temperature, params...);
+        return smith::tuple{C_v, q0};
+      },
+      domain_name);
 
-  // Cycle-zero: (u, v, a, temperature, temperature_old, ...params)
-  if (solid->cycle_zero_solid_weak_form) {
-    solid->cycle_zero_solid_weak_form->addBodyIntegral(
-        domain_name,
-        [=](auto t_info, auto /*X*/, auto u, auto v, auto a, auto temperature, auto temperature_old, auto... params) {
-          auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          typename MaterialType::State state{};
-          auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
-              material, t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T),
-              params...);
-          return detail::makeScaledCycleZeroResidual(t_info, get<VALUE>(a) * material.density, pk);
-        });
-  }
-
-  // Thermal contribution: (T, T_old, disp_ss, displacement, velocity, acceleration, ...params)
-  thermal->thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp,
-                                                               auto disp_old, auto v_old, auto a_old, auto... params) {
-    auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, T, T_old);
+  thermal->thermal_weak_form->addBodyIntegral(domain_name, [=](const TimeInfo& t_info, auto /*X*/, auto temperature,
+                                                               auto temperature_old, auto disp, auto disp_old,
+                                                               auto v_old, auto a_old, auto... params) {
+    auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
     auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
-
     typename MaterialType::State state{};
-    auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
-        material, t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T_current),
-        get<DERIVATIVE>(T_current), params...);
-    return smith::tuple{C_v * get<VALUE>(T_dot) - s0, -q0};
+    auto [pk, C_v, s0, q0] =
+        detail::evaluateCoupledThermoMechanicsMaterial(material, t_info, state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
+                                                       get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
+    return smith::tuple{s0, smith::zero{}};
   });
 }
 

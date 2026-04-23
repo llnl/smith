@@ -62,9 +62,9 @@ struct ThermalStaticFixture : public testing::Test {
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
     // heat_flux is the physical flux (Fourier's law): q = -k * grad(T).
     // The system negates it to form the weak form integral(k * grad(T) . grad(v)).
-    thermal_system->setMaterial(
-        [=](auto /*temperature*/, auto grad_temperature) { return smith::tuple{0.0, -k * grad_temperature}; },
-        "entire_body");
+    thermal_system->setMaterial([=](const TimeInfo& /*t_info*/, auto /*temperature*/,
+                                    auto grad_temperature) { return smith::tuple{0.0, -k * grad_temperature}; },
+                                "entire_body");
 
     thermal_system->addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
       auto x = X[0];
@@ -160,15 +160,14 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
 
   // Material uses the parameter field for conductivity
   thermal_system->setMaterial(
-      [](auto /*temperature*/, auto grad_temperature, auto k_param) {
+      [](const TimeInfo& /*t_info*/, auto /*temperature*/, auto grad_temperature, auto k_param) {
         auto k = get<0>(k_param);
         return smith::tuple{0.0, -k * grad_temperature};
       },
       "entire_body");
 
-  // Use DependsOn to specify that the heat source depends only on the temperature states (indices 0,1),
-  // not on the parameter field
-  thermal_system->addHeatSource(DependsOn<0, 1>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
+  // DependsOn now indexes only trailing coupling/parameter args, so empty means "state-only".
+  thermal_system->addHeatSource(DependsOn<>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
     auto x = X[0];
     auto y = X[1];
     return 2.0 * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);

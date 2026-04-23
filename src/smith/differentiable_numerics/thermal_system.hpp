@@ -57,7 +57,7 @@ struct ThermalSystem : public SystemBase {
   /**
    * @brief Set the thermal material model for a domain.
    *
-   * Material is called as `material(x, temperature, grad_temperature, params...)` and must return
+   * Material is called as `material(t_info, temperature, grad_temperature, params...)` and must return
    * `smith::tuple{heat_capacity, heat_flux}`. Consistent with heat_transfer.hpp convention.
    *
    * The system forms the residual as: heat_capacity * dT/dt for the source term, and -heat_flux
@@ -72,73 +72,76 @@ struct ThermalSystem : public SystemBase {
   {
     auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old, auto... params) {
-          auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
-          auto [heat_capacity, heat_flux] = material(get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
-          return smith::tuple{heat_capacity * get<VALUE>(T_dot), -heat_flux};
-        });
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old,
+                                                        auto... params) {
+      auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
+      auto [heat_capacity, heat_flux] = material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
+      return smith::tuple{heat_capacity * get<VALUE>(T_dot), -heat_flux};
+    });
   }
 
   /**
    * @brief Add a body heat source to the thermal system (with DependsOn).
    * @param depends_on Selects which primal and parameter fields the contribution depends on.
    * @param domain_name The name of the domain where the heat source is applied.
-   * @param source_function (t, X, T, params...) -> heat_source.
+   * @param source_function (t_info, X, T, params...) -> heat_source.
    */
   template <int... active_parameters, typename HeatSourceType>
   void addHeatSource(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
                      HeatSourceType source_function)
   {
+    (void)depends_on;
     auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBodySource(depends_on, domain_name,
-                                     [=](auto t_info, auto X, auto temperature, auto temperature_old, auto... params) {
-                                       auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-                                       return source_function(t_info.time(), X, T, params...);
-                                     });
+    thermal_weak_form->template addBodySource<0, 1, (2 + active_parameters)...>(
+        DependsOn<0, 1, (2 + active_parameters)...>{}, domain_name,
+        [=](auto t_info, auto X, auto temperature, auto temperature_old, auto... params) {
+          auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
+          return source_function(t_info, X, T, params...);
+        });
   }
 
   /**
    * @brief Add a body heat source that depends on all state and parameter fields.
    * @param domain_name The name of the domain where the heat source is applied.
-   * @param source_function (t, X, T, params...) -> heat_source.
+   * @param source_function (t_info, X, T, params...) -> heat_source.
    */
   template <typename HeatSourceType>
   void addHeatSource(const std::string& domain_name, HeatSourceType source_function)
   {
-    addHeatSourceAllParams(domain_name, source_function, std::make_index_sequence<2 + Coupling::num_coupling_fields>{});
+    addHeatSourceAllParams(domain_name, source_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
   }
 
   /**
    * @brief Add a boundary heat flux to the thermal system (with DependsOn).
    * @param depends_on Selects which primal and parameter fields the contribution depends on.
    * @param boundary_name The name of the boundary where the heat flux is applied.
-   * @param flux_function (t, X, n, T, params...) -> heat_flux.
+   * @param flux_function (t_info, X, n, T, params...) -> heat_flux.
    */
   template <int... active_parameters, typename HeatFluxType>
   void addHeatFlux(DependsOn<active_parameters...> depends_on, const std::string& boundary_name,
                    HeatFluxType flux_function)
   {
+    (void)depends_on;
     auto captured_temp_rule = temperature_time_rule;
 
-    thermal_weak_form->addBoundaryFlux(
-        depends_on, boundary_name,
+    thermal_weak_form->template addBoundaryFlux<0, 1, (2 + active_parameters)...>(
+        DependsOn<0, 1, (2 + active_parameters)...>{}, boundary_name,
         [=](auto t_info, auto X, auto n, auto temperature, auto temperature_old, auto... params) {
           auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          return -flux_function(t_info.time(), X, n, T, params...);
+          return -flux_function(t_info, X, n, T, params...);
         });
   }
 
   /**
    * @brief Add a boundary heat flux that depends on all state and parameter fields.
    * @param boundary_name The name of the boundary where the heat flux is applied.
-   * @param flux_function (t, X, n, T, params...) -> heat_flux.
+   * @param flux_function (t_info, X, n, T, params...) -> heat_flux.
    */
   template <typename HeatFluxType>
   void addHeatFlux(const std::string& boundary_name, HeatFluxType flux_function)
   {
-    addHeatFluxAllParams(boundary_name, flux_function, std::make_index_sequence<2 + Coupling::num_coupling_fields>{});
+    addHeatFluxAllParams(boundary_name, flux_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
   }
 
   /// Set zero-temperature Dirichlet BC.

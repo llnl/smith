@@ -160,7 +160,9 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
           block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
                       stage.solver.get(), stage_bc_managers);
 
-      // Propagate updated fields to all residuals that reference them.
+      // Propagate updated fields to every residual input that references the solved field.
+      // Match by field name, not by block_indices: coupling fields appear as fixed inputs in
+      // other rows and therefore do not have a valid unknown-block entry there.
       // Apply relaxation: x_new = omega * x_solved + (1 - omega) * x_k.
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_col = stage.block_indices[i];
@@ -172,9 +174,10 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         }
 
         for (size_t r = 0; r < num_residuals; ++r) {
-          size_t c = block_indices[r][global_col];
-          if (c != invalid_block_index) {
-            current_states[r][c] = new_state;
+          for (auto& row_state : current_states[r]) {
+            if (row_state.get()->name() == new_state.get()->name()) {
+              row_state = new_state;
+            }
           }
         }
       }
