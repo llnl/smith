@@ -21,7 +21,7 @@
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 
 namespace smith {
 
@@ -87,7 +87,7 @@ template <typename FieldTypeT>
 auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh> mesh, std::shared_ptr<FieldStore> fs,
                                   FieldTypeT field_type)
 {
-  using WeakFormType = TimeDiscretizedWeakForm<2, H1<1>, Parameters<H1<1>>>;
+  using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>>>;
   auto weak_form = std::make_shared<WeakFormType>(name, mesh, fs->getField(field_type.name).get()->space(),
                                                   fs->createSpaces(name, field_type.name, field_type));
   weak_form->addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(),
@@ -100,7 +100,7 @@ auto buildSecondOrderMainWeakForm(const std::string& name, std::shared_ptr<Mesh>
                                   DispFieldType displacement_type, DispOldFieldType displacement_old_type,
                                   VelocityFieldType velocity_type, AccelerationFieldType acceleration_type)
 {
-  using WeakFormType = TimeDiscretizedWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
+  using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
   auto weak_form =
       std::make_shared<WeakFormType>(name, mesh, fs->getField(displacement_type.name).get()->space(),
                                      fs->createSpaces(name, displacement_type.name, displacement_type,
@@ -114,7 +114,7 @@ auto buildSecondOrderCycleZeroWeakForm(const std::string& name, std::shared_ptr<
                                        std::shared_ptr<FieldStore> fs, DispFieldType displacement_type,
                                        VelocityFieldType velocity_type, AccelerationFieldType acceleration_type)
 {
-  using WeakFormType = TimeDiscretizedWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>>>;
+  using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>>>;
   auto weak_form = std::make_shared<WeakFormType>(
       name, mesh, fs->getField(acceleration_type.name).get()->space(),
       fs->createSpaces(name, acceleration_type.name, displacement_type, velocity_type, acceleration_type));
@@ -293,7 +293,7 @@ TEST(SystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
   StateManager::reset();
 }
 
-TEST(SystemSolver, AppendsRemappedStagesForCombinedSubsystems)
+TEST(SystemSolver, AppendsStagesWithBlockMappingForCombinedSubsystems)
 {
   auto first_solver = std::make_shared<NoOpNonlinearBlockSolver>();
   auto second_solver = std::make_shared<NoOpNonlinearBlockSolver>();
@@ -304,9 +304,9 @@ TEST(SystemSolver, AppendsRemappedStagesForCombinedSubsystems)
   SystemSolver subsystem_b(3, false);
   subsystem_b.addSubsystemSolver({0, 1}, second_solver, 1.0);
 
-  SystemSolver combined(3, false);
-  combined.appendRemappedStages(subsystem_a, {0});
-  combined.appendRemappedStages(subsystem_b, {1, 2});
+  SystemSolver combined_solver(3, false);
+  combined_solver.appendStagesWithBlockMapping(subsystem_a, {0});
+  combined_solver.appendStagesWithBlockMapping(subsystem_b, {1, 2});
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "combined_solver_stage_mapping");
@@ -318,13 +318,13 @@ TEST(SystemSolver, AppendsRemappedStagesForCombinedSubsystems)
   FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
   field_store->addShapeDisp(shape_disp_type);
 
-  auto quasi_static = std::make_shared<QuasiStaticRule>();
+  auto static_rule = std::make_shared<StaticTimeIntegrationRule>();
   FieldType<H1<1>> field0_type("field0");
   FieldType<H1<1>> field1_type("field1");
   FieldType<H1<1>> field2_type("field2");
-  field_store->addIndependent(field0_type, quasi_static);
-  field_store->addIndependent(field1_type, quasi_static);
-  field_store->addIndependent(field2_type, quasi_static);
+  field_store->addIndependent(field0_type, static_rule);
+  field_store->addIndependent(field1_type, static_rule);
+  field_store->addIndependent(field2_type, static_rule);
 
   auto wf0 = buildScalarDiffusionWeakForm("wf0", mesh, field_store, field0_type);
   auto wf1 = buildScalarDiffusionWeakForm("wf1", mesh, field_store, field1_type);
@@ -338,8 +338,8 @@ TEST(SystemSolver, AppendsRemappedStagesForCombinedSubsystems)
   const std::vector<std::vector<FieldState>> params(residuals.size());
   const auto bc_managers = field_store->getBoundaryConditionManagers(residual_names);
 
-  auto solved_states = combined.solve(residuals, block_indices, field_store->getShapeDisp(), states, params,
-                                      TimeInfo(0.0, 1.0, 0), bc_managers);
+  auto solved_states = combined_solver.solve(residuals, block_indices, field_store->getShapeDisp(), states, params,
+                                             TimeInfo(0.0, 1.0, 0), bc_managers);
 
   EXPECT_EQ(solved_states.size(), 3);
   EXPECT_EQ(first_solver->solveCalls(), 1);

@@ -35,7 +35,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
@@ -64,8 +64,9 @@ struct InternalVariableSystem : public SystemBase {
                 "InternalVariableSystem requires a 2-state time integration rule");
 
   /// State weak form: (alpha, alpha_old, coupling_fields..., params...)
-  using InternalVariableWeakFormType = TimeDiscretizedWeakForm<
-      dim, StateSpace, typename detail::TimeRuleParamsWithCoupling<InternalVarTimeRule, StateSpace, Coupling>::type>;
+  using InternalVariableWeakFormType =
+      FunctionalWeakForm<dim, StateSpace,
+                         typename detail::TimeRuleParamsWithCoupling<InternalVarTimeRule, StateSpace, Coupling>::type>;
 
   std::shared_ptr<InternalVariableWeakFormType> internal_variable_weak_form;  ///< Internal variable weak form.
   std::shared_ptr<DirichletBoundaryConditions> internal_variable_bc;          ///< Internal variable BCs.

@@ -51,10 +51,11 @@ class SystemSolver {
   void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolverBase> solver,
                           double relaxation_factor = 1.0);
 
-  /// @brief Append stages from another solver, remapped onto global block indices.
+  /// @brief Append stages from another solver using a local-to-global block mapping.
   /// @param subsystem_solver Source solver whose stages operate on subsystem-local block indices.
   /// @param global_block_indices Mapping from subsystem-local block index to global block index.
-  void appendRemappedStages(const SystemSolver& subsystem_solver, const std::vector<size_t>& global_block_indices);
+  void appendStagesWithBlockMapping(const SystemSolver& subsystem_solver,
+                                    const std::vector<size_t>& global_block_indices);
 
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.

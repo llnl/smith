@@ -34,7 +34,6 @@ set(differentiable_numerics_headers
     evaluate_objective.hpp
     dirichlet_boundary_conditions.hpp
     time_integration_rule.hpp
-    time_discretized_weak_form.hpp
     paraview_writer.hpp
     multiphysics_time_integrator.hpp
     solid_mechanics_system.hpp

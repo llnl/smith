@@ -8,7 +8,7 @@
 
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/physics/mesh.hpp"
 
 #include <map>
@@ -522,7 +522,7 @@ struct FieldStore {
 };
 
 /**
- * @brief Create a TimeDiscretizedWeakForm and register its fields in the FieldStore.
+ * @brief Create a FunctionalWeakForm and register its fields in the FieldStore.
  *
  * Thin convenience wrapper: registers @p test_type as the reaction field, registers all
  * @p field_types as input arguments, and constructs the weak form in one call.
@@ -531,7 +531,7 @@ template <int spatial_dim, typename TestSpaceType, typename... InputSpaceTypes>
 auto createWeakForm(std::string name, FieldType<TestSpaceType> test_type, FieldStore& field_store,
                     FieldType<InputSpaceTypes>... field_types)
 {
-  return std::make_shared<TimeDiscretizedWeakForm<spatial_dim, TestSpaceType, Parameters<InputSpaceTypes...>>>(
+  return std::make_shared<FunctionalWeakForm<spatial_dim, TestSpaceType, Parameters<InputSpaceTypes...>>>(
       name, field_store.getMesh(), field_store.getField(test_type.name).get()->space(),
       field_store.createSpaces(name, test_type.name, field_types...));
 }

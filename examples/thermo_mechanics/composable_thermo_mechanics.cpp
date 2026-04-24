@@ -79,8 +79,8 @@ int main(int argc, char* argv[])
 
   auto coupled_system = smith::combineSystems(solid_system, thermal_system);
 
-  smith::thermomechanics::TimeInfoGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
-                                                                                 0.0025, 0.0,   0.05};
+  smith::thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
+                                                                                     0.0025, 0.0,   0.05};
   smith::setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh->entireBodyName());
   // _build_end
 

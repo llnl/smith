@@ -156,8 +156,8 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
       makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, thermal_fields, param_fields, solid_fields);
 
   auto coupled = combineSystems(solid, thermal);
-  thermomechanics::TimeInfoParameterizedGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
-                                                                                       0.0025, 0.0,   0.05};
+  thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
+                                                                                           0.0025, 0.0,   0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   coupled->field_store->getParameterFields()[0].get()->setFromFieldFunction(
@@ -217,13 +217,13 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
   auto thermal =
       buildThermalSystem<dim, temperature_order>(nullptr, ThermalOptions{}, thermal_fields, param_fields, solid_fields);
 
-  auto custom_solver = std::make_shared<SystemSolver>(10);
-  custom_solver->addSubsystemSolver({0}, buildNonlinearBlockSolver(solid_nonlin_opts, solid_lin_opts, *mesh_));
-  custom_solver->addSubsystemSolver({1}, buildNonlinearBlockSolver(thermal_nonlin_opts, thermal_lin_opts, *mesh_));
-  auto coupled = combineSystems(custom_solver, solid, thermal);
+  auto coupled_solver = std::make_shared<SystemSolver>(10);
+  coupled_solver->addSubsystemSolver({0}, buildNonlinearBlockSolver(solid_nonlin_opts, solid_lin_opts, *mesh_));
+  coupled_solver->addSubsystemSolver({1}, buildNonlinearBlockSolver(thermal_nonlin_opts, thermal_lin_opts, *mesh_));
+  auto coupled = combineSystems(coupled_solver, solid, thermal);
 
-  thermomechanics::TimeInfoParameterizedGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
-                                                                                       0.0025, 0.0,   0.05};
+  thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
+                                                                                           0.0025, 0.0,   0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   coupled->field_store->getParameterFields()[0].get()->setFromFieldFunction(
@@ -299,7 +299,7 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
                                                             ThermalOptions{}, thermal_fields, solid_fields);
 
   auto coupled = combineSystems(solid, thermal);
-  thermomechanics::TimeInfoGreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
@@ -327,7 +327,7 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto thermal = buildThermalSystem<dim, temperature_order>(nullptr, ThermalOptions{}, thermal_fields, solid_fields);
 
   auto coupled = combineSystems(solver_ptr, solid, thermal);
-  thermomechanics::TimeInfoGreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   setCoupledThermoMechanicsMaterial(solid, thermal, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid, thermal, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);

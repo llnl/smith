@@ -40,8 +40,8 @@ void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
   stages_.push_back(Stage{block_indices, std::move(solver), relaxation_factor});
 }
 
-void SystemSolver::appendRemappedStages(const SystemSolver& subsystem_solver,
-                                        const std::vector<size_t>& global_block_indices)
+void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_solver,
+                                                const std::vector<size_t>& global_block_indices)
 {
   SLIC_ERROR_IF(global_block_indices.empty(), "Global block index map must be non-empty");
 

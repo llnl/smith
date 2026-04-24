@@ -16,7 +16,7 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
@@ -46,7 +46,7 @@ struct ThermalSystem : public SystemBase {
   static_assert(TemperatureTimeRule::num_states == 2, "ThermalSystem requires a 2-state time integration rule");
 
   /// Thermal weak form: (temp, temp_old, coupling_fields..., params...)
-  using ThermalWeakFormType = TimeDiscretizedWeakForm<
+  using ThermalWeakFormType = FunctionalWeakForm<
       dim, H1<temp_order>,
       typename detail::TimeRuleParamsWithCoupling<TemperatureTimeRule, H1<temp_order>, Coupling>::type>;
 

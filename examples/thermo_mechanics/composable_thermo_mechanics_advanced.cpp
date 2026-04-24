@@ -35,21 +35,6 @@
 #include "smith/physics/materials/green_saint_venant_thermoelastic.hpp"
 // _includes_end
 
-namespace {
-
-std::vector<smith::FieldState> outputFields(const smith::FieldStore& field_store)
-{
-  return field_store.getOutputFieldStates();
-}
-
-std::vector<smith::FieldState> qoiFields(const smith::FieldStore& field_store)
-{
-  return {field_store.getField(field_store.prefix("displacement")),
-          field_store.getField(field_store.prefix("temperature"))};
-}
-
-}  // namespace
-
 int main(int argc, char* argv[])
 {
   // _init_start
@@ -85,8 +70,8 @@ int main(int argc, char* argv[])
   auto thermal_system = smith::buildThermalSystem<dim, order>(nullptr, smith::ThermalOptions{}, thermal_fields,
                                                               param_fields, solid_fields);
 
-  smith::thermomechanics::TimeInfoParameterizedGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
-                                                                                              0.0025, 0.0,   0.05};
+  smith::thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{
+      1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   smith::setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh->entireBodyName());
 
   field_store->getParameterFields()[0].get()->setFromFieldFunction([](smith::tensor<double, dim>) { return 1.0; });
@@ -106,18 +91,6 @@ int main(int argc, char* argv[])
   thermal_system->addHeatSource(mesh->entireBodyName(), [](auto, auto... /*unused*/) { return 0.1; });
   // _bc_end
 
-  smith::LinearSolverOptions trust_region_linear{.linear_solver = smith::LinearSolver::CG,
-                                                 .preconditioner = smith::Preconditioner::HypreAMG,
-                                                 .relative_tol = 1e-6,
-                                                 .absolute_tol = 1e-10,
-                                                 .max_iterations = 80,
-                                                 .print_level = 0};
-  smith::NonlinearSolverOptions trust_region_nonlin{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
-                                                    .relative_tol = 1e-7,
-                                                    .absolute_tol = 1e-8,
-                                                    .max_iterations = 15,
-                                                    .print_level = 0};
-
   smith::LinearSolverOptions coupled_linear{.linear_solver = smith::LinearSolver::SuperLU,
                                             .relative_tol = 1e-8,
                                             .absolute_tol = 1e-10,
@@ -132,32 +105,33 @@ int main(int argc, char* argv[])
   // _solver_end
 
   // _build_start
-  size_t max_staggered_iterations = 10;
-  auto custom_solver = std::make_shared<smith::SystemSolver>(max_staggered_iterations);
-  custom_solver->addSubsystemSolver(
-      {0}, smith::buildNonlinearBlockSolver(trust_region_nonlin, trust_region_linear, *mesh), 1.0);
-  custom_solver->addSubsystemSolver({1}, smith::buildNonlinearBlockSolver(coupled_nonlin, coupled_linear, *mesh), 1.0);
+  auto coupled_solver = std::make_shared<smith::SystemSolver>(10);
+  coupled_solver->addSubsystemSolver({0, 1}, smith::buildNonlinearBlockSolver(coupled_nonlin, coupled_linear, *mesh),
+                                     1.0);
 
-  auto coupled_system = smith::combineSystems(custom_solver, solid_system, thermal_system);
+  auto coupled_system = smith::combineSystems(coupled_solver, solid_system, thermal_system);
   std::string physics_name = "composable_thermo_mechanics_advanced";
   auto physics = smith::makeDifferentiablePhysics(coupled_system, physics_name);
-  auto output_states = outputFields(*field_store);
+  auto output_states = field_store->getOutputFieldStates();
   auto output_writer =
       smith::createParaviewWriter(*mesh, output_states, "paraview_composable_thermo_mechanics_advanced",
                                   smith::ParaviewWriter::Options{.write_duals = false});
   // _build_end
 
   // _qoi_start
+  auto qoi_fields =
+      std::vector<smith::FieldState>{field_store->getField("displacement"), field_store->getField("temperature")};
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, TempSpace>> qoi("thermo_mechanical_energy_proxy", mesh,
-                                                                               smith::spaces(qoiFields(*field_store)));
-  qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(), [](double, auto /*X*/, auto U, auto Theta) {
-    auto u = smith::get<smith::VALUE>(U);
-    auto theta = smith::get<smith::VALUE>(Theta);
-    return 0.5 * u[0] * u[0] + 0.05 * theta * theta;
-  });
+                                                                               smith::spaces(qoi_fields));
+  qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(),
+                      [](const smith::TimeInfo&, auto /*X*/, auto U, auto Theta) {
+                        auto u = smith::get<smith::VALUE>(U);
+                        auto theta = smith::get<smith::VALUE>(Theta);
+                        return 0.5 * u[0] * u[0] + 0.05 * theta * theta;
+                      });
 
   auto qoi_state =
-      0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoiFields(*field_store),
+      0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoi_fields,
                                      smith::TimeInfo(physics->time(), 1.0, static_cast<size_t>(physics->cycle())));
   // _qoi_end
 
@@ -167,13 +141,13 @@ int main(int argc, char* argv[])
   for (int step = 0; step < qoi_steps; ++step) {
     physics->advanceTimestep(dt);
     qoi_state = qoi_state +
-                smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoiFields(*field_store),
+                smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoi_fields,
                                          smith::TimeInfo(physics->time(), dt, static_cast<size_t>(physics->cycle())));
   }
   // _run_end
 
   // _output_start
-  output_writer.write(physics->cycle(), physics->time(), outputFields(*field_store));
+  output_writer.write(physics->cycle(), physics->time(), field_store->getOutputFieldStates());
 
   std::cout << "ParaView output: paraview_composable_thermo_mechanics_advanced\n";
   // _output_end

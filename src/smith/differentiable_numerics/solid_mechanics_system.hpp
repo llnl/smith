@@ -17,7 +17,7 @@
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
@@ -66,20 +66,20 @@ struct SolidMechanicsSystem : public SystemBase {
   static_assert(DisplacementTimeRule::num_states == 4, "SolidMechanicsSystem requires a 4-state time integration rule");
 
   /// Main weak form: (u, u_old, v_old, a_old, coupling_fields..., params...)
-  using SolidWeakFormType = TimeDiscretizedWeakForm<
+  using SolidWeakFormType = FunctionalWeakForm<
       dim, H1<order, dim>,
       typename detail::TimeRuleParamsWithCoupling<DisplacementTimeRule, H1<order, dim>, Coupling>::type>;
 
   /// Cycle-zero startup form reusing the main solid fields: (u, v_old, a, coupling_fields..., params...)
   /// No extra fields are registered for cycle zero; acceleration is the unknown for this internal solve.
   using CycleZeroSolidWeakFormType =
-      TimeDiscretizedWeakForm<dim, H1<order, dim>,
-                              typename detail::AppendCouplingToParams<
-                                  Coupling, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>>>::type>;
+      FunctionalWeakForm<dim, H1<order, dim>,
+                         typename detail::AppendCouplingToParams<
+                             Coupling, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>>>::type>;
 
   /// L2 projection weak form for PK1 stress output (dim*dim components).
   /// Args: (stress_unknown, u, u_old, v_old, a_old, coupling_fields..., params...).
-  using StressOutputWeakFormType = TimeDiscretizedWeakForm<
+  using StressOutputWeakFormType = FunctionalWeakForm<
       dim, L2<0, dim * dim>,
       typename detail::AppendCouplingToParams<Coupling, Parameters<L2<0, dim * dim>, H1<order, dim>, H1<order, dim>,
                                                                    H1<order, dim>, H1<order, dim>>>::type>;

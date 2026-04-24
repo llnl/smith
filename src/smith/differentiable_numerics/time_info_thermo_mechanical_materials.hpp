@@ -12,7 +12,7 @@
 namespace smith::thermomechanics {
 
 /// @brief TimeInfo-aware wrapper for `GreenSaintVenantThermoelasticMaterial`.
-struct TimeInfoGreenSaintVenantThermoelasticMaterial {
+struct GreenSaintVenantThermoelasticMaterialWithTimeInfo {
   /// State type reused from wrapped material.
   using State = GreenSaintVenantThermoelasticMaterial::State;
 
@@ -35,7 +35,7 @@ struct TimeInfoGreenSaintVenantThermoelasticMaterial {
 };
 
 /// @brief TimeInfo-aware wrapper for `ParameterizedGreenSaintVenantThermoelasticMaterial`.
-struct TimeInfoParameterizedGreenSaintVenantThermoelasticMaterial {
+struct ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo {
   /// State type reused from wrapped material.
   using State = ParameterizedGreenSaintVenantThermoelasticMaterial::State;
 

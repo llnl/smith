@@ -32,11 +32,7 @@
 
 namespace {
 
-constexpr size_t displacement_state_index = 0;
-constexpr size_t initial_displacement_state_index = 1;
-constexpr size_t velocity_state_index = 2;
-
-struct TimeInfoYoungsModulusNeoHookean {
+struct YoungsModulusNeoHookeanWithTimeInfo {
   using State = smith::solid_mechanics::NeoHookean::State;
 
   double density;
@@ -59,19 +55,6 @@ struct TimeInfoYoungsModulusNeoHookean {
     return dot(TK, inv(transpose(F)));
   }
 };
-
-std::vector<smith::FieldState> outputFields(const smith::FieldStore& field_store)
-{
-  return field_store.getOutputFieldStates();
-}
-
-std::vector<smith::FieldState> qoiFields(const std::vector<smith::FieldState>& states)
-{
-  if (states.size() <= velocity_state_index) {
-    throw std::runtime_error("Unexpected solid state layout.");
-  }
-  return {states[displacement_state_index], states[velocity_state_index]};
-}
 
 }  // namespace
 
@@ -119,7 +102,7 @@ int main(int argc, char* argv[])
 
   constexpr double E = 100.0;
   constexpr double nu = 0.25;
-  solid_system->setMaterial(TimeInfoYoungsModulusNeoHookean{.density = 1.0, .nu = nu}, mesh->entireBodyName());
+  solid_system->setMaterial(YoungsModulusNeoHookeanWithTimeInfo{.density = 1.0, .nu = nu}, mesh->entireBodyName());
   field_store->getParameterFields()[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E; });
 
   auto initial_displacement = [](smith::tensor<double, dim> X) {
@@ -154,7 +137,7 @@ int main(int argc, char* argv[])
     return traction;
   });
 
-  auto output_states = outputFields(*field_store);
+  auto output_states = field_store->getOutputFieldStates();
   auto writer = smith::createParaviewWriter(*mesh, output_states, "paraview_composable_solid_mechanics",
                                             smith::ParaviewWriter::Options{.write_duals = false});
   // _bc_end
@@ -167,23 +150,32 @@ int main(int argc, char* argv[])
   auto physics = smith::makeDifferentiablePhysics(solid_system, "composable_solid_mechanics");
   auto initial_states = physics->getInitialFieldStates();
   using DispSpace = smith::H1<order, dim>;
-  smith::FunctionalObjective<dim, smith::Parameters<DispSpace, DispSpace>> qoi(
-      "solid_dynamic_energy_proxy", mesh, smith::spaces(qoiFields(initial_states)));
-  qoi.addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(), [](double, auto, auto U, auto V) {
-    auto u = smith::get<smith::VALUE>(U);
-    auto v = smith::get<smith::VALUE>(V);
-    return 0.5 * (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]) + 0.05 * (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-  });
+  const auto displacement_index = field_store->getFieldIndex("displacement");
+  const auto velocity_index = field_store->getFieldIndex("velocity");
+  const auto qoi_fields =
+      std::vector<smith::FieldState>{initial_states[displacement_index], initial_states[velocity_index]};
+  smith::FunctionalObjective<dim, smith::Parameters<DispSpace, DispSpace>> qoi("solid_dynamic_energy_proxy", mesh,
+                                                                               smith::spaces(qoi_fields));
+  qoi.addBodyIntegral(
+      smith::DependsOn<0, 1>{}, mesh->entireBodyName(), [](const smith::TimeInfo&, auto, auto U, auto V) {
+        auto u = smith::get<smith::VALUE>(U);
+        auto v = smith::get<smith::VALUE>(V);
+        return 0.5 * (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]) + 0.05 * (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+      });
 
   constexpr double dt = 0.25;
   constexpr int num_steps = 3;
+  auto current_qoi_fields = [&]() {
+    return std::vector<smith::FieldState>{physics->getFieldStates()[displacement_index],
+                                          physics->getFieldStates()[velocity_index]};
+  };
   auto qoi_state =
-      0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoiFields(initial_states),
+      0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoi_fields,
                                      smith::TimeInfo(physics->time(), dt, static_cast<size_t>(physics->cycle())));
   for (int step = 0; step < num_steps; ++step) {
     physics->advanceTimestep(dt);
     qoi_state = qoi_state +
-                smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoiFields(physics->getFieldStates()),
+                smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), current_qoi_fields(),
                                          smith::TimeInfo(physics->time(), dt, static_cast<size_t>(physics->cycle())));
   }
 
@@ -192,8 +184,8 @@ int main(int argc, char* argv[])
   std::cout << "QoI value: " << qoi_state.get() << '\n';
   qoi_state.data_store().back_prop();
   auto shape_displacement = physics->getShapeDispFieldState();
-  auto initial_displacement_state = initial_states[initial_displacement_state_index];
-  auto initial_velocity_state = initial_states[velocity_state_index];
+  auto initial_displacement_state = initial_states[displacement_index];
+  auto initial_velocity_state = initial_states[velocity_index];
   auto youngs_modulus_state = field_store->getParameterFields()[0];
   std::cout << "dQoI/d(shape) norm: " << shape_displacement.get_dual()->Norml2() << '\n';
   std::cout << "dQoI/d(youngs_modulus) norm: " << youngs_modulus_state.get_dual()->Norml2() << '\n';
@@ -209,7 +201,7 @@ int main(int argc, char* argv[])
   // _run_end
 
   // _output_start
-  writer.write(physics->cycle(), physics->time(), outputFields(*field_store));
+  writer.write(physics->cycle(), physics->time(), field_store->getOutputFieldStates());
   std::cout << "ParaView output: paraview_composable_solid_mechanics\n";
   // _output_end
 

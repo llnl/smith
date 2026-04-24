@@ -10,7 +10,6 @@
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"

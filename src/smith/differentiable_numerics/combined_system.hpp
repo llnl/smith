@@ -135,7 +135,7 @@ auto combineSystems(std::shared_ptr<SubSystems>... subs)
   for (size_t i = 0; i < combined->subsystems.size(); ++i) {
     const auto& sub = combined->subsystems[i];
     SLIC_ERROR_IF(!sub->solver, "Combined subsystem must have a solver");
-    combined->solver->appendRemappedStages(*sub->solver, subsystem_global_block_indices[i]);
+    combined->solver->appendStagesWithBlockMapping(*sub->solver, subsystem_global_block_indices[i]);
   }
 
   std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
@@ -151,7 +151,7 @@ auto combineSystems(std::shared_ptr<SubSystems>... subs)
         cycle_zero->weak_forms.push_back(wf);
       }
       SLIC_ERROR_IF(!sub->solver, "Combined cycle-zero subsystem must have a solver");
-      cycle_zero->solver->appendRemappedStages(*sub->solver, global_block_indices);
+      cycle_zero->solver->appendStagesWithBlockMapping(*sub->solver, global_block_indices);
     }
     cycle_zero_combined = cycle_zero;
   }

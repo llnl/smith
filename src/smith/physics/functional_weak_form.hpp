@@ -110,13 +110,19 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
   {
-    weak_form_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, integrand,
-                                  mesh_->domain(body_name));
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    weak_form_->AddDomainIntegral(
+        Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
+        [dt, cycle, integrand](double time, auto X, auto... inputs) {
+          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, inputs...);
+        },
+        mesh_->domain(body_name));
 
     v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double time, auto X, auto V, auto... inputs) {
-          auto orig_tuple = integrand(time, X, inputs...);
+        [dt, cycle, integrand](double time, auto X, auto V, auto... inputs) {
+          auto orig_tuple = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, inputs...);
           return smith::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  smith::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
@@ -127,7 +133,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename BodyForceType>
   void addBodyIntegral(std::string body_name, BodyForceType body_integral)
   {
-    addBodyIntegral(DependsOn<>{}, body_name, body_integral);
+    addBodyIntegralWithAllParams(body_name, body_integral, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -153,8 +159,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyLoadType>
   void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
   {
-    addBodyIntegral(depends_on, body_name, [load_function](double t, auto X, auto... inputs) {
-      return smith::tuple{-load_function(t, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+    addBodyIntegral(depends_on, body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      return smith::tuple{-invokeTimeAwareSource(load_function, t_info, get<VALUE>(X), get<VALUE>(inputs)...),
+                          smith::zero{}};
     });
   }
 
@@ -162,7 +169,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {
-    return addBodySource(DependsOn<>{}, body_name, load_function);
+    return addBodySourceWithAllParams(body_name, load_function,
+                                      std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -191,13 +199,19 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BoundaryIntegrandType>
   void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, BoundaryIntegrandType integrand)
   {
-    weak_form_->AddBoundaryIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
-                                    mesh_->domain(boundary_name));
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    weak_form_->AddBoundaryIntegral(
+        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
+        [dt, cycle, integrand](double time, auto X, auto... params) {
+          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+        },
+        mesh_->domain(boundary_name));
 
     v_dot_weak_form_residual_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double t, auto X, auto V, auto... params) {
-          auto orig_surface_flux = integrand(t, X, params...);
+        [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
+          auto orig_surface_flux = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
           return smith::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
@@ -207,7 +221,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename BoundaryIntegrandType>
   void addBoundaryIntegral(std::string boundary_name, const BoundaryIntegrandType& integrand)
   {
-    addBoundaryIntegral(DependsOn<>{}, boundary_name, integrand);
+    addBoundaryIntegralWithAllParams(boundary_name, integrand,
+                                     std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -232,14 +247,20 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name,
                                    InteriorIntegrandType integrand)
   {
-    weak_form_->AddInteriorFaceIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
-                                        mesh_->domain(interior_name));
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    weak_form_->AddInteriorFaceIntegral(
+        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
+        [dt, cycle, integrand](double time, auto X, auto... params) {
+          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+        },
+        mesh_->domain(interior_name));
 
     v_dot_weak_form_residual_->AddInteriorFaceIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double t, auto X, auto V, auto... params) {
+        [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
           auto [V1, V2] = V;
-          auto orig_surface_flux = integrand(t, X, params...);
+          auto orig_surface_flux = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
           auto [flux_pos, flux_neg] = orig_surface_flux;
           return smith::inner(V1, flux_pos) + smith::inner(V2, flux_neg);
         },
@@ -250,7 +271,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename InteriorIntegrandType>
   void addInteriorBoundaryIntegral(std::string interior_name, const InteriorIntegrandType& integrand)
   {
-    addInteriorBoundaryIntegral(DependsOn<>{}, interior_name, integrand);
+    addInteriorBoundaryIntegralWithAllParams(interior_name, integrand,
+                                             std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -278,9 +300,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
                        BoundaryFluxType flux_function)
   {
-    addBoundaryIntegral(depends_on, boundary_name, [flux_function](double t, auto X, auto... inputs) {
+    addBoundaryIntegral(depends_on, boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
       auto n = cross(get<DERIVATIVE>(X));
-      return -flux_function(t, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
+      return -invokeTimeAwareFlux(flux_function, t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
     });
   }
 
@@ -288,7 +310,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename BoundaryFluxType>
   void addBoundaryFlux(std::string boundary_name, const BoundaryFluxType& integrand)
   {
-    addBoundaryFlux(DependsOn<>{}, boundary_name, integrand);
+    addBoundaryFluxWithAllParams(boundary_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /// @overload
@@ -411,6 +433,80 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
  protected:
+  template <typename BodyIntegralType, int... all_params>
+  void addBodyIntegralWithAllParams(std::string body_name, BodyIntegralType integrand,
+                                    std::integer_sequence<int, all_params...>)
+  {
+    this->template addBodyIntegral<all_params...>(DependsOn<all_params...>{}, body_name, integrand);
+  }
+
+  template <typename BodyLoadType, int... all_params>
+  void addBodySourceWithAllParams(std::string body_name, BodyLoadType load_function,
+                                  std::integer_sequence<int, all_params...>)
+  {
+    this->template addBodySource<all_params...>(DependsOn<all_params...>{}, body_name, load_function);
+  }
+
+  template <typename BoundaryIntegrandType, int... all_params>
+  void addBoundaryIntegralWithAllParams(std::string boundary_name, BoundaryIntegrandType integrand,
+                                        std::integer_sequence<int, all_params...>)
+  {
+    this->template addBoundaryIntegral<all_params...>(DependsOn<all_params...>{}, boundary_name, integrand);
+  }
+
+  template <typename BoundaryFluxType, int... all_params>
+  void addBoundaryFluxWithAllParams(std::string boundary_name, BoundaryFluxType flux_function,
+                                    std::integer_sequence<int, all_params...>)
+  {
+    this->template addBoundaryFlux<all_params...>(DependsOn<all_params...>{}, boundary_name, flux_function);
+  }
+
+  template <typename InteriorIntegrandType, int... all_params>
+  void addInteriorBoundaryIntegralWithAllParams(std::string interior_name, InteriorIntegrandType integrand,
+                                                std::integer_sequence<int, all_params...>)
+  {
+    this->template addInteriorBoundaryIntegral<all_params...>(DependsOn<all_params...>{}, interior_name, integrand);
+  }
+
+  template <typename IntegrandType, typename XType, typename... InputTypes>
+  static auto invokeTimeAwareIntegrand(const IntegrandType& integrand, double time, double dt, size_t cycle, XType&& X,
+                                       InputTypes&&... inputs)
+  {
+    if constexpr (requires {
+                    integrand(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+                  }) {
+      return integrand(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    } else {
+      return integrand(time, std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    }
+  }
+
+  template <typename LoadFunctionType, typename XType, typename... InputTypes>
+  static auto invokeTimeAwareSource(const LoadFunctionType& load_function, const TimeInfo& t_info, XType&& X,
+                                    InputTypes&&... inputs)
+  {
+    if constexpr (requires { load_function(t_info, std::forward<XType>(X), std::forward<InputTypes>(inputs)...); }) {
+      return load_function(t_info, std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    } else {
+      return load_function(t_info.time(), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    }
+  }
+
+  template <typename FluxFunctionType, typename XType, typename NType, typename... InputTypes>
+  static auto invokeTimeAwareFlux(const FluxFunctionType& flux_function, const TimeInfo& t_info, XType&& X, NType&& n,
+                                  InputTypes&&... inputs)
+  {
+    if constexpr (requires {
+                    flux_function(t_info, std::forward<XType>(X), std::forward<NType>(n),
+                                  std::forward<InputTypes>(inputs)...);
+                  }) {
+      return flux_function(t_info, std::forward<XType>(X), std::forward<NType>(n), std::forward<InputTypes>(inputs)...);
+    } else {
+      return flux_function(t_info.time(), std::forward<XType>(X), std::forward<NType>(n),
+                           std::forward<InputTypes>(inputs)...);
+    }
+  }
+
   /// @brief Helper to validate input spaces recursively (for constructor)
   template <size_t I>
   void validateInputSpaces(const SpacesT& input_mfem_spaces) const
