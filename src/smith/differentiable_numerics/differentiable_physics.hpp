@@ -220,18 +220,16 @@ template <typename SystemType>
 /**
  * @brief Build a `DifferentiablePhysics` and default multiphysics advancer from a system.
  *
- * If optional cycle-zero or post-solve systems are omitted, values stored on `system` are used.
+ * Uses cycle-zero and post-solve systems already attached to `system`.
  *
  * @param system Main system to wrap.
  * @param physics_name Name exposed through the `BasePhysics` interface.
- * @param post_solve_systems Optional systems solved after each main step.
  */
-std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(
-    std::shared_ptr<SystemType> system, const std::string& physics_name,
-    std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})
+std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr<SystemType> system,
+                                                                 const std::string& physics_name)
 {
-  return makeDifferentiablePhysics(
-      system, makeAdvancer(system, system->cycle_zero_system, std::move(post_solve_systems)), physics_name);
+  return makeDifferentiablePhysics(system, makeAdvancer(system, system->cycle_zero_system, system->post_solve_systems),
+                                   physics_name);
 }
 
 }  // namespace smith

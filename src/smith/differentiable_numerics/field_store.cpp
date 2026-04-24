@@ -160,19 +160,21 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
 
 bool FieldStore::hasField(const std::string& field_name) const
 {
-  if (to_states_index_.count(field_name)) return true;
-  if (to_params_index_.count(field_name)) return true;
-  if (!shape_disp_.empty() && shape_disp_[0].get()->name() == field_name) return true;
+  const auto resolved_name = resolveFieldName(field_name);
+  if (to_states_index_.count(resolved_name)) return true;
+  if (to_params_index_.count(resolved_name)) return true;
+  if (!shape_disp_.empty() && shape_disp_[0].get()->name() == resolved_name) return true;
   return false;
 }
 
 size_t FieldStore::getFieldIndex(const std::string& field_name) const
 {
-  if (to_states_index_.count(field_name)) {
-    return to_states_index_.at(field_name);
+  const auto resolved_name = resolveFieldName(field_name);
+  if (to_states_index_.count(resolved_name)) {
+    return to_states_index_.at(resolved_name);
   }
-  if (to_params_index_.count(field_name)) {
-    return to_params_index_.at(field_name);
+  if (to_params_index_.count(resolved_name)) {
+    return to_params_index_.at(resolved_name);
   }
   SLIC_ERROR("Field or parameter '" << field_name << "' not found in getFieldIndex");
   return 0;  // unreachable
@@ -180,14 +182,15 @@ size_t FieldStore::getFieldIndex(const std::string& field_name) const
 
 FieldState FieldStore::getField(const std::string& field_name) const
 {
+  const auto resolved_name = resolveFieldName(field_name);
   // Check if it's a state field
-  if (to_states_index_.count(field_name)) {
-    size_t field_index = to_states_index_.at(field_name);
+  if (to_states_index_.count(resolved_name)) {
+    size_t field_index = to_states_index_.at(resolved_name);
     return states_[field_index];
   }
   // Otherwise check if it's a parameter
-  if (to_params_index_.count(field_name)) {
-    size_t param_index = to_params_index_.at(field_name);
+  if (to_params_index_.count(resolved_name)) {
+    size_t param_index = to_params_index_.at(resolved_name);
     return params_[param_index];
   }
   SLIC_ERROR("Field or parameter '" << field_name << "' not found");
@@ -196,25 +199,49 @@ FieldState FieldStore::getField(const std::string& field_name) const
 
 FieldState FieldStore::getParameter(const std::string& param_name) const
 {
-  size_t param_index = to_params_index_.at(param_name);
+  const auto resolved_name = resolveFieldName(param_name);
+  size_t param_index = to_params_index_.at(resolved_name);
   return params_[param_index];
 }
 
 void FieldStore::setField(const std::string& field_name, FieldState updated_field)
 {
-  if (to_states_index_.count(field_name)) {
-    states_[to_states_index_.at(field_name)] = updated_field;
+  const auto resolved_name = resolveFieldName(field_name);
+  if (to_states_index_.count(resolved_name)) {
+    states_[to_states_index_.at(resolved_name)] = updated_field;
     return;
   }
-  if (to_params_index_.count(field_name)) {
-    params_[to_params_index_.at(field_name)] = updated_field;
+  if (to_params_index_.count(resolved_name)) {
+    params_[to_params_index_.at(resolved_name)] = updated_field;
     return;
   }
-  if (!shape_disp_.empty() && shape_disp_[0].get()->name() == field_name) {
+  if (!shape_disp_.empty() && shape_disp_[0].get()->name() == resolved_name) {
     shape_disp_[0] = updated_field;
     return;
   }
   SLIC_ERROR("Field '" << field_name << "' not found in setField");
+}
+
+std::string FieldStore::resolveFieldName(const std::string& field_name) const
+{
+  if (to_states_index_.count(field_name) || to_params_index_.count(field_name)) {
+    return field_name;
+  }
+  if (!shape_disp_.empty() && shape_disp_[0].get()->name() == field_name) {
+    return field_name;
+  }
+
+  const auto prefixed_name = prefix(field_name);
+  if (prefixed_name != field_name) {
+    if (to_states_index_.count(prefixed_name) || to_params_index_.count(prefixed_name)) {
+      return prefixed_name;
+    }
+    if (!shape_disp_.empty() && shape_disp_[0].get()->name() == prefixed_name) {
+      return prefixed_name;
+    }
+  }
+
+  return field_name;
 }
 
 FieldState FieldStore::getShapeDisp() const { return shape_disp_[0]; }

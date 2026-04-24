@@ -60,11 +60,10 @@ int main(int argc, char* argv[])
 
   auto field_store = std::make_shared<smith::FieldStore>(mesh, 100);
 
-  using DispRule = smith::QuasiStaticSecondOrderTimeIntegrationRule;
-  using TempRule = smith::BackwardEulerFirstOrderTimeIntegrationRule;
-
-  auto solid_fields = smith::registerSolidMechanicsFields<dim, order, DispRule>(field_store);
-  auto thermal_fields = smith::registerThermalFields<dim, order, TempRule>(field_store);
+  auto solid_fields =
+      smith::registerSolidMechanicsFields<dim, order, smith::QuasiStaticSecondOrderTimeIntegrationRule>(field_store);
+  auto thermal_fields =
+      smith::registerThermalFields<dim, order, smith::BackwardEulerFirstOrderTimeIntegrationRule>(field_store);
   // _solver_end
 
   // _build_start
@@ -78,11 +77,11 @@ int main(int argc, char* argv[])
   auto thermal_system =
       smith::buildThermalSystem<dim, order>(thermal_solver, smith::ThermalOptions{}, thermal_fields, solid_fields);
 
+  auto coupled_system = smith::combineSystems(solid_system, thermal_system);
+
   smith::thermomechanics::TimeInfoGreenSaintVenantThermoelasticMaterial material{1.0,    100.0, 0.25, 1.0,
                                                                                  0.0025, 0.0,   0.05};
   smith::setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh->entireBodyName());
-
-  auto coupled_system = smith::combineSystems(solid_system, thermal_system);
   // _build_end
 
   // _bc_start

@@ -364,34 +364,36 @@ struct FieldStore {
   void shareBoundaryConditions(const std::string& name, std::shared_ptr<DirichletBoundaryConditions> source_bc);
 
   /**
-   * @brief Check whether a field with the given fully-qualified name exists.
+   * @brief Check whether a field exists.
+   *
+   * Accepts either a fully-qualified field name or an unprefixed base name.
    */
   bool hasField(const std::string& field_name) const;
 
   /**
    * @brief Get the internal index of a field by name.
-   * @param field_name Name of the field.
+   * @param field_name Fully-qualified or unprefixed field name.
    * @return size_t Index of the field.
    */
   size_t getFieldIndex(const std::string& field_name) const;
 
   /**
    * @brief Get a FieldState by name.
-   * @param field_name Name of the field.
+   * @param field_name Fully-qualified or unprefixed field name.
    * @return FieldState The field state.
    */
   FieldState getField(const std::string& field_name) const;
 
   /**
    * @brief Get a parameter field by name.
-   * @param param_name Name of the parameter.
+   * @param param_name Fully-qualified or unprefixed parameter name.
    * @return FieldState The parameter field state.
    */
   FieldState getParameter(const std::string& param_name) const;
 
   /**
    * @brief Update a field in the store by name.
-   * @param field_name Name of the field.
+   * @param field_name Fully-qualified or unprefixed field name.
    * @param updated_field The new field state.
    */
   void setField(const std::string& field_name, FieldState updated_field);
@@ -475,6 +477,8 @@ struct FieldStore {
   const std::shared_ptr<gretl::DataStore>& graph() const;
 
  private:
+  std::string resolveFieldName(const std::string& field_name) const;
+
   std::shared_ptr<Mesh> mesh_;
   std::shared_ptr<gretl::DataStore> graph_;
   std::string prepend_name_;

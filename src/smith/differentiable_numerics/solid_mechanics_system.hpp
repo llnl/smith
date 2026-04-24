@@ -572,16 +572,27 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
 }
 
 /**
- * @brief Build a SolidMechanicsSystem from variadic field packs.
+ * @brief Build a SolidMechanicsSystem from solver options and a FieldStore.
  *
- * New API: accepts any combination of PhysicsFields and CouplingParams packs.
- * The FieldStore is extracted from the PhysicsFields pack matching DisplacementTimeRule.
- * Non-self packs become coupling fields; CouplingParams packs are registered as parameters.
+ * Registers the solid field pack, builds a nonlinear block solver from the supplied options,
+ * then forwards to the existing field-pack overload.
  *
  * Usage:
  * @code
  *   auto solid = buildSolidMechanicsSystem<dim, order, DispRule>(
- *       solver, opts, solid_fields, param_fields, thermal_fields);
+ *       nonlin_opts, lin_opts, field_store, opts, param_fields, thermal_fields);
  * @endcode
  */
+template <int dim, int order, typename DisplacementTimeRule, typename... OtherPacks>
+  requires(detail::is_coupling_params_v<OtherPacks> && ...)
+auto buildSolidMechanicsSystem(const NonlinearSolverOptions& nonlinear_options,
+                               const LinearSolverOptions& linear_options, const SolidMechanicsOptions& options,
+                               std::shared_ptr<FieldStore> field_store, const OtherPacks&... other_packs)
+{
+  auto self_fields = registerSolidMechanicsFields<dim, order, DisplacementTimeRule>(field_store, options);
+  auto solver = std::make_shared<SystemSolver>(
+      buildNonlinearBlockSolver(nonlinear_options, linear_options, *field_store->getMesh()));
+  return buildSolidMechanicsSystem<dim, order, DisplacementTimeRule>(solver, options, self_fields, other_packs...);
+}
+
 }  // namespace smith

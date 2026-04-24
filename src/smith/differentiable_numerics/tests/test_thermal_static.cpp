@@ -48,15 +48,11 @@ struct ThermalStaticFixture : public testing::Test {
     auto solver_options = NonlinearSolverOptions();
     solver_options.relative_tol = 1e-12;
     auto linear_options = LinearSolverOptions();
-    auto nonlinear_block_solver = buildNonlinearBlockSolver(solver_options, linear_options, *mesh);
-
-    auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
 
     using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
-    auto thermal_fields = registerThermalFields<2, temp_order, TempRule>(field_store);
-
-    auto thermal_system = buildThermalSystem<2, temp_order>(coupled_solver, ThermalOptions{}, thermal_fields);
+    auto thermal_system =
+        buildThermalSystem<2, temp_order, TempRule>(solver_options, linear_options, ThermalOptions{}, field_store);
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
@@ -142,17 +138,14 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   auto solver_options = NonlinearSolverOptions();
   solver_options.relative_tol = 1e-12;
   auto linear_options = LinearSolverOptions();
-  auto nonlinear_block_solver = buildNonlinearBlockSolver(solver_options, linear_options, *mesh);
-  auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
 
   FieldType<L2<0>> conductivity_param("conductivity");
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
 
   using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
   auto param_fields = registerParameterFields(conductivity_param);
-  auto thermal_fields = registerThermalFields<2, 1, TempRule>(field_store);
-
-  auto thermal_system = buildThermalSystem<2, 1>(coupled_solver, ThermalOptions{}, thermal_fields, param_fields);
+  auto thermal_system =
+      buildThermalSystem<2, 1, TempRule>(solver_options, linear_options, ThermalOptions{}, field_store, param_fields);
 
   // Set the conductivity parameter field to k=1.0
   thermal_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(

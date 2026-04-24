@@ -39,8 +39,7 @@ namespace {
 
 std::vector<smith::FieldState> outputFields(const smith::FieldStore& field_store)
 {
-  return {field_store.getField(field_store.prefix("displacement")),
-          field_store.getField(field_store.prefix("temperature")), field_store.getField(field_store.prefix("stress"))};
+  return field_store.getOutputFieldStates();
 }
 
 std::vector<smith::FieldState> qoiFields(const smith::FieldStore& field_store)
@@ -141,7 +140,11 @@ int main(int argc, char* argv[])
 
   auto coupled_system = smith::combineSystems(custom_solver, solid_system, thermal_system);
   std::string physics_name = "composable_thermo_mechanics_advanced";
-  auto physics = smith::makeDifferentiablePhysics(coupled_system, physics_name, {});
+  auto physics = smith::makeDifferentiablePhysics(coupled_system, physics_name);
+  auto output_states = outputFields(*field_store);
+  auto output_writer =
+      smith::createParaviewWriter(*mesh, output_states, "paraview_composable_thermo_mechanics_advanced",
+                                  smith::ParaviewWriter::Options{.write_duals = false});
   // _build_end
 
   // _qoi_start
@@ -170,9 +173,6 @@ int main(int argc, char* argv[])
   // _run_end
 
   // _output_start
-  auto output_writer =
-      smith::createParaviewWriter(*mesh, outputFields(*field_store), "paraview_composable_thermo_mechanics_advanced",
-                                  smith::ParaviewWriter::Options{.write_duals = false});
   output_writer.write(physics->cycle(), physics->time(), outputFields(*field_store));
 
   std::cout << "ParaView output: paraview_composable_thermo_mechanics_advanced\n";

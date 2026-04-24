@@ -101,21 +101,18 @@ struct SolidMechanicsMeshFixture : public testing::Test {
 // produce a non-null cycle_zero_system; rules that don't (QuasiStatic) produce nullptr.
 TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
 {
-  auto solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
-
   {
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "impl");
     using ImplicitRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
-    auto solid_fields = registerSolidMechanicsFields<dim, order, ImplicitRule>(field_store);
-    auto sys = buildSolidMechanicsSystem<dim, order>(solver, SolidMechanicsOptions{}, solid_fields);
+    auto sys = buildSolidMechanicsSystem<dim, order, ImplicitRule>(solid_nonlinear_opts, solid_linear_options,
+                                                                   SolidMechanicsOptions{}, field_store);
     EXPECT_NE(sys->cycle_zero_system, nullptr) << "ImplicitNewmark should emit a cycle-zero initial acceleration solve";
   }
   {
     auto field_store = std::make_shared<FieldStore>(mesh, 100, "qs");
     using QsRule = QuasiStaticSecondOrderTimeIntegrationRule;
-    auto solid_fields = registerSolidMechanicsFields<dim, order, QsRule>(field_store);
-    auto sys = buildSolidMechanicsSystem<dim, order>(solver, SolidMechanicsOptions{}, solid_fields);
+    auto sys = buildSolidMechanicsSystem<dim, order, QsRule>(solid_nonlinear_opts, solid_linear_options,
+                                                             SolidMechanicsOptions{}, field_store);
     EXPECT_EQ(sys->cycle_zero_system, nullptr) << "QuasiStatic has no initial acceleration solve";
   }
 }
@@ -154,19 +151,14 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 
-  auto solid_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-
-  auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
 
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
   auto param_fields =
       registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
-  auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(
-      field_store, SolidMechanicsOptions{.enable_stress_output = true});
-
-  auto system = buildSolidMechanicsSystem<dim, order>(
-      coupled_solver, SolidMechanicsOptions{.enable_stress_output = true}, solid_fields, param_fields);
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(solid_nonlinear_opts, solid_linear_options,
+                                                                SolidMechanicsOptions{.enable_stress_output = true},
+                                                                field_store, param_fields);
 
   static constexpr double gravity = -9.0;
 
@@ -201,8 +193,9 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   auto output_states = system->field_store->getOutputFieldStates();
 
   std::string pv_dir = "paraview_solid";
-  auto pv_writer = createParaviewWriter(*mesh, {output_states[0], params[0], params[1]}, pv_dir);
-  pv_writer.write(0, 0.0, {output_states[0], params[0], params[1]});
+  auto pv_fields = std::vector<FieldState>{output_states[0], params[0], params[1]};
+  auto pv_writer = createParaviewWriter(*mesh, pv_fields, pv_dir);
+  pv_writer.write(0, 0.0, pv_fields);
 
   double time = 0.0;
   size_t cycle = 0;
@@ -214,9 +207,10 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
     TimeInfo t_info(time, dt_, cycle);
     std::tie(states, reactions) = advancer->advanceState(t_info, shape_disp, states, params);
     output_states = system->field_store->getOutputFieldStates();
+    pv_fields = {output_states[0], params[0], params[1]};
     time += dt_;
     cycle++;
-    pv_writer.write(m + 1, time, {output_states[0], params[0], params[1]});
+    pv_writer.write(m + 1, time, pv_fields);
   }
 
   double a_exact = gravity;
@@ -261,14 +255,12 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
 TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditions)
 {
-  auto solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "freefall_");
 
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
   SolidMechanicsOptions solid_options{.enable_stress_output = true};
-  auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store, solid_options);
-  auto system = buildSolidMechanicsSystem<dim, order>(solver, solid_options, solid_fields);
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(solid_nonlinear_opts, solid_linear_options,
+                                                                solid_options, field_store);
 
   static constexpr double gravity = -9.0;
   double E = 100.0;
@@ -298,13 +290,13 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
   double u_exact = 0.5 * gravity * time * time;
 
   auto vector_error = [&](const std::string& name, size_t state_index, double y_exact) {
-    FunctionalObjective<dim, Parameters<VectorSpace>> error(name, mesh, spaces({states[state_index]}));
+    auto state_vec = std::vector<FieldState>{states[state_index]};
+    FunctionalObjective<dim, Parameters<VectorSpace>> error(name, mesh, spaces(state_vec));
     error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [y_exact](auto /*t*/, auto /*X*/, auto U) {
       auto u = get<VALUE>(U);
       return u[0] * u[0] + (u[1] - y_exact) * (u[1] - y_exact) + u[2] * u[2];
     });
-    return error.evaluate(TimeInfo(0.0, dt_, num_steps_), shape_disp.get().get(),
-                          getConstFieldPointers({states[state_index]}));
+    return error.evaluate(TimeInfo(0.0, dt_, num_steps_), shape_disp.get().get(), getConstFieldPointers(state_vec));
   };
 
   EXPECT_NEAR(0.0, vector_error("freefall_acceleration_error", 3, a_exact), 1e-12);
@@ -321,19 +313,13 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
 
 auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
 {
-  std::shared_ptr<NonlinearBlockSolver> solid_block_solver =
-      buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
-
-  auto coupled_solver = std::make_shared<SystemSolver>(solid_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, physics_name);
 
   using TimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
   auto param_fields =
       registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
-  auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
-
-  auto system =
-      buildSolidMechanicsSystem<dim, order>(coupled_solver, SolidMechanicsOptions{}, solid_fields, param_fields);
+  auto system = buildSolidMechanicsSystem<dim, order, TimeRule>(solid_nonlinear_opts, solid_linear_options,
+                                                                SolidMechanicsOptions{}, field_store, param_fields);
 
   auto physics = makeDifferentiablePhysics(system, physics_name);
   auto bcs = system->disp_bc;

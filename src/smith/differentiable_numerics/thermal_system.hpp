@@ -286,16 +286,27 @@ auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptio
 }
 
 /**
- * @brief Build a ThermalSystem from variadic field packs.
+ * @brief Build a ThermalSystem from solver options and a FieldStore.
  *
- * New API: accepts any combination of PhysicsFields and CouplingParams packs.
- * The FieldStore is extracted from the PhysicsFields pack matching TemperatureTimeRule.
- * Non-self packs become coupling fields; CouplingParams packs are registered as parameters.
+ * Registers the thermal field pack, builds a nonlinear block solver from the supplied options,
+ * then forwards to the existing field-pack overload.
  *
  * Usage:
  * @code
- *   auto thermal = buildThermalSystem<dim, temp_order, TempRule>(
- *       solver, opts, thermal_fields, param_fields, solid_fields);
+ *   auto thermal = buildThermalSystem<dim, order, TempRule>(
+ *       nonlin_opts, lin_opts, field_store, opts, param_fields, solid_fields);
  * @endcode
  */
+template <int dim, int temp_order, typename TemperatureTimeRule, typename... OtherPacks>
+  requires(detail::is_coupling_params_v<OtherPacks> && ...)
+auto buildThermalSystem(const NonlinearSolverOptions& nonlinear_options, const LinearSolverOptions& linear_options,
+                        const ThermalOptions& options, std::shared_ptr<FieldStore> field_store,
+                        const OtherPacks&... other_packs)
+{
+  auto self_fields = registerThermalFields<dim, temp_order, TemperatureTimeRule>(field_store, options);
+  auto solver = std::make_shared<SystemSolver>(
+      buildNonlinearBlockSolver(nonlinear_options, linear_options, *field_store->getMesh()));
+  return buildThermalSystem<dim, temp_order, TemperatureTimeRule>(solver, options, self_fields, other_packs...);
+}
+
 }  // namespace smith
