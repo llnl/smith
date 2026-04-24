@@ -338,9 +338,8 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(MFEM_USE_UMPIRE OFF CACHE BOOL "")
         endif()
 
+        # Temporarily unset asan flags when finding blas, in order to avoid conflicts with fortran and asan.
         if(APPLE AND ENABLE_ASAN)
-            # Temporarily unset asan flags when finding blas, in order to avoid conflicts with fortran and asan.
-
             set(TMP_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
             set(TMP_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
             set(TMP_CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS})
@@ -348,13 +347,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             unset(CMAKE_C_FLAGS)
             unset(CMAKE_CXX_FLAGS)
             unset(CMAKE_EXE_LINKER_FLAGS)
-
-            find_package(BLAS REQUIRED)
-            find_package(LAPACK REQUIRED)
-
-            set(CMAKE_C_FLAGS ${TMP_CMAKE_C_FLAGS})
-            set(CMAKE_CXX_FLAGS ${TMP_CMAKE_CXX_FLAGS})
-            set(CMAKE_EXE_LINKER_FLAGS ${TMP_CMAKE_EXE_LINKER_FLAGS})
         endif()
 
         #### MFEM Configuration Options
@@ -422,6 +414,16 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         target_include_directories(mfem SYSTEM INTERFACE ${_mfem_includes})
         target_include_directories(mfem SYSTEM INTERFACE $<BUILD_INTERFACE:${SMITH_SOURCE_DIR}>)
         target_include_directories(mfem SYSTEM INTERFACE $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/mfem>)
+
+        # Restore flags and apply asan to mfem target directly
+        if(APPLE AND ENABLE_ASAN)
+            target_compile_options(mfem PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+            target_link_options(mfem PRIVATE -fsanitize=address)
+
+            set(CMAKE_C_FLAGS ${TMP_CMAKE_C_FLAGS})
+            set(CMAKE_CXX_FLAGS ${TMP_CMAKE_CXX_FLAGS})
+            set(CMAKE_EXE_LINKER_FLAGS ${TMP_CMAKE_EXE_LINKER_FLAGS})
+        endif()
 
         #### Restore previously stored data
         foreach(_tpl ${tpls_to_save})
