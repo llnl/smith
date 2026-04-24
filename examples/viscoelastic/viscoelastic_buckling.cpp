@@ -44,6 +44,7 @@ static void fpe_signal_handler(int sig, siginfo_t *sip, void *scp)
     abort();
 }
 
+#if 0
 void enable_floating_point_exceptions()
 {
     fenv_t env;
@@ -58,6 +59,7 @@ void enable_floating_point_exceptions()
     act.sa_flags = SA_SIGINFO;
     sigaction(SIGILL, &act, NULL);
 }
+#endif
 
 using namespace smith;
 
@@ -98,12 +100,16 @@ int main(int argc, char* argv[])
   // Initialize and automatically finalize MPI and other libraries
   smith::ApplicationManager applicationManager(argc, argv);
 
+  // default mesh file
+  std::string meshfile{"cap_coarse.g"};
+
   // Handle command line arguments
   axom::CLI::App app{"Viscoelastic buckling of a curved shell"};
   // Mesh options
   app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")->check(axom::CLI::PositiveNumber);
   app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
       ->check(axom::CLI::PositiveNumber);
+  app.add_option("--mesh", meshfile, "Mesh file");
   // Solver options
   app.add_option("--nonlinear-solver", nonlinear_options.nonlin_solver,
                  "Nonlinear solver (Index of enum smith::NonlinearSolver)")
@@ -116,7 +122,7 @@ int main(int argc, char* argv[])
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum smith::PetscPCType)")
       ->expected(0, 14);
-  app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")->check(axom::CLI::PositiveNumber);
+  app.add_option("--dt", dt, "Size of time step")->check(axom::CLI::PositiveNumber);
   // Misc options
   app.set_help_flag("--help");
 
@@ -131,8 +137,7 @@ int main(int argc, char* argv[])
   smith::StateManager::initialize(datastore, name + "_data");
 
   // Create and refine mesh
-  std::string filename = SMITH_REPO_DIR "/data/meshes/cap.g";
-  auto mesh = std::make_shared<smith::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
+  auto mesh = std::make_shared<smith::Mesh>(meshfile, mesh_tag, serial_refinement, parallel_refinement);
   //mesh->mfemParMesh().Print();
   auto mesh_coord_order = mesh->mfemParMesh().GetNodes()->FESpace()->GetMaxElementOrder();
   SLIC_WARNING_ROOT_IF(p != mesh_coord_order, axom::fmt::format("Displacement order p does not match mesh coord order at runtime, p = {}, mesh.p = {}", p, mesh_coord_order));
@@ -163,7 +168,7 @@ int main(int argc, char* argv[])
 
   solid_solver.setTraction(
     [&](auto, auto, double t) {
-      return smith::vec3{0, -1e-1*std::sin(M_PI*t), 0}; 
+      return smith::vec3{0, -4e-1*std::sin(M_PI*t), 0}; 
     },
      mesh->domain("top"));
 
@@ -189,7 +194,7 @@ int main(int argc, char* argv[])
 
   // NEOHOOKEAN
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = K, .G = G_inf};
-  axom::fmt::print("K = {}, G = {}\n", K, G_inf);
+  SLIC_INFO_ROOT(axom::fmt::format("K = {}, G = {}\n", K, G_inf));
   solid_solver.setMaterial(mat, mesh->entireBody());
   
 
@@ -197,7 +202,7 @@ int main(int argc, char* argv[])
   solid_solver.setFixedBCs(mesh->domain("xsymm"), smith::Component::X);
   solid_solver.setFixedBCs(mesh->domain("zsymm"), smith::Component::Z);
 
-  std::cout << "Num of elements in domain['bottom'] = " << mesh->domain("bottom").total_elements() << std::endl;
+  //std::cout << "Num of elements in domain['bottom'] = " << mesh->domain("bottom").total_elements() << std::endl;
 
 #if 0
   // displacement control, for comparison
@@ -214,14 +219,17 @@ int main(int argc, char* argv[])
   solid_solver.completeSetup();
 
   // post-processing functions
+  auto [rank, ranks] = smith::getMPIInfo();
   mfem::Array<int> force_dof_list = mesh->domain("bottom").dof_list(&solid_solver.displacement().space());
   solid_solver.displacement().space().DofsToVDofs(1, force_dof_list);
-  auto compute_net_force = [&force_dof_list](const smith::FiniteElementDual& reaction) -> double {
+  auto compute_net_force = [&force_dof_list, ranks](const smith::FiniteElementDual& reaction) -> double {
     double R{};
     for (int i = 0; i < force_dof_list.Size(); i++) {
       R += reaction(force_dof_list[i]);
     }
-    return R;
+    double total;
+    MPI_Allreduce(&R, &total, ranks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    return total;
   };
 
   smith::Functional<double(H1<p, dim>)> applied_displacement({&solid_solver.displacement().space()});
@@ -232,7 +240,7 @@ int main(int argc, char* argv[])
                                            mesh->domain("top"));
   
   std::ofstream file("force_displacement.csv");
-  file << "# time displacement force\n";
+  if (rank == 0) file << "# time displacement force\n";
 
   // Save initial state
   std::string paraview_name = name + "_paraview";
@@ -253,7 +261,9 @@ int main(int argc, char* argv[])
     solid_solver.outputStateToDisk(paraview_name);
     double u = applied_displacement(solid_solver.time(), solid_solver.displacement());
     double f = compute_net_force(solid_solver.dual("reactions"));
-    file << solid_solver.time() << " " << u << " " << f << "\n";
+    if (rank == 0) {
+      file << solid_solver.time() << " " << u << " " << f << "\n";
+    }
   }
   file.close();
   SLIC_INFO_ROOT(axom::fmt::format("final time = {}", solid_solver.time()));
