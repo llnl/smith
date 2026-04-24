@@ -131,9 +131,9 @@ int main(int argc, char* argv[])
   smith::StateManager::initialize(datastore, name + "_data");
 
   // Create and refine mesh
-  std::string filename = SMITH_REPO_DIR "/data/meshes/cap_coarse.g";
+  std::string filename = SMITH_REPO_DIR "/data/meshes/cap.g";
   auto mesh = std::make_shared<smith::Mesh>(filename, mesh_tag, serial_refinement, parallel_refinement);
-  mesh->mfemParMesh().Print();
+  //mesh->mfemParMesh().Print();
   auto mesh_coord_order = mesh->mfemParMesh().GetNodes()->FESpace()->GetMaxElementOrder();
   SLIC_WARNING_ROOT_IF(p != mesh_coord_order, axom::fmt::format("Displacement order p does not match mesh coord order at runtime, p = {}, mesh.p = {}", p, mesh_coord_order));
 
@@ -226,8 +226,10 @@ int main(int argc, char* argv[])
 
   smith::Functional<double(H1<p, dim>)> applied_displacement({&solid_solver.displacement().space()});
   double area = 0.1256;
-  applied_displacement.AddBoundaryIntegral(smith::Dimension<dim - 1>{}, DependsOn<0>{}, 
-                                           [area](double, auto, auto u) { return get<0>(u)/area; }, mesh->domain("top"));
+  applied_displacement.AddBoundaryIntegral(smith::Dimension<dim - 1>{},
+                                           DependsOn<0>{}, 
+                                           [area](double, auto, auto u) { return get<0>(u)[1]/area; },
+                                           mesh->domain("top"));
   
   std::ofstream file("force_displacement.csv");
   file << "# time displacement force\n";
