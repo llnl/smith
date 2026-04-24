@@ -161,14 +161,18 @@ int main(int argc, char* argv[])
   
   solid_solver.setParameter(0, temperature);
 
-  // solver with no parameters
-  // smith::SolidMechanics<p, dim> solid_solver(
-  //     nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name,
-  //     mesh, {}, 0, 0.0, false, false);
+  // compute area of loading zone
+  smith::Functional<double(smith::H1<p, dim>)> area_computer({&solid_solver.displacement().space()});
+  area_computer.AddBoundaryIntegral(smith::Dimension<dim - 1>{},
+                                    DependsOn<0>{}, 
+                                    [](double, auto, auto) { return 1.0; },
+                                    mesh->domain("top"));
+  double area = area_computer(0.0, solid_solver.displacement());
+  SLIC_INFO_ROOT(axom::fmt::format("Load patch area = {}", area));
 
   solid_solver.setTraction(
     [&](auto, auto, double t) {
-      return smith::vec3{0, -4e-1*std::sin(M_PI*t), 0}; 
+      return smith::vec3{0, -2.0e-1/area*std::sin(M_PI*t), 0};
     },
      mesh->domain("top"));
 
@@ -233,7 +237,6 @@ int main(int argc, char* argv[])
   };
 
   smith::Functional<double(H1<p, dim>)> applied_displacement({&solid_solver.displacement().space()});
-  double area = 0.1256;
   applied_displacement.AddBoundaryIntegral(smith::Dimension<dim - 1>{},
                                            DependsOn<0>{}, 
                                            [area](double, auto, auto u) { return get<0>(u)[1]/area; },
