@@ -142,9 +142,9 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
     // Lazily materialize any pending zero-mirror BCs on first access.
     auto mirror_it = zero_mirror_sources_.find(reaction_name);
     if (mirror_it != zero_mirror_sources_.end()) {
-      auto zero_bc = addBoundaryConditions(getField(reaction_name).get());
-      zero_bc->setZeroBCsMatchingDofs(mirror_it->second->getBoundaryConditionManager());
-      boundary_conditions_[reaction_name] = std::move(zero_bc);
+      auto mirrored_bc = addBoundaryConditions(getField(reaction_name).get());
+      mirrored_bc->setSecondTimeDerivativeBCsMatchingDofs(mirror_it->second->getBoundaryConditionManager());
+      boundary_conditions_[reaction_name] = std::move(mirrored_bc);
       zero_mirror_sources_.erase(mirror_it);
     }
 

@@ -7,8 +7,74 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "smith/physics/boundary_conditions/boundary_condition.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace smith {
+
+namespace {
+
+constexpr double bc_time_fd_step = 1.0e-6;
+
+class SecondTimeDerivativeScalarCoefficient : public mfem::Coefficient {
+ public:
+  explicit SecondTimeDerivativeScalarCoefficient(std::shared_ptr<mfem::Coefficient> source) : source_(std::move(source))
+  {
+  }
+
+  double Eval(mfem::ElementTransformation& T, const mfem::IntegrationPoint& ip) override
+  {
+    const double t0 = GetTime();
+    const double h = std::max(bc_time_fd_step, std::sqrt(std::numeric_limits<double>::epsilon()) *
+                                                   std::max(1.0, std::abs(t0)));
+    source_->SetTime(t0);
+    const double f0 = source_->Eval(T, ip);
+    source_->SetTime(t0 + h);
+    const double f1 = source_->Eval(T, ip);
+    source_->SetTime(t0 + 2.0 * h);
+    const double f2 = source_->Eval(T, ip);
+    source_->SetTime(t0);
+    return (f2 - 2.0 * f1 + f0) / (h * h);
+  }
+
+ private:
+  std::shared_ptr<mfem::Coefficient> source_;
+};
+
+class SecondTimeDerivativeVectorCoefficient : public mfem::VectorCoefficient {
+ public:
+  explicit SecondTimeDerivativeVectorCoefficient(std::shared_ptr<mfem::VectorCoefficient> source)
+      : mfem::VectorCoefficient(source->GetVDim()), source_(std::move(source))
+  {
+  }
+
+  void Eval(mfem::Vector& V, mfem::ElementTransformation& T, const mfem::IntegrationPoint& ip) override
+  {
+    const double t0 = GetTime();
+    const double h = std::max(bc_time_fd_step, std::sqrt(std::numeric_limits<double>::epsilon()) *
+                                                   std::max(1.0, std::abs(t0)));
+    mfem::Vector v0(vdim), v1(vdim), v2(vdim);
+    source_->SetTime(t0);
+    source_->Eval(v0, T, ip);
+    source_->SetTime(t0 + h);
+    source_->Eval(v1, T, ip);
+    source_->SetTime(t0 + 2.0 * h);
+    source_->Eval(v2, T, ip);
+    source_->SetTime(t0);
+    V = v2;
+    V.Add(-2.0, v1);
+    V += v0;
+    V /= (h * h);
+  }
+
+ private:
+  std::shared_ptr<mfem::VectorCoefficient> source_;
+};
+
+}  // namespace
 
 DirichletBoundaryConditions::DirichletBoundaryConditions(const mfem::ParMesh& mfem_mesh,
                                                          mfem::ParFiniteElementSpace& space)
@@ -21,17 +87,19 @@ DirichletBoundaryConditions::DirichletBoundaryConditions(const Mesh& mesh, mfem:
 {
 }
 
-void DirichletBoundaryConditions::setZeroBCsMatchingDofs(const BoundaryConditionManager& source)
+void DirichletBoundaryConditions::setSecondTimeDerivativeBCsMatchingDofs(const BoundaryConditionManager& source)
 {
-  const auto& true_dofs = source.allEssentialTrueDofs();
-  if (true_dofs.Size() == 0) {
-    return;
+  for (const auto& bc : source.essentials()) {
+    if (is_vector_valued(bc.coefficient())) {
+      auto accel_coef = std::make_shared<SecondTimeDerivativeVectorCoefficient>(
+          get<std::shared_ptr<mfem::VectorCoefficient>>(bc.coefficient()));
+      bcs_.addEssentialByTrueDofs(bc.getTrueDofList(), accel_coef, space_);
+    } else {
+      auto accel_coef = std::make_shared<SecondTimeDerivativeScalarCoefficient>(
+          get<std::shared_ptr<mfem::Coefficient>>(bc.coefficient()));
+      bcs_.addEssential(bc.getLocalDofList(), accel_coef, space_, bc.component());
+    }
   }
-  int vdim = space_.GetVDim();
-  mfem::Vector zero_vec(vdim);
-  zero_vec = 0.0;
-  auto zero_coef = std::make_shared<mfem::VectorConstantCoefficient>(zero_vec);
-  bcs_.addEssentialByTrueDofs(true_dofs, zero_coef, space_);
 }
 
 }  // namespace smith

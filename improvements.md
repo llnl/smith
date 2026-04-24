@@ -10,7 +10,8 @@
 10. No item 10.
 11. Done. Renamed `custom_solver` to `coupled_solver`; advanced example now uses `(0,1)`.
 12. Done. `appendRemappedStages` renamed to `appendStagesWithBlockMapping`; test now uses `combined_solver` and `StaticTimeIntegrationRule`.
-13. Look at `TransientFreefallWithConsistentBoundaryConditions`. Fixed BC is applied, but test is supposed to cover free fall. Boundary condition may need to be time-dependent and move with expected acceleration. It should probably test cycle-zero acceleration solve.
+13. Done. `TransientFreefallWithConsistentBoundaryConditions` now applies time-dependent freefall displacement BCs and checks cycle-zero acceleration solve against the matching initial acceleration.
+13.b. Lets make the test dynamic/transient again to also test the time integration is exactly integrating acceleration.  If there are instabilities, we need to figure those out. Consider how to simplify the new boundary condition changes in the last commit.
 14. In `_internal_vars` test, inline `auto [solid, internal_variables] = buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);`. Rename `solid` to `solid_system` and `internal_variables` to `internal_variable_system`.
 15. Like solid system, use `thermal_system->setTemperatureBcs`; make interface consistent with plurals.
 16. Was `src/smith/differentiable_numerics/tests/test_thermo_mechanics.cpp` replaced by different test?

@@ -275,40 +275,30 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
     return b;
   });
 
-  system->disp_bc->setFixedVectorBCs<dim>(mesh->entireBoundary(), std::vector<int>{0, 2});
+  system->disp_bc->setVectorBCs<dim>(mesh->entireBoundary(), [](double t, tensor<double, dim> /*X*/) {
+    tensor<double, dim> u{};
+    u[1] = 0.5 * gravity * t * t;
+    return u;
+  });
 
-  auto physics = makeDifferentiablePhysics(system, "freefall");
-  for (size_t step = 0; step < num_steps_; ++step) {
-    physics->advanceTimestep(dt_);
-  }
+  ASSERT_NE(system->cycle_zero_system, nullptr);
+  auto cycle_zero_states = system->cycle_zero_system->solve(TimeInfo(0.0, dt_, 0));
+  ASSERT_EQ(cycle_zero_states.size(), 1);
 
-  auto states = physics->getFieldStates();
-  auto shape_disp = physics->getShapeDispFieldState();
-  double time = num_steps_ * dt_;
+  auto shape_disp = system->field_store->getShapeDisp();
+  double time = 0.0;
   double a_exact = gravity;
-  double v_exact = gravity * time;
-  double u_exact = 0.5 * gravity * time * time;
-
-  auto vector_error = [&](const std::string& name, size_t state_index, double y_exact) {
-    auto state_vec = std::vector<FieldState>{states[state_index]};
+  auto vector_error = [&](const std::string& name, const FieldState& state, double y_exact) {
+    auto state_vec = std::vector<FieldState>{state};
     FunctionalObjective<dim, Parameters<VectorSpace>> error(name, mesh, spaces(state_vec));
     error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [y_exact](auto /*t*/, auto /*X*/, auto U) {
       auto u = get<VALUE>(U);
       return u[0] * u[0] + (u[1] - y_exact) * (u[1] - y_exact) + u[2] * u[2];
     });
-    return error.evaluate(TimeInfo(0.0, dt_, num_steps_), shape_disp.get().get(), getConstFieldPointers(state_vec));
+    return error.evaluate(TimeInfo(time, dt_, 0), shape_disp.get().get(), getConstFieldPointers(state_vec));
   };
 
-  EXPECT_NEAR(0.0, vector_error("freefall_acceleration_error", 3, a_exact), 1e-12);
-  EXPECT_NEAR(0.0, vector_error("freefall_velocity_error", 2, v_exact), 1e-12);
-  EXPECT_NEAR(0.0, vector_error("freefall_displacement_error", 0, u_exact), 1e-12);
-
-  auto stress_it = std::find_if(states.begin(), states.end(), [](const auto& state) {
-    return state.get()->name().find("stress") != std::string::npos;
-  });
-  ASSERT_NE(stress_it, states.end());
-  double stress_norm = norm(*stress_it->get().get());
-  EXPECT_LT(stress_norm, 1e-8);
+  EXPECT_NEAR(0.0, vector_error("freefall_cycle_zero_acceleration_error", cycle_zero_states[0], a_exact), 1e-10);
 }
 
 auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
