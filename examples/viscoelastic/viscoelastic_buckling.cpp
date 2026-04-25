@@ -44,7 +44,7 @@ static void fpe_signal_handler(int sig, siginfo_t *sip, void *scp)
     abort();
 }
 
-#if 0
+#if 1
 void enable_floating_point_exceptions()
 {
     fenv_t env;
@@ -70,7 +70,7 @@ using namespace smith;
  */
 int main(int argc, char* argv[])
 {
-  //enable_floating_point_exceptions();
+  enable_floating_point_exceptions();
   constexpr int dim = 3;
   constexpr int p = 2;
 
@@ -103,6 +103,8 @@ int main(int argc, char* argv[])
   // default mesh file
   std::string meshfile{"cap_coarse.g"};
 
+  double load = 0.2;
+
   // Handle command line arguments
   axom::CLI::App app{"Viscoelastic buckling of a curved shell"};
   // Mesh options
@@ -123,6 +125,7 @@ int main(int argc, char* argv[])
                  "Petsc preconditioner (Index of enum smith::PetscPCType)")
       ->expected(0, 14);
   app.add_option("--dt", dt, "Size of time step")->check(axom::CLI::PositiveNumber);
+  app.add_option("--load", load, "Total load")->check(axom::CLI::PositiveNumber);
   // Misc options
   app.set_help_flag("--help");
 
@@ -172,7 +175,7 @@ int main(int argc, char* argv[])
 
   solid_solver.setTraction(
     [&](auto, auto, double t) {
-      return smith::vec3{0, -2.0e-1/area*std::sin(M_PI*t), 0};
+      return smith::vec3{0, -load/area*std::sin(M_PI*t), 0};
     },
      mesh->domain("top"));
 
@@ -185,9 +188,9 @@ int main(int argc, char* argv[])
   double eta_0 = G_0*tau_0;
   
   // VISCOELASTIC
-  // solid_mechanics::ViscoelasticOldInterface mat(K, G_inf, 0.0, 300.0, G_0, eta_0, 300.0, 0.0, 50.0, 1.0);
-  // auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
-  // solid_solver.setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
+  solid_mechanics::ViscoelasticOldInterface mat(K, G_inf, 0.0, 300.0, G_0, eta_0, 300.0, 0.0, 50.0, 1.0);
+  auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
+  solid_solver.setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
 
   // NOTE: somehow J2 material works fine
   // using Hardening = solid_mechanics::LinearHardening;
@@ -197,9 +200,9 @@ int main(int argc, char* argv[])
   // solid_solver.setRateDependentMaterial(mat2, mesh->entireBody(), internal_states);
 
   // NEOHOOKEAN
-  solid_mechanics::NeoHookean mat{.density = 1.0, .K = K, .G = G_inf};
-  SLIC_INFO_ROOT(axom::fmt::format("K = {}, G = {}\n", K, G_inf));
-  solid_solver.setMaterial(mat, mesh->entireBody());
+  // solid_mechanics::NeoHookean mat{.density = 1.0, .K = K, .G = G_inf};
+  // SLIC_INFO_ROOT(axom::fmt::format("K = {}, G = {}\n", K, G_inf));
+  // solid_solver.setMaterial(mat, mesh->entireBody());
   
 
   solid_solver.setFixedBCs(mesh->domain("bottom"));
@@ -223,7 +226,8 @@ int main(int argc, char* argv[])
   solid_solver.completeSetup();
 
   // post-processing functions
-  auto [rank, ranks] = smith::getMPIInfo();
+  auto [ranks, rank] = smith::getMPIInfo();
+  axom::fmt::print("I am rank {} of {}\n", rank, ranks);
   mfem::Array<int> force_dof_list = mesh->domain("bottom").dof_list(&solid_solver.displacement().space());
   solid_solver.displacement().space().DofsToVDofs(1, force_dof_list);
   auto compute_net_force = [&force_dof_list, ranks](const smith::FiniteElementDual& reaction) -> double {
