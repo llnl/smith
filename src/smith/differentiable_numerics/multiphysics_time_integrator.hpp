@@ -56,6 +56,8 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
   std::shared_ptr<SystemBase> system_;
   std::shared_ptr<SystemBase> cycle_zero_system_;
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems_;
+
+  std::map<std::string, size_t> main_unknown_name_to_local_idx_;
 };
 
 /**

@@ -120,13 +120,12 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
 const FiniteElementDual& DifferentiablePhysics::dual(const std::string& reaction_name) const
 {
   if (reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end()) {
-    std::cout << "\n[DEBUG] Available reactions (size " << reaction_names_.size() << "): ";
-    for (auto& n : reaction_names_) std::cout << n << " ";
-    std::cout << std::endl;
+    std::string available;
+    for (auto& n : reaction_names_) available += n + " ";
+    SLIC_ERROR(axom::fmt::format(
+        "Could not find reaction named {0} in mesh with tag \"{1}\" to get. Available reactions (size {2}): {3}",
+        reaction_name, mesh_->tag(), reaction_names_.size(), available));
   }
-  SLIC_ERROR_IF(reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
-                axom::fmt::format("Could not find reaction named {0} in mesh with tag \"{1}\" to get", reaction_name,
-                                  mesh_->tag()));
   size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
 
   SLIC_ERROR_IF(reaction_states_.empty() && !reaction_names_.empty(),

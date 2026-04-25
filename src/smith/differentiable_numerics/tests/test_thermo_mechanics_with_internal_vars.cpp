@@ -30,7 +30,8 @@
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_with_internal_vars_system.hpp"
 #include "smith/differentiable_numerics/thermal_system.hpp"
-#include "smith/differentiable_numerics/thermo_mechanical_system.hpp"
+#include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
+#include "smith/differentiable_numerics/thermo_mechanics_with_internal_vars_system.hpp"
 #include "smith/differentiable_numerics/state_variable_system.hpp"
 #include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
@@ -146,70 +147,36 @@ TEST_F(ThreeSystemMeshFixture, StronglyCoupledThreeSystems)
 
   // Phase 2: build each system.
   // Solid receives thermal and alpha coupling.
-  auto solid = buildSolidMechanicsSystem<dim, disp_ord>(std::make_shared<SystemSolver>(solid_block_solver),
-                                                        SolidMechanicsOptions{}, solid_fields, thermal_fields,
-                                                        internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, disp_ord>(std::make_shared<SystemSolver>(solid_block_solver),
+                                                               SolidMechanicsOptions{}, solid_fields, thermal_fields,
+                                                               internal_variable_fields);
 
-  auto thermal = buildThermalSystem<dim, temp_ord>(std::make_shared<SystemSolver>(thermal_block_solver),
-                                                   ThermalOptions{}, thermal_fields, solid_fields);
+  auto thermal_system = buildThermalSystem<dim, temp_ord>(std::make_shared<SystemSolver>(thermal_block_solver),
+                                                          ThermalOptions{}, thermal_fields, solid_fields);
 
-  auto internal_variables =
-      buildInternalVariableSystem<dim, StateSpace>(std::make_shared<SystemSolver>(internal_variable_block_solver),
-                                                   InternalVariableOptions{}, internal_variable_fields, solid_fields);
+  auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace>(
+      std::make_shared<SystemSolver>(internal_variable_block_solver), internal_variable_fields, solid_fields);
 
   // Phase 3: register material integrands.
   auto material = SimpleThermoelasticMaterial{};
-  auto disp_rule = solid->disp_time_rule;
-  auto temp_rule = thermal->temperature_time_rule;
-  auto alpha_rule = internal_variables->internal_variable_time_rule;
-
-  solid->solid_weak_form->addBodyIntegral(
-      mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old, auto a_old,
-                                   auto temperature, auto temperature_old, auto alpha, auto alpha_old) {
-        auto [u_current, v_current, a_current] = disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-        auto T = temp_rule->value(t_info, temperature, temperature_old);
-        auto alpha_current = alpha_rule->value(t_info, alpha, alpha_old);
-
-        SimpleThermoelasticMaterial::State state{};
-        auto response = material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), get<VALUE>(T),
-                                 get<DERIVATIVE>(T), get<VALUE>(alpha_current));
-        auto pk = get<0>(response);
-        return smith::tuple{get<VALUE>(a_current) * material.density, pk};
-      });
-
-  thermal->thermal_weak_form->addBodyIntegral(
-      mesh_->entireBodyName(),
-      [=](auto t_info, auto /*X*/, auto T, auto T_old, auto disp, auto disp_old, auto v_old, auto a_old) {
-        auto [T_current, T_dot] = temp_rule->interpolate(t_info, T, T_old);
-        auto [u_current, v_current, a_current] = disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
-
-        SimpleThermoelasticMaterial::State state{};
-        auto response = material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
-                                 get<VALUE>(T_current), get<DERIVATIVE>(T_current));
-        auto C_v = get<1>(response);
-        auto s0 = get<2>(response);
-        auto q0 = get<3>(response);
-        return smith::tuple{C_v * get<VALUE>(T_dot) - s0, -q0};
-      });
-
-  setCoupledInternalVariableMaterial(internal_variables, solid, StrainDrivenInternalVariableMaterial{},
-                                     mesh_->entireBodyName());
+  setCoupledThermoMechanicsInternalVariableMaterial(solid_system, thermal_system, internal_variable_system, material,
+                                                    StrainDrivenInternalVariableMaterial{}, mesh_->entireBodyName());
 
   // Phase 4: boundary conditions.
-  solid->setDisplacementBC(mesh_->domain("left"));
-  thermal->setTemperatureBC(mesh_->domain("left"));
+  solid_system->setDisplacementBC(mesh_->domain("left"));
+  thermal_system->setTemperatureBC(mesh_->domain("left"));
 
   // Compressive traction on right face.
   // Lambda args from addTraction: (t, X, n, u, v, a, temp_ss, temp_old, alpha_ss, alpha_old)
-  solid->addTraction("right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto /*temp_ss*/,
-                                 auto /*temp_old*/, auto /*alpha_ss*/, auto /*alpha_old*/) {
+  solid_system->addTraction("right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/,
+                                        auto /*temp_ss*/, auto /*temp_old*/, auto /*alpha_ss*/, auto /*alpha_old*/) {
     auto t = 0.0 * X;
     t[0] = -0.005;
     return t;
   });
 
   // Phase 5: combine and solve.
-  auto combined = combineSystems(solid, thermal, internal_variables);
+  auto coupled_system = combineSystems(solid_system, thermal_system, internal_variable_system);
 
   double dt = 1.0, time = 0.0;
   auto shape_disp = field_store->getShapeDisp();
@@ -219,7 +186,7 @@ TEST_F(ThreeSystemMeshFixture, StronglyCoupledThreeSystems)
 
   for (size_t step = 0; step < 2; ++step) {
     std::tie(states, reactions) =
-        makeAdvancer(combined)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+        makeAdvancer(coupled_system)->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
   }
 

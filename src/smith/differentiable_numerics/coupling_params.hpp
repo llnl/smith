@@ -140,19 +140,9 @@ inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>
 // Helpers for variadic build functions
 // -------------------------------------------------------------------------
 
-/// Extract field_store from the first PhysicsFields pack.
-template <typename First, typename... Rest>
-std::shared_ptr<FieldStore> findFieldStore(const First& first, const Rest&... rest)
-{
-  if constexpr (is_physics_fields_v<First>) {
-    return first.field_store;
-  } else {
-    static_assert(sizeof...(Rest) > 0, "No PhysicsFields pack found — at least one is required");
-    return findFieldStore(rest...);
-  }
-}
-
-/// Extract physics coupling fields (non-self PhysicsFields packs).
+/**
+ * @brief selects foreign `PhysicsFields` (skip self by rule match); keeps field names.
+ */
 template <typename TargetRule, typename Pack>
 auto collectPhysicsFromPack(const Pack& pack)
 {
@@ -167,8 +157,9 @@ auto collectPhysicsFromPack(const Pack& pack)
   }
 }
 
-/// Extract parameter fields (CouplingParams packs that are NOT PhysicsFields) with fully-qualified
-/// names matching what the FieldStore uses: `{store_prefix}param_{name}`.
+/**
+ * @brief selects pure `CouplingParams` (not `PhysicsFields`); rewrites names to `{prefix}param_{name}`.
+ */
 template <typename Pack>
 auto collectParamsFromPack(const std::shared_ptr<FieldStore>& fs, const Pack& pack)
 {
@@ -187,8 +178,9 @@ auto collectParamsFromPack(const std::shared_ptr<FieldStore>& fs, const Pack& pa
   }
 }
 
-/// Collect non-self fields from all packs into a single CouplingParams.
-/// Order: physics coupling fields first (in pack order), then parameter fields.
+/**
+ * @brief concatenates physics then params into a single `CouplingParams`.
+ */
 template <typename TargetRule, typename... Packs>
 auto collectCouplingFields(const std::shared_ptr<FieldStore>& fs, const Packs&... packs)
 {
@@ -215,28 +207,25 @@ void registerParamsIfNeeded(std::shared_ptr<FieldStore> fs, const Pack& pack)
   }
 }
 
-/**
- * @brief Produce TimeRuleParams<Rule, Space, CS..., Tail...> from a CouplingParams<CS...>.
- *
- * Inserts coupling spaces immediately after the num_states copies of Space (the time-rule
- * state fields), and before the user-supplied Tail types (parameter_space...).
- */
-template <typename Rule, typename Space, typename Coupling, typename... Tail>
-struct TimeRuleParamsWithCoupling;
+/// @brief Build the weak-form parameter list for a time rule and coupling pack.
+///
+/// Unpacks Coupling (either CouplingParams<CS...> or PhysicsFields<R, CS...>) and produces
+/// TimeRuleParams<Rule, Space, CS...>, i.e. num_states copies of Space followed by the coupling field types.
+template <typename Rule, typename Space, typename Coupling>
+struct TimeRuleParamsHelper;
 
-template <typename Rule, typename Space, typename... CS, typename... Tail>
-/// @brief Specialization for coupling packs expressed as `CouplingParams`.
-struct TimeRuleParamsWithCoupling<Rule, Space, CouplingParams<CS...>, Tail...> {
-  using type = TimeRuleParams<Rule, Space, CS...,
-                              Tail...>;  ///< Expanded parameter list with coupling inserted after rule states.
+template <typename Rule, typename Space, typename... CS>
+struct TimeRuleParamsHelper<Rule, Space, CouplingParams<CS...>> {
+  using type = smith::TimeRuleParams<Rule, Space, CS...>;
 };
 
-template <typename Rule, typename Space, typename R, typename... CS, typename... Tail>
-/// @brief Specialization for coupling packs expressed as `PhysicsFields`.
-struct TimeRuleParamsWithCoupling<Rule, Space, PhysicsFields<R, CS...>, Tail...> {
-  using type = TimeRuleParams<Rule, Space, CS...,
-                              Tail...>;  ///< Expanded parameter list with coupling inserted after rule states.
+template <typename Rule, typename Space, typename R, typename... CS>
+struct TimeRuleParamsHelper<Rule, Space, PhysicsFields<R, CS...>> {
+  using type = smith::TimeRuleParams<Rule, Space, CS...>;
 };
+
+template <typename Rule, typename Space, typename Coupling>
+using TimeRuleParams = typename TimeRuleParamsHelper<Rule, Space, Coupling>::type;
 
 /**
  * @brief Append coupling spaces (CS...) and Tail... onto a base Parameters<Fixed...> type.

@@ -452,6 +452,9 @@ struct LinearSolverOptions {
 
   /// Schur approximation type
   SchurApproxType schur_approx_type = SchurApproxType::DiagInv;
+
+  /// Whether to use Hypre's elasticity-specific AMG options (requires byVDIM ordering)
+  bool amg_elasticity = false;
 };
 // _linear_options_end
 

@@ -21,6 +21,11 @@ MultiphysicsTimeIntegrator::MultiphysicsTimeIntegrator(std::shared_ptr<SystemBas
                                                        std::vector<std::shared_ptr<SystemBase>> post_solve_systems)
     : system_(system), cycle_zero_system_(cycle_zero_system), post_solve_systems_(std::move(post_solve_systems))
 {
+  for (size_t i = 0; i < system_->weak_forms.size(); ++i) {
+    const std::string wf_name = system_->weak_forms[i]->name();
+    const std::string reaction_name = system_->field_store->getWeakFormReaction(wf_name);
+    main_unknown_name_to_local_idx_[reaction_name] = i;
+  }
 }
 
 void MultiphysicsTimeIntegrator::addPostSolveSystem(std::shared_ptr<SystemBase> system)
@@ -74,18 +79,12 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   // Entries in the shared FieldStore's time integration rules that belong to post-solve
   // subsystems (e.g. stress projection) are NOT present here and must be skipped by downstream
   // lookups that walk getTimeIntegrationRules().
-  std::map<std::string, size_t> main_unknown_name_to_local_idx;
-  for (size_t i = 0; i < system_->weak_forms.size(); ++i) {
-    const std::string wf_name = system_->weak_forms[i]->name();
-    const std::string reaction_name = system_->field_store->getWeakFormReaction(wf_name);
-    main_unknown_name_to_local_idx[reaction_name] = i;
-  }
 
   // Create states for reaction computation: newly solved primary unknowns + current states
   std::vector<FieldState> states_for_reactions = current_states;
   for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
-    auto it = main_unknown_name_to_local_idx.find(mapping.primary_name);
-    if (it == main_unknown_name_to_local_idx.end()) {
+    auto it = main_unknown_name_to_local_idx_.find(mapping.primary_name);
+    if (it == main_unknown_name_to_local_idx_.end()) {
       continue;  // rule belongs to a post-solve subsystem, not the main solve
     }
     size_t u_idx = system_->field_store->getFieldIndex(mapping.primary_name);
@@ -99,8 +98,8 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   // Sync field_store with newly solved primary unknowns so post-solve systems (e.g. stress
   // projection) read the current displacement rather than the pre-solve snapshot.
   for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
-    auto it = main_unknown_name_to_local_idx.find(mapping.primary_name);
-    if (it == main_unknown_name_to_local_idx.end()) {
+    auto it = main_unknown_name_to_local_idx_.find(mapping.primary_name);
+    if (it == main_unknown_name_to_local_idx_.end()) {
       continue;
     }
     size_t u_idx = system_->field_store->getFieldIndex(mapping.primary_name);
@@ -118,16 +117,14 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
     }
   }
 
-  // Now do time integration to compute corrected velocities/accelerations and update all states
-  const auto& all_current_states = system_->field_store->getAllFields();
-  std::vector<FieldState> new_states = current_states;
-  for (size_t i = 0; i < current_states.size(); ++i) {
-    new_states[i] = all_current_states[i];
-  }
+  // Now do time integration to compute corrected velocities/accelerations and update all states.
+  // Seed new_states from field_store, which already reflects post-solve subsystem updates and
+  // the freshly synced primary unknowns.
+  std::vector<FieldState> new_states = system_->field_store->getAllFields();
 
   for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
-    auto it = main_unknown_name_to_local_idx.find(mapping.primary_name);
-    if (it == main_unknown_name_to_local_idx.end()) {
+    auto it = main_unknown_name_to_local_idx_.find(mapping.primary_name);
+    if (it == main_unknown_name_to_local_idx_.end()) {
       continue;  // rule belongs to a post-solve subsystem, not the main solve
     }
     size_t u_idx = system_->field_store->getFieldIndex(mapping.primary_name);
@@ -170,7 +167,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   // The main loop skipped these rules; their primary fields are already correct in new_states
   // (populated from all_current_states above), so only the history field needs updating.
   for (const auto& [rule, mapping] : system_->field_store->getTimeIntegrationRules()) {
-    if (main_unknown_name_to_local_idx.count(mapping.primary_name)) {
+    if (main_unknown_name_to_local_idx_.count(mapping.primary_name)) {
       continue;  // already handled by main time integration loop above
     }
     if (!mapping.history_name.empty()) {

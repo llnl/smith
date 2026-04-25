@@ -25,7 +25,7 @@
 #include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/thermal_system.hpp"
-#include "smith/differentiable_numerics/thermo_mechanical_system.hpp"
+#include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
 #include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
@@ -119,10 +119,12 @@ int main(int argc, char* argv[])
   // _build_end
 
   // _qoi_start
-  auto qoi_fields =
-      std::vector<smith::FieldState>{field_store->getField("displacement"), field_store->getField("temperature")};
+  auto fetch_qoi_fields = [&]() {
+    return std::vector<smith::FieldState>{field_store->getField("displacement"),
+                                          field_store->getField("temperature")};
+  };
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, TempSpace>> qoi("thermo_mechanical_energy_proxy", mesh,
-                                                                               smith::spaces(qoi_fields));
+                                                                               smith::spaces(fetch_qoi_fields()));
   qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(),
                       [](const smith::TimeInfo&, auto /*X*/, auto U, auto Theta) {
                         auto u = smith::get<smith::VALUE>(U);
@@ -131,7 +133,7 @@ int main(int argc, char* argv[])
                       });
 
   auto qoi_state =
-      0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoi_fields,
+      0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), fetch_qoi_fields(),
                                      smith::TimeInfo(physics->time(), 1.0, static_cast<size_t>(physics->cycle())));
   // _qoi_end
 
@@ -141,7 +143,7 @@ int main(int argc, char* argv[])
   for (int step = 0; step < qoi_steps; ++step) {
     physics->advanceTimestep(dt);
     qoi_state = qoi_state +
-                smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoi_fields,
+                smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), fetch_qoi_fields(),
                                          smith::TimeInfo(physics->time(), dt, static_cast<size_t>(physics->cycle())));
   }
   // _run_end

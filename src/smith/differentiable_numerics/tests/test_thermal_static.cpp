@@ -68,8 +68,7 @@ struct ThermalStaticFixture : public testing::Test {
       return 2.0 * k * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);
     });
 
-    thermal_system->temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
-                                                             [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
+    thermal_system->setTemperatureBC(mesh->entireBoundary(), [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
     TimeInfo t_info(0.0, 1.0);
     auto [new_states, reactions] = makeAdvancer(thermal_system)
@@ -166,8 +165,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
     return 2.0 * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);
   });
 
-  thermal_system->temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
-                                                           [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
+  thermal_system->setTemperatureBC(mesh->entireBoundary(), [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
   TimeInfo t_info(0.0, 1.0);
   auto [new_states, reactions] = makeAdvancer(thermal_system)

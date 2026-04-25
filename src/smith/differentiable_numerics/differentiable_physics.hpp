@@ -228,8 +228,7 @@ template <typename SystemType>
 std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr<SystemType> system,
                                                                  const std::string& physics_name)
 {
-  return makeDifferentiablePhysics(system, makeAdvancer(system, system->cycle_zero_system, system->post_solve_systems),
-                                   physics_name);
+  return makeDifferentiablePhysics(system, makeAdvancer(system), physics_name);
 }
 
 }  // namespace smith

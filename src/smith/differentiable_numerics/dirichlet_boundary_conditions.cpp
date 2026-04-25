@@ -11,13 +11,12 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace smith {
 
 namespace {
 
-constexpr double bc_time_fd_step = 1.0e-6;
+constexpr double bc_time_fd_step = 1.0e-4;
 
 class SecondTimeDerivativeScalarCoefficient : public mfem::Coefficient {
  public:
@@ -28,8 +27,7 @@ class SecondTimeDerivativeScalarCoefficient : public mfem::Coefficient {
   double Eval(mfem::ElementTransformation& T, const mfem::IntegrationPoint& ip) override
   {
     const double t0 = GetTime();
-    const double h = std::max(bc_time_fd_step, std::sqrt(std::numeric_limits<double>::epsilon()) *
-                                                   std::max(1.0, std::abs(t0)));
+    const double h = bc_time_fd_step * std::max(1.0, std::abs(t0));
     source_->SetTime(t0);
     const double f0 = source_->Eval(T, ip);
     source_->SetTime(t0 + h);
@@ -54,8 +52,7 @@ class SecondTimeDerivativeVectorCoefficient : public mfem::VectorCoefficient {
   void Eval(mfem::Vector& V, mfem::ElementTransformation& T, const mfem::IntegrationPoint& ip) override
   {
     const double t0 = GetTime();
-    const double h = std::max(bc_time_fd_step, std::sqrt(std::numeric_limits<double>::epsilon()) *
-                                                   std::max(1.0, std::abs(t0)));
+    const double h = bc_time_fd_step * std::max(1.0, std::abs(t0));
     mfem::Vector v0(vdim), v1(vdim), v2(vdim);
     source_->SetTime(t0);
     source_->Eval(v0, T, ip);

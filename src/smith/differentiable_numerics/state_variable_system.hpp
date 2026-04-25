@@ -12,14 +12,14 @@
  *   auto internal_variable_fields = registerInternalVariableFields<StateSpace, StateRule>(
  *       field_store, params...);
  *
- *   auto internal_variables = buildInternalVariableSystem<dim, StateSpace, StateRule>(
+ *   auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace, StateRule>(
  *       solver, opts, internal_variable_fields, params..., solid_fields);
  *
  * The returned PhysicsFields from registerInternalVariableFields carries field tokens
  * (state_solve_state, state) that can be injected into another physics system
  * (e.g. SolidMechanicsSystem) as coupling input.
  *
- * The system's setMaterial registers an ODE residual of the form:
+ * addEvolution registers an ODE residual of the form:
  *   evolution_law(t_info, alpha_val, alpha_dot, coupling_fields..., params...) == 0
  *
  * With Coupling = CouplingParams<H1<order,dim>, H1<order,dim>, H1<order,dim>, H1<order,dim>>
@@ -65,8 +65,7 @@ struct InternalVariableSystem : public SystemBase {
 
   /// State weak form: (alpha, alpha_old, coupling_fields..., params...)
   using InternalVariableWeakFormType =
-      FunctionalWeakForm<dim, StateSpace,
-                         typename detail::TimeRuleParamsWithCoupling<InternalVarTimeRule, StateSpace, Coupling>::type>;
+      FunctionalWeakForm<dim, StateSpace, detail::TimeRuleParams<InternalVarTimeRule, StateSpace, Coupling>>;
 
   std::shared_ptr<InternalVariableWeakFormType> internal_variable_weak_form;  ///< Internal variable weak form.
   std::shared_ptr<DirichletBoundaryConditions> internal_variable_bc;          ///< Internal variable BCs.
@@ -98,30 +97,7 @@ struct InternalVariableSystem : public SystemBase {
           return smith::tuple{residual_val, flux};
         });
   }
-
-  template <typename MaterialType>
-  /// @brief Register an internal-variable material or evolution law on a domain.
-  void setMaterial(const MaterialType& material, const std::string& domain_name)
-  {
-    addEvolution(domain_name, material);
-  }
-
-  template <typename EvolutionType>
-  /// @brief Backward-compatible alias for `addEvolution`.
-  void addStateEvolution(const std::string& domain_name, EvolutionType evolution_law)
-  {
-    addEvolution(domain_name, evolution_law);
-  }
 };
-
-// ---------------------------------------------------------------------------
-// Options
-// ---------------------------------------------------------------------------
-
-/// @brief Options for building an `InternalVariableSystem`.
-struct InternalVariableOptions {};
-/// @brief Backward-compatible alias for `InternalVariableOptions`.
-using StateVariableOptions = InternalVariableOptions;
 
 // ---------------------------------------------------------------------------
 // Phase 1: registerInternalVariableFields
@@ -179,7 +155,7 @@ namespace detail {
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
 auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
-                                     std::shared_ptr<SystemSolver> solver, const InternalVariableOptions& /*options*/)
+                                     std::shared_ptr<SystemSolver> solver)
 {
   auto internal_variable_time_rule = std::make_shared<InternalVarTimeRule>();
 
@@ -213,65 +189,20 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
 }  // namespace detail
 
 /**
- * @brief Build an internal-variable system from explicitly typed field packs.
+ * @brief Build an internal-variable system from registered field packs.
+ *
+ * The time rule is deduced from SelfFields::time_rule_type.
  */
-template <int dim, typename StateSpace, typename InternalVarTimeRule, typename SelfFields, typename... OtherPacks>
-  requires(detail::is_physics_fields_v<SelfFields> &&
-           std::is_same_v<typename std::decay_t<SelfFields>::time_rule_type, InternalVarTimeRule> &&
-           (detail::is_coupling_params_v<OtherPacks> && ...))
-auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const InternalVariableOptions& options,
-                                 const SelfFields& self_fields, const OtherPacks&... other_packs)
+template <int dim, typename StateSpace, typename SelfFields, typename... OtherPacks>
+  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                                 const OtherPacks&... other_packs)
 {
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
   (detail::registerParamsIfNeeded(field_store, other_packs), ...);
   auto coupling = detail::collectCouplingFields<InternalVarTimeRule>(field_store, self_fields, other_packs...);
-  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver,
-                                                                                       options);
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
 }
-
-/**
- * @brief Backward-compatible alias for `buildInternalVariableSystem`.
- */
-template <int dim, typename StateSpace, typename InternalVarTimeRule, typename SelfFields, typename... OtherPacks>
-  requires(detail::is_physics_fields_v<SelfFields> &&
-           std::is_same_v<typename std::decay_t<SelfFields>::time_rule_type, InternalVarTimeRule> &&
-           (detail::is_coupling_params_v<OtherPacks> && ...))
-auto buildStateVariableSystem(std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
-                              const SelfFields& self_fields, const OtherPacks&... other_packs)
-{
-  return buildInternalVariableSystem<dim, StateSpace, InternalVarTimeRule>(solver, options, self_fields,
-                                                                           other_packs...);
-}
-
-/**
- * @brief Build an internal-variable system from registered field packs.
- */
-template <int dim, typename StateSpace, typename SelfFields, typename... OtherPacks>
-  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
-auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const InternalVariableOptions& options,
-                                 const SelfFields& self_fields, const OtherPacks&... other_packs)
-{
-  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
-  return buildInternalVariableSystem<dim, StateSpace, InternalVarTimeRule>(solver, options, self_fields,
-                                                                           other_packs...);
-}
-
-/**
- * @brief Backward-compatible alias for `buildInternalVariableSystem`.
- */
-template <int dim, typename StateSpace, typename SelfFields, typename... OtherPacks>
-  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
-auto buildStateVariableSystem(std::shared_ptr<SystemSolver> solver, const StateVariableOptions& options,
-                              const SelfFields& self_fields, const OtherPacks&... other_packs)
-{
-  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
-  return buildInternalVariableSystem<dim, StateSpace, InternalVarTimeRule>(solver, options, self_fields,
-                                                                           other_packs...);
-}
-
-template <int dim, typename StateSpace, typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
-          typename Coupling = CouplingParams<>>
-/// @brief Backward-compatible alias for `InternalVariableSystem`.
-using StateVariableSystem = InternalVariableSystem<dim, StateSpace, InternalVarTimeRule, Coupling>;
 
 }  // namespace smith

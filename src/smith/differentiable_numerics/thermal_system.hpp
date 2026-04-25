@@ -46,9 +46,8 @@ struct ThermalSystem : public SystemBase {
   static_assert(TemperatureTimeRule::num_states == 2, "ThermalSystem requires a 2-state time integration rule");
 
   /// Thermal weak form: (temp, temp_old, coupling_fields..., params...)
-  using ThermalWeakFormType = FunctionalWeakForm<
-      dim, H1<temp_order>,
-      typename detail::TimeRuleParamsWithCoupling<TemperatureTimeRule, H1<temp_order>, Coupling>::type>;
+  using ThermalWeakFormType =
+      FunctionalWeakForm<dim, H1<temp_order>, detail::TimeRuleParams<TemperatureTimeRule, H1<temp_order>, Coupling>>;
 
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
@@ -78,6 +77,34 @@ struct ThermalSystem : public SystemBase {
       auto [heat_capacity, heat_flux] = material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
       return smith::tuple{heat_capacity * get<VALUE>(T_dot), -heat_flux};
     });
+  }
+
+  /**
+   * @brief Set thermal material and a coincident body heat source from a single callable.
+   *
+   * The callable is invoked once per quadrature point and must return
+   * `smith::tuple{heat_capacity, heat_flux, heat_source}`. Used by coupled physics (e.g.
+   * thermo-mechanics) where one material evaluation produces all three contributions and we
+   * want to avoid re-evaluating the material for each piece.
+   *
+   * Residual contribution: `(heat_capacity * dT/dt - heat_source, -heat_flux)`.
+   *
+   * @tparam MaterialType The thermal material type.
+   * @param material The material model instance returning {C_v, q, s}.
+   * @param domain_name The name of the domain to apply the material to.
+   */
+  template <typename MaterialType>
+  void setMaterialAndHeatSource(const MaterialType& material, const std::string& domain_name)
+  {
+    auto captured_temp_rule = temperature_time_rule;
+
+    thermal_weak_form->addBodyIntegral(
+        domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old, auto... params) {
+          auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
+          auto [heat_capacity, heat_flux, heat_source] =
+              material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
+          return smith::tuple{heat_capacity * get<VALUE>(T_dot) - heat_source, -heat_flux};
+        });
   }
 
   /**
@@ -248,7 +275,7 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
  *
  * Usage:
  * @code
- *   auto thermal = buildThermalSystem<dim, order, TempRule>(
+ *   auto thermal_system = buildThermalSystem<dim, order, TempRule>(
  *       solver, opts, thermal_fields, solid_fields);
  * @endcode
  */
@@ -272,7 +299,7 @@ auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptio
  *
  * Usage:
  * @code
- *   auto thermal = buildThermalSystem<dim, order>(
+ *   auto thermal_system = buildThermalSystem<dim, order>(
  *       solver, opts, thermal_fields, solid_fields);
  * @endcode
  */
@@ -293,7 +320,7 @@ auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptio
  *
  * Usage:
  * @code
- *   auto thermal = buildThermalSystem<dim, order, TempRule>(
+ *   auto thermal_system = buildThermalSystem<dim, order, TempRule>(
  *       nonlin_opts, lin_opts, field_store, opts, param_fields, solid_fields);
  * @endcode
  */

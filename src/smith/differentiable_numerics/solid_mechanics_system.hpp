@@ -66,12 +66,13 @@ struct SolidMechanicsSystem : public SystemBase {
   static_assert(DisplacementTimeRule::num_states == 4, "SolidMechanicsSystem requires a 4-state time integration rule");
 
   /// Main weak form: (u, u_old, v_old, a_old, coupling_fields..., params...)
-  using SolidWeakFormType = FunctionalWeakForm<
-      dim, H1<order, dim>,
-      typename detail::TimeRuleParamsWithCoupling<DisplacementTimeRule, H1<order, dim>, Coupling>::type>;
+  using SolidWeakFormType =
+      FunctionalWeakForm<dim, H1<order, dim>, detail::TimeRuleParams<DisplacementTimeRule, H1<order, dim>, Coupling>>;
 
-  /// Cycle-zero startup form reusing the main solid fields: (u, v_old, a, coupling_fields..., params...)
-  /// No extra fields are registered for cycle zero; acceleration is the unknown for this internal solve.
+  /// Cycle-zero startup form reusing the main solid fields: (u, v, a, coupling_fields..., params...)
+  /// At cycle 0 the velocity field holds the initial velocity (no prior step has run), so the
+  /// second argument is `v` (initial), not `v_old`. Acceleration is the unknown for this internal solve.
+  /// No extra fields are registered for cycle zero.
   using CycleZeroSolidWeakFormType =
       FunctionalWeakForm<dim, H1<order, dim>,
                          typename detail::AppendCouplingToParams<
@@ -176,8 +177,8 @@ struct SolidMechanicsSystem : public SystemBase {
         });
 
     addCycleZeroBodySourceImpl(
-        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto v_old, auto a, auto... params) {
-          return detail::scaleCycleZeroTerm(t_info, force_function(t_info.time(), X, u, v_old, a, params...));
+        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto v, auto a, auto... params) {
+          return detail::scaleCycleZeroTerm(t_info, force_function(t_info.time(), X, u, v, a, params...));
         });
   }
 
@@ -214,8 +215,8 @@ struct SolidMechanicsSystem : public SystemBase {
         });
 
     addCycleZeroBoundaryFluxImpl(
-        depends_on, domain_name, [=](auto t_info, auto X, auto n, auto u, auto v_old, auto a, auto... params) {
-          return detail::scaleCycleZeroTerm(t_info, traction_function(t_info.time(), X, n, u, v_old, a, params...));
+        depends_on, domain_name, [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto... params) {
+          return detail::scaleCycleZeroTerm(t_info, traction_function(t_info.time(), X, n, u, v, a, params...));
         });
   }
 
@@ -532,7 +533,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
  *
  * Usage:
  * @code
- *   auto solid = buildSolidMechanicsSystem<dim, order, DispRule>(
+ *   auto solid_system = buildSolidMechanicsSystem<dim, order, DispRule>(
  *       solver, opts, solid_fields, youngs_modulus, thermal_fields);
  * @endcode
  */
@@ -558,7 +559,7 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
  *
  * Usage:
  * @code
- *   auto solid = buildSolidMechanicsSystem<dim, order>(
+ *   auto solid_system = buildSolidMechanicsSystem<dim, order>(
  *       solver, opts, solid_fields, youngs_modulus, thermal_fields);
  * @endcode
  */
@@ -579,7 +580,7 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
  *
  * Usage:
  * @code
- *   auto solid = buildSolidMechanicsSystem<dim, order, DispRule>(
+ *   auto solid_system = buildSolidMechanicsSystem<dim, order, DispRule>(
  *       nonlin_opts, lin_opts, field_store, opts, param_fields, thermal_fields);
  * @endcode
  */

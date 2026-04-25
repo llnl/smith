@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file thermo_mechanical_system.hpp
+ * @file thermo_mechanics_system.hpp
  * @brief Helper to wire a coupled thermo-mechanical material to a SolidMechanicsSystem and ThermalSystem.
  */
 
@@ -97,28 +97,18 @@ void setCoupledThermoMechanicsMaterial(
 
   solid->setMaterial(solid_material, domain_name);
 
-  thermal->setMaterial(
+  thermal->setMaterialAndHeatSource(
       [=](const TimeInfo& t_info, auto temperature, auto grad_temperature, auto disp, auto disp_old, auto v_old,
           auto a_old, auto... params) {
         auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
         typename MaterialType::State state{};
         auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
             material, t_info, state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), temperature, grad_temperature, params...);
-        return smith::tuple{C_v, q0};
+        // Material's s0 sits on the LHS (residual = C_v*T_dot + s0 - q·∇v); negate to fit the
+        // physical-heat-source convention used by setMaterialAndHeatSource.
+        return smith::tuple{C_v, q0, -s0};
       },
       domain_name);
-
-  thermal->thermal_weak_form->addBodyIntegral(domain_name, [=](const TimeInfo& t_info, auto /*X*/, auto temperature,
-                                                               auto temperature_old, auto disp, auto disp_old,
-                                                               auto v_old, auto a_old, auto... params) {
-    auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
-    auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
-    typename MaterialType::State state{};
-    auto [pk, C_v, s0, q0] =
-        detail::evaluateCoupledThermoMechanicsMaterial(material, t_info, state, get<DERIVATIVE>(u), get<DERIVATIVE>(v),
-                                                       get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
-    return smith::tuple{s0, smith::zero{}};
-  });
 }
 
 }  // namespace smith

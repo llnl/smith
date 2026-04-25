@@ -18,10 +18,10 @@
  *   auto solid_fields = registerSolidMechanicsFields<dim, disp_order, DispRule>(field_store);
  *   auto thermal_fields = registerThermalFields<dim, temp_order, TempRule>(field_store);
  *
- *   auto solid = buildSolidMechanicsSystem<dim, disp_order, DispRule>(
+ *   auto solid_system = buildSolidMechanicsSystem<dim, disp_order, DispRule>(
  *       solid_solver, solid_opts, solid_fields, params..., thermal_fields);
  *
- *   auto thermal = buildThermalSystem<dim, temp_order, TempRule>(
+ *   auto thermal_system = buildThermalSystem<dim, temp_order, TempRule>(
  *       thermal_solver, thermal_opts, thermal_fields, solid_fields);
  *
  *   auto coupled = combineSystems(solid, thermal);
@@ -163,18 +163,9 @@ auto combineSystems(std::shared_ptr<SubSystems>... subs)
 }
 
 /**
- * @brief A generic wrapper that combines multiple sub-systems into a single monolithic block system.
+ * @brief Combine two or more independently-built sub-systems into a single monolithic SystemBase.
  *
- * Unlike CombinedSystem (which performs staggered solver iterations), MonolithicCombinedSystem
- * concatenates all weak forms and solves them simultaneously using a single global SystemSolver.
- */
-struct MonolithicCombinedSystem : public SystemBase {
-  /// @brief Inherit `SystemBase` constructors for monolithic wrappers.
-  using SystemBase::SystemBase;
-};
-
-/**
- * @brief Combine two or more independently-built sub-systems into a MonolithicCombinedSystem.
+ * All sub-system weak forms are concatenated and solved simultaneously by @p solver.
  *
  * Preconditions:
  *  - All sub-systems share the same FieldStore.
@@ -185,7 +176,7 @@ struct MonolithicCombinedSystem : public SystemBase {
  * @param subs    Two or more sub-systems that share a FieldStore.
  */
 template <typename... SubSystems>
-auto combineSystems(std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSystems>... subs)
+std::shared_ptr<SystemBase> combineSystems(std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSystems>... subs)
 {
   static_assert(sizeof...(subs) >= 2, "combineSystems requires at least two sub-systems");
 
@@ -214,7 +205,7 @@ auto combineSystems(std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSys
       }(subs),
       ...);
 
-  auto combined = std::make_shared<MonolithicCombinedSystem>(field_store, solver, wfs);
+  auto combined = std::make_shared<SystemBase>(field_store, solver, wfs);
   std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
   if (!cycle_zero_wfs.empty()) {
     cycle_zero_combined = std::make_shared<SystemBase>(field_store, solver, cycle_zero_wfs);
@@ -224,19 +215,6 @@ auto combineSystems(std::shared_ptr<SystemSolver> solver, std::shared_ptr<SubSys
   combined->post_solve_systems = post_solve_systems;
 
   return combined;
-}
-
-/**
- * @brief Concatenate multiple vectors of systems into a single vector.
- *
- * Primarily used to gather end-step systems (like stress output) from multiple physics systems.
- */
-template <typename... Vectors>
-std::vector<std::shared_ptr<SystemBase>> mergeSystems(Vectors&&... vectors)
-{
-  std::vector<std::shared_ptr<SystemBase>> result;
-  (result.insert(result.end(), vectors.begin(), vectors.end()), ...);
-  return result;
 }
 
 }  // namespace smith

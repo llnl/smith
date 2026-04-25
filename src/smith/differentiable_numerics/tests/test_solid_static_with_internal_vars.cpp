@@ -114,32 +114,23 @@ auto registerFields(const std::shared_ptr<FieldStore>& field_store)
                     registerInternalVariableFields<StateSpace, InternalVariableRule>(field_store)};
 }
 
-template <typename SolidFields, typename InternalVariableFields>
-auto buildSystems(const std::shared_ptr<SystemSolver>& solid_solver,
-                  const std::shared_ptr<SystemSolver>& internal_variable_solver, const SolidFields& solid_fields,
-                  const InternalVariableFields& internal_variable_fields)
-{
-  return std::tuple{buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
-                                                               internal_variable_fields),
-                    buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, InternalVariableOptions{},
-                                                                 internal_variable_fields, solid_fields)};
-}
-
 template <typename SolidSystemType, typename InternalVariableSystemType>
-void setDamageCoupling(const std::shared_ptr<SolidSystemType>& solid,
-                       const std::shared_ptr<InternalVariableSystemType>& internal_variables,
+void setDamageCoupling(const std::shared_ptr<SolidSystemType>& solid_system,
+                       const std::shared_ptr<InternalVariableSystemType>& internal_variable_system,
                        const std::shared_ptr<Mesh>& mesh)
 {
-  setCoupledSolidMechanicsInternalVariableMaterial(solid, internal_variables, DamageMaterial{}, mesh->entireBodyName());
-  setCoupledInternalVariableMaterial(internal_variables, solid, StrainNormEvolution{}, mesh->entireBodyName());
+  setCoupledSolidMechanicsInternalVariableMaterial(solid_system, internal_variable_system, DamageMaterial{},
+                                                   mesh->entireBodyName());
+  setCoupledInternalVariableMaterial(internal_variable_system, solid_system, StrainNormEvolution{},
+                                     mesh->entireBodyName());
 }
 
 template <typename SolidSystemType>
-void setPullBoundaryConditions(const std::shared_ptr<SolidSystemType>& solid, const std::shared_ptr<Mesh>& mesh,
+void setPullBoundaryConditions(const std::shared_ptr<SolidSystemType>& solid_system, const std::shared_ptr<Mesh>& mesh,
                                double pull_rate)
 {
-  solid->disp_bc->template setFixedVectorBCs<dim>(mesh->domain("bottom"));
-  solid->disp_bc->template setVectorBCs<dim>(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
+  solid_system->setDisplacementBC(mesh->domain("bottom"));
+  solid_system->setDisplacementBC(mesh->domain("top"), [pull_rate](double t, tensor<double, dim> /*X*/) {
     tensor<double, dim> u{};
     u[2] = pull_rate * t;
     return u;
@@ -154,13 +145,15 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_static_with_internal_vars_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
-  auto [solid, internal_variables] =
-      buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                                 internal_variable_fields);
+  auto internal_variable_system =
+      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
 
-  auto system = combineSystems(coupled_solver, solid, internal_variables);
+  auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 
-  setDamageCoupling(solid, internal_variables, mesh);
-  setPullBoundaryConditions(solid, mesh, 0.05);
+  setDamageCoupling(solid_system, internal_variable_system, mesh);
+  setPullBoundaryConditions(solid_system, mesh, 0.05);
 
   auto physics = makeDifferentiablePhysics(system, "physics");
 
@@ -190,13 +183,15 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_staggered_relaxation_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
-  auto [solid, internal_variables] =
-      buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                                 internal_variable_fields);
+  auto internal_variable_system =
+      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
 
-  auto system = combineSystems(staggered_solver, solid, internal_variables);
+  auto system = combineSystems(staggered_solver, solid_system, internal_variable_system);
 
-  setDamageCoupling(solid, internal_variables, mesh);
-  setPullBoundaryConditions(solid, mesh, 0.05);
+  setDamageCoupling(solid_system, internal_variable_system, mesh);
+  setPullBoundaryConditions(solid_system, mesh, 0.05);
 
   auto physics = makeDifferentiablePhysics(system, "physics_relaxed");
   for (int step = 1; step <= 3; ++step) {
@@ -213,19 +208,21 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "body_force_test_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
-  auto [solid, internal_variables] =
-      buildSystems(solid_solver, internal_variable_solver, solid_fields, internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                                 internal_variable_fields);
+  auto internal_variable_system =
+      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
 
-  auto system = combineSystems(coupled_solver, solid, internal_variables);
+  auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 
-  setDamageCoupling(solid, internal_variables, mesh);
+  setDamageCoupling(solid_system, internal_variable_system, mesh);
 
   // Fix bottom face
-  solid->disp_bc->setFixedVectorBCs<dim>(mesh->domain("bottom"));
+  solid_system->setDisplacementBC(mesh->domain("bottom"));
 
   // Apply a gravity-like body force in the -z direction
   double body_force_mag = -0.01;
-  solid->addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto) {
+  solid_system->addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto) {
     tensor<double, dim> f{};
     f[2] = body_force_mag;
     return f;
@@ -233,7 +230,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a traction on the top face in the +z direction
   double traction_mag = 0.005;
-  solid->addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto) {
+  solid_system->addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto) {
     tensor<double, dim> t{};
     t[2] = traction_mag;
     return t;
