@@ -261,7 +261,7 @@ SMITH_HOST_DEVICE constexpr zero dot(zero, const T&)
 
 /** @brief return the size of the leftmost tensor dimension */
 template <typename T, int m, int... n>
-SMITH_HOST_DEVICE constexpr int first_dim(tensor<T, m, n...>)
+SMITH_HOST_DEVICE consteval int first_dim(const tensor<T, m, n...>&)
 {
   return m;
 }

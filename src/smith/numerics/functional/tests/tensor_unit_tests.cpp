@@ -67,6 +67,8 @@ TEST(Tensor, BasicOperations)
 
   tensor<double, 3, 4> B = make_tensor<3, 4>([](auto i, auto j) { return 3.0 * i - j; });
   EXPECT_EQ(first_dim(B), 3);
+  // Ensure that first_dim is a compile-time constant
+  static_assert(first_dim(B) == 3, "Size of leftmost tensor index dimension is wrong");
 
   double uBv = 300;
   EXPECT_LT(abs(dot(u, B, v) - uBv), tolerance);
