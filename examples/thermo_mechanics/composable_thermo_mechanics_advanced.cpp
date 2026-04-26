@@ -120,17 +120,15 @@ int main(int argc, char* argv[])
 
   // _qoi_start
   auto fetch_qoi_fields = [&]() {
-    return std::vector<smith::FieldState>{field_store->getField("displacement"),
-                                          field_store->getField("temperature")};
+    return std::vector<smith::FieldState>{field_store->getField("displacement"), field_store->getField("temperature")};
   };
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, TempSpace>> qoi("thermo_mechanical_energy_proxy", mesh,
                                                                                smith::spaces(fetch_qoi_fields()));
-  qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(),
-                      [](const smith::TimeInfo&, auto /*X*/, auto U, auto Theta) {
-                        auto u = smith::get<smith::VALUE>(U);
-                        auto theta = smith::get<smith::VALUE>(Theta);
-                        return 0.5 * u[0] * u[0] + 0.05 * theta * theta;
-                      });
+  qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(), [](double, auto /*X*/, auto U, auto Theta) {
+    auto u = smith::get<smith::VALUE>(U);
+    auto theta = smith::get<smith::VALUE>(Theta);
+    return 0.5 * u[0] * u[0] + 0.05 * theta * theta;
+  });
 
   auto qoi_state =
       0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), fetch_qoi_fields(),
