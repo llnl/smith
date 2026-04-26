@@ -243,7 +243,10 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solveAdjoi
   auto block_jac = std::make_unique<mfem::BlockOperator>(block_offsets);
   for (int i = 0; i < num_rows; ++i) {
     for (int j = 0; j < num_rows; ++j) {
-      block_jac->SetBlock(i, j, jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)].get());
+      auto& J = jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)];
+      if (J) {
+        block_jac->SetBlock(i, j, J.get());
+      }
     }
   }
 
