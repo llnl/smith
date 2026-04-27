@@ -434,6 +434,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
  protected:
   template <typename BodyIntegralType, int... all_params>
+  /// @brief Forwards body integrand with dependency list covering all input parameters.
   void addBodyIntegralWithAllParams(std::string body_name, BodyIntegralType integrand,
                                     std::integer_sequence<int, all_params...>)
   {
@@ -441,6 +442,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   template <typename BodyLoadType, int... all_params>
+  /// @brief Forwards body source with dependency list covering all input parameters.
   void addBodySourceWithAllParams(std::string body_name, BodyLoadType load_function,
                                   std::integer_sequence<int, all_params...>)
   {
@@ -448,6 +450,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   template <typename BoundaryIntegrandType, int... all_params>
+  /// @brief Forwards boundary integrand with dependency list covering all input parameters.
   void addBoundaryIntegralWithAllParams(std::string boundary_name, BoundaryIntegrandType integrand,
                                         std::integer_sequence<int, all_params...>)
   {
@@ -455,6 +458,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   template <typename BoundaryFluxType, int... all_params>
+  /// @brief Forwards boundary flux with dependency list covering all input parameters.
   void addBoundaryFluxWithAllParams(std::string boundary_name, BoundaryFluxType flux_function,
                                     std::integer_sequence<int, all_params...>)
   {
@@ -462,6 +466,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   template <typename InteriorIntegrandType, int... all_params>
+  /// @brief Forwards interior-boundary integrand with dependency list covering all input parameters.
   void addInteriorBoundaryIntegralWithAllParams(std::string interior_name, InteriorIntegrandType integrand,
                                                 std::integer_sequence<int, all_params...>)
   {
@@ -469,6 +474,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   template <typename IntegrandType, typename XType, typename... InputTypes>
+  /// @brief Calls integrand with `TimeInfo` when available, else with scalar time.
   static auto invokeTimeAwareIntegrand(const IntegrandType& integrand, double time, double dt, size_t cycle, XType&& X,
                                        InputTypes&&... inputs)
   {
@@ -482,6 +488,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   template <typename LoadFunctionType, typename XType, typename... InputTypes>
+  /// @brief Calls source with `TimeInfo` when available, else with scalar time.
   static auto invokeTimeAwareSource(const LoadFunctionType& load_function, const TimeInfo& t_info, XType&& X,
                                     InputTypes&&... inputs)
   {
@@ -493,6 +500,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   template <typename FluxFunctionType, typename XType, typename NType, typename... InputTypes>
+  /// @brief Calls flux with `TimeInfo` when available, else with scalar time.
   static auto invokeTimeAwareFlux(const FluxFunctionType& flux_function, const TimeInfo& t_info, XType&& X, NType&& n,
                                   InputTypes&&... inputs)
   {
