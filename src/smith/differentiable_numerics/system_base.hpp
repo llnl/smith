@@ -108,6 +108,7 @@ inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_
 namespace smith {
 namespace detail {
 
+/// @brief Expands coupling tuple into trailing weak-form space arguments.
 template <typename WeakFormT, typename FieldStorePtr, typename... Args, std::size_t... Is>
 auto buildWeakFormWithCouplingImpl(const FieldStorePtr& field_store, const std::string& weak_form_name,
                                    const std::string& unknown_field_name, const std::tuple<Args...>& args_tuple,
@@ -124,6 +125,7 @@ auto buildWeakFormWithCouplingImpl(const FieldStorePtr& field_store, const std::
       coupling_fields_tuple);
 }
 
+/// @brief Builds weak form using regular args plus final coupling pack argument.
 template <typename WeakFormT, typename FieldStorePtr, typename... Args>
 auto buildWeakFormWithCoupling(const FieldStorePtr& field_store, const std::string& weak_form_name,
                                const std::string& unknown_field_name, const Args&... args)

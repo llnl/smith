@@ -214,16 +214,19 @@ void registerParamsIfNeeded(std::shared_ptr<FieldStore> fs, const Pack& pack)
 template <typename Rule, typename Space, typename Coupling>
 struct TimeRuleParamsHelper;
 
+/// @brief Maps `CouplingParams` packs to weak-form time-rule parameters.
 template <typename Rule, typename Space, typename... CS>
 struct TimeRuleParamsHelper<Rule, Space, CouplingParams<CS...>> {
-  using type = smith::TimeRuleParams<Rule, Space, CS...>;
+  using type = smith::TimeRuleParams<Rule, Space, CS...>;  ///< Resolved weak-form time-rule parameter list.
 };
 
+/// @brief Maps `PhysicsFields` packs to weak-form time-rule parameters.
 template <typename Rule, typename Space, typename R, typename... CS>
 struct TimeRuleParamsHelper<Rule, Space, PhysicsFields<R, CS...>> {
-  using type = smith::TimeRuleParams<Rule, Space, CS...>;
+  using type = smith::TimeRuleParams<Rule, Space, CS...>;  ///< Resolved weak-form time-rule parameter list.
 };
 
+/// @brief Convenience alias selecting time-rule parameters for coupling pack type.
 template <typename Rule, typename Space, typename Coupling>
 using TimeRuleParams = typename TimeRuleParamsHelper<Rule, Space, Coupling>::type;
 
