@@ -167,15 +167,9 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
   using SystemType = InternalVariableSystem<dim, StateSpace, InternalVarTimeRule, Coupling>;
 
   std::string internal_variable_residual_name = field_store->prefix("state_residual");
-  auto internal_variable_weak_form = std::apply(
-      [&](auto&... coupling_fields) {
-        return std::make_shared<typename SystemType::InternalVariableWeakFormType>(
-            internal_variable_residual_name, field_store->getMesh(),
-            field_store->getField(state_type.name).get()->space(),
-            field_store->createSpaces(internal_variable_residual_name, state_type.name, state_type, state_old_type,
-                                      coupling_fields...));
-      },
-      coupling.fields);
+  auto internal_variable_weak_form =
+      detail::buildWeakFormWithCoupling<typename SystemType::InternalVariableWeakFormType>(
+          field_store, internal_variable_residual_name, state_type.name, state_type, state_old_type, coupling.fields);
 
   auto sys = std::make_shared<SystemType>(field_store, solver,
                                           std::vector<std::shared_ptr<WeakForm>>{internal_variable_weak_form});

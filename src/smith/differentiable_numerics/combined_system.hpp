@@ -102,7 +102,6 @@ auto combineSystems(std::shared_ptr<SubSystems>... subs)
   int max_stagger_iters = 1;
   bool exact_staggered_steps = false;
 
-  std::vector<std::shared_ptr<SystemBase>> cycle_zero_subs;
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems;
   std::vector<std::vector<size_t>> subsystem_global_block_indices;
 
@@ -119,15 +118,11 @@ auto combineSystems(std::shared_ptr<SubSystems>... subs)
           max_stagger_iters = std::max(max_stagger_iters, sub->solver->maxStaggeredIterations());
           exact_staggered_steps = exact_staggered_steps || sub->solver->exactStaggeredSteps();
         }
-        if constexpr (requires { sub->cycle_zero_system; }) {
-          if (sub->cycle_zero_system) {
-            cycle_zero_subs.push_back(sub->cycle_zero_system);
-          }
+        for (auto& cz_sys : sub->cycle_zero_systems) {
+          combined->cycle_zero_systems.push_back(cz_sys);
         }
-        if constexpr (requires { sub->post_solve_systems; }) {
-          post_solve_systems.insert(post_solve_systems.end(), sub->post_solve_systems.begin(),
-                                    sub->post_solve_systems.end());
-        }
+        post_solve_systems.insert(post_solve_systems.end(), sub->post_solve_systems.begin(),
+                                  sub->post_solve_systems.end());
       }(subs),
       ...);
 
@@ -138,25 +133,6 @@ auto combineSystems(std::shared_ptr<SubSystems>... subs)
     combined->solver->appendStagesWithBlockMapping(*sub->solver, subsystem_global_block_indices[i]);
   }
 
-  std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
-  if (!cycle_zero_subs.empty()) {
-    auto cycle_zero = std::make_shared<CombinedSystem>();
-    cycle_zero->field_store = field_store;
-    cycle_zero->solver = std::make_shared<SystemSolver>(1, true);
-    for (auto& sub : cycle_zero_subs) {
-      std::vector<size_t> global_block_indices;
-      cycle_zero->subsystems.push_back(sub);
-      for (auto& wf : sub->weak_forms) {
-        global_block_indices.push_back(cycle_zero->weak_forms.size());
-        cycle_zero->weak_forms.push_back(wf);
-      }
-      SLIC_ERROR_IF(!sub->solver, "Combined cycle-zero subsystem must have a solver");
-      cycle_zero->solver->appendStagesWithBlockMapping(*sub->solver, global_block_indices);
-    }
-    cycle_zero_combined = cycle_zero;
-  }
-
-  combined->cycle_zero_system = cycle_zero_combined;
   combined->post_solve_systems = post_solve_systems;
 
   return combined;
@@ -183,7 +159,7 @@ std::shared_ptr<SystemBase> combineSystems(std::shared_ptr<SystemSolver> solver,
   auto field_store = std::get<0>(std::forward_as_tuple(subs...))->field_store;
 
   std::vector<std::shared_ptr<WeakForm>> wfs;
-  std::vector<std::shared_ptr<WeakForm>> cycle_zero_wfs;
+  std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems;
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems;
 
   (
@@ -191,27 +167,16 @@ std::shared_ptr<SystemBase> combineSystems(std::shared_ptr<SystemSolver> solver,
         for (auto& wf : sub->weak_forms) {
           wfs.push_back(wf);
         }
-        if constexpr (requires { sub->cycle_zero_system; }) {
-          if (sub->cycle_zero_system) {
-            for (auto& cycle_zero_wf : sub->cycle_zero_system->weak_forms) {
-              cycle_zero_wfs.push_back(cycle_zero_wf);
-            }
-          }
+        for (auto& cz_sys : sub->cycle_zero_systems) {
+          cycle_zero_systems.push_back(cz_sys);
         }
-        if constexpr (requires { sub->post_solve_systems; }) {
-          post_solve_systems.insert(post_solve_systems.end(), sub->post_solve_systems.begin(),
-                                    sub->post_solve_systems.end());
-        }
+        post_solve_systems.insert(post_solve_systems.end(), sub->post_solve_systems.begin(),
+                                  sub->post_solve_systems.end());
       }(subs),
       ...);
 
   auto combined = std::make_shared<SystemBase>(field_store, solver, wfs);
-  std::shared_ptr<SystemBase> cycle_zero_combined = nullptr;
-  if (!cycle_zero_wfs.empty()) {
-    cycle_zero_combined = std::make_shared<SystemBase>(field_store, solver, cycle_zero_wfs);
-  }
-
-  combined->cycle_zero_system = cycle_zero_combined;
+  combined->cycle_zero_systems = cycle_zero_systems;
   combined->post_solve_systems = post_solve_systems;
 
   return combined;

@@ -246,14 +246,8 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
   using SystemType = ThermalSystem<dim, temp_order, TemperatureTimeRule, Coupling>;
 
   std::string thermal_flux_name = field_store->prefix("thermal_flux");
-  auto thermal_weak_form = std::apply(
-      [&](auto&... coupling_fields) {
-        return std::make_shared<typename SystemType::ThermalWeakFormType>(
-            thermal_flux_name, field_store->getMesh(), field_store->getField(temperature_type.name).get()->space(),
-            field_store->createSpaces(thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
-                                      coupling_fields...));
-      },
-      coupling.fields);
+  auto thermal_weak_form = detail::buildWeakFormWithCoupling<typename SystemType::ThermalWeakFormType>(
+      field_store, thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type, coupling.fields);
 
   auto sys =
       std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{thermal_weak_form});

@@ -30,11 +30,11 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
   /**
    * @brief Construct a multiphysics advancer around main and auxiliary systems.
    * @param system Main system solved every timestep.
-   * @param cycle_zero_system Optional startup system solved before first regular step.
+   * @param cycle_zero_systems Optional startup systems solved independently before first regular step.
    * @param post_solve_systems Optional systems solved after the main step.
    */
   MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
-                             std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
+                             std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems = {},
                              std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {});
 
   /// @brief Register a system to be solved after the main solve and reaction computation.
@@ -54,7 +54,7 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
 
  private:
   std::shared_ptr<SystemBase> system_;
-  std::shared_ptr<SystemBase> cycle_zero_system_;
+  std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems_;
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems_;
 
   std::map<std::string, size_t> main_unknown_name_to_local_idx_;
@@ -63,20 +63,20 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
 /**
  * @brief Build a `MultiphysicsTimeIntegrator` from system-owned or explicit auxiliary systems.
  *
- * Missing optional arguments fall back to `system->cycle_zero_system` and
+ * Missing optional arguments fall back to `system->cycle_zero_systems` and
  * `system->post_solve_systems`.
  */
 inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(
-    std::shared_ptr<SystemBase> system, std::shared_ptr<SystemBase> cycle_zero_system = nullptr,
+    std::shared_ptr<SystemBase> system, std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems = {},
     std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})
 {
-  if (cycle_zero_system == nullptr) {
-    cycle_zero_system = system->cycle_zero_system;
+  if (cycle_zero_systems.empty()) {
+    cycle_zero_systems = system->cycle_zero_systems;
   }
   if (post_solve_systems.empty()) {
     post_solve_systems = system->post_solve_systems;
   }
-  return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_system),
+  return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_systems),
                                                       std::move(post_solve_systems));
 }
 

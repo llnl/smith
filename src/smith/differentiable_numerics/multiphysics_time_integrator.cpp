@@ -17,9 +17,11 @@
 namespace smith {
 
 MultiphysicsTimeIntegrator::MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
-                                                       std::shared_ptr<SystemBase> cycle_zero_system,
+                                                       std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems,
                                                        std::vector<std::shared_ptr<SystemBase>> post_solve_systems)
-    : system_(system), cycle_zero_system_(cycle_zero_system), post_solve_systems_(std::move(post_solve_systems))
+    : system_(system),
+      cycle_zero_systems_(std::move(cycle_zero_systems)),
+      post_solve_systems_(std::move(post_solve_systems))
 {
   for (size_t i = 0; i < system_->weak_forms.size(); ++i) {
     const std::string wf_name = system_->weak_forms[i]->name();
@@ -59,17 +61,18 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
                     return rule_and_mapping.first && rule_and_mapping.first->requiresInitialAccelerationSolve();
                   });
 
-  if (time_info.cycle() == 0 && cycle_zero_system_ && requires_cycle_zero_solve) {
-    auto cycle_zero_unknowns = cycle_zero_system_->solve(time_info);
+  if (time_info.cycle() == 0 && !cycle_zero_systems_.empty() && requires_cycle_zero_solve) {
+    for (const auto& cz_sys : cycle_zero_systems_) {
+      auto cycle_zero_unknowns = cz_sys->solve(time_info);
 
-    SLIC_ERROR_ROOT_IF(cycle_zero_unknowns.size() != cycle_zero_system_->weak_forms.size(),
-                       "Cycle zero system result count does not match number of cycle-zero weak forms");
-    for (size_t i = 0; i < cycle_zero_system_->weak_forms.size(); ++i) {
-      std::string test_field_name =
-          system_->field_store->getWeakFormReaction(cycle_zero_system_->weak_forms[i]->name());
-      size_t test_field_state_idx = system_->field_store->getFieldIndex(test_field_name);
-      current_states[test_field_state_idx] = cycle_zero_unknowns[i];
-      system_->field_store->setField(test_field_state_idx, cycle_zero_unknowns[i]);
+      SLIC_ERROR_ROOT_IF(cycle_zero_unknowns.size() != cz_sys->weak_forms.size(),
+                         "Cycle zero system result count does not match number of cycle-zero weak forms");
+      for (size_t i = 0; i < cz_sys->weak_forms.size(); ++i) {
+        std::string test_field_name = system_->field_store->getWeakFormReaction(cz_sys->weak_forms[i]->name());
+        size_t test_field_state_idx = system_->field_store->getFieldIndex(test_field_name);
+        current_states[test_field_state_idx] = cycle_zero_unknowns[i];
+        system_->field_store->setField(test_field_state_idx, cycle_zero_unknowns[i]);
+      }
     }
   }
 

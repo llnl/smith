@@ -180,7 +180,7 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
   cycle_zero_system->weak_forms = {cycle_zero_wf};
   cycle_zero_system->solver = cycle_zero_solver;
 
-  MultiphysicsTimeIntegrator advancer(main_system, cycle_zero_system);
+  MultiphysicsTimeIntegrator advancer(main_system, {cycle_zero_system});
 
   auto [new_states, reactions] =
       advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
@@ -236,7 +236,7 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   cycle_zero_system->weak_forms = {cycle_zero_wf};
   cycle_zero_system->solver = cycle_zero_solver;
 
-  MultiphysicsTimeIntegrator advancer(main_system, cycle_zero_system);
+  MultiphysicsTimeIntegrator advancer(main_system, {cycle_zero_system});
 
   auto [new_states, reactions] =
       advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
