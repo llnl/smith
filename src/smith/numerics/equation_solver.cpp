@@ -100,6 +100,7 @@ class NewtonSolver : public mfem::NewtonSolver {
     real_t norm, norm_goal = 0;
 
     norm = initial_norm = evaluateNorm(x, r);
+    if (norm == 0.0) return;
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -649,6 +650,8 @@ class TrustRegion : public mfem::NewtonSolver {
 
     real_t norm, norm_goal = 0.0;
     norm = initial_norm = computeResidual(X, r);
+    if (norm == 0.0) return;
+
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
 
     if (print_level == 1) {
@@ -1014,7 +1017,8 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
 
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*matrix);
   }
-
+  height = op.Height();
+  width = op.Width();
   strumpack_solver_.SetOperator(*strumpack_mat_);
 }
 
@@ -1209,12 +1213,12 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 {
   std::unique_ptr<mfem::Solver> preconditioner_solver;
   auto preconditioner = linear_opts.preconditioner;
-  auto print_level = linear_opts.print_level;
+  auto preconditioner_print_level = linear_opts.preconditioner_print_level;
 
   // Handle the preconditioner - currently just BoomerAMG and HypreSmoother are supported
   if (preconditioner == Preconditioner::HypreAMG) {
     auto amg_preconditioner = std::make_unique<mfem::HypreBoomerAMG>();
-    amg_preconditioner->SetPrintLevel(print_level);
+    amg_preconditioner->SetPrintLevel(preconditioner_print_level);
     preconditioner_solver = std::move(amg_preconditioner);
   } else if (preconditioner == Preconditioner::HypreJacobi) {
     auto jac_preconditioner = std::make_unique<mfem::HypreSmoother>();
@@ -1231,7 +1235,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
   } else if (preconditioner == Preconditioner::HypreILU) {
     auto ilu_preconditioner = std::make_unique<mfem::HypreILU>();
     ilu_preconditioner->SetLevelOfFill(1);
-    ilu_preconditioner->SetPrintLevel(print_level);
+    ilu_preconditioner->SetPrintLevel(preconditioner_print_level);
     preconditioner_solver = std::move(ilu_preconditioner);
   } else if (preconditioner == Preconditioner::AMGX) {
 #ifdef MFEM_USE_AMGX
@@ -1245,6 +1249,13 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 #else
     SLIC_ERROR_ROOT("PETSc preconditioner requested in non-PETSc build");
 #endif
+  } else if (preconditioner == Preconditioner::AMGFContact) {
+    auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
+    auto amgfcontact_opts = linear_opts.amgfcontact_options;
+    amgfcontact_preconditioner->GetAMG().SetPrintLevel(preconditioner_print_level);
+    amgfcontact_preconditioner->GetAMG().SetSystemsOptions(amgfcontact_opts.dim_systems_options);
+    amgfcontact_preconditioner->GetAMG().SetRelaxType(amgfcontact_opts.relax_type);
+    preconditioner_solver = std::move(amgfcontact_preconditioner);
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");
   }
@@ -1319,7 +1330,7 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
   } else if (solver_type == "cg") {
     options.linear_solver = smith::LinearSolver::CG;
   } else {
-    std::string msg = axom::fmt::format("Unknown Linear solver type given: '{0}'", solver_type);
+    std::string msg = std::format("Unknown Linear solver type given: '{0}'", solver_type);
     SLIC_ERROR_ROOT(msg);
   }
   const std::string prec_type = config["prec_type"];
@@ -1343,8 +1354,10 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
     options.preconditioner = smith::Preconditioner::Petsc;
     options.petsc_preconditioner = smith::mfem_ext::stringToPetscPCType(petsc_prec);
 #endif
+  } else if (prec_type == "AMGFContact") {
+    options.preconditioner = smith::Preconditioner::AMGFContact;
   } else {
-    std::string msg = axom::fmt::format("Unknown preconditioner type given: '{0}'", prec_type);
+    std::string msg = std::format("Unknown preconditioner type given: '{0}'", prec_type);
     SLIC_ERROR_ROOT(msg);
   }
 
@@ -1368,7 +1381,7 @@ smith::NonlinearSolverOptions FromInlet<smith::NonlinearSolverOptions>::operator
   } else if (solver_type == "KINPicard") {
     options.nonlin_solver = smith::NonlinearSolver::KINPicard;
   } else {
-    SLIC_ERROR_ROOT(axom::fmt::format("Unknown nonlinear solver type given: '{0}'", solver_type));
+    SLIC_ERROR_ROOT(std::format("Unknown nonlinear solver type given: '{0}'", solver_type));
   }
   return options;
 }

@@ -619,6 +619,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endif()
 
         add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
+
+        # Suppresses Tribol compiler warnings during build
+        blt_convert_to_system_includes(TARGET tribol)
         
         if(TRIBOL_ENABLE_PROFILING)
             unset(CALIPER_DIR CACHE)
@@ -692,6 +695,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             if(TARGET ${_target})
                 message(STATUS "Adding MPI link directory to target [${_target}]")
                 target_link_directories(${_target} BEFORE INTERFACE ${_mpi_lib_dir})
+                if (ENABLE_FORTRAN AND DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
+                    target_link_libraries(${_target} INTERFACE "-lmpifort")
+                endif()
             endif()
         endforeach()
     endif()
@@ -706,6 +712,22 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                 target_link_libraries(${_target} INTERFACE ${ARPACK_LIBRARIES})
             endif()
         endforeach()
+    endif()
+
+    # On Apple, Spack-built cmake configs embed literal -Wl,-rpath,... entries in
+    # INTERFACE_LINK_LIBRARIES. These duplicate CMake's own rpath management
+    # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings.
+    if(APPLE)
+        foreach(_target ${_mfem_targets})
+            if(TARGET ${_target})
+                get_target_property(_link_libs ${_target} INTERFACE_LINK_LIBRARIES)
+                if(_link_libs)
+                    list(FILTER _link_libs EXCLUDE REGEX "^-Wl,-rpath,")
+                    set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
+                endif()
+            endif()
+        endforeach()
+        unset(_link_libs)
     endif()
     unset(_mfem_targets)
 

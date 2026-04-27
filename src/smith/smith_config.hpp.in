@@ -42,7 +42,6 @@
 #cmakedefine SMITH_USE_CONDUIT
 #cmakedefine SMITH_USE_CONTINUATION
 #cmakedefine SMITH_USE_ENZYME
-#cmakedefine SMITH_USE_FMT
 #cmakedefine SMITH_USE_HDF5
 #cmakedefine SMITH_USE_LUA
 #cmakedefine SMITH_USE_MFEM

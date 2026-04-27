@@ -210,7 +210,7 @@ struct LinearHardening {
   auto operator()(T1 accumulated_plastic_strain, T2 accumulated_plastic_strain_rate) const
   {
     return sigma_y + Hi * accumulated_plastic_strain + overstress(eta, accumulated_plastic_strain_rate);
-  };
+  }
 };
 
 /**
@@ -237,7 +237,7 @@ struct PowerLawHardening {
     using std::pow;
     return sigma_y * pow(1.0 + accumulated_plastic_strain / eps0, 1.0 / n) +
            overstress(eta, accumulated_plastic_strain_rate);
-  };
+  }
 };
 
 /**
@@ -269,7 +269,7 @@ struct VoceHardening {
     auto& epsilon_p_dot = accumulated_plastic_strain_rate;
     auto Y_vis = overstress(eta, epsilon_p_dot);
     return Y_eq + Y_vis;
-  };
+  }
 };
 
 /// @brief J2 material with nonlinear isotropic hardening and linear kinematic hardening

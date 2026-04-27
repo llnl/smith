@@ -12,6 +12,14 @@
 
 #pragma once
 
+#include <charconv>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <system_error>
+#include <unordered_map>
+#include <vector>
+
 #include "smith/physics/solid_mechanics.hpp"
 #include "smith/physics/contact/contact_data.hpp"
 
@@ -115,10 +123,21 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SolidMechanicsBase::resetStates(cycle, time);
     forces_ = 0.0;
-    contact_.setDisplacements(BasePhysics::shapeDisplacement(), displacement_);
+    for (auto& [_, force] : contact_interaction_forces_) {
+      if (force) {
+        *force = 0.0;
+      }
+    }
+    for (auto& [_, seed] : contact_interaction_force_adjoint_bcs_) {
+      if (seed) {
+        *seed = 0.0;
+      }
+    }
     contact_.reset();
     double dt = 0.0;
-    contact_.update(cycle, time, dt);
+    mfem::Vector p(contact_.numPressureDofs());
+    p = 0.0;
+    contact_.update(cycle, time, dt, BasePhysics::shapeDisplacement(), displacement_, p);
   }
 
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
@@ -180,14 +199,14 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
             return *J_constraint_;
           });
     } else {
-      // If all of the contact interactions are penalty, then there will be no blocks.  Jacobian operator is a single
+      // If all of the contact interactions are penalty, then there will be no blocks. Jacobian operator is a single
       // mfem::HypreParMatrix
       return std::make_unique<mfem_ext::StdFunctionOperator>(
           displacement_.space().TrueVSize(), residual_fn, [this](const mfem::Vector& u) -> mfem::Operator& {
             auto [r, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                           *parameters_[parameter_indices].state...);
 
-            // get 11-block holding jacobian contributions
+            // get 11-block holding Jacobian contributions
             auto block_J = contact_.jacobianFunction(assemble(drdu));
             block_J->owns_blocks = false;
             J_ = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
@@ -213,7 +232,86 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Contact can only be applied to quasistatic problems.");
     SLIC_ERROR_ROOT_IF(order > 1, "Contact can only be applied to linear (order = 1) meshes.");
+
+    // Disallow duplicates for this physics module. Tribol ids are global, so reusing the same interaction_id is an
+    // error even if ContactData rejects it later.
+    SLIC_ERROR_ROOT_IF(
+        contact_interaction_forces_.find(interaction_id) != contact_interaction_forces_.end(),
+        std::format("Contact interaction id {} already exists for physics module '{}'.", interaction_id, name_));
+
+    // Register with Tribol via ContactData (includes global uniqueness check).
     contact_.addContactInteraction(interaction_id, bdry_attr_surf1, bdry_attr_surf2, contact_opts);
+
+    const auto interaction_force_name = detail::addPrefix(name_, std::format("contact_force_{}", interaction_id));
+    auto interaction_force_dual =
+        std::make_unique<FiniteElementDual>(StateManager::newDual(displacement_.space(), interaction_force_name));
+    *interaction_force_dual = 0.0;
+    duals_.push_back(interaction_force_dual.get());
+    contact_interaction_forces_.emplace(interaction_id, std::move(interaction_force_dual));
+
+    const auto force_adjoint_bcs_name =
+        detail::addPrefix(name_, std::format("contact_force_adjoint_bcs_{}", interaction_id));
+    auto force_adjoint_bcs = std::make_unique<FiniteElementState>(displacement_.space(), force_adjoint_bcs_name);
+    *force_adjoint_bcs = 0.0;
+    this->dual_adjoints_.push_back(force_adjoint_bcs.get());
+    contact_interaction_force_adjoint_bcs_.emplace(interaction_id, std::move(force_adjoint_bcs));
+  }
+
+  /// @overload
+  std::vector<std::string> dualNames() const override
+  {
+    auto dual_names = SolidMechanicsBase::dualNames();
+    dual_names.push_back("contact_forces");
+#ifdef SMITH_USE_TRIBOL
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      dual_names.push_back(std::format("contact_force_{}", interaction.getInteractionId()));
+    }
+#endif
+    return dual_names;
+  }
+
+  /// @overload
+  const FiniteElementDual& dual(const std::string& dual_name) const override
+  {
+    if (dual_name == "contact_forces" || dual_name == detail::addPrefix(this->name_, "contact_forces")) {
+      return forces_;
+    }
+
+    const auto interaction_id = parseContactInteractionForceId(dual_name);
+    if (interaction_id.has_value()) {
+      auto it = contact_interaction_forces_.find(*interaction_id);
+      if (it != contact_interaction_forces_.end()) {
+        return *it->second;
+      }
+    }
+
+    return SolidMechanicsBase::dual(dual_name);
+  }
+
+  /// @overload
+  const FiniteElementState& dualAdjoint(const std::string& dual_name) const override
+  {
+    const auto interaction_id = parseContactInteractionForceId(dual_name);
+    if (interaction_id.has_value()) {
+      auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
+      if (it != contact_interaction_force_adjoint_bcs_.end()) {
+        return *it->second;
+      }
+    }
+
+    return SolidMechanicsBase::dualAdjoint(dual_name);
+  }
+
+  /**
+   * @brief create a contactSubspaceTransferOperator for AMGF
+   */
+  void computeContactSubspaceTransferOperator()
+  {
+    // compute contact dof --> displacement dof prolongation operator
+    // if not previously computed
+    if (!contact_dof_prolongation_) {
+      contact_dof_prolongation_ = contact_.contactSubspaceTransferOperator();
+    }
   }
 
   /**
@@ -224,8 +322,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   void completeSetup() override
   {
     double dt = 0.0;
-    std::cout << "Line 227" << std::endl;
-    contact_.update(cycle_, time_, dt);
+    mfem::Vector p = pressure();
+    contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
 
     std::cout << "Line 230" << std::endl;
 
@@ -241,7 +339,76 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
    */
   mfem::HypreParVector pressure() const { return contact_.mergedPressures(); }
 
+#ifdef SMITH_USE_TRIBOL
+  /**
+   * @brief Get a contact interaction by its interaction id
+   *
+   * @param interaction_id The unique identifier for the contact interaction
+   * @return Reference to the requested contact interaction
+   */
+  const ContactInteraction& contactInteraction(int interaction_id) const
+  {
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      if (interaction.getInteractionId() == interaction_id) {
+        return interaction;
+      }
+    }
+    SLIC_ERROR_ROOT(std::format("No contact interaction found with interaction_id={}", interaction_id));
+    return contact_.getContactInteractions().front();
+  }
+#endif
+
+  /// @overload
+  void setDualAdjointBcs(std::unordered_map<std::string, const smith::FiniteElementState&> bcs) override
+  {
+    SLIC_ERROR_ROOT_IF(bcs.size() == 0, "Adjoint load container size must be greater than 0 in SolidMechanicsContact.");
+
+    auto reaction_adjoint_load = bcs.find("reactions");
+    if (reaction_adjoint_load != bcs.end()) {
+      SolidMechanicsBase::setDualAdjointBcs({{"reactions", reaction_adjoint_load->second}});
+    }
+
+    for (const auto& [name, bc] : bcs) {
+      if (name == "reactions") {
+        continue;
+      }
+
+      const auto interaction_id = parseContactInteractionForceId(name);
+      SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
+                         std::format("Unknown dual adjoint BC '{}' for SolidMechanicsContact.", name));
+
+      auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
+      SLIC_ERROR_ROOT_IF(it == contact_interaction_force_adjoint_bcs_.end(),
+                         std::format("No contact force adjoint BC registered for interaction_id={}", *interaction_id));
+
+      *it->second = bc;
+    }
+  }
+
  protected:
+  /// @brief Converts a dual name into an interaction id (if it exists)
+  static std::optional<int> parseContactInteractionForceId(std::string_view dual_name)
+  {
+    constexpr std::string_view prefix = "contact_force_";
+
+    // Accept both the bare name and the module-prefixed name, e.g. "solid_contact_force_0".
+    const auto idx = dual_name.rfind(prefix);
+    if (idx == std::string_view::npos) {
+      return std::nullopt;
+    }
+
+    // This code converts everything after the prefix to a candidate id
+    const std::string_view id_str = dual_name.substr(idx + prefix.size());
+    int interaction_id = -1;
+    const auto* begin = id_str.data();
+    const auto* end = id_str.data() + id_str.size();
+    auto [ptr, ec] = std::from_chars(begin, end, interaction_id);
+    if (ec != std::errc{} || ptr != end) {
+      return std::nullopt;
+    }
+    return interaction_id;
+  }
+
   /// @brief Solve the Quasi-static Newton system
   void quasiStaticSolve(double dt) override
   {
@@ -262,9 +429,16 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // solve the non-linear system resid = 0 and pressure * gap = 0
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));
-    contact_.setPressures(mfem::Vector(augmented_solution, displacement_.Size(), contact_.numPressureDofs()));
-    contact_.update(cycle_, time_, dt);
     forces_.SetVector(contact_.forces(), 0);
+
+#ifdef SMITH_USE_TRIBOL
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      auto it = contact_interaction_forces_.find(interaction.getInteractionId());
+      if (it != contact_interaction_forces_.end()) {
+        it->second->SetVector(interaction.forces(), 0);
+      }
+    }
+#endif
   }
 
   /**
@@ -316,6 +490,25 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       du_[j] -= displacement_(j);
     }
 
+    auto amgf_prec = dynamic_cast<mfem::AMGFSolver*>(&nonlin_solver_->preconditioner());
+    if (amgf_prec) {
+      // compute contact_dof_prolongation
+      computeContactSubspaceTransferOperator();
+      // set AMGF subspace transfer operator
+      amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_prolongation_.get()));
+      // set the filteredsubspace solver component of AMGF
+      // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
+      int filter_solver_print_level = 0;
+      filter_solver_ =
+          std::make_unique<StrumpackSolver>(filter_solver_print_level, contact_dof_prolongation_->GetComm());
+      amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
+
+      auto& lin_solver = nonlin_solver_->linearSolver();
+      auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);
+      SLIC_WARNING_ROOT_IF(!iterative_solver,
+                           "AMGFContact should only be used as a preconditioner for an iterative solver");
+    }
+
     if (use_warm_start_) {
       // Update the system residual
       mfem::Vector augmented_residual(displacement_.Size() + contact_.numPressureDofs());
@@ -323,24 +516,29 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       const mfem::Vector res = (*residual_)(time_ + dt, BasePhysics::shapeDisplacement(), displacement_, acceleration_,
                                             *parameters_[parameter_indices].state...);
 
-      contact_.setPressures(mfem::Vector(augmented_residual, displacement_.Size(), contact_.numPressureDofs()));
-      contact_.update(cycle_, time_, dt);
-      mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
-      r_blk = res;
-
       mfem::Vector augmented_solution(displacement_.space().TrueVSize() + contact_.numPressureDofs());
       augmented_solution = 0.0;
       mfem::Vector du(augmented_solution, 0, displacement_.space().TrueVSize());
       du = displacement_;
+      mfem::Vector p_blk(augmented_solution, displacement_.Size(), contact_.numPressureDofs());
 
-      contact_.residualFunction(BasePhysics::shapeDisplacement(), augmented_solution, augmented_residual);
+      // Perform a single update for the warm start evaluation.
+      // Note: we use time_ to match the previous Jacobian evaluation point.
+      contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p_blk);
+
+      mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
+      r_blk = res;
+      r_blk += contact_.forces();
+
+      mfem::Vector g_blk(augmented_residual, displacement_.Size(), contact_.numPressureDofs());
+      g_blk.Set(1.0, contact_.mergedGaps(true));
+
       r_blk.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
 
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                     acceleration_, *parameters_[parameter_indices].previous_state...);
 
-      contact_.update(cycle_, time_, dt);
       if (contact_.haveLagrangeMultipliers()) {
         J_offsets_ = mfem::Array<int>({0, displacement_.Size(), displacement_.Size() + contact_.numPressureDofs()});
         J_constraint_ = contact_.jacobianFunction(assemble(drdu));
@@ -381,9 +579,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       }
 
       auto& lin_solver = nonlin_solver_->linearSolver();
-
       lin_solver.SetOperator(*J_operator_);
-
       lin_solver.Mult(augmented_residual, augmented_solution);
 
       du_ = du;
@@ -406,8 +602,47 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     auto jacobian = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
     auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
 
-    for (const auto& bc : bcs_.essentials()) {
-      bc.apply(*J_T, displacement_adjoint_load_, reactions_adjoint_bcs_);
+    // If a QoI depends on per-interaction contact force duals, the dual-adjoint seeds define an additional contribution
+    // to the adjoint load:
+    //   dJ/du += (df_i/du)^T * dJ/df_i
+    // Following SolidMechanics::setAdjointLoad() sign convention, displacement_adjoint_load_ stores the negative of the
+    // provided dJ/du, so we subtract these contributions here.
+#ifdef SMITH_USE_TRIBOL
+    if (!contact_interaction_force_adjoint_bcs_.empty()) {
+      FiniteElementDual contact_force_load(displacement_.space(), "contact_force_dual_adjoint_load");
+      contact_force_load = 0.0;
+
+      for (const auto& [interaction_id, force_seed] : contact_interaction_force_adjoint_bcs_) {
+        if (!force_seed) {
+          continue;
+        }
+
+        // Only apply if the seed is nonzero.
+        if (force_seed->Norml2() == 0.0) {
+          continue;
+        }
+
+        const auto interaction_J = contactInteraction(interaction_id).jacobianContribution();
+        auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
+        SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+        FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
+        tmp = 0.0;
+        J00->MultTranspose(*force_seed, tmp);
+        contact_force_load.Add(1.0, tmp);
+      }
+
+      displacement_adjoint_load_.Add(-1.0, contact_force_load);
+    }
+#endif
+
+    auto J_e_T = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
+    auto& constrained_dofs = bcs_.allEssentialTrueDofs();
+
+    mfem::EliminateBC(*J_T, *J_e_T, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
+    for (int i = 0; i < constrained_dofs.Size(); i++) {
+      int j = constrained_dofs[i];
+      displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
     }
 
     auto& lin_solver = nonlin_solver_->linearSolver();
@@ -489,6 +724,18 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
   /// forces for output
   FiniteElementDual forces_;
+
+  /// per-interaction contact forces for output
+  std::unordered_map<int, std::unique_ptr<FiniteElementDual>> contact_interaction_forces_;
+
+  /// per-interaction dual-adjoint (BC) fields for contact force duals
+  std::unordered_map<int, std::unique_ptr<FiniteElementState>> contact_interaction_force_adjoint_bcs_;
+
+  /// contactDOFProlongationOperator
+  std::unique_ptr<mfem::HypreParMatrix> contact_dof_prolongation_;
+
+  /// filter solver (for use with AMGF preconditioner)
+  std::unique_ptr<mfem::Solver> filter_solver_;
 };
 
 }  // namespace smith

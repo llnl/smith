@@ -12,7 +12,9 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -65,9 +67,27 @@ class ContactData {
    * @param bdry_attr_surf1 MFEM boundary attributes for the first (mortar) surface
    * @param bdry_attr_surf2 MFEM boundary attributes for the second (nonmortar) surface
    * @param contact_opts Defines contact method, enforcement, type, and penalty
+   *
+   * @note Interaction ids must be unique across the entire executable: Tribol uses @p interaction_id as the unique key
+   * for its coupling schemes, so reusing an id (even across different ContactData instances) is an error.
    */
   void addContactInteraction(int interaction_id, const std::set<int>& bdry_attr_surf1,
                              const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts);
+
+  /**
+   * @brief Updates only the gap contributions associated with contact
+   *
+   * @param cycle The current simulation cycle
+   * @param time The current time
+   * @param dt The timestep size to attempt
+   * @param u_shape Optional shape displacement vector
+   * @param u Optional current displacement dof values
+   * @param eval_jacobian Whether to also evaluate the Jacobian contributions (default false)
+   */
+  void updateGaps(int cycle, double time, double& dt,
+                  std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+                  std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
+                  bool eval_jacobian = false);
 
   /**
    * @brief Updates the positions, forces, and Jacobian contributions associated with contact
@@ -75,8 +95,14 @@ class ContactData {
    * @param cycle The current simulation cycle
    * @param time The current time
    * @param dt The timestep size to attempt
+   * @param u_shape Optional shape displacement vector
+   * @param u Optional current displacement dof values
+   * @param p Optional current pressure true dof values
    */
-  void update(int cycle, double time, double& dt);
+  void update(int cycle, double time, double& dt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
+              std::optional<std::reference_wrapper<const mfem::Vector>> p = std::nullopt);
 
   /**
    * @brief Resets the contact pressures to zero
@@ -157,25 +183,11 @@ class ContactData {
   std::unique_ptr<mfem::BlockOperator> jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const;
 
   /**
-   * @brief Set the pressure field
+   * @brief Computes the subspace transfer operator
    *
-   * This sets Tribol's pressure degrees of freedom based on
-   *  1) the values in merged_pressure for Lagrange multiplier enforcement
-   *  2) the nodal gaps and penalty for penalty enforcement
-   *
-   * @note The nodal gaps must be up-to-date for penalty enforcement
-   *
-   * @param merged_pressures Current pressure true dof values in a merged mfem::Vector
+   * @return Contact subspace transfer operator (mapping from contact_dofs to all displacement dofs)
    */
-  void setPressures(const mfem::Vector& merged_pressures) const;
-
-  /**
-   * @brief Update the current coordinates based on the new displacement field
-   *
-   * @param u_shape Shape displacement vector
-   * @param u Current displacement dof values
-   */
-  void setDisplacements(const mfem::Vector& u_shape, const mfem::Vector& u);
+  std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator();
 
   /**
    * @brief Have there been contact interactions added?
@@ -216,6 +228,28 @@ class ContactData {
    */
   int numPressureDofs() const { return num_pressure_dofs_; };
 
+ protected:
+  /**
+   * @brief Set the pressure field
+   *
+   * This sets Tribol's pressure degrees of freedom based on
+   *  1) the values in merged_pressure for Lagrange multiplier enforcement
+   *  2) the nodal gaps and penalty for penalty enforcement
+   *
+   * @note The nodal gaps must be up-to-date for penalty enforcement
+   *
+   * @param merged_pressures Current pressure true dof values in a merged mfem::Vector
+   */
+  void setPressures(const mfem::Vector& merged_pressures) const;
+
+  /**
+   * @brief Update the current coordinates based on the new displacement field
+   *
+   * @param u_shape Shape displacement vector
+   * @param u Current displacement dof values
+   */
+  void setDisplacements(const mfem::Vector& u_shape, const mfem::Vector& u);
+
  private:
 #ifdef SMITH_USE_TRIBOL
   /**
@@ -244,6 +278,8 @@ class ContactData {
 
   /**
    * @brief The contact boundary condition information
+   *
+   * @note The order of this vector defines the ordering used for merged pressure/Jacobian offsets.
    */
   std::vector<ContactInteraction> interactions_;
 #endif
@@ -295,6 +331,11 @@ class ContactData {
    * @note This is mutable so it can be updated when pressures/gaps/Jacobians are retrieved.
    */
   mutable mfem::Array<HYPRE_BigInt> global_pressure_dof_offsets_;
+
+  /**
+   * @brief Array of dofs associated to contact
+   */
+  mfem::Array<int> contact_dofs_;
 
   int cycle_{0};
   double time_{0.0};

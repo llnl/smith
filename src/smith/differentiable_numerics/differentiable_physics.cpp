@@ -4,20 +4,13 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-// Copyright (c) Lawrence Livermore National Security, LLC and
-// other Smith Project Developers. See the top-level LICENSE file for
-// details.
-//
-// SPDX-License-Identifier: (BSD-3-Clause)
-
 #include "gretl/data_store.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
-#include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/state_advancer.hpp"
 #include "smith/differentiable_numerics/reaction.hpp"
-#include "gretl/data_store.hpp"
+#include "gretl/upstream_state.hpp"
 
 namespace smith {
 
@@ -109,16 +102,15 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
 {
   SLIC_ERROR_IF(
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-      axom::fmt::format("Could not find field named {0} in mesh with tag \"{1}\" to get", field_name, mesh_->tag()));
+      std::format("Could not find field named {0} in mesh with tag \"{1}\" to get", field_name, mesh_->tag()));
   size_t state_index = state_name_to_field_index_.at(field_name);
   return *field_states_[state_index].get();
 }
 
 const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_name) const
 {
-  SLIC_ERROR_IF(
-      reaction_name_to_reaction_index_.find(dual_name) == reaction_name_to_reaction_index_.end(),
-      axom::fmt::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
+  SLIC_ERROR_IF(reaction_name_to_reaction_index_.find(dual_name) == reaction_name_to_reaction_index_.end(),
+                std::format("Could not find dual named {0} in mesh with tag \"{1}\" to get", dual_name, mesh_->tag()));
   size_t reaction_index = reaction_name_to_reaction_index_.at(dual_name);
   SLIC_ERROR_IF(
       reaction_index >= reaction_names_.size(),
@@ -132,9 +124,9 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& dual_nam
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
 {
   SLIC_ERROR_IF(cycle != cycle_,
-                axom::fmt::format("Due to checkpointing restrictions in smith::Mechanics, cannot ask for an arbitrary "
-                                  "checkpointed cycle, asking for cycle {}, but physics is at cycle {}",
-                                  cycle, cycle_));
+                std::format("Due to checkpointing restrictions in smith::Mechanics, cannot ask for an arbitrary "
+                            "checkpointed cycle, asking for cycle {}, but physics is at cycle {}",
+                            cycle, cycle_));
   return state(state_name);
 }
 
@@ -143,16 +135,16 @@ const FiniteElementState& DifferentiablePhysics::shapeDisplacement() const { ret
 const FiniteElementState& DifferentiablePhysics::parameter(std::size_t parameter_index) const
 {
   SLIC_ERROR_IF(parameter_index >= field_params_.size(),
-                axom::fmt::format("Parameter index {} requested, but only {} parameters exist in physics module {}.",
-                                  parameter_index, field_params_.size(), name_));
+                std::format("Parameter index {} requested, but only {} parameters exist in physics module {}.",
+                            parameter_index, field_params_.size(), name_));
   return *field_params_[parameter_index].get();
 }
 
 const FiniteElementState& DifferentiablePhysics::parameter(const std::string& parameter_name) const
 {
-  SLIC_ERROR_IF(param_name_to_field_index_.find(parameter_name) == param_name_to_field_index_.end(),
-                axom::fmt::format("Could not find parameter named {0} in mesh with tag \"{1}\" to get", parameter_name,
-                                  mesh_->tag()));
+  SLIC_ERROR_IF(
+      param_name_to_field_index_.find(parameter_name) == param_name_to_field_index_.end(),
+      std::format("Could not find parameter named {0} in mesh with tag \"{1}\" to get", parameter_name, mesh_->tag()));
   size_t param_index = param_name_to_field_index_.at(parameter_name);
   return parameter(param_index);
 }
@@ -160,8 +152,8 @@ const FiniteElementState& DifferentiablePhysics::parameter(const std::string& pa
 void DifferentiablePhysics::setParameter(const size_t parameter_index, const FiniteElementState& parameter_state)
 {
   SLIC_ERROR_IF(parameter_index >= field_params_.size(),
-                axom::fmt::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
-                                  parameter_index, field_params_.size(), name_));
+                std::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
+                            parameter_index, field_params_.size(), name_));
   *field_params_[parameter_index].get() = parameter_state;
 }
 
@@ -170,9 +162,8 @@ void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& s) { 
 void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name,
                                      [[maybe_unused]] const FiniteElementState& s)
 {
-  SLIC_ERROR_IF(
-      state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-      axom::fmt::format("Could not find field named {0} in mesh with tag {1} to set", field_name, mesh_->tag()));
+  SLIC_ERROR_IF(state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
+                std::format("Could not find field named {0} in mesh with tag {1} to set", field_name, mesh_->tag()));
   size_t state_index = state_name_to_field_index_.at(field_name);
   *field_states_[state_index].get() = s;
   *initial_field_states_[state_index].get() = s;
@@ -185,7 +176,7 @@ void DifferentiablePhysics::setAdjointLoad(
     std::string field_name = string_dual_pair.first;
     const smith::FiniteElementDual& dual = string_dual_pair.second;
     SLIC_ERROR_IF(state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-                  axom::fmt::format("Could not find dual named {0} in mesh with tag {1}", field_name, mesh_->tag()));
+                  std::format("Could not find dual named {0} in mesh with tag {1}", field_name, mesh_->tag()));
     size_t state_index = state_name_to_field_index_.at(field_name);
     *field_states_[state_index].get_dual() += dual;
   }
@@ -197,10 +188,9 @@ void DifferentiablePhysics::setDualAdjointBcs(
   for (auto string_bc_pair : string_to_bc) {
     std::string reaction_name = string_bc_pair.first;
     const smith::FiniteElementState& reaction_dual = string_bc_pair.second;
-    SLIC_ERROR_IF(
-        reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
-        axom::fmt::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
-                          reaction_name, mesh_->tag()));
+    SLIC_ERROR_IF(reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
+                  std::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
+                              reaction_name, mesh_->tag()));
     size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
     *reaction_states_[reaction_index].get_dual() += reaction_dual;
   }
@@ -248,7 +238,7 @@ void DifferentiablePhysics::reverseAdjointTimestep()
     current_step = checkpointer_->currentStep_;
   }
 
-  auto& upstreams = checkpointer_->upstreams_[milestone];
+  gretl::UpstreamStates upstreams(*checkpointer_, checkpointer_->upstreamSteps_[milestone]);
 
   SLIC_ERROR_IF(field_states_.size() != upstreams.size(), "field states and upstream sizes do not match.");
   // recreate the upstream field states with upstream step, field, and dual values.

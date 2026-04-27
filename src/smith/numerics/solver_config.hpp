@@ -15,7 +15,7 @@
 #include <variant>
 
 #include "mfem.hpp"
-#include "axom/fmt.hpp"
+#include "smith/infrastructure/format.hpp"
 
 namespace smith {
 
@@ -251,6 +251,21 @@ struct AMGXOptions {
 };
 
 /**
+ * @brief Stores the configuration information for an AMGFContact preconditioner
+ */
+struct AMGFContactOptions {
+  /**
+   * @brief The amg relaxation type
+   */
+  int relax_type = 88;  // l1-hybrid symmetric Gauss-Seidel smoother
+  /**
+   * @brief amg DimSystemsOptions
+   */
+  int dim_systems_options =
+      3;  // geometric dimension of problem, used to set more robust options for systems such as elasticity
+};
+
+/**
  * @brief Preconditioner types supported by PETSc
  */
 enum class PetscPCType
@@ -327,6 +342,7 @@ enum class Preconditioner
   HypreILU,         /**< Hypre's Incomplete LU */
   AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
   Petsc,            /**< PETSc preconditioner,  */
+  AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
   None              /**< No preconditioner used */
 };
 // _preconditioners_end
@@ -349,6 +365,8 @@ inline std::string preconditionerName(Preconditioner p)
       return "AMGX";
     case Preconditioner::Petsc:
       return "Petsc";
+    case Preconditioner::AMGFContact:
+      return "AMGFContact";
     case Preconditioner::None:
       return "None";
   }
@@ -368,6 +386,7 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"HypreILU", Preconditioner::HypreILU},
     {"AMGX", Preconditioner::AMGX},
     {"Petsc", Preconditioner::Petsc},
+    {"AMGFContact", Preconditioner::AMGFContact},
     {"None", Preconditioner::None},
 };
 
@@ -382,6 +401,9 @@ struct LinearSolverOptions {
 
   /// AMGX Options, used for Preconditioner::AMGX
   AMGXOptions amgx_options = AMGXOptions{};
+
+  /// AMGFContact Options, used for Preconditioner::AMGFContact
+  AMGFContactOptions amgfcontact_options = AMGFContactOptions{};
 
   /// PETSc preconditioner type
   PetscPCType petsc_preconditioner = PetscPCType::JACOBI;
@@ -452,20 +474,21 @@ struct NonlinearSolverOptions {
 
 }  // namespace smith
 
-// fmt support for smith::NonlinearSolver
-namespace axom::fmt {
+// std::format support for Smith solver enums
+namespace std {
 template <>
-struct formatter<smith::NonlinearSolver> : ostream_formatter {};
+/// @brief Formats `smith::NonlinearSolver` values with stream output.
+struct formatter<smith::NonlinearSolver> : smith::format::OstreamFormatter {};
 
-// fmt support for smith::LinearSolver
 template <>
-struct formatter<smith::LinearSolver> : ostream_formatter {};
+/// @brief Formats `smith::LinearSolver` values with stream output.
+struct formatter<smith::LinearSolver> : smith::format::OstreamFormatter {};
 
-// fmt support for smith::Preconditioner
 template <>
-struct formatter<smith::Preconditioner> : ostream_formatter {};
+/// @brief Formats `smith::Preconditioner` values with stream output.
+struct formatter<smith::Preconditioner> : smith::format::OstreamFormatter {};
 
-// fmt support for smith::PetscPCType
 template <>
-struct formatter<smith::PetscPCType> : ostream_formatter {};
-}  // namespace axom::fmt
+/// @brief Formats `smith::PetscPCType` values with stream output.
+struct formatter<smith::PetscPCType> : smith::format::OstreamFormatter {};
+}  // namespace std
