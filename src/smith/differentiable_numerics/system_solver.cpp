@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <numeric>
+#include <unordered_map>
+#include <string>
 #include <axom/slic.hpp>
 #include <axom/fmt.hpp>
 
@@ -102,6 +104,16 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   // Working copy of states, updated in-place as stages solve
   std::vector<std::vector<FieldState>> current_states = states;
 
+  // Pre-compute name -> (row, slot) routing so the propagation loop avoids O(N*M) string compares
+  // on every staggered iteration. Field-name identity within current_states is invariant across
+  // the iteration loop: only values are replaced, never the underlying name.
+  std::unordered_map<std::string, std::vector<std::pair<size_t, size_t>>> field_routing;
+  for (size_t r = 0; r < num_residuals; ++r) {
+    for (size_t slot = 0; slot < current_states[r].size(); ++slot) {
+      field_routing[current_states[r][slot].get()->name()].emplace_back(r, slot);
+    }
+  }
+
   // Helper lambda to assemble input pointers, evaluate residual, and zero essential BCs
   auto eval_residual_and_zero_bcs = [&](size_t global_row) {
     std::vector<const FiniteElementState*> input_ptrs;
@@ -161,8 +173,8 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
                       stage.solver.get(), stage_bc_managers);
 
       // Propagate updated fields to every residual input that references the solved field.
-      // Match by field name, not by block_indices: coupling fields appear as fixed inputs in
-      // other rows and therefore do not have a valid unknown-block entry there.
+      // Match by field name (looked up via the pre-computed routing map): coupling fields appear
+      // as fixed inputs in other rows and therefore do not have a valid unknown-block entry there.
       // Apply relaxation: x_new = omega * x_solved + (1 - omega) * x_k.
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_col = stage.block_indices[i];
@@ -173,11 +185,10 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
           new_state = weighted_average(new_state, old_state, stage.relaxation_factor);
         }
 
-        for (size_t r = 0; r < num_residuals; ++r) {
-          for (auto& row_state : current_states[r]) {
-            if (row_state.get()->name() == new_state.get()->name()) {
-              row_state = new_state;
-            }
+        auto it = field_routing.find(new_state.get()->name());
+        if (it != field_routing.end()) {
+          for (const auto& [r, slot] : it->second) {
+            current_states[r][slot] = new_state;
           }
         }
       }

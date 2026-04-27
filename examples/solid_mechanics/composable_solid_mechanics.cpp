@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
   // _bc_end
 
   // _run_start
-  if (solid_system->cycle_zero_system == nullptr) {
+  if (solid_system->cycle_zero_systems.empty()) {
     throw std::runtime_error("Expected cycle-zero solve for implicit dynamics.");
   }
 

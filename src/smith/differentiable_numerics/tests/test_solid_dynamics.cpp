@@ -98,7 +98,7 @@ struct SolidMechanicsMeshFixture : public testing::Test {
 };
 
 // Verifies the cycle-zero contract: rules that report requiresInitialAccelerationSolve()
-// produce a non-null cycle_zero_system; rules that don't (QuasiStatic) produce nullptr.
+// produce a non-empty cycle_zero_systems; rules that don't (QuasiStatic) produce empty.
 TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
 {
   {
@@ -106,7 +106,7 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
     using ImplicitRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
     auto solid_system = buildSolidMechanicsSystem<dim, order, ImplicitRule>(solid_nonlinear_opts, solid_linear_options,
                                                                             SolidMechanicsOptions{}, field_store);
-    EXPECT_NE(solid_system->cycle_zero_system, nullptr)
+    EXPECT_EQ(solid_system->cycle_zero_systems.size(), 1u)
         << "ImplicitNewmark should emit a cycle-zero initial acceleration solve";
   }
   {
@@ -114,7 +114,7 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSystemPresenceMatchesRuleContract)
     using QsRule = QuasiStaticSecondOrderTimeIntegrationRule;
     auto solid_system = buildSolidMechanicsSystem<dim, order, QsRule>(solid_nonlinear_opts, solid_linear_options,
                                                                       SolidMechanicsOptions{}, field_store);
-    EXPECT_EQ(solid_system->cycle_zero_system, nullptr) << "QuasiStatic has no initial acceleration solve";
+    EXPECT_TRUE(solid_system->cycle_zero_systems.empty()) << "QuasiStatic has no initial acceleration solve";
   }
 }
 
@@ -129,10 +129,11 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverUsesOwnedSingleStepPolicy)
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, order>(solver, SolidMechanicsOptions{}, solid_fields);
 
-  ASSERT_NE(solid_system->cycle_zero_system, nullptr);
-  ASSERT_NE(solid_system->cycle_zero_system->solver, nullptr);
-  EXPECT_EQ(solid_system->cycle_zero_system->solver->maxStaggeredIterations(), 1);
-  EXPECT_TRUE(solid_system->cycle_zero_system->solver->exactStaggeredSteps());
+  ASSERT_EQ(solid_system->cycle_zero_systems.size(), 1u);
+  const auto& cz = solid_system->cycle_zero_systems[0];
+  ASSERT_NE(cz->solver, nullptr);
+  EXPECT_EQ(cz->solver->maxStaggeredIterations(), 1);
+  EXPECT_TRUE(cz->solver->exactStaggeredSteps());
 }
 
 TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverFallbackBuildsWithoutMainSolver)
@@ -142,10 +143,11 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverFallbackBuildsWithoutMainSolver
   auto solid_fields = registerSolidMechanicsFields<dim, order, TimeRule>(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, order>(nullptr, SolidMechanicsOptions{}, solid_fields);
 
-  ASSERT_NE(solid_system->cycle_zero_system, nullptr);
-  ASSERT_NE(solid_system->cycle_zero_system->solver, nullptr);
-  EXPECT_EQ(solid_system->cycle_zero_system->solver->maxStaggeredIterations(), 1);
-  EXPECT_FALSE(solid_system->cycle_zero_system->solver->exactStaggeredSteps());
+  ASSERT_EQ(solid_system->cycle_zero_systems.size(), 1u);
+  const auto& cz = solid_system->cycle_zero_systems[0];
+  ASSERT_NE(cz->solver, nullptr);
+  EXPECT_EQ(cz->solver->maxStaggeredIterations(), 1);
+  EXPECT_FALSE(cz->solver->exactStaggeredSteps());
 }
 
 TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
@@ -284,7 +286,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
     return u;
   });
 
-  ASSERT_NE(solid_system->cycle_zero_system, nullptr);
+  ASSERT_FALSE(solid_system->cycle_zero_systems.empty());
 
   const double dt = 1.0e-3;
   const size_t num_steps = 4;

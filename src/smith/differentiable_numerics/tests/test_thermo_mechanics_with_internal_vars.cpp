@@ -79,6 +79,15 @@ struct SimpleThermoelasticMaterial {
   }
 
   template <typename StateType, typename GradUType, typename GradVType, typename ThetaType, typename GradThetaType,
+            typename AlphaValueType, typename AlphaGradType, typename... Params>
+  SMITH_HOST_DEVICE auto operator()(const TimeInfo& t_info, StateType state, GradUType grad_u, GradVType grad_v,
+                                    ThetaType theta, GradThetaType grad_theta,
+                                    smith::tuple<AlphaValueType, AlphaGradType> alpha, Params... params) const
+  {
+    return (*this)(t_info, state, grad_u, grad_v, theta, grad_theta, smith::get<smith::VALUE>(alpha), params...);
+  }
+
+  template <typename StateType, typename GradUType, typename GradVType, typename ThetaType, typename GradThetaType,
             typename... Params>
   SMITH_HOST_DEVICE auto operator()(const TimeInfo& t_info, StateType state, GradUType grad_u, GradVType grad_v,
                                     ThetaType theta, GradThetaType grad_theta, Params... params) const

@@ -454,13 +454,8 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
   using SystemType = SolidMechanicsSystem<dim, order, DisplacementTimeRule, Coupling>;
 
   std::string force_name = field_store->prefix("reactions");
-  auto solid_weak_form = std::apply(
-      [&](auto&... coupling_fields) {
-        return std::make_shared<typename SystemType::SolidWeakFormType>(
-            force_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-            field_store->createSpaces(force_name, disp_type.name, disp_type, disp_old_type, velo_old_type,
-                                      accel_old_type, coupling_fields...));
-      },
+  auto solid_weak_form = detail::buildWeakFormWithCoupling<typename SystemType::SolidWeakFormType>(
+      field_store, force_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
       coupling.fields);
 
   auto sys = std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{solid_weak_form});
@@ -474,32 +469,23 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
     auto accel_as_unknown = accel_old_type;
     accel_as_unknown.is_unknown = true;
     FieldType<H1<order, dim>> disp_cz_input(disp_type.name);
-    sys->cycle_zero_solid_weak_form = std::apply(
-        [&](auto&... coupling_fields) {
-          return std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
-              cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-              field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type,
-                                        accel_as_unknown, coupling_fields...));
-        },
-        coupling.fields);
+    sys->cycle_zero_solid_weak_form =
+        detail::buildWeakFormWithCoupling<typename SystemType::CycleZeroSolidWeakFormType>(
+            field_store, cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type, accel_as_unknown,
+            coupling.fields);
     field_store->markWeakFormInternal(cycle_zero_name);
     field_store->shareBoundaryConditions(accel_old_type.name, disp_bc);
     auto cycle_zero_solver = detail::makeCycleZeroSolver(solver, *field_store->getMesh());
-    sys->cycle_zero_system = makeSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form});
+    sys->cycle_zero_systems.push_back(makeSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form}));
   }
 
   if (has_stress_output) {
     FieldType<L2<0, dim * dim>> stress_type(field_store->prefix("stress"), true);
     FieldType<H1<order, dim>> disp_as_input(disp_type.name);
     std::string stress_name = field_store->prefix("stress_projection");
-    sys->stress_weak_form = std::apply(
-        [&](auto&... coupling_fields) {
-          return std::make_shared<typename SystemType::StressOutputWeakFormType>(
-              stress_name, field_store->getMesh(), field_store->getField(stress_type.name).get()->space(),
-              field_store->createSpaces(stress_name, stress_type.name, stress_type, disp_as_input, disp_old_type,
-                                        velo_old_type, accel_old_type, coupling_fields...));
-        },
-        coupling.fields);
+    sys->stress_weak_form = detail::buildWeakFormWithCoupling<typename SystemType::StressOutputWeakFormType>(
+        field_store, stress_name, stress_type.name, stress_type, disp_as_input, disp_old_type, velo_old_type,
+        accel_old_type, coupling.fields);
 
     NonlinearSolverOptions stress_nonlin{.nonlin_solver = NonlinearSolver::Newton,
                                          .relative_tol = 1e-14,

@@ -54,9 +54,11 @@ struct SystemBase {
   std::vector<std::shared_ptr<WeakForm>> weak_forms;  ///< Weak forms solved together by this system.
 
   // --- infrastructure ---
-  std::shared_ptr<FieldStore> field_store;        ///< Field store managing the system's fields.
-  std::shared_ptr<SystemSolver> solver;           ///< The solver for the system.
-  std::shared_ptr<SystemBase> cycle_zero_system;  ///< Optional startup solve executed before first timestep.
+  std::shared_ptr<FieldStore> field_store;  ///< Field store managing the system's fields.
+  std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
+  std::vector<std::shared_ptr<SystemBase>>
+      cycle_zero_systems;  ///< Optional startup solves executed before first timestep. Each entry is solved
+                           ///< independently; cycle-zero solves do not couple across subsystems.
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems;  ///< Optional systems solved after main state update.
 
   /// @brief Construct an empty system shell.
@@ -101,4 +103,34 @@ inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_
   return std::make_shared<SystemBase>(std::move(field_store), std::move(solver), std::move(weak_forms));
 }
 
+}  // namespace smith
+
+namespace smith {
+namespace detail {
+
+template <typename WeakFormT, typename FieldStorePtr, typename... Args, std::size_t... Is>
+auto buildWeakFormWithCouplingImpl(const FieldStorePtr& field_store, const std::string& weak_form_name,
+                                   const std::string& unknown_field_name, const std::tuple<Args...>& args_tuple,
+                                   std::index_sequence<Is...>)
+{
+  auto coupling_fields_tuple = std::get<sizeof...(Args) - 1>(args_tuple);
+  return std::apply(
+      [&](const auto&... coupling_fields) {
+        return std::make_shared<WeakFormT>(weak_form_name, field_store->getMesh(),
+                                           field_store->getField(unknown_field_name).get()->space(),
+                                           field_store->createSpaces(weak_form_name, unknown_field_name,
+                                                                     std::get<Is>(args_tuple)..., coupling_fields...));
+      },
+      coupling_fields_tuple);
+}
+
+template <typename WeakFormT, typename FieldStorePtr, typename... Args>
+auto buildWeakFormWithCoupling(const FieldStorePtr& field_store, const std::string& weak_form_name,
+                               const std::string& unknown_field_name, const Args&... args)
+{
+  return buildWeakFormWithCouplingImpl<WeakFormT>(field_store, weak_form_name, unknown_field_name, std::tie(args...),
+                                                  std::make_index_sequence<sizeof...(Args) - 1>{});
+}
+
+}  // namespace detail
 }  // namespace smith
