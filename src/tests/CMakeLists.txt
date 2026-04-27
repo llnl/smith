@@ -66,3 +66,9 @@ if(PETSC_FOUND)
                         NUM_MPI_TASKS 4)
     endif()
 endif()
+
+smith_add_tests(
+    SOURCES       energy_mortar_patch.cpp
+    DEPENDS_ON    gtest mfem blt::mpi smith_infrastructure smith_physics
+    NUM_MPI_TASKS 4
+)
