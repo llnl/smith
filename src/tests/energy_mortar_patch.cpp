@@ -32,12 +32,11 @@
 #include "smith/infrastructure/application_manager.hpp"
 #include <fenv.h>
 
-
 // static void enable_fpe() {
 //   // trap on invalid ops (NaN), divide-by-zero, and overflow
 //   feclearexcept(FE_ALL_EXCEPT);
 //   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-  
+
 // }
 
 namespace smith {
@@ -59,18 +58,23 @@ TEST_P(ContactTest, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(20,20 ).translate({0.0,  1.0}).bdrAttribInfo()
-    .updateBdrAttrib(4, 7).updateBdrAttrib(3, 9).updateBdrAttrib(1, 6),
-    shared::MeshBuilder::SquareMesh(20, 20).bdrAttribInfo().updateBdrAttrib(4, 7).updateBdrAttrib(1, 8).updateBdrAttrib(3, 5)}), "patch_mesh_2D", 0, 0);
+  auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(20, 20)
+                                                                            .translate({0.0, 1.0})
+                                                                            .bdrAttribInfo()
+                                                                            .updateBdrAttrib(4, 7)
+                                                                            .updateBdrAttrib(3, 9)
+                                                                            .updateBdrAttrib(1, 6),
+                                                                        shared::MeshBuilder::SquareMesh(20, 20)
+                                                                            .bdrAttribInfo()
+                                                                            .updateBdrAttrib(4, 7)
+                                                                            .updateBdrAttrib(1, 8)
+                                                                            .updateBdrAttrib(3, 5)}),
+                                            "patch_mesh_2D", 0, 0);
 
   mfem::VisItDataCollection visit_dc("contact_patch_visit", &mesh->mfemParMesh());
 
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.Save();
-
-  
-  
 
   mesh->addDomainOfBoundaryElements("x0_faces", smith::by_attr<dim>(7));
   mesh->addDomainOfBoundaryElements("y0_faces", smith::by_attr<dim>(8));
@@ -94,19 +98,19 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-//   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
-//                                            .relative_tol = 1.0e-13,
-//                                            .absolute_tol = 1.0e-13,
-//                                            .max_iterations = 20,
-//                                            .max_line_search_iterations = 12,
-//                                            .print_level = 1};
+  //   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
+  //                                            .relative_tol = 1.0e-13,
+  //                                            .absolute_tol = 1.0e-13,
+  //                                            .max_iterations = 20,
+  //                                            .max_line_search_iterations = 12,
+  //                                            .print_level = 1};
 
-//   ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
-//                                  .enforcement =smith::ContactEnforcement::Penalty,
-//                                  .type = ContactType::Frictionless,
-//                                  .penalty = 10000,
-//                                  .penalty2 = 0,
-//                                  .jacobian = smith::ContactJacobian::Exact};
+  //   ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
+  //                                  .enforcement =smith::ContactEnforcement::Penalty,
+  //                                  .type = ContactType::Frictionless,
+  //                                  .penalty = 10000,
+  //                                  .penalty2 = 0,
+  //                                  .jacobian = smith::ContactJacobian::Exact};
 
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                                   .relative_tol = 1.0e-8,
@@ -120,14 +124,12 @@ TEST_P(ContactTest, patch)
                                         .penalty = 100000,
                                         .jacobian = smith::ContactJacobian::Exact};
 
-
-
   smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
       {"bulk_mod", "shear_mod"});
 
-//   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-//                                              solid_mechanics::default_quasistatic_options, name, mesh);
+  //   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
+  //                                              solid_mechanics::default_quasistatic_options, name, mesh);
 
   double K = 1000.0;
   double G = 10;
@@ -149,7 +151,6 @@ TEST_P(ContactTest, patch)
   // Finalize the data structures
   solid_solver.completeSetup();
 
-
   std::string paraview_name = name + "_paraview";
   solid_solver.outputStateToDisk(paraview_name);
 
@@ -162,7 +163,7 @@ TEST_P(ContactTest, patch)
   solid_solver.outputStateToDisk(paraview_name);
 
   // Check the l2 norm of the displacement dofs
-  auto c = (3.0 * K - 2.0 * G) / ((3.0 * K + 2*G));
+  auto c = (3.0 * K - 2.0 * G) / ((3.0 * K + 2 * G));
   // auto c = 0.0;
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(2, [c](const mfem::Vector& x, mfem::Vector& u) {
     u[0] = 0.005 * c * x[0];
@@ -177,72 +178,67 @@ TEST_P(ContactTest, patch)
   // auto approx_error_l2 = mfem::ParNormlp(approx_error, 2, MPI_COMM_WORLD);
   // EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
 
-  //Set up test to only look at y component of error*********
-const mfem::ParFiniteElementSpace& u_space_const = solid_solver.displacement().space();
-auto& u_space = const_cast<mfem::ParFiniteElementSpace&>(u_space_const); 
-mfem::ParGridFunction U_exact(&u_space);
-U_exact.ProjectCoefficient(elasticity_sol_coeff);       
+  // Set up test to only look at y component of error*********
+  const mfem::ParFiniteElementSpace& u_space_const = solid_solver.displacement().space();
+  auto& u_space = const_cast<mfem::ParFiniteElementSpace&>(u_space_const);
+  mfem::ParGridFunction U_exact(&u_space);
+  U_exact.ProjectCoefficient(elasticity_sol_coeff);
 
-// Numerical displacement
-const mfem::ParGridFunction& U_num = solid_solver.displacement().gridFunction();
+  // Numerical displacement
+  const mfem::ParGridFunction& U_num = solid_solver.displacement().gridFunction();
 
-// Overall Error
-mfem::ParGridFunction U_err(U_exact);
-U_err -= U_num;
-const double L2_err_vec = mfem::ParNormlp(U_err, 2, MPI_COMM_WORLD);
-std::cout << "L2_err_vec = " << L2_err_vec << std::endl;
+  // Overall Error
+  mfem::ParGridFunction U_err(U_exact);
+  U_err -= U_num;
+  const double L2_err_vec = mfem::ParNormlp(U_err, 2, MPI_COMM_WORLD);
+  std::cout << "L2_err_vec = " << L2_err_vec << std::endl;
 
-//y-component error 
-const mfem::FiniteElementCollection* fec = u_space.FEColl();
-mfem::ParFiniteElementSpace y_fes(&mesh->mfemParMesh(), fec, /*vdim=*/1, u_space.GetOrdering()); //builds scalar space on same mesh 
+  // y-component error
+  const mfem::FiniteElementCollection* fec = u_space.FEColl();
+  mfem::ParFiniteElementSpace y_fes(&mesh->mfemParMesh(), fec, /*vdim=*/1,
+                                    u_space.GetOrdering());  // builds scalar space on same mesh
 
-mfem::ParGridFunction uy_ex(&y_fes), uy_num(&y_fes);
-const int n = y_fes.GetNDofs();
+  mfem::ParGridFunction uy_ex(&y_fes), uy_num(&y_fes);
+  const int n = y_fes.GetNDofs();
 
-for (int i = 0; i < n; ++i) {
-  uy_ex(i)  = U_exact(n*1 + i);   
-  uy_num(i) = U_num  (n*1 + i);
+  for (int i = 0; i < n; ++i) {
+    uy_ex(i) = U_exact(n * 1 + i);
+    uy_num(i) = U_num(n * 1 + i);
+  }
+
+  // Same thing for x forces.
+  mfem::ParGridFunction ux_ex(&y_fes), ux_num(&y_fes);
+
+  for (int i = 0; i < n; ++i) {
+    ux_ex(i) = U_exact(i);
+    ux_num(i) = U_num(i);
+  }
+
+  mfem::ParGridFunction uy_err(uy_ex);
+  mfem::ParGridFunction ux_err(ux_ex);
+  uy_err -= uy_num;
+  ux_err -= ux_num;
+  const double L2_err_y = mfem::ParNormlp(uy_err, 2, MPI_COMM_WORLD);
+  const double L2_err_x = mfem::ParNormlp(ux_err, 2, MPI_COMM_WORLD);
+  std::cout << "L2_err_y   = " << L2_err_y << std::endl;
+  std::cout << "L2_err_x   = " << L2_err_x << std::endl;
+
+  EXPECT_NEAR(0.0, L2_err_vec, 1e-2);
+  EXPECT_NEAR(0.0, L2_err_y, 1e-2);
+  EXPECT_NEAR(0.0, L2_err_x, 1e-2);
+
+  std::cout << "check = " << std::abs(L2_err_vec * L2_err_vec - (L2_err_x * L2_err_x + L2_err_y * L2_err_y)) << "\n";
 }
 
-//Same thing for x forces. 
-mfem::ParGridFunction ux_ex(&y_fes), ux_num(&y_fes);
-
-for( int i = 0; i < n; ++i) {
-  ux_ex(i) = U_exact(i);
-  ux_num(i) = U_num(i);
-}
-
-mfem::ParGridFunction uy_err(uy_ex);
-mfem::ParGridFunction ux_err(ux_ex);
-uy_err -= uy_num;
-ux_err -= ux_num;
-const double L2_err_y = mfem::ParNormlp(uy_err, 2, MPI_COMM_WORLD);
-const double L2_err_x = mfem::ParNormlp(ux_err, 2, MPI_COMM_WORLD);
-std::cout << "L2_err_y   = " << L2_err_y << std::endl;
-std::cout << "L2_err_x   = " << L2_err_x << std::endl;
-
-EXPECT_NEAR(0.0, L2_err_vec, 1e-2);
-EXPECT_NEAR(0.0, L2_err_y,   1e-2);
-EXPECT_NEAR(0.0, L2_err_x, 1e-2);
-
-
-std::cout << "check = " 
-          << std::abs(L2_err_vec*L2_err_vec - (L2_err_x*L2_err_x + L2_err_y*L2_err_y))
-          << "\n";
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    tribol, ContactTest,
-    testing::Values(
-                    std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_approxJ")));
-                    // std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
+INSTANTIATE_TEST_SUITE_P(tribol, ContactTest,
+                         testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact,
+                                                         "penalty_approxJ")));
+// std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
 
 }  // namespace smith
 
 int main(int argc, char* argv[])
 {
-
-
   // enable_fpe();
   testing::InitGoogleTest(&argc, argv);
   smith::ApplicationManager applicationManager(argc, argv);

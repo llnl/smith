@@ -47,7 +47,6 @@ TEST_P(TribolFiniteDiff, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-
   double shift = eps * 10;
   // clang-format off
   auto pmesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
@@ -88,8 +87,6 @@ TEST_P(TribolFiniteDiff, patch)
   u_dot = 0.0;
   // wiggle displacement (col = j)
 
-
-
   // // for (int j{0}; j < u.Size(); ++j) {
   for (int j{0}; j < 1; ++j) {
     int block_size = 8;
@@ -98,14 +95,12 @@ TEST_P(TribolFiniteDiff, patch)
     mfem::Vector J_exact(u.Size());
     J_exact = 0.0;
     J_op->Mult(u_dot, J_exact);
-        // Print the i-th entries from the top-left (0,0) block
+    // Print the i-th entries from the top-left (0,0) block
     std::cout << "Column " << j << " of block (0,0):" << std::endl;
     for (int i = 0; i < block_size; ++i) {
-        std::cout << J_exact[i] << " ";
+      std::cout << J_exact[i] << " ";
     }
     std::cout << std::endl;
-
-
 
     u_dot[j] = 0.0;
     u[j] += eps;
@@ -131,21 +126,19 @@ TEST_P(TribolFiniteDiff, patch)
       }
     }
 
-      for(int m = 0; m < 16; ++m) {
-  std::cout << "J exact: " << J_exact[m] << std:: endl;
-}
-      for(int m = 0; m < 16; ++m) {
-  std::cout << "J FD: " << J_fd[m] << std:: endl;
-}
+    for (int m = 0; m < 16; ++m) {
+      std::cout << "J exact: " << J_exact[m] << std::endl;
+    }
+    for (int m = 0; m < 16; ++m) {
+      std::cout << "J FD: " << J_fd[m] << std::endl;
+    }
   }
 
-  
   std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
 }
 
 INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff,
-                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")
-));
+                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")));
 
 }  // namespace smith
 

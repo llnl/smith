@@ -112,8 +112,7 @@ TEST_P(ContactFiniteDiff, patch)
   auto x0_face_dofs = mesh->domain("x0_faces").dof_list(&solid_solver.displacement().space());
   auto y0_face_dofs = mesh->domain("y0_faces").dof_list(&solid_solver.displacement().space());
   auto ymax_face_dofs = mesh->domain("ymax_face").dof_list(&solid_solver.displacement().space());
-  mfem::Array<int> bc_vdofs(dim *
-                            (x0_face_dofs.Size() + y0_face_dofs.Size() + ymax_face_dofs.Size()));
+  mfem::Array<int> bc_vdofs(dim * (x0_face_dofs.Size() + y0_face_dofs.Size() + ymax_face_dofs.Size()));
   int dof_ct = 0;
   for (int i{0}; i < x0_face_dofs.Size(); ++i) {
     for (int d{0}; d < dim; ++d) {
@@ -185,16 +184,13 @@ TEST_P(ContactFiniteDiff, patch)
       J_fd /= eps;
       merged_sol[j] -= eps;
 
-      for(int m = 0; m < 16; ++m) {
-  std::cout << "J exact: " << J_exact[m] << std:: endl;
-}
-      for(int m = 0; m < 16; ++m) {
-  std::cout << "J FD: " << J_fd[m] << std:: endl;
-}
+      for (int m = 0; m < 16; ++m) {
+        std::cout << "J exact: " << J_exact[m] << std::endl;
+      }
+      for (int m = 0; m < 16; ++m) {
+        std::cout << "J FD: " << J_fd[m] << std::endl;
+      }
 
-
-
-      
       // loop through forces (row = k)
       for (int k{0}; k < merged_sol.Size(); ++k) {
         if (J_exact[k] != 1.0 && (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15)) {
@@ -214,17 +210,12 @@ TEST_P(ContactFiniteDiff, patch)
     std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
 
     solid_solver.advanceTimestep(dt);
-
-    
   }
 }
 
-
-
-
 INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff,
                          testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")));
-                                        //  std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
+//  std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
 
 }  // namespace smith
 

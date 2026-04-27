@@ -23,18 +23,14 @@ enum class ContactMethod
   EnergyMortar
 };
 
-
-
-
-
 /**
  * @brief Describes how to enforce the contact constraint equations
  */
 enum class ContactEnforcement
 {
-  Penalty,           /**< Equal penalty applied to all constrained dofs */
+  Penalty,            /**< Equal penalty applied to all constrained dofs */
   LagrangeMultiplier, /**< Solve for exact pressures to satisfy constraints */
-  NotRequired       
+  NotRequired
 };
 
 /**
