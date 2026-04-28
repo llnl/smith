@@ -1,0 +1,131 @@
+name: CI Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+    - develop
+
+# Cancel previous jobs if an update has been made to the pull request
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
+
+env:
+  CLANG_DOCKER_IMAGE: seracllnl/tpls:clang-19_02-24-26_02h-31m
+  CUDA_DOCKER_IMAGE: seracllnl/tpls:cuda-12_01-09-26_02h-37m
+  GCC_DOCKER_IMAGE: seracllnl/tpls:gcc-14_02-24-26_02h-17m
+
+jobs:
+  # Hacky solution to reference env variables outside of `run` steps https://stackoverflow.com/a/74217028
+  set_image_vars:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Do Nothing
+      run: echo
+    outputs:
+      clang_docker_image: ${{ env.CLANG_DOCKER_IMAGE }}
+      cuda_docker_image: ${{ env.CUDA_DOCKER_IMAGE }}
+      gcc_docker_image: ${{ env.GCC_DOCKER_IMAGE }}
+  build_and_test:
+    runs-on: ubuntu-24.04
+    needs:
+    - set_image_vars
+    strategy:
+      fail-fast: true
+      matrix:
+        build_type: [ Debug, Release ]
+        config:
+        - job_name: llvm@19.1.1, shared
+          host_config: llvm@19.1.1.cmake
+          compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+          cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF"
+        # # Not enough disk space to run CUDA container
+        # https://github.com/LLNL/smith/issues/1479
+        # - job_name: gcc@13.3.0, shared, cuda, no tests/install/warnings as errors
+        #   host_config: gcc@13.3.0_cuda.cmake
+        #   compiler_image: ${{ needs.set_image_vars.outputs.cuda_docker_image }}
+        #   cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DENABLE_WARNINGS_AS_ERRORS=OFF"
+        #   build_src_opts: "--skip-install --skip-tests"
+        - job_name: gcc@14.2.0, shared
+          host_config: gcc@14.2.0.cmake
+          compiler_image: ${{ needs.set_image_vars.outputs.gcc_docker_image }}
+          cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF"
+        include:
+        - build_type: Debug
+          config:
+            job_name: llvm@19.1.1, shared, codevelop
+            host_config: llvm@19.1.1.cmake
+            compiler_image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+            cmake_opts: "-DBUILD_SHARED_LIBS=ON -DENABLE_DOCS=OFF -DSMITH_ENABLE_CODEVELOP=ON"
+            build_src_opts: "--skip-install"
+    name: ${{ matrix.build_type }} - ${{ matrix.config.job_name }}
+    container:
+      image: ${{ matrix.config.compiler_image }}
+      volumes:
+      - /home/smith/smith
+      # Required - default is set to user "smith"
+      options: --user root
+    steps:
+      - name: Checkout Smith
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Print Matrix Variables
+        run: |
+          echo "build_src_opts ${{ matrix.config.build_src_opts }}"
+          echo "build_type     ${{ matrix.build_type }}"
+          echo "cmake_opts     ${{ matrix.config.cmake_opts }}"
+          echo "compiler_image ${{ matrix.config.compiler_image }}"
+          echo "host_config    ${{ matrix.config.host_config }}"
+      - name: Build and Test ${{ matrix.config.host_config }} ${{ matrix.build_type }}
+        timeout-minutes: 60
+        run: |
+          ./scripts/llnl/build_src.py ${{ matrix.config.build_src_opts }} \
+            --verbose \
+            --host-config ${{ matrix.config.host_config }} \
+            --extra-cmake-options "${{ matrix.config.cmake_opts }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}" \
+            --jobs 4
+      - name: Upload Test Results
+        # CUDA containers do not run tests, because runners don't have GPUs, so skip upload in that case
+        if: ${{ matrix.config.compiler_image != needs.set_image_vars.outputs.cuda_docker_image }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results ${{ matrix.config.host_config }} ${{ matrix.build_type }} ${{ matrix.config.cmake_opts }}
+          path: "**/Test.xml"
+  check_code:
+    runs-on: ubuntu-24.04
+    needs:
+    - set_image_vars
+    strategy:
+      # If any of checks (e.g. style) fail, allow other jobs to continue running.
+      fail-fast: false
+      matrix:
+        # TODO re-enable coverage https://github.com/LLNL/smith/issues/1481
+        check_type: [style, header, docs] #[coverage, docs, style, header]
+    container:
+      image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
+      volumes:
+      - /home/smith/smith
+      # Required - default is set to user "smith"
+      options: --user root
+      env:
+        CHECK_TYPE: ${{ matrix.check_type }}
+        HOST_CONFIG: llvm@19.1.1.cmake
+    steps:
+    - name: Checkout Smith
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Check ${{ matrix.check_type }}
+      run: ./scripts/github-actions/linux-check.sh 
+    - name: Upload coverage to Codecov
+      if: ${{ matrix.check_type == 'coverage' }}
+      uses: codecov/codecov-action@v4
+      with:
+        fail_ci_if_error: true
+        files: smith_coverage.info.cleaned
+        flags: unittests
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

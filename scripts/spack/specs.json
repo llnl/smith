@@ -1,0 +1,28 @@
+{
+    "__comment__":"##############################################################################",
+    "__comment__":"# Copyright (c) Lawrence Livermore National Security, LLC and      ",
+    "__comment__":"# other Smith Project Developers. See the top-level COPYRIGHT file for details.",
+    "__comment__":"#                                                                             ",
+    "__comment__":"# SPDX-License-Identifier: (BSD-3-Clause)                                     ",
+    "__comment__":"##############################################################################",
+
+    "__comment__":"##############################################################################",
+    "__comment__":"#                                                                             ",
+    "__comment__":"# Define specs we support and test on LLNL platforms. SYS_TYPE is used unless ",
+    "__comment__":"# a more specific machine name is defined.                                    ",
+    "__comment__":"#                                                                             ",
+    "__comment__":"##############################################################################",
+
+    "toss_4_x86_64_ib":
+    [ "+devtools+adiak+caliper+enzyme %clang_19",
+      "+devtools+adiak+caliper~enzyme %gcc_13" ],
+
+    "toss_4_x86_64_ib_cray":
+    [ "~devtools+adiak+caliper~openmp+rocm+enzyme~petsc~slepc amdgpu_target=gfx942,gfx90a %rocm_6_4_2"],
+
+    "blueos_3_ppc64le_ib_p9":
+    [ "+devtools+cuda+adiak+caliper~strumpack %clang_gfortran cuda_arch=70" ],
+
+    "macos_sonoma_aarch64":
+    [ "+devtools+adiak+caliper+enzyme~openmp %clang_19" ]
+}

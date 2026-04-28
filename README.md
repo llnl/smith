@@ -1,35 +1,39 @@
-Serac
-====
+# <img src="/share/smith/logo/smith-logo-orange.png?raw=true" width="150" alt="Smith"/>
 
-[![Build
-Status](https://dev.azure.com/llnl-serac/serac/_apis/build/status/LLNL.serac?branchName=master)](https://dev.azure.com/llnl-serac/serac/_build/latest?definitionId=1&branchName=master)
-[![Documentation Status](https://readthedocs.org/projects/serac/badge/?version=latest)](https://serac.readthedocs.io/en/latest/?badge=latest)
+[![Build Status](https://github.com/LLNL/smith/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/LLNL/smith/actions/workflows/ci-tests.yml)
+[![Documentation Status](https://readthedocs.org/projects/serac/badge/?version=latest)](https://llnlsmith.readthedocs.io/en/latest/?badge=latest)
+[![codecov](https://codecov.io/gh/LLNL/serac/branch/develop/graph/badge.svg?token=DO4KFMPNM0)](https://codecov.io/gh/LLNL/serac)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-blue.svg)](./LICENSE)
 
-Serac is a 3D implicit nonlinear thermal-structural simulation code. It's primary purpose is to investigate multiphysics 
-abstraction strategies and implicit finite element-based alogrithm development for emerging computing architectures. 
-It also serves as a proxy-app for LLNL's DIABLO and ALE3D codes.
+Smith is a 3D implicit nonlinear thermal-structural simulation code. Its primary purpose is to investigate 
+abstraction strategies and implicit finite element-based algorithm development for emerging computing architectures. 
+It also heavily leverages the [MFEM finite element library](https://mfem.org/).
+
+> This project is under heavy development and is currently a pre-alpha release. Functionality and interfaces may change rapidly
+> as development progresses.
 
 Documentation
 ------
 
-Build, run, and design documentation can be found at [readthedocs](https://serac.readthedocs.io).
+Build, run, and design documentation can be found at [readthedocs](https://llnlsmith.readthedocs.io).
+
+Source documentation can be found [here](https://llnlsmith.readthedocs.io/en/latest/doxygen/html/index.html).
 
 Contributions
 -------------
 
-We welcome all kinds of contributions: new features, bug fixes, documentation edits.
+We welcome all kinds of contributions: new features, bug fixes, and documentation edits.
 
 For more information, see the [contributing guide](./CONTRIBUTING.md).
 
 License
 -------
 
-Copyright (c) 2019-2020, Lawrence Livermore National Security, LLC. 
+Copyright (c) Lawrence Livermore National Security, LLC. 
 Produced at the Lawrence Livermore National Laboratory.
 
-Copyrights and patents in the Serac project are retained by contributors.
-No copyright assignment is required to contribute to Serac.
+Copyrights and patents in the Smith project are retained by contributors.
+No copyright assignment is required to contribute to Smith.
 
 See [LICENSE](./LICENSE) for details.
 
@@ -51,16 +55,36 @@ text in the license header:
 External Packages
 -----------------
 
-Serac bundles some of its external dependencies in its repository.  These
+Smith bundles some of its external dependencies in its repository.  These
 packages are covered by various permissive licenses.  A summary listing
 follows.  See the license included with each package for full details.
 
 
 [//]: # (Note: The spaces at the end of each line below add line breaks)
 
+PackageName: Axom  
+PackageHomePage: https://github.com/LLNL/axom  
+PackageLicenseDeclared: BSD-3-Clause  
+
 PackageName: BLT  
 PackageHomePage: https://github.com/LLNL/blt  
 PackageLicenseDeclared: BSD-3-Clause  
+
+PackageName: ContinuationSolvers  
+PackageHomePage: https://github.com/LLNL/ContinuationSolvers  
+PackageLicenseDeclared: BSD-3-Clause  
+
+PackageName: MFEM  
+PackageHomePage: https://github.com/mfem/mfem  
+PackageLicenseDeclared: BSD-3-Clause  
+
+PackageName: radiuss-spack-configs  
+PackageHomePage: https://github.com/LLNL/radiuss-spack-configs  
+PackageLicenseDeclared: MIT License
+
+PackageName: Tribol  
+PackageHomePage: https://github.com/LLNL/tribol  
+PackageLicenseDeclared: MIT License
 
 PackageName: uberenv  
 PackageHomePage: https://github.com/LLNL/uberenv  

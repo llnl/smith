@@ -1,80 +1,173 @@
 ##############################################################################
-# Copyright (c) 2019-2020, Lawrence Livermore National Security, LLC and Serac
-# project contributors. See the LICENSE file for details.
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level LICENSE file for
+# details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
 ##############################################################################
 
 variables:
+  #TODO: uncomment this when everyone has service user access across all the machines
+  #LLNL_SERVICE_USER: asmith
+  GIT_STRATEGY: clone
   GIT_SUBMODULE_STRATEGY: recursive
   PROJECT_ALLOC_NAME: ${CI_PROJECT_NAME}_ci_${CI_PIPELINE_ID}
   BUILD_ROOT: ${CI_PROJECT_DIR}
-  ACCOUNT: -p pdebug -A eng
-  MIRROR: "/usr/workspace/smithdev/mirror"
-
-# There are no tests for now
-stages:
-  - allocate_resources
-  - build
-  - release_resources
-  - build_with_deps
+  FULL_BUILD_ROOT: ${CI_BUILDS_DIR}/smith/${CI_JOB_NAME}
+  ALLOC_BANK: eng
+  SPOT_DIR: ${BUILD_ROOT}/califiles
 
 # Whether and how to update uberenv
 .run_update_uberenv: &run_update_uberenv |
   [[ -n "${UPDATE_UBERENV}" ]] && ./scripts/gitlab/update-uberenv.sh "${UPDATE_UBERENV}"
 
-.pr_workflow:
-  rules:
-    - if: '$CI_COMMIT_BRANCH != "master" && $BUILD_DEPS != "ON"' #run only if ...
+stages:
+  - src
+  - tpl
+  - asan
+  - examples
+  - benchmarks
+  - comparison
 
-.master_workflow:
+# Run src build each push
+# NOTE: When you add a new workflow, remember to add it to this `if` statement!
+.src_workflow:
+  stage: src
   rules:
-    - if: '$CI_COMMIT_BRANCH == "master" || $BUILD_DEPS == "ON"' #run only if ...
+    - if: $SMITH_CI_WORKFLOW_TYPE != "examples" &&
+          $SMITH_CI_WORKFLOW_TYPE != "tpl" &&
+          $SMITH_CI_WORKFLOW_TYPE != "asan" &&
+          $SMITH_CI_WORKFLOW_TYPE != "benchmarks" &&
+          $SMITH_CI_WORKFLOW_TYPE != "comparison"
+
+# Run examples as a nightly scheduled pipeline
+.examples_workflow:
+  stage: examples
+  rules:
+    - if: $SMITH_CI_WORKFLOW_TYPE == "examples"
+
+# Run tpl build as a nightly scheduled pipeline
+.tpl_workflow:
+  stage: tpl
+  rules:
+    - if: $SMITH_CI_WORKFLOW_TYPE == "tpl"
+
+# Run asan build as a nightly scheduled pipeline
+.asan_workflow:
+  stage: asan
+  rules:
+    - if: $SMITH_CI_WORKFLOW_TYPE == "asan"
+
+# Run benchmarks build as a weekly scheduled pipeline
+# or, run benchmarks and save them in tmp location for comparison
+.benchmarks_workflow:
+  stage: benchmarks
+  rules:
+    - if: $SMITH_CI_WORKFLOW_TYPE == "benchmarks"
+      variables:
+        # Note: make sure this matches what's in common_build_functions.py!
+        SPOT_DIR: /usr/workspace/smithdev/califiles/smith
+    - if: $SMITH_CI_WORKFLOW_TYPE == "comparison"
+
+# Compare caliper files (generated from .benchmarks_workflow) against develop
+.comparison_workflow:
+  stage: comparison
+  rules:
+    - if: $SMITH_CI_WORKFLOW_TYPE == "comparison"
+  dependencies:
+    # TODO re-enable with CZMatrix
+    # - blueos-clang_14_0_5-benchmarks
+    - toss4-gcc_13_3_1-benchmarks
+    - toss4-llvm_19_1_3-benchmarks
 
 ####
-# Template
-.srun_build_script:
+# Templates
+.src_build_script:
   script:
-    #Use pre-existing allocation if any
-    - JOBID=$(squeue -h --name=${PROJECT_ALLOC_NAME} --format=%A)
-    - ASSIGN_ID=$(if [[ -n "${JOBID}" ]]; then echo "--jobid=${JOBID}"; fi)
-    - EXEC_PREFIX="srun ${ACCOUNT} ${ASSIGN_ID}"
-    #BUILD
-    - RESOURCES="-t 5 -N 1"
-    - echo -e "section_start:$(date +%s):build\r\e[0K
-      Build ${CI_PROJECT_NAME}"
-    - ${EXEC_PREFIX} ${RESOURCES} scripts/gitlab/build_and_test.sh --build-only
-    - echo -e "section_end:$(date +%s):build\r\e[0K"
-    #TEST
-    - RESOURCES="-t 5 -N 1"
-    - echo -e "section_start:$(date +%s):tests\r\e[0K
-      Test ${CI_PROJECT_NAME}"
-    - ${EXEC_PREFIX} ${RESOURCES} scripts/gitlab/build_and_test.sh --test-only
-    - echo -e "section_end:$(date +%s):tests\r\e[0K"
+    # Build source, run unit tests, and test install examples. Conditionally run
+    # integration tests
+    - echo -e "section_start:$(date +%s):src_build_and_unit_test\r\e[0K
+      Source Build and Unit Tests ${CI_PROJECT_NAME}"
+    - ./scripts/gitlab/build_and_test.sh
+    - echo -e "section_end:$(date +%s):src_build_and_unit_test\r\e[0K"
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - _smith_build_and_test_*/output.log*.txt
+      - _smith_build_and_test_*/build-*/output.log*.txt
+      - _smith_build_and_test_*/build-*/*.*.logs/*.log
+      - _smith_build_and_test_*/build-*/*.*.logs/*.err
+    reports:
+      junit:
+      - _smith_build_and_test_*/build-*/junit.xml
+      - _smith_build_and_test_*/build-*/*.*.logs/atsr.xml
 
-.srun_build_with_deps_script:
+.tpl_build_script:
   script:
     - *run_update_uberenv
-    - EXEC_PREFIX="srun ${ACCOUNT}"
-    #DEPENDENCIES
-    - RESOURCES="-t 20 -N 1"
-    - echo -e "section_start:$(date +%s):dependencies\r\e[0K
-      Build dependencies and generate host-config file (uberenv)"
-    - ${EXEC_PREFIX} ${RESOURCES} scripts/gitlab/build_and_test.sh --deps-only
-    - echo -e "section_end:$(date +%s):dependencies\r\e[0K"
-    #BUILD
-    - RESOURCES="-t 5 -N 1"
-    - echo -e "section_start:$(date +%s):build\r\e[0K
-      Build ${CI_PROJECT_NAME}"
-    - ${EXEC_PREFIX} ${RESOURCES} scripts/gitlab/build_and_test.sh --build-only
-    - echo -e "section_end:$(date +%s):build\r\e[0K"
-    #TEST
-    - RESOURCES="-t 5 -N 1"
-    - echo -e "section_start:$(date +%s):tests\r\e[0K
-      Test ${CI_PROJECT_NAME}"
-    - ${EXEC_PREFIX} ${RESOURCES} scripts/gitlab/build_and_test.sh --test-only
-    - echo -e "section_end:$(date +%s):tests\r\e[0K"
+    # Build TPLs, src, and run unit tests
+    - echo -e "section_start:$(date +%s):tpl_build_and_unit_test\r\e[0K
+      TPL Build and Unit Test ${CI_PROJECT_NAME}"
+    - ${ALLOC_COMMAND} python3 scripts/llnl/build_tpls.py -v ${SPEC} --directory=${FULL_BUILD_ROOT} --short-path
+    - echo -e "section_end:$(date +%s):tpl_build_and_unit_test\r\e[0K"
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/output.log*.txt
+      - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_smith_build_and_test_*/output.log*.txt
+      - ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_smith_build_and_test_*/build-*/output.log*.txt
+    reports:
+      junit: ${FULL_BUILD_ROOT}/${SYS_TYPE}/*/_smith_build_and_test_*/build-*/junit.xml
 
-# This is where jobs are included
+.examples_build_script:
+  script:
+    # Build src and run examples
+    - echo -e "section_start:$(date +%s):examples_build_and_unit_test\r\e[0K
+      Source Build and Unit Test with Examples ${CI_PROJECT_NAME}"
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_examples.py
+    - echo -e "section_end:$(date +%s):examples_build_and_unit_test\r\e[0K"
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - _smith_build_and_test_*/output.log*.txt
+      - _smith_build_and_test_*/build-*/output.log*.txt
+      - _smith_build_and_test_*/build-*/*.*.logs/*.log
+      - _smith_build_and_test_*/build-*/*.*.logs/*.err
+
+.benchmarks_build_script:
+  script:
+    # Builds src, runs benchmarks, and stores Caliper files in shared location
+    - echo -e "section_start:$(date +%s):benchmarks_build\r\e[0K
+      Benchmarks Build ${CI_PROJECT_NAME}"
+    - mkdir -p ${SPOT_DIR}
+    - ${ALLOC_COMMAND} python3 scripts/llnl/run_benchmarks.py --spot-dir ${SPOT_DIR}
+    - echo -e "section_end:$(date +%s):benchmarks_build\r\e[0K"
+  artifacts:
+    expire_in: 2 weeks
+    when: always
+    paths:
+      - _smith_build_and_test_*/output.log*.txt
+      - _smith_build_and_test_*/build-*/output.log*.txt
+      - ${SPOT_DIR}/*.cali
+
+.comparison_build_script:
+  script:
+    # Takes Caliper files from previous jobs and performs benchmark analysis
+    - echo -e "section_start:$(date +%s):comparison\r\e[0K
+      Comparison Build ${CI_PROJECT_NAME}"
+    - ls ${SPOT_DIR}
+    - ls ${SPOT_DIR} | wc -l
+    - ${ALLOC_COMMAND} python3 scripts/llnl/compare_benchmarks.py --current-cali-dir ${SPOT_DIR} --verbose
+    - echo -e "section_end:$(date +%s):comparison\r\e[0K"
+
+# This is where jobs are included for each system
 include:
-  - local: .gitlab/ci/build_quartz.yml
-
-
+  # TODO re-enable with CZMatrix
+  # - local: .gitlab/build_blueos.yml
+  - local: .gitlab/build_toss4.yml
+  - local: .gitlab/build_toss4_cray.yml
+  - project: 'lc-templates/id_tokens'
+    file: 'id_tokens.yml'

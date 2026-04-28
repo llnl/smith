@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# Uberenv is used as a submodule. This script updates uberenv to a given ref.
+# This is used in CI context so that we can test that an update of Uberenv
+# has no side-effect.
+
 
 if [[ ! ${1} ]]
 then
@@ -7,7 +12,9 @@ else
     uberenv_ref="${1}"
 fi
 
-uberenv_file="scripts/uberenv/uberenv.py"
-uberenv_master="https://raw.githubusercontent.com/LLNL/uberenv/${uberenv_ref}/uberenv.py"
+git submodule update --init
 
-curl --fail --output ${uberenv_file} ${uberenv_master}
+cd scripts/uberenv
+
+git fetch origin
+git checkout -b testing/uberenv $uberenv_ref

@@ -1,0 +1,83 @@
+name: Docker TPL build
+
+# Manually triggered
+on:
+  workflow_dispatch:
+    # No input required
+
+jobs:
+  build_images:
+    runs-on: ubuntu-latest
+    name: Docker TPL build
+    strategy:
+      matrix:
+        dockerfile_suffix: [clang-19, gcc-14] #, cuda-12]
+    env:
+      REPO: seracllnl/tpls
+      HOSTCONFIG_LOC: /home/smith/export_hostconfig
+      DOCKERFILE_PREFIX: ./scripts/docker/dockerfile_
+    steps:
+    - name: Extract branch name
+      shell: bash
+      run: |
+        echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
+      id: extract_branch
+    - name: Get dockerfile name
+      shell: bash
+      run: |
+        echo "filename=$(echo ${DOCKERFILE_PREFIX}${{ matrix.dockerfile_suffix }})" >> $GITHUB_OUTPUT
+      id: dockerfile_name
+    - name: Get dockerhub repo name
+      shell: bash
+      run: |
+        repo_plus_tag=$(echo ${REPO}:${{ matrix.dockerfile_suffix }}_`date "+%m-%d-%y_%Hh-%Mm"`) && export repo_plus_tag
+        echo $repo_plus_tag 
+        echo "repo_plus_tag=$repo_plus_tag" >> $GITHUB_OUTPUT
+        echo "repo_plus_latest=$(echo ${REPO}:${{ matrix.dockerfile_suffix }}_latest)" >> $GITHUB_OUTPUT
+      id: repo_name
+
+    - name: Free up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and push
+      id: docker_build
+      uses: docker/build-push-action@v5
+      with:
+        push: true
+        tags: ${{ steps.repo_name.outputs.repo_plus_tag }},${{ steps.repo_name.outputs.repo_plus_latest }}
+        file: ${{ steps.dockerfile_name.outputs.filename }}
+        context: .
+        platforms: linux/amd64
+        build-args: branch=${{ steps.extract_branch.outputs.branch }}
+
+    - name: Get hostconfig
+      run: |
+        echo ${{ steps.docker_build.outputs.digest }}
+        docker pull ${{ steps.repo_name.outputs.repo_plus_tag }}
+        docker create --name extract_hc ${{ steps.repo_name.outputs.repo_plus_tag }}
+        mkdir -p extracted_hc
+        docker cp extract_hc:${{ env.HOSTCONFIG_LOC }} ./extracted_hc
+        docker rm extract_hc
+    
+    - name: Upload hostconfig
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.dockerfile_suffix }}_hostconfigs
+        path: ./extracted_hc/export_hostconfig/*

@@ -1,0 +1,71 @@
+####
+# This is the shared configuration of jobs for toss4_cray
+.on_toss4_cray:
+  variables:
+    SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
+    COMPILER: "llvm-amdgpu@6.4.2"
+    HOST_CONFIG: "tuolumne-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
+  tags:
+    - batch
+    - tuolumne
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /_qnone/ || $ON_TOSS4_CRAY == "OFF"' #run except if ...
+      when: never
+  before_script:
+    - module load cmake/3.29.2
+
+####
+# Templates
+.src_build_on_toss4_cray:
+  extends: [.src_build_script, .on_toss4_cray, .src_workflow]
+
+.examples_build_on_toss4_cray:
+  extends: [.examples_build_script, .on_toss4_cray, .examples_workflow]
+
+.tpl_build_on_toss4_cray:
+  extends: [.tpl_build_script, .on_toss4_cray, .tpl_workflow]
+  before_script:
+    # LC version of pip is ancient
+    - if [[ $(python3 -c 'import pip; print(pip.__version__ < "19.3")') == "True" ]]; then python3 -m pip install --user --upgrade pip; fi
+
+.benchmarks_build_on_toss4_cray:
+  extends: [.benchmarks_build_script, .on_toss4_cray, .benchmarks_workflow]
+
+####
+# Build jobs
+
+toss4_cray-llvm_amdgpu_6_4_2-src:
+  variables:
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "75"
+  extends: .src_build_on_toss4_cray
+ 
+toss4_cray-llvm_amdgpu_6_4_2-src-codevelop:
+  variables:
+    EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Debug -DSMITH_ENABLE_CODEVELOP=ON"
+    EXTRA_BUILD_OPTIONS: "--skip-install"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "75"
+  extends: .src_build_on_toss4_cray
+
+# NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
+toss4_cray-llvm_amdgpu_6_4_2-tpl:
+  variables:
+    SPEC: "--spec %~devtools~profiling~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %${COMPILER}"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "90"
+  extends: .tpl_build_on_toss4_cray
+
+toss4_cray-llvm_amdgpu_6_4_2-examples:
+  variables:
+    EXTRA_CMAKE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "90"
+  extends: .examples_build_on_toss4_cray
+
+toss4_cray-llvm_amdgpu_6_4_2-benchmarks:
+  variables:
+    ALLOC_NODES: "1"
+    ALLOC_TIME: "120"
+  extends: .benchmarks_build_on_toss4_cray

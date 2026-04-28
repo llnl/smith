@@ -1,0 +1,66 @@
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level LICENSE file for
+# details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
+#------------------------------------------------------------------------------
+# Host-config for example. 
+# Defines configuration variables from Smith's build.
+#------------------------------------------------------------------------------
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE                       CACHE BOOL "")
+
+# Config related to compiler
+set(CMAKE_C_COMPILER              "@CMAKE_C_COMPILER@"       CACHE PATH "")
+set(CMAKE_CXX_COMPILER            "@CMAKE_CXX_COMPILER@"     CACHE PATH "")
+set(CMAKE_CXX_STANDARD            "@CMAKE_CXX_STANDARD@"     CACHE STRING "")
+set(CMAKE_Fortran_COMPILER        "@CMAKE_Fortran_COMPILER@" CACHE PATH "")
+
+set(CMAKE_C_FLAGS            "@CMAKE_C_FLAGS@"          CACHE STRING "")
+set(CMAKE_CXX_FLAGS          "@CMAKE_CXX_FLAGS@"        CACHE STRING "")
+set(CMAKE_EXE_LINKER_FLAGS   "@CMAKE_EXE_LINKER_FLAGS@" CACHE STRING "")
+
+
+# MPI
+set(MPI_C_COMPILER                "@MPI_C_COMPILER@"         CACHE PATH "")
+set(MPI_CXX_COMPILER              "@MPI_CXX_COMPILER@"       CACHE PATH "")
+set(MPI_Fortran_COMPILER          "@MPI_Fortran_COMPILER@"   CACHE PATH "")
+
+set(MPIEXEC_EXECUTABLE "@MPIEXEC_EXECUTABLE@" CACHE PATH "")
+set(MPIEXEC_NUMPROC_FLAG "@MPIEXEC_NUMPROC_FLAG@" CACHE STRING "")
+
+
+# OpenMP
+set(ENABLE_OPENMP @ENABLE_OPENMP@ CACHE BOOL "")
+
+
+# CUDA
+set(ENABLE_CUDA                @ENABLE_CUDA@                  CACHE BOOL "")
+
+if(ENABLE_CUDA)
+  set(CUDAToolkit_ROOT           "@CUDAToolkit_ROOT@"           CACHE PATH "")
+  set(CMAKE_CUDA_COMPILER        "@CMAKE_CUDA_COMPILER@"        CACHE PATH "")
+  set(CMAKE_CUDA_STANDARD        "@CMAKE_CUDA_STANDARD@"        CACHE STRING "")
+  set(CMAKE_CUDA_HOST_COMPILER   "@CMAKE_CUDA_HOST_COMPILER@"   CACHE PATH "")
+  set(CMAKE_CUDA_SEPARABLE_COMPILATION @CMAKE_CUDA_SEPARABLE_COMPILATION@ CACHE BOOL "")
+  set(CMAKE_CUDA_ARCHITECTURES   "@CMAKE_CUDA_ARCHITECTURES@"   CACHE STRING "")
+  set(CMAKE_CUDA_FLAGS           "@CMAKE_CUDA_FLAGS@"           CACHE STRING "")
+endif()
+
+
+# HIP/ ROCm
+set(ENABLE_HIP @ENABLE_HIP@ CACHE BOOL "")
+
+if(ENABLE_HIP)
+  set(ROCM_PATH               "@ROCM_PATH@"               CACHE PATH "")
+  set(CMAKE_HIP_ARCHITECTURES "@CMAKE_HIP_ARCHITECTURES@" CACHE STRING "")
+  set(CMAKE_HIP_COMPILER      "@CMAKE_HIP_COMPILER@"      CACHE FILEPATH "")
+  set(HIP_ROOT_DIR            "@HIP_ROOT_DIR@"            CACHE PATH "")
+  set(AMDGPU_TARGETS          "@AMDGPU_TARGETS@"          CACHE STRING "")
+  set(GPU_TARGETS             "@GPU_TARGETS@"             CACHE STRING "")
+  set(ROCM_ROOT_DIR           "@ROCM_ROOT_DIR@"           CACHE PATH "")
+endif()
+
+
+# Path to Smith
+set(SMITH_DIR        "@CMAKE_INSTALL_PREFIX@" CACHE PATH "")

@@ -1,3 +1,24 @@
 [submodule "cmake/blt"]
 	path = cmake/blt
 	url = https://github.com/LLNL/blt.git
+[submodule "scripts/uberenv"]
+	path = scripts/uberenv
+	url = https://github.com/LLNL/uberenv.git
+[submodule "axom"]
+	path = axom
+	url = https://github.com/LLNL/axom.git
+[submodule "mfem"]
+	path = mfem
+	url = https://github.com/mfem/mfem.git
+[submodule "tests"]
+	path = tests
+	url = https://github.com/LLNL/serac_tests.git
+[submodule "tribol"]
+	path = tribol
+	url = https://github.com/LLNL/Tribol.git
+[submodule "ContinuationSolvers"]
+	path = ContinuationSolvers
+	url = https://github.com/LLNL/ContinuationSolvers
+[submodule "gretl"]
+	path = gretl
+	url = https://github.com/LLNL/gretl

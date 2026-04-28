@@ -1,0 +1,431 @@
+// Copyright (c) 2019-2024, Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+#include <string>
+#include <memory>
+#include <tuple>
+#include <vector>
+
+#include "gtest/gtest.h"
+#include "mpi.h"
+#include "mfem.hpp"
+
+#include "smith/physics/solid_mechanics_contact.hpp"
+#include "smith/physics/materials/solid_material.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/physics/state/state_manager.hpp"
+#include "smith/smith_config.hpp"
+#include "smith/infrastructure/application_manager.hpp"
+#include "smith/numerics/functional/tensor.hpp"
+#include "smith/numerics/solver_config.hpp"
+#include "smith/physics/base_physics.hpp"
+#include "smith/physics/boundary_conditions/components.hpp"
+#include "smith/physics/contact/contact_config.hpp"
+#include "smith/physics/solid_mechanics.hpp"
+#include "smith/physics/state/finite_element_dual.hpp"
+#include "smith/physics/state/finite_element_state.hpp"
+
+namespace smith {
+
+constexpr int dim = 3;
+constexpr int p = 1;
+
+const std::string mesh_tag = "mesh";
+const std::string physics_prefix = "solid";
+
+using SolidMaterial = solid_mechanics::NeoHookean;
+
+struct TimeSteppingInfo {
+  TimeSteppingInfo() : dts({0.0, 0.2, 0.4, 0.24, 0.12, 0.0}) {}
+  int numTimesteps() const { return dts.Size() - 2; }
+  mfem::Vector dts;
+};
+
+constexpr double disp_target = -0.34;
+
+double computeStepQoi(const FiniteElementState& displacement)
+{
+  FiniteElementState displacement_error(displacement);
+  displacement_error = -disp_target;
+  displacement_error.Add(1.0, displacement);
+  return 0.5 * innerProduct(displacement_error, displacement_error);
+}
+
+void computeStepAdjointLoad(const FiniteElementState& displacement, FiniteElementDual& d_qoi_d_displacement)
+{
+  d_qoi_d_displacement = -disp_target;
+  d_qoi_d_displacement.Add(1.0, displacement);
+}
+
+FiniteElementState createReactionDirection(const BasePhysics& solid_solver, int direction, std::shared_ptr<Mesh> mesh)
+{
+  const FiniteElementDual& reactions = solid_solver.dual("reactions");
+
+  FiniteElementState reactionDirections(reactions.space(), "reaction_directions");
+  reactionDirections = 0.0;
+
+  mfem::VectorFunctionCoefficient func(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& u) {
+    u = 0.0;
+    u[direction] = 1.0;
+  });
+
+  reactionDirections.project(func, mesh->domain("two"));
+
+  return reactionDirections;
+}
+
+double computeContactReactionQoi(BasePhysics& solid_solver, std::shared_ptr<Mesh> mesh)
+{
+  solid_solver.resetStates();
+  solid_solver.advanceTimestep(1.0);
+
+  const FiniteElementDual& reactions = solid_solver.dual("reactions");
+  auto reactionDirections = createReactionDirection(solid_solver, 1, mesh);
+
+  return innerProduct(reactions, reactionDirections);
+}
+
+auto computeContactReactionQoiSensitivities(BasePhysics& solid_solver, std::shared_ptr<Mesh> mesh)
+{
+  EXPECT_EQ(0, solid_solver.cycle());
+
+  double qoi = computeContactReactionQoi(solid_solver, mesh);
+
+  // Verify nonzero reaction forces
+  EXPECT_NE(qoi, 0.0);
+
+  FiniteElementDual shape_sensitivity(solid_solver.shapeDisplacement().space(), "shape sensitivity");
+
+  auto reaction_adjoint_load = createReactionDirection(solid_solver, 1, mesh);
+
+  EXPECT_EQ(1, solid_solver.cycle());
+  solid_solver.setDualAdjointBcs({{"reactions", reaction_adjoint_load}});
+  solid_solver.reverseAdjointTimestep();
+  shape_sensitivity = solid_solver.computeTimestepShapeSensitivity();
+  EXPECT_EQ(0, solid_solver.cycle());
+
+  return std::make_tuple(qoi, shape_sensitivity);
+}
+
+double computeContactReactionQoiAdjustingShape(SolidMechanics<p, dim>& solid_solver,
+                                               const FiniteElementState& shape_derivative_direction, double pertubation,
+                                               std::shared_ptr<Mesh> mesh)
+{
+  FiniteElementState shape_disp(shape_derivative_direction.space(), "input_shape_displacement");
+
+  shape_disp.Add(pertubation, shape_derivative_direction);
+  solid_solver.setShapeDisplacement(shape_disp);
+
+  return computeContactReactionQoi(solid_solver, mesh);
+}
+
+using SolidMechT = smith::SolidMechanicsContact<p, dim>;
+// using SolidMechT = smith::SolidMechanics<p, dim>;
+
+std::unique_ptr<SolidMechT> createContactSolver(std::shared_ptr<Mesh> mesh,
+                                                const NonlinearSolverOptions& nonlinear_opts,
+                                                const TimesteppingOptions& dyn_opts, const SolidMaterial& mat)
+{
+  static int iter = 0;
+
+  auto solid = std::make_unique<SolidMechT>(nonlinear_opts, solid_mechanics::direct_linear_options, dyn_opts,
+                                            physics_prefix + std::to_string(iter++), mesh, std::vector<std::string>{},
+                                            0, 0.0, false, true);
+
+  solid->setMaterial(mat, mesh->entireBody());
+  solid->setFixedBCs(mesh->domain("two"));
+  solid->setDisplacementBCs(
+      [](tensor<double, dim> x, double) {
+        auto r = 0.0 * x;
+        r[1] -= 0.1;
+        return r;
+      },
+      mesh->domain("four"), Component::ALL);
+
+#if 1
+  auto contact_type = smith::ContactEnforcement::Penalty;
+  double element_length = 1.0;
+  double penalty = 105.1 * mat.K / element_length;
+
+  smith::ContactOptions contact_options{.method = smith::ContactMethod::SingleMortar,
+                                        .enforcement = contact_type,
+                                        .type = smith::ContactType::TiedNormal,
+                                        .penalty = penalty,
+                                        .jacobian = smith::ContactJacobian::Exact};
+  auto contact_interaction_id = 0;
+  solid->addContactInteraction(contact_interaction_id, {3}, {5}, contact_options);
+#endif
+
+  solid->completeSetup();
+
+  return solid;
+}
+
+double computeSolidMechanicsQoi(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info)
+{
+  auto dts = ts_info.dts;
+  solid_solver.resetStates();
+  solid_solver.outputStateToDisk("paraview_contact");
+  solid_solver.advanceTimestep(1.0);
+  solid_solver.outputStateToDisk("paraview_contact");
+  return computeStepQoi(solid_solver.state("displacement"));
+}
+
+auto computeContactQoiSensitivities(BasePhysics& solid_solver, const TimeSteppingInfo& ts_info)
+{
+  EXPECT_EQ(0, solid_solver.cycle());
+
+  double qoi = computeSolidMechanicsQoi(solid_solver, ts_info);
+
+  FiniteElementDual shape_sensitivity(solid_solver.shapeDisplacement().space(), "shape sensitivity");
+  FiniteElementDual adjoint_load(solid_solver.state("displacement").space(), "adjoint_displacement_load");
+
+  auto previous_displacement = solid_solver.loadCheckpointedState("displacement", solid_solver.cycle());
+  computeStepAdjointLoad(previous_displacement, adjoint_load);
+  EXPECT_EQ(1, solid_solver.cycle());
+  solid_solver.setAdjointLoad({{"displacement", adjoint_load}});
+  solid_solver.reverseAdjointTimestep();
+  shape_sensitivity = solid_solver.computeTimestepShapeSensitivity();
+  EXPECT_EQ(0, solid_solver.cycle());
+
+  return std::make_tuple(qoi, shape_sensitivity);
+}
+
+double computeSolidMechanicsQoiAdjustingShape(SolidMechanics<p, dim>& solid_solver, const TimeSteppingInfo& ts_info,
+                                              const FiniteElementState& shape_derivative_direction, double pertubation)
+{
+  FiniteElementState shape_disp(shape_derivative_direction.space(), "input_shape_displacement");
+
+  shape_disp.Add(pertubation, shape_derivative_direction);
+  solid_solver.setShapeDisplacement(shape_disp);
+
+  return computeSolidMechanicsQoi(solid_solver, ts_info);
+}
+
+struct ContactSensitivityFixture : public ::testing::Test {
+  void SetUp() override
+  {
+    MPI_Barrier(MPI_COMM_WORLD);
+    StateManager::initialize(dataStore, "contact_solve");
+    std::string filename = std::string(SMITH_REPO_DIR) + "/data/meshes/contact_two_blocks.g";
+
+    mesh = std::make_shared<Mesh>(filename, mesh_tag, 0, 0);
+    mesh->addDomainOfBoundaryElements("two", by_attr<dim>(2));
+    mesh->addDomainOfBoundaryElements("four", by_attr<dim>(4));
+
+    mat.density = 1.0;
+    mat.K = 1.0;
+    mat.G = 0.1;
+  }
+
+  void fillDirection(const SolidMechT& solid_solver, FiniteElementState& direction) const
+  {
+    auto sz = direction.Size();
+    for (int i = 0; i < sz; ++i) {
+      direction(i) = -1.2 + 2.02 * (double(i) / sz);
+      // direction(i) = 0.0;
+    }
+    solid_solver.zeroEssentials(direction);
+  }
+
+  axom::sidre::DataStore dataStore;
+  std::shared_ptr<Mesh> mesh;
+
+  NonlinearSolverOptions nonlinear_opts{.relative_tol = 1.0e-10, .absolute_tol = 1.0e-12};
+
+  bool dispBc = true;
+  TimesteppingOptions dyn_opts{.timestepper = TimestepMethod::QuasiStatic};
+
+  SolidMaterial mat;
+  TimeSteppingInfo tsInfo;
+
+#ifdef SMITH_USE_ENZYME
+  static constexpr double eps = 2e-7;
+#else
+  static constexpr double eps = 0.2;
+#endif
+};
+
+TEST_F(ContactSensitivityFixture, WhenShapeSensitivitiesCalledTwice_GetSameObjectiveAndGradient)
+{
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+  auto [qoi1, shape_sensitivity1] = computeContactQoiSensitivities(*solid_solver, tsInfo);
+  auto [qoi2, shape_sensitivity2] = computeContactQoiSensitivities(*solid_solver, tsInfo);
+
+  EXPECT_EQ(qoi1, qoi2);
+
+  solid_solver->resetStates();
+  FiniteElementState derivative_direction(shape_sensitivity1.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  double directional_deriv1 = innerProduct(derivative_direction, shape_sensitivity1);
+  double directional_deriv2 = innerProduct(derivative_direction, shape_sensitivity2);
+  EXPECT_EQ(directional_deriv1, directional_deriv2);
+}
+
+TEST_F(ContactSensitivityFixture, QuasiStaticShapeSensitivities)
+{
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+  auto [qoi_base, shape_sensitivity] = computeContactQoiSensitivities(*solid_solver, tsInfo);
+
+  solid_solver->resetStates();
+  FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  double qoi_plus = computeSolidMechanicsQoiAdjustingShape(*solid_solver, tsInfo, derivative_direction, eps);
+
+  double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
+  double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
+}
+
+TEST_F(ContactSensitivityFixture, ReactionShapeSensitivities)
+{
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+  auto [qoi_base, shape_sensitivity] = computeContactReactionQoiSensitivities(*solid_solver, mesh);
+
+  solid_solver->resetStates();
+  FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  double qoi_plus = computeContactReactionQoiAdjustingShape(*solid_solver, derivative_direction, eps, mesh);
+
+  double directional_deriv = innerProduct(derivative_direction, shape_sensitivity);
+  double directional_deriv_fd = (qoi_plus - qoi_base) / eps;
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, eps);
+}
+
+TEST_F(ContactSensitivityFixture, SingleContactInteractionForceMagnitudeQoiShapeSensitivities)
+{
+  // For this test, define a QoI that penalizes the (single-interaction) contact force magnitude:
+  //   J = 0.5 * <f_contact,i, f_contact,i>
+  // and verify the adjoint-based directional derivative matches a finite-difference check.
+  constexpr int contact_interaction_id = 0;
+
+  auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  auto compute_contact_force_qoi = [&](SolidMechT& solver) -> double {
+    solver.resetStates();
+    solver.advanceTimestep(1.0);
+    const auto f = solver.dual(std::format("contact_force_{}", contact_interaction_id));
+    return 0.5 * innerProduct(f, f);
+  };
+
+  (void)compute_contact_force_qoi(*solid_solver);
+
+  // Compute adjoint/shape sensitivity for this QoI.
+  const auto f_base = solid_solver->dual(std::format("contact_force_{}", contact_interaction_id));
+  const auto interaction_jacobian = solid_solver->contactInteraction(contact_interaction_id).jacobianContribution();
+  auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+  SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+  FiniteElementDual displacement_adjoint_load(solid_solver->state("displacement").space(),
+                                              "contact_force_qoi_adjoint_load");
+  displacement_adjoint_load = 0.0;
+  J00->MultTranspose(f_base, displacement_adjoint_load);
+
+  // Our shape sensitivity has an explicit term (dJ/d(shape) with u=const) which depends only on the contact
+  // interaction force:
+  //   dJ/d(shape) = (df_contact,i/d(shape))^T * f_contact,i
+  //
+  // In this contact implementation, the shape displacement DOFs enter the current coordinates additively in the same
+  // way as the displacement DOFs (see ContactData::setDisplacements), so:
+  //   df_contact,i/d(shape) = df_contact,i/du
+  // and we can reuse the (0,0) Jacobian block J00 = df_contact,i/du.
+  FiniteElementDual explicit_shape_term(solid_solver->shapeDisplacement().space(), "contact_force_qoi_explicit_shape");
+  explicit_shape_term = 0.0;
+  J00->MultTranspose(f_base, explicit_shape_term);
+
+  solid_solver->setAdjointLoad({{"displacement", displacement_adjoint_load}});
+  solid_solver->reverseAdjointTimestep();
+
+  const FiniteElementDual implicit_shape_term =
+      static_cast<BasePhysics&>(*solid_solver).computeTimestepShapeSensitivity();
+
+  FiniteElementDual total_shape_sensitivity(implicit_shape_term.space(), "contact_force_qoi_total_shape");
+  total_shape_sensitivity = implicit_shape_term;
+  total_shape_sensitivity.Add(1.0, explicit_shape_term);
+
+  FiniteElementState derivative_direction(total_shape_sensitivity.space(), "derivative_direction");
+  fillDirection(*solid_solver, derivative_direction);
+
+  auto compute_qoi_adjusting_shape = [&](SolidMechT& solver, double scale) -> double {
+    FiniteElementState shape_disp(solver.shapeDisplacement().space(), "input_shape_displacement");
+    shape_disp = 0.0;
+    shape_disp.Add(scale, derivative_direction);
+    solver.setShapeDisplacement(shape_disp);
+    return compute_contact_force_qoi(solver);
+  };
+
+  const double qoi_plus = compute_qoi_adjusting_shape(*solid_solver, eps);
+  const double qoi_minus = compute_qoi_adjusting_shape(*solid_solver, -eps);
+
+  const double directional_deriv = innerProduct(derivative_direction, total_shape_sensitivity);
+  const double directional_deriv_fd = (qoi_plus - qoi_minus) / (2.0 * eps);
+
+  EXPECT_NEAR(directional_deriv, directional_deriv_fd, 10.0 * eps);
+}
+
+TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdjointLoad)
+{
+  // Verify that providing a seed for a contact force dual via setDualAdjointBcs({"contact_force_<id>", seed})
+  // produces the same displacement adjoint as providing the equivalent adjoint load
+  //   dJ/du = (df_i/du)^T * dJ/df_i
+  // directly via setAdjointLoad.
+  constexpr int contact_interaction_id = 0;
+
+  auto solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  FiniteElementState dJ_df(solver->state("displacement").space(), "dJ_df");
+  fillDirection(*solver, dJ_df);
+
+  // 1) Solve adjoint with the contact-force seed provided via setDualAdjointBcs.
+  FiniteElementDual zero_load(solver->state("displacement").space(), "zero_load");
+  zero_load = 0.0;
+  solver->setAdjointLoad({{"displacement", zero_load}});
+  solver->setDualAdjointBcs({{std::format("contact_force_{}", contact_interaction_id), dJ_df}});
+  solver->reverseAdjointTimestep();
+
+  FiniteElementState lambda_from_seed(solver->adjoint("displacement"));
+
+  // 2) Re-run the forward step and solve the adjoint using the equivalent adjoint load.
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  const auto interaction_jacobian = solver->contactInteraction(contact_interaction_id).jacobianContribution();
+  auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+  SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+  FiniteElementDual equivalent_load(solver->state("displacement").space(), "equivalent_load");
+  equivalent_load = 0.0;
+  J00->MultTranspose(dJ_df, equivalent_load);
+
+  solver->setAdjointLoad({{"displacement", equivalent_load}});
+  solver->reverseAdjointTimestep();
+
+  const auto& lambda_from_load = solver->adjoint("displacement");
+
+  FiniteElementState diff(lambda_from_seed);
+  diff.Add(-1.0, lambda_from_load);
+
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
+}
+
+}  // namespace smith
+
+int main(int argc, char* argv[])
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  smith::ApplicationManager applicationManager(argc, argv);
+  int result = RUN_ALL_TESTS();
+
+  return result;
+}

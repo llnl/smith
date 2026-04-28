@@ -1,0 +1,90 @@
+#!/bin/bash
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level LICENSE file for
+# details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
+##############################################################################
+
+########################
+## Test Invocations
+#
+# TOSS3: salloc -N2 ./ats.sh
+# BlueOS: lalloc 2 ./ats.sh
+# WSL: ./ats.sh
+
+# Variables used inside of the base test.ats and this script
+export ATS_SMITH_BIN_DIR=@SMITH_BINARY_DIR@/bin
+export ATS_SMITH_REPO_DIR=@SMITH_REPO_DIR@
+export ATS_EXECUTABLE=@ATS_EXECUTABLE@
+export ATS_SMITH_BASELINE="none"
+
+Help()
+{
+    echo "Test Invocations"
+    echo "=========================="
+    echo "TOSS4: salloc -N2 ./ats.sh"
+    echo "BlueOS: lalloc 2 ./ats.sh"
+    echo "WSL: ./ats.sh"
+    echo "Options:"
+    echo "  -b | --baseline   = copies generated baselines from a pre-existing Smith run"
+    echo "                      options: none (default), all, or comma delimited list of tests"
+    echo "  -c | --clean      = cleans output and log files"
+    echo "  -h | --help       = displays this message"
+}
+
+Clean()
+{
+    # Clean-up old run's logs
+    rm -rf $SYS_TYPE.*.logs
+
+    # Clean-up last run's output
+    rm -rf $ATS_SMITH_REPO_DIR/tests/integration/*/*/*_output*
+}
+
+if [ ! -d "$ATS_SMITH_REPO_DIR" ]; then
+    echo "ERROR: Given ATS_SMITH_REPO_DIR does not exist: " $ATS_SMITH_REPO_DIR
+    exit 1
+fi
+
+if [ ! -d "$ATS_SMITH_BIN_DIR" ]; then
+    echo "ERROR: Given ATS_SMITH_BIN_DIR does not exist: " $ATS_SMITH_BIN_DIR
+    exit 1
+fi
+
+if [ ! -f "$ATS_EXECUTABLE" ]; then
+    echo "ERROR: Given ATS_EXECUTABLE does not exist: " $ATS_EXECUTABLE
+    exit 1
+fi
+
+while [ -n "$1" ] ; do
+    case "$1" in
+        -h | --help     ) Help; exit 0;;
+        -c | --clean    ) Clean; exit 0;;
+        -b | --baseline ) shift; ATS_SMITH_BASELINE=$1;;
+        *               ) echo "Invalid option: '$1'"; exit 1;;
+    esac
+    shift
+done
+
+# Add Smith's bin directory to path
+export PATH=$ATS_SMITH_BIN_DIR:$PATH
+
+echo "~~~~~~~~~~~~~~~~~~~~~~~~~~"
+echo "ATS:       $ATS_EXECUTABLE"
+echo "BIN DIR:   $ATS_SMITH_BIN_DIR"
+echo "REPO DIR:  $ATS_SMITH_REPO_DIR"
+echo "BASELINE:  $ATS_SMITH_BASELINE"
+echo "~~~~~~~~~~~~~~~~~~~~~~~~~~"
+
+# Run ATS
+$ATS_EXECUTABLE $ATS_SMITH_REPO_DIR/tests/integration/test.ats
+if [ $? -ne 0 ]; then { echo "ERROR: Failed Integration tests, aborting."; exit 1; } fi
+
+# Work around because ATS is currently not returning an error code on failed tests
+# Get log dir that was just created by ATS
+ATS_LOG_DIR=`ls -1d $SYS_TYPE*.logs | sort -r | head -n1`
+# grep returns 0 on finding a line that matches, which is a failure in this case
+grep -q FAIL $ATS_LOG_DIR/atsr.xml
+if [ $? -eq 0 ]; then { echo "ERROR: Failed Integration tests, aborting."; exit 1; } fi

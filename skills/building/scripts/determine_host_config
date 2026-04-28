@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and
+# other Smith Project Developers. See the top-level LICENSE file for
+# details.
+#
+# SPDX-License-Identifier: (BSD-3-Clause)
+##############################################################################
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: determine_host_config [options]
+
+Prints the best-matching Smith host-config file path.
+
+Options:
+  --compiler <name>     Compiler family preference (e.g., llvm, gcc, rocmcc).
+                        Overrides $SMITH_COMPILER, $COMPILER, and $CC.
+  --machine <name>      Override detected machine name (hostname -s, trailing digits stripped).
+  --sys-type <name>     Override $SYS_TYPE (used to filter host-config filenames).
+  --host-config-dir DIR Override host-config directory (default: <repo>/host-configs).
+  --basename            Print only the host-config filename.
+  -h, --help            Show help.
+
+Notes:
+  - If both GCC and LLVM are available, LLVM is preferred unless --compiler is provided.
+  - Machine equivalences:
+      rzwhippet <-> rzgenie
+      rzadams   <-> rzvernal
+      tuolumne  <-> tioga  (also accepts 'tuo')
+EOF
+}
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+
+host_config_dir=""
+requested_compiler=""
+requested_machine=""
+requested_sys_type=""
+print_basename="0"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --compiler)
+      requested_compiler="${2:-}"
+      shift 2
+      ;;
+    --machine)
+      requested_machine="${2:-}"
+      shift 2
+      ;;
+    --sys-type)
+      requested_sys_type="${2:-}"
+      shift 2
+      ;;
+    --host-config-dir)
+      host_config_dir="${2:-}"
+      shift 2
+      ;;
+    --basename)
+      print_basename="1"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$host_config_dir" ]]; then
+  if [[ -z "$repo_root" ]]; then
+    echo "Error: unable to locate repo root (not in a git worktree?)" >&2
+    exit 1
+  fi
+  host_config_dir="$repo_root/host-configs"
+fi
+
+if [[ ! -d "$host_config_dir" ]]; then
+  echo "Error: host-config directory not found: $host_config_dir" >&2
+  exit 1
+fi
+
+machine="${requested_machine:-}"
+if [[ -z "$machine" ]]; then
+  machine="$(hostname -s 2>/dev/null || hostname)"
+  machine="${machine%%[0-9]*}"
+fi
+machine="${machine,,}"
+
+sys_type="${requested_sys_type:-${SYS_TYPE:-}}"
+
+declare -a machine_candidates=()
+case "$machine" in
+  rzgenie|rzwhippet)
+    machine_candidates=("$machine")
+    [[ "$machine" != "rzwhippet" ]] && machine_candidates+=("rzwhippet")
+    [[ "$machine" != "rzgenie" ]] && machine_candidates+=("rzgenie")
+    ;;
+  rzadams|rzvernal)
+    machine_candidates=("$machine")
+    [[ "$machine" != "rzadams" ]] && machine_candidates+=("rzadams")
+    [[ "$machine" != "rzvernal" ]] && machine_candidates+=("rzvernal")
+    ;;
+  tioga|tuolumne|tuo)
+    machine_candidates=("$machine")
+    [[ "$machine" != "tuo" ]] && machine_candidates+=("tuo")
+    [[ "$machine" != "tuolomne" ]] && machine_candidates+=("tuolomne")
+    [[ "$machine" != "tioga" ]] && machine_candidates+=("tioga")
+    ;;
+  *)
+    machine_candidates=("$machine")
+    ;;
+esac
+
+requested_compiler="${requested_compiler:-${SMITH_COMPILER:-${COMPILER:-}}}"
+if [[ -z "$requested_compiler" && -n "${CC:-}" ]]; then
+  case "${CC##*/}" in
+    clang*|icx|icpx) requested_compiler="llvm" ;;
+    gcc*|g++) requested_compiler="gcc" ;;
+  esac
+fi
+
+if [[ -z "$requested_compiler" ]]; then
+  has_llvm="0"
+  has_gcc="0"
+  command -v clang++ >/dev/null 2>&1 && has_llvm="1"
+  command -v g++ >/dev/null 2>&1 && has_gcc="1"
+  if [[ "$has_llvm" == "1" ]]; then
+    requested_compiler="llvm"
+  elif [[ "$has_gcc" == "1" ]]; then
+    requested_compiler="gcc"
+  else
+    requested_compiler=""
+  fi
+fi
+requested_compiler="${requested_compiler,,}"
+
+declare -a all_candidates=()
+for prefix in "${machine_candidates[@]}"; do
+  if [[ -n "$sys_type" ]]; then
+    for f in "$host_config_dir/${prefix}-${sys_type}-"*.cmake; do
+      [[ -f "$f" ]] && all_candidates+=("$f")
+    done
+  else
+    for f in "$host_config_dir/${prefix}-"*.cmake; do
+      [[ -f "$f" ]] && all_candidates+=("$f")
+    done
+  fi
+done
+
+if [[ ${#all_candidates[@]} -eq 0 ]]; then
+  echo "Error: no host-configs found for machine='$machine' sys_type='${sys_type:-<unset>}' in $host_config_dir" >&2
+  exit 1
+fi
+
+declare -a compiler_tokens=()
+case "$requested_compiler" in
+  "" )
+    compiler_tokens=()
+    ;;
+  llvm|clang|clang++ )
+    compiler_tokens=("llvm" "clang")
+    ;;
+  gcc|gnu|g++ )
+    compiler_tokens=("gcc" "gnu")
+    ;;
+  rocm|rocmcc|hip|amdgpu )
+    compiler_tokens=("rocm" "rocmcc" "hip" "amdgpu")
+    ;;
+  * )
+    compiler_tokens=("$requested_compiler")
+    ;;
+esac
+
+declare -a filtered_candidates=()
+if [[ ${#compiler_tokens[@]} -gt 0 ]]; then
+  for f in "${all_candidates[@]}"; do
+    base="$(basename "$f")"
+    for token in "${compiler_tokens[@]}"; do
+      if [[ "$base" == *"-${token}"* ]]; then
+        filtered_candidates+=("$f")
+        break
+      fi
+    done
+  done
+fi
+
+if [[ ${#filtered_candidates[@]} -eq 0 ]]; then
+  filtered_candidates=("${all_candidates[@]}")
+fi
+
+selected="$(printf '%s\n' "${filtered_candidates[@]}" | sort -V | tail -n 1)"
+
+if [[ "$print_basename" == "1" ]]; then
+  echo "$(basename "$selected")"
+else
+  echo "$selected"
+fi
+
