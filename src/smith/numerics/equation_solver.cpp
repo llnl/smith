@@ -889,6 +889,144 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 };
 
+/**
+ * @brief Skeleton for a nonlinear preconditioned conjugate-gradient block solver.
+ *
+ * The full algorithm is added in a follow-on chunk. This class establishes the Smith/MFEM integration points used by
+ * that implementation: residual evaluation, Jacobian assembly, Hessian-vector products, preconditioning, counters, and
+ * standard nonlinear convergence bookkeeping.
+ */
+class PcgBlockSolver : public mfem::NewtonSolver {
+ protected:
+  /// Trial solution vector
+  mutable mfem::Vector x_trial;
+  /// Trial residual vector
+  mutable mfem::Vector r_trial;
+  /// Scratch vector
+  mutable mfem::Vector scratch;
+
+  /// Nonlinear solution options
+  NonlinearSolverOptions nonlinear_options;
+
+  /// Preconditioner used by the PCG-block recurrence
+  Solver& pcg_precond;
+
+  /// Reconstructed Smith print level
+  mutable size_t print_level = 0;
+
+ public:
+  /// Internal counter for hess-vecs
+  mutable size_t num_hess_vecs = 0;
+  /// Internal counter for preconditions
+  mutable size_t num_preconds = 0;
+  /// Internal counter for residuals
+  mutable size_t num_residuals = 0;
+  /// Internal counter for matrix assembles
+  mutable size_t num_jacobian_assembles = 0;
+
+#ifdef MFEM_USE_MPI
+  /// Constructor
+  PcgBlockSolver(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, Solver& preconditioner)
+      : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts), pcg_precond(preconditioner)
+  {
+  }
+#endif
+
+  /// Assemble the Jacobian at x.
+  void assembleJacobian(const mfem::Vector& x) const
+  {
+    SMITH_MARK_FUNCTION;
+    ++num_jacobian_assembles;
+    grad = &oper->GetGradient(x);
+    if (nonlinear_options.force_monolithic) {
+      auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
+      if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
+    }
+  }
+
+  /// Evaluate the nonlinear residual.
+  mfem::real_t computeResidual(const mfem::Vector& x, mfem::Vector& residual) const
+  {
+    SMITH_MARK_FUNCTION;
+    ++num_residuals;
+    oper->Mult(x, residual);
+    return Norm(residual);
+  }
+
+  /// Apply the assembled Jacobian to a vector.
+  void hessVec(const mfem::Vector& x, mfem::Vector& v) const
+  {
+    SMITH_MARK_FUNCTION;
+    ++num_hess_vecs;
+    grad->Mult(x, v);
+  }
+
+  /// Apply the configured nonlinear PCG preconditioner.
+  void precond(const mfem::Vector& x, mfem::Vector& v) const
+  {
+    SMITH_MARK_FUNCTION;
+    ++num_preconds;
+    pcg_precond.Mult(x, v);
+  }
+
+  /// @overload
+  void Mult(const mfem::Vector&, mfem::Vector& X) const
+  {
+    MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
+    MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
+
+    print_level = print_options.iterations ? 1 : print_level;
+    print_level = print_options.summary ? 2 : print_level;
+
+    num_hess_vecs = 0;
+    num_preconds = 0;
+    num_residuals = 0;
+    num_jacobian_assembles = 0;
+
+    mfem::real_t norm = 0.0;
+    norm = initial_norm = computeResidual(X, r);
+    if (norm == 0.0) {
+      converged = true;
+      final_iter = 0;
+      final_norm = norm;
+      return;
+    }
+
+    const mfem::real_t norm_goal = std::max(rel_tol * initial_norm, abs_tol);
+
+    if (print_level == 1) {
+      mfem::out << "PcgBlock iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
+    }
+
+    pcg_precond.iterative_mode = false;
+
+    x_trial.SetSize(X.Size());
+    x_trial = 0.0;
+    r_trial.SetSize(X.Size());
+    r_trial = 0.0;
+    scratch.SetSize(X.Size());
+    scratch = 0.0;
+
+    if (print_level >= 2) {
+      mfem::out << "PcgBlock iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm
+                << ", norm goal = " << std::setw(13) << norm_goal << '\n';
+    }
+
+    if (norm <= norm_goal && nonlinear_options.min_iterations == 0) {
+      converged = true;
+    } else {
+      converged = false;
+    }
+
+    final_iter = 0;
+    final_norm = norm;
+
+    if (!converged && print_level >= 1) {
+      mfem::out << "PcgBlock: No convergence! Algorithm implementation pending.\n";
+    }
+  }
+};
+
 EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions lin_opts, MPI_Comm comm)
 {
   auto [lin_solver, preconditioner] = buildLinearSolverAndPreconditioner(lin_opts, comm);
@@ -1041,6 +1179,8 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions 
     nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::TrustRegion) {
     nonlinear_solver = std::make_unique<TrustRegion>(comm, nonlinear_opts, linear_opts, prec);
+  } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::PcgBlock) {
+    nonlinear_solver = std::make_unique<PcgBlockSolver>(comm, nonlinear_opts, prec);
 #ifdef SMITH_USE_PETSC
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::PetscNewton) {
     nonlinear_solver = std::make_unique<mfem_ext::PetscNewtonSolver>(comm, nonlinear_opts);
@@ -1298,7 +1438,9 @@ void EquationSolver::defineInputFileSchema(axom::inlet::Container& container)
   nonlinear_container.addDouble("abs_tol", "Absolute tolerance for the Newton solve.").defaultValue(1.0e-4);
   nonlinear_container.addInt("max_iter", "Maximum iterations for the Newton solve.").defaultValue(500);
   nonlinear_container.addInt("print_level", "Nonlinear print level.").defaultValue(0);
-  nonlinear_container.addString("solver_type", "Solver type (Newton|KINFullStep|KINLineSearch)").defaultValue("Newton");
+  nonlinear_container
+      .addString("solver_type", "Solver type (Newton|NewtonLineSearch|TrustRegion|PcgBlock|KINFullStep|KINLineSearch)")
+      .defaultValue("Newton");
 }
 
 }  // namespace smith
@@ -1373,6 +1515,12 @@ smith::NonlinearSolverOptions FromInlet<smith::NonlinearSolverOptions>::operator
   const std::string solver_type = base["solver_type"];
   if (solver_type == "Newton") {
     options.nonlin_solver = smith::NonlinearSolver::Newton;
+  } else if (solver_type == "NewtonLineSearch") {
+    options.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch;
+  } else if (solver_type == "TrustRegion") {
+    options.nonlin_solver = smith::NonlinearSolver::TrustRegion;
+  } else if (solver_type == "PcgBlock") {
+    options.nonlin_solver = smith::NonlinearSolver::PcgBlock;
   } else if (solver_type == "KINFullStep") {
     options.nonlin_solver = smith::NonlinearSolver::KINFullStep;
   } else if (solver_type == "KINLineSearch") {
