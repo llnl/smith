@@ -42,7 +42,7 @@
 namespace smith {
 
 class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string>> {};
-
+/// @brief Patch test for smoothed mortar contact with configurable enforcement and Jacobian type.
 TEST_P(ContactTest, patch)
 {
   // NOTE: p must be equal to 1 for now
@@ -212,7 +212,7 @@ TEST_P(ContactTest, patch)
 
   std::cout << "check = " << std::abs(L2_err_vec * L2_err_vec - (L2_err_x * L2_err_x + L2_err_y * L2_err_y)) << "\n";
 }
-
+/// Instantiate patch tests with penalty enforcement and exact Jacobian.
 INSTANTIATE_TEST_SUITE_P(tribol, ContactTest,
                          testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact,
                                                          "penalty_approxJ")));

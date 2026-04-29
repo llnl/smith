@@ -66,7 +66,7 @@ struct ContactOptions {
 
   /// Penalty parameter (only used when enforcement == ContactEnforcement::Penalty)
   double penalty = 1.0e3;
-
+  /// Secondary penalty parameter (reserved for future use).
   double penalty2 = 0.0;
 
   /// The method to use for Jacobian calculations
