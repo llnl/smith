@@ -92,8 +92,9 @@ class NewtonSolver : public mfem::NewtonSolver {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
 
-    print_level = print_options.iterations ? 1 : print_level;
-    print_level = print_options.summary ? 2 : print_level;
+    print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
+    print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
+    print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
 
     using real_t = mfem::real_t;
 
@@ -636,8 +637,9 @@ class TrustRegion : public mfem::NewtonSolver {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
 
-    print_level = print_options.iterations ? 1 : print_level;
-    print_level = print_options.summary ? 2 : print_level;
+    print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
+    print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
+    print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
 
     using real_t = mfem::real_t;
 
@@ -923,6 +925,28 @@ class PcgBlockSolver : public mfem::NewtonSolver {
   mutable size_t num_residuals = 0;
   /// Internal counter for matrix assembles
   mutable size_t num_jacobian_assembles = 0;
+  /// Internal counter for accepted blocks
+  mutable size_t num_blocks = 0;
+  /// Internal counter for rejected blocks
+  mutable size_t num_block_rejects = 0;
+  /// Internal counter for Powell restarts
+  mutable size_t num_powell_restarts = 0;
+  /// Internal counter for descent-guard restarts
+  mutable size_t num_descent_restarts = 0;
+  /// Internal counter for non-positive curvature directions
+  mutable size_t num_negative_curvature = 0;
+  /// Internal counter for line-search backtracks
+  mutable size_t num_line_search_backtracks = 0;
+  /// Internal counter for positive-curvature steps capped by the trust radius
+  mutable size_t num_trust_capped_steps = 0;
+  /// Internal counter for accepted inner PCG steps
+  mutable size_t num_accepted_steps = 0;
+  /// Internal counter for trial inner PCG steps
+  mutable size_t num_trial_steps = 0;
+  /// Last trust scale used by the solver
+  mutable double final_h_scale = 1.0;
+  /// Last accepted block trust ratio
+  mutable double last_trust_ratio = 0.0;
 
 #ifdef MFEM_USE_MPI
   /// Constructor
@@ -969,19 +993,47 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     pcg_precond.Mult(x, v);
   }
 
+  /// Return solver diagnostic counters.
+  PcgBlockDiagnostics diagnostics() const
+  {
+    return {.num_blocks = num_blocks,
+            .num_block_rejects = num_block_rejects,
+            .num_powell_restarts = num_powell_restarts,
+            .num_descent_restarts = num_descent_restarts,
+            .num_negative_curvature = num_negative_curvature,
+            .num_line_search_backtracks = num_line_search_backtracks,
+            .num_trust_capped_steps = num_trust_capped_steps,
+            .num_accepted_steps = num_accepted_steps,
+            .num_trial_steps = num_trial_steps,
+            .final_h_scale = final_h_scale,
+            .last_trust_ratio = last_trust_ratio};
+  }
+
   /// @overload
   void Mult(const mfem::Vector&, mfem::Vector& X) const
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
 
-    print_level = print_options.iterations ? 1 : print_level;
-    print_level = print_options.summary ? 2 : print_level;
+    print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
+    print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
+    print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
 
     num_hess_vecs = 0;
     num_preconds = 0;
     num_residuals = 0;
     num_jacobian_assembles = 0;
+    num_blocks = 0;
+    num_block_rejects = 0;
+    num_powell_restarts = 0;
+    num_descent_restarts = 0;
+    num_negative_curvature = 0;
+    num_line_search_backtracks = 0;
+    num_trust_capped_steps = 0;
+    num_accepted_steps = 0;
+    num_trial_steps = 0;
+    final_h_scale = nonlinear_options.pcg_h_scale_init;
+    last_trust_ratio = 0.0;
 
     SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_block_len <= 0, "PcgBlock requires pcg_block_len > 0");
     SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_window <= 0, "PcgBlock requires pcg_window > 0");
@@ -1031,6 +1083,15 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     double cumulative_work = 0.0;
     std::vector<double> work_history{cumulative_work};
     std::vector<double> accepted_step_norms;
+
+    auto append_bounded = [](std::vector<double>& history, double value, int max_size) {
+      history.push_back(value);
+      const auto bound = static_cast<size_t>(max_size);
+      if (history.size() > bound) {
+        const auto num_to_remove = static_cast<std::vector<double>::difference_type>(history.size() - bound);
+        history.erase(history.begin(), history.begin() + num_to_remove);
+      }
+    };
 
     auto reset_momentum = [&]() {
       have_momentum = false;
@@ -1103,9 +1164,12 @@ class PcgBlockSolver : public mfem::NewtonSolver {
 
         double block_predicted = 0.0;
         double block_actual = 0.0;
+        double block_delta_ref = current_delta_ref();
+        double block_trust_size = h_scale * (block_delta_ref > 0.0 ? block_delta_ref : 1.0);
         double trial_cumulative_work = cumulative_work;
         int trial_steps = 0;
         bool trial_failed = false;
+        bool trial_ended_after_inner_failure = false;
         std::vector<double> trial_step_norms;
         auto trial_work_history = work_history;
 
@@ -1113,10 +1177,12 @@ class PcgBlockSolver : public mfem::NewtonSolver {
           force = r;
           force *= -1.0;
           precond(force, z);
+          ++num_trial_steps;
 
           const double rho = Dot(force, z);
-          if (!mfem::IsFinite(rho) || rho <= nonlinear_options.pcg_eps_descent) {
-            trial_failed = true;
+          if (!mfem::IsFinite(rho) || rho <= 0.0) {
+            trial_ended_after_inner_failure = trial_steps > 0;
+            trial_failed = trial_steps == 0;
             break;
           }
 
@@ -1126,6 +1192,7 @@ class PcgBlockSolver : public mfem::NewtonSolver {
             beta = std::max(0.0, (rho - force_dot_z_old) / rho_old);
             if (std::abs(force_dot_z_old) > nonlinear_options.pcg_powell_eta * rho) {
               beta = 0.0;
+              ++num_powell_restarts;
             }
           }
 
@@ -1139,6 +1206,7 @@ class PcgBlockSolver : public mfem::NewtonSolver {
             beta = 0.0;
             p = z;
             force_dot_p = rho;
+            ++num_descent_restarts;
           }
 
           hessVec(p, Hp);
@@ -1146,10 +1214,12 @@ class PcgBlockSolver : public mfem::NewtonSolver {
 
           double alpha = 0.0;
           double alpha_quad = std::numeric_limits<double>::quiet_NaN();
-          const bool positive_curvature = pHp > nonlinear_options.pcg_eps_descent && mfem::IsFinite(pHp);
+          const bool positive_curvature = pHp > 0.0 && mfem::IsFinite(pHp);
           if (positive_curvature) {
             alpha_quad = force_dot_p / pHp;
             alpha = alpha_quad;
+          } else {
+            ++num_negative_curvature;
           }
 
           const double p_norm = Norm(p);
@@ -1159,19 +1229,28 @@ class PcgBlockSolver : public mfem::NewtonSolver {
           } else if (delta_ref <= 0.0) {
             delta_ref = 1.0;
           }
+          block_delta_ref = delta_ref;
+          block_trust_size = h_scale * delta_ref;
 
           const bool apply_trust_cap = !positive_curvature || h_scale < nonlinear_options.pcg_h_scale_init;
+          bool trust_capped = false;
           if (apply_trust_cap && p_norm > 0.0) {
             const double alpha_cap = h_scale * delta_ref / p_norm;
             if (alpha > 0.0 && mfem::IsFinite(alpha)) {
+              if (alpha_cap < alpha) {
+                ++num_trust_capped_steps;
+                trust_capped = true;
+              }
               alpha = std::min(alpha, alpha_cap);
             } else {
               alpha = alpha_cap;
+              trust_capped = true;
             }
           }
 
           if (!(alpha > 0.0) || !mfem::IsFinite(alpha)) {
-            trial_failed = true;
+            trial_ended_after_inner_failure = trial_steps > 0;
+            trial_failed = trial_steps == 0;
             break;
           }
 
@@ -1179,6 +1258,7 @@ class PcgBlockSolver : public mfem::NewtonSolver {
           double accepted_work = 0.0;
           double accepted_predicted = 0.0;
           double accepted_step_norm = 0.0;
+          int accepted_ls_count = 0;
 
           for (int ls = 0; ls <= nonlinear_options.pcg_ls_max_backtracks; ++ls) {
             step = p;
@@ -1198,6 +1278,7 @@ class PcgBlockSolver : public mfem::NewtonSolver {
               accepted_predicted = std::max(predicted, 0.0);
               accepted_work = work;
               accepted_step_norm = Norm(step);
+              accepted_ls_count = ls;
               norm = norm_candidate;
               accepted_step = true;
               break;
@@ -1207,23 +1288,33 @@ class PcgBlockSolver : public mfem::NewtonSolver {
           }
 
           if (!accepted_step) {
-            trial_failed = true;
+            trial_ended_after_inner_failure = trial_steps > 0;
+            trial_failed = trial_steps == 0;
             break;
           }
 
           x_trial = x_candidate;
           r = r_candidate;
           trial_cumulative_work += accepted_work;
-          trial_work_history.push_back(trial_cumulative_work);
-          trial_step_norms.push_back(accepted_step_norm);
+          append_bounded(trial_work_history, trial_cumulative_work, nonlinear_options.pcg_window);
+          append_bounded(trial_step_norms, accepted_step_norm, nonlinear_options.pcg_delta_avg_window);
           block_predicted += accepted_predicted;
           block_actual += accepted_work;
+          num_line_search_backtracks += static_cast<size_t>(accepted_ls_count);
+
+          if (print_level >= 2) {
+            mfem::out << "  PcgBlock step " << std::setw(3) << (it + trial_steps + 1) << " : alpha = " << std::setw(13)
+                      << alpha << ", approx work = " << std::setw(13) << accepted_predicted
+                      << ", achieved work = " << std::setw(13) << accepted_work << ", trust size = " << std::setw(13)
+                      << block_trust_size << ", capped = " << trust_capped << ", ls = " << accepted_ls_count << '\n';
+          }
 
           p_old = p;
           z_old = z;
           rho_old = rho;
           have_momentum = true;
           ++trial_steps;
+          ++num_accepted_steps;
 
           if (norm <= norm_goal && it + trial_steps >= nonlinear_options.min_iterations) {
             break;
@@ -1242,24 +1333,42 @@ class PcgBlockSolver : public mfem::NewtonSolver {
             trial_steps > 0 && !trial_failed &&
             (block_converged || (block_actual >= 0.0 && trust_ratio >= nonlinear_options.pcg_trust_eta_bad));
 
+        const double old_h_scale = h_scale;
+        const bool prefix_accept = accept_block && trial_ended_after_inner_failure;
+        bool reset_next_momentum = false;
         if (accept_block) {
           X = x_trial;
           cumulative_work = trial_cumulative_work;
           work_history = std::move(trial_work_history);
           accepted_step_norms.insert(accepted_step_norms.end(), trial_step_norms.begin(), trial_step_norms.end());
+          if (accepted_step_norms.size() > static_cast<size_t>(nonlinear_options.pcg_delta_avg_window)) {
+            accepted_step_norms.erase(accepted_step_norms.begin(),
+                                      accepted_step_norms.end() - nonlinear_options.pcg_delta_avg_window);
+          }
           it += trial_steps;
+          ++num_blocks;
 
           if (trust_ratio < nonlinear_options.pcg_trust_eta_bad) {
             h_scale = std::max(h_scale * nonlinear_options.pcg_shrink, nonlinear_options.pcg_min_h_scale);
             reset_momentum();
+            reset_next_momentum = true;
+          } else if (trial_ended_after_inner_failure) {
+            reset_momentum();
+            reset_next_momentum = true;
           } else if (trust_ratio >= nonlinear_options.pcg_trust_eta_good) {
             h_scale = std::min(h_scale * nonlinear_options.pcg_growth, nonlinear_options.pcg_h_scale_init);
           }
+          const double next_trust_size = h_scale * block_delta_ref;
 
           if (print_level >= 2) {
-            mfem::out << "PcgBlock block accepted: steps = " << trial_steps << ", rho = " << std::setw(13)
-                      << trust_ratio << ", h_scale = " << std::setw(13) << h_scale << '\n';
+            mfem::out << "PcgBlock block accepted: steps = " << std::setw(3) << trial_steps
+                      << ", prefix = " << prefix_accept << ", approx work = " << std::setw(13) << block_predicted
+                      << ", achieved work = " << std::setw(13) << block_actual << ", rho = " << std::setw(13)
+                      << trust_ratio << ", h_scale = " << std::setw(13) << old_h_scale << " -> " << std::setw(13)
+                      << h_scale << ", trust size = " << std::setw(13) << block_trust_size << " -> " << std::setw(13)
+                      << next_trust_size << ", reset momentum = " << reset_next_momentum << '\n';
           }
+          last_trust_ratio = trust_ratio;
 
           block_finished = true;
         } else {
@@ -1268,10 +1377,15 @@ class PcgBlockSolver : public mfem::NewtonSolver {
           h_scale *= nonlinear_options.pcg_shrink;
           reset_momentum();
           --retries_remaining;
+          ++num_block_rejects;
+          const double next_trust_size = h_scale * block_delta_ref;
 
           if (print_level >= 2) {
-            mfem::out << "PcgBlock block rejected: steps = " << trial_steps << ", rho = " << std::setw(13)
-                      << trust_ratio << ", h_scale = " << std::setw(13) << h_scale
+            mfem::out << "PcgBlock block rejected: steps = " << std::setw(3) << trial_steps
+                      << ", approx work = " << std::setw(13) << block_predicted << ", achieved work = " << std::setw(13)
+                      << block_actual << ", rho = " << std::setw(13) << trust_ratio << ", h_scale = " << std::setw(13)
+                      << old_h_scale << " -> " << std::setw(13) << h_scale << ", trust size = " << std::setw(13)
+                      << block_trust_size << " -> " << std::setw(13) << next_trust_size << ", reset momentum = 1"
                       << ", retries left = " << retries_remaining << '\n';
           }
 
@@ -1284,6 +1398,7 @@ class PcgBlockSolver : public mfem::NewtonSolver {
 
     final_iter = it;
     final_norm = norm;
+    final_h_scale = h_scale;
 
     if (print_level == 1) {
       mfem::out << "PcgBlock iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm
@@ -1334,6 +1449,15 @@ void EquationSolver::solve(mfem::Vector& x) const
   // KINSOL does not handle non-zero RHS, so we enforce that the RHS
   // of the nonlinear system is zero
   nonlin_solver_->Mult(zero, x);
+}
+
+std::optional<PcgBlockDiagnostics> EquationSolver::pcgBlockDiagnostics() const
+{
+  auto* pcg_block = dynamic_cast<const PcgBlockSolver*>(nonlin_solver_.get());
+  if (!pcg_block) {
+    return std::nullopt;
+  }
+  return pcg_block->diagnostics();
 }
 
 void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const

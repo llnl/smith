@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -25,6 +26,32 @@
 #include "smith/numerics/petsc_solvers.hpp"
 
 namespace smith {
+
+/// Diagnostic counters for the nonlinear PCG-block solver
+struct PcgBlockDiagnostics {
+  /// Number of accepted blocks
+  size_t num_blocks = 0;
+  /// Number of rejected blocks
+  size_t num_block_rejects = 0;
+  /// Number of Powell restarts
+  size_t num_powell_restarts = 0;
+  /// Number of descent-guard restarts
+  size_t num_descent_restarts = 0;
+  /// Number of non-positive curvature directions
+  size_t num_negative_curvature = 0;
+  /// Number of line-search backtracks
+  size_t num_line_search_backtracks = 0;
+  /// Number of positive-curvature steps capped by the trust radius
+  size_t num_trust_capped_steps = 0;
+  /// Number of accepted inner PCG steps
+  size_t num_accepted_steps = 0;
+  /// Number of trial inner PCG steps
+  size_t num_trial_steps = 0;
+  /// Last trust scale used by the solver
+  double final_h_scale = 1.0;
+  /// Last accepted block trust ratio
+  double last_trust_ratio = 0.0;
+};
 
 /**
  * @brief This class manages the objects typically required to solve a nonlinear set of equations arising from
@@ -93,6 +120,12 @@ class EquationSolver {
    * @overload
    */
   const mfem::NewtonSolver& nonlinearSolver() const { return *nonlin_solver_; }
+
+  /**
+   * Returns diagnostic counters when the nonlinear solver is PcgBlock.
+   * @return Optional PCG-block diagnostics; empty for other nonlinear solvers
+   */
+  std::optional<PcgBlockDiagnostics> pcgBlockDiagnostics() const;
 
   /**
    * Returns the underlying linear solver object

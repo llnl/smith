@@ -1383,6 +1383,12 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @brief getter for nodal forces (before zeroing-out essential dofs)
   const smith::FiniteElementDual& reactions() const { return reactions_; };
 
+  /// @brief Get the equation solver used by this physics module
+  smith::EquationSolver& equationSolver() { return *nonlin_solver_; }
+
+  /// @overload
+  const smith::EquationSolver& equationSolver() const { return *nonlin_solver_; }
+
  protected:
   /// The compile-time finite element trial space for displacement and velocity (H1 of order p)
   using trial = H1<order, dim>;

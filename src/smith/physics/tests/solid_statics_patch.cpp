@@ -241,6 +241,78 @@ double solution_error(PatchBoundaryCondition bc)
   return computeL2Error(solid.displacement(), exact_solution_coef);
 }
 
+template <typename element_type>
+double pcg_block_solution_error(PatchBoundaryCondition bc)
+{
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, "solid_static_pcg_block_solve");
+
+  constexpr int p = element_type::order;
+  constexpr int dim = dimension_of(element_type::geometry);
+
+  static_assert(dim == 2 || dim == 3, "Dimension must be 2 or 3 for solid test");
+
+  AffineSolution<dim> exact_displacement;
+
+  std::string meshdir = std::string(SMITH_REPO_DIR) + "/data/meshes/";
+  std::string filename;
+  switch (element_type::geometry) {
+    case mfem::Geometry::TRIANGLE:
+      filename = meshdir + "patch2D_tris.mesh";
+      break;
+    case mfem::Geometry::SQUARE:
+      filename = meshdir + "patch2D_quads.mesh";
+      break;
+    case mfem::Geometry::TETRAHEDRON:
+      filename = meshdir + "patch3D_tets.mesh";
+      break;
+    case mfem::Geometry::CUBE:
+      filename = meshdir + "patch3D_hexes.mesh";
+      break;
+    default:
+      SLIC_ERROR_ROOT("unsupported element type for patch test");
+      break;
+  }
+
+  auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "mesh_tag");
+
+  smith::NonlinearSolverOptions nonlin_solver_options{.nonlin_solver = NonlinearSolver::PcgBlock,
+                                                      .relative_tol = 0.0,
+                                                      .absolute_tol = 5.0e-14,
+                                                      .max_iterations = 200,
+                                                      .print_level = 0,
+                                                      .pcg_block_len = 10,
+                                                      .pcg_ls_max_backtracks = 8};
+
+  auto equation_solver = std::make_unique<EquationSolver>(
+      nonlin_solver_options, smith::solid_mechanics::default_linear_options, mesh->getComm());
+
+  SolidMechanics<p, dim> solid(std::move(equation_solver), solid_mechanics::default_quasistatic_options, "solid", mesh);
+
+  solid_mechanics::NeoHookean mat{.density = 1.0, .K = 1.0, .G = 1.0};
+  solid.setMaterial(mat, mesh->entireBody());
+
+  mesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(essentialBoundaryAttributes<dim>(bc)));
+  exact_displacement.applyLoads(mat, solid, mesh->domain("essential_boundary"));
+
+  solid.completeSetup();
+  solid.advanceTimestep(1.0);
+
+  const auto& nonlinear_solver = solid.equationSolver().nonlinearSolver();
+  const auto diagnostics = solid.equationSolver().pcgBlockDiagnostics();
+  EXPECT_TRUE(nonlinear_solver.GetConverged());
+  EXPECT_LT(nonlinear_solver.GetFinalRelNorm(), 1.0e-10);
+  EXPECT_TRUE(diagnostics.has_value());
+  if (diagnostics.has_value()) {
+    EXPECT_GT(diagnostics->num_blocks, 0u);
+  }
+
+  mfem::VectorFunctionCoefficient exact_solution_coef(dim, exact_displacement);
+  return computeL2Error(solid.displacement(), exact_solution_coef);
+}
+
 /**
  * @brief Solve pressure-driven problem with 10% uniaxial strain and compare numerical solution to exact answer
  *
@@ -462,6 +534,13 @@ TEST(SolidMechanics, PatchTest2dQ1EssentialAndNaturalBcs)
   using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<LINEAR> >;
   double quad_error = solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
   EXPECT_LT(quad_error, tol);
+}
+
+TEST(SolidMechanics, PcgBlockPatchTest2dQ1EssentialAndNaturalBcs)
+{
+  using quadrilateral = finite_element<mfem::Geometry::SQUARE, H1<LINEAR> >;
+  double quad_error = pcg_block_solution_error<quadrilateral>(PatchBoundaryCondition::EssentialAndNatural);
+  EXPECT_LT(quad_error, 1.0e-6);
 }
 
 TEST(SolidMechanics, PatchTest3dQ1EssentialAndNaturalBcs)
