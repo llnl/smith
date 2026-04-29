@@ -14,7 +14,8 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         ironing_2D_circle.cpp
         twisted_ironing_2D.cpp
         ironing_energy_mortar.cpp
-        contact_hertzian_2d.cpp
+        energy_mortar_hertzian_disp.cpp
+        energy_mortar_hertzian_traction.cpp
     )
 
     foreach(filename ${CONTACT_EXAMPLES_SOURCES})
