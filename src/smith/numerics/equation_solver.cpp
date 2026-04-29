@@ -983,8 +983,13 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     num_residuals = 0;
     num_jacobian_assembles = 0;
 
-    mfem::real_t norm = 0.0;
-    norm = initial_norm = computeResidual(X, r);
+    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_block_len <= 0, "PcgBlock requires pcg_block_len > 0");
+    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_window <= 0, "PcgBlock requires pcg_window > 0");
+    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_ls_max_backtracks < 0, "PcgBlock requires pcg_ls_max_backtracks >= 0");
+    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_delta_avg_window <= 0, "PcgBlock requires pcg_delta_avg_window > 0");
+
+    mfem::real_t norm = computeResidual(X, r);
+    initial_norm = norm;
     if (norm == 0.0) {
       converged = true;
       final_iter = 0;
@@ -1007,22 +1012,285 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     scratch.SetSize(X.Size());
     scratch = 0.0;
 
-    if (print_level >= 2) {
-      mfem::out << "PcgBlock iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm
-                << ", norm goal = " << std::setw(13) << norm_goal << '\n';
+    mfem::Vector r_block(X.Size());
+    mfem::Vector r_candidate(X.Size());
+    mfem::Vector force(X.Size());
+    mfem::Vector z(X.Size());
+    mfem::Vector z_old(X.Size());
+    mfem::Vector p(X.Size());
+    mfem::Vector p_old(X.Size());
+    mfem::Vector Hp(X.Size());
+    mfem::Vector step(X.Size());
+    mfem::Vector x_candidate(X.Size());
+
+    bool have_momentum = false;
+    double rho_old = 0.0;
+    double h_scale = nonlinear_options.pcg_h_scale_init;
+    int retries_remaining = nonlinear_options.pcg_max_block_retries;
+    int it = 0;
+    double cumulative_work = 0.0;
+    std::vector<double> work_history{cumulative_work};
+    std::vector<double> accepted_step_norms;
+
+    auto reset_momentum = [&]() {
+      have_momentum = false;
+      rho_old = 0.0;
+      p_old = 0.0;
+      z_old = 0.0;
+    };
+
+    auto window_max = [&](const std::vector<double>& history) {
+      const int window = nonlinear_options.pcg_window;
+      const auto begin = history.size() > static_cast<size_t>(window) ? history.end() - window : history.begin();
+      return *std::max_element(begin, history.end());
+    };
+
+    auto current_delta_ref = [&]() {
+      if (accepted_step_norms.empty()) {
+        return 0.0;
+      }
+      const int window = nonlinear_options.pcg_delta_avg_window;
+      const auto begin = accepted_step_norms.size() > static_cast<size_t>(window) ? accepted_step_norms.end() - window
+                                                                                  : accepted_step_norms.begin();
+      double sum = 0.0;
+      for (auto iter = begin; iter != accepted_step_norms.end(); ++iter) {
+        sum += *iter;
+      }
+      return sum / static_cast<double>(accepted_step_norms.end() - begin);
+    };
+
+    for (; true;) {
+      MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
+      if (print_level >= 2) {
+        mfem::out << "PcgBlock iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
+        if (it > 0) {
+          mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
+        } else {
+          mfem::out << ", norm goal = " << std::setw(13) << norm_goal;
+        }
+        mfem::out << '\n';
+      }
+
+      if (print_level >= 1 && (norm != norm)) {
+        mfem::out << "Initial residual for PCG-block iteration is undefined/nan." << std::endl;
+        mfem::out << "PcgBlock: No convergence!\n";
+        converged = false;
+        break;
+      }
+
+      if (norm <= norm_goal && it >= nonlinear_options.min_iterations) {
+        converged = true;
+        break;
+      } else if (it >= max_iter) {
+        converged = false;
+        break;
+      } else if (retries_remaining <= 0 || h_scale < nonlinear_options.pcg_min_h_scale) {
+        converged = false;
+        break;
+      }
+
+      assembleJacobian(X);
+      pcg_precond.SetOperator(*grad);
+
+      r_block = r;
+      const double norm_block = norm;
+      bool block_finished = false;
+
+      while (!block_finished) {
+        x_trial = X;
+        r = r_block;
+        norm = norm_block;
+
+        double block_predicted = 0.0;
+        double block_actual = 0.0;
+        double trial_cumulative_work = cumulative_work;
+        int trial_steps = 0;
+        bool trial_failed = false;
+        std::vector<double> trial_step_norms;
+        auto trial_work_history = work_history;
+
+        for (int block_it = 0; block_it < nonlinear_options.pcg_block_len && it + trial_steps < max_iter; ++block_it) {
+          force = r;
+          force *= -1.0;
+          precond(force, z);
+
+          const double rho = Dot(force, z);
+          if (!mfem::IsFinite(rho) || rho <= nonlinear_options.pcg_eps_descent) {
+            trial_failed = true;
+            break;
+          }
+
+          double beta = 0.0;
+          if (have_momentum) {
+            const double force_dot_z_old = Dot(force, z_old);
+            beta = std::max(0.0, (rho - force_dot_z_old) / rho_old);
+            if (std::abs(force_dot_z_old) > nonlinear_options.pcg_powell_eta * rho) {
+              beta = 0.0;
+            }
+          }
+
+          p = z;
+          if (have_momentum && beta != 0.0) {
+            p.Add(beta, p_old);
+          }
+
+          double force_dot_p = Dot(force, p);
+          if (force_dot_p <= nonlinear_options.pcg_eps_descent * rho) {
+            beta = 0.0;
+            p = z;
+            force_dot_p = rho;
+          }
+
+          hessVec(p, Hp);
+          const double pHp = Dot(p, Hp);
+
+          double alpha = 0.0;
+          double alpha_quad = std::numeric_limits<double>::quiet_NaN();
+          const bool positive_curvature = pHp > nonlinear_options.pcg_eps_descent && mfem::IsFinite(pHp);
+          if (positive_curvature) {
+            alpha_quad = force_dot_p / pHp;
+            alpha = alpha_quad;
+          }
+
+          const double p_norm = Norm(p);
+          double delta_ref = current_delta_ref();
+          if (delta_ref <= 0.0 && alpha > 0.0 && mfem::IsFinite(alpha) && p_norm > 0.0) {
+            delta_ref = alpha * p_norm;
+          } else if (delta_ref <= 0.0) {
+            delta_ref = 1.0;
+          }
+
+          const bool apply_trust_cap = !positive_curvature || h_scale < nonlinear_options.pcg_h_scale_init;
+          if (apply_trust_cap && p_norm > 0.0) {
+            const double alpha_cap = h_scale * delta_ref / p_norm;
+            if (alpha > 0.0 && mfem::IsFinite(alpha)) {
+              alpha = std::min(alpha, alpha_cap);
+            } else {
+              alpha = alpha_cap;
+            }
+          }
+
+          if (!(alpha > 0.0) || !mfem::IsFinite(alpha)) {
+            trial_failed = true;
+            break;
+          }
+
+          bool accepted_step = false;
+          double accepted_work = 0.0;
+          double accepted_predicted = 0.0;
+          double accepted_step_norm = 0.0;
+
+          for (int ls = 0; ls <= nonlinear_options.pcg_ls_max_backtracks; ++ls) {
+            step = p;
+            step *= alpha;
+            add(x_trial, step, x_candidate);
+
+            const double norm_candidate = computeResidual(x_candidate, r_candidate);
+            const double work = -0.5 * Dot(r, step) - 0.5 * Dot(r_candidate, step);
+            const double cumulative_candidate = trial_cumulative_work + work;
+            const double work_ref = window_max(trial_work_history);
+            const bool finite_candidate = mfem::IsFinite(norm_candidate) && mfem::IsFinite(work);
+            const bool sufficient_work =
+                cumulative_candidate >= work_ref - nonlinear_options.pcg_ls_armijo_c * alpha * force_dot_p;
+
+            if (finite_candidate && (sufficient_work || norm_candidate <= norm_goal)) {
+              const double predicted = alpha * force_dot_p - 0.5 * alpha * alpha * pHp;
+              accepted_predicted = std::max(predicted, 0.0);
+              accepted_work = work;
+              accepted_step_norm = Norm(step);
+              norm = norm_candidate;
+              accepted_step = true;
+              break;
+            }
+
+            alpha *= nonlinear_options.pcg_ls_shrink;
+          }
+
+          if (!accepted_step) {
+            trial_failed = true;
+            break;
+          }
+
+          x_trial = x_candidate;
+          r = r_candidate;
+          trial_cumulative_work += accepted_work;
+          trial_work_history.push_back(trial_cumulative_work);
+          trial_step_norms.push_back(accepted_step_norm);
+          block_predicted += accepted_predicted;
+          block_actual += accepted_work;
+
+          p_old = p;
+          z_old = z;
+          rho_old = rho;
+          have_momentum = true;
+          ++trial_steps;
+
+          if (norm <= norm_goal && it + trial_steps >= nonlinear_options.min_iterations) {
+            break;
+          }
+        }
+
+        double trust_ratio = 1.0;
+        if (block_predicted > nonlinear_options.pcg_eps_descent) {
+          trust_ratio = block_actual / block_predicted;
+        } else if (block_actual < 0.0) {
+          trust_ratio = -std::numeric_limits<double>::infinity();
+        }
+
+        const bool block_converged = norm <= norm_goal && it + trial_steps >= nonlinear_options.min_iterations;
+        const bool accept_block =
+            trial_steps > 0 && !trial_failed &&
+            (block_converged || (block_actual >= 0.0 && trust_ratio >= nonlinear_options.pcg_trust_eta_bad));
+
+        if (accept_block) {
+          X = x_trial;
+          cumulative_work = trial_cumulative_work;
+          work_history = std::move(trial_work_history);
+          accepted_step_norms.insert(accepted_step_norms.end(), trial_step_norms.begin(), trial_step_norms.end());
+          it += trial_steps;
+
+          if (trust_ratio < nonlinear_options.pcg_trust_eta_bad) {
+            h_scale = std::max(h_scale * nonlinear_options.pcg_shrink, nonlinear_options.pcg_min_h_scale);
+            reset_momentum();
+          } else if (trust_ratio >= nonlinear_options.pcg_trust_eta_good) {
+            h_scale = std::min(h_scale * nonlinear_options.pcg_growth, nonlinear_options.pcg_h_scale_init);
+          }
+
+          if (print_level >= 2) {
+            mfem::out << "PcgBlock block accepted: steps = " << trial_steps << ", rho = " << std::setw(13)
+                      << trust_ratio << ", h_scale = " << std::setw(13) << h_scale << '\n';
+          }
+
+          block_finished = true;
+        } else {
+          r = r_block;
+          norm = norm_block;
+          h_scale *= nonlinear_options.pcg_shrink;
+          reset_momentum();
+          --retries_remaining;
+
+          if (print_level >= 2) {
+            mfem::out << "PcgBlock block rejected: steps = " << trial_steps << ", rho = " << std::setw(13)
+                      << trust_ratio << ", h_scale = " << std::setw(13) << h_scale
+                      << ", retries left = " << retries_remaining << '\n';
+          }
+
+          if (retries_remaining <= 0 || h_scale < nonlinear_options.pcg_min_h_scale) {
+            block_finished = true;
+          }
+        }
+      }
     }
 
-    if (norm <= norm_goal && nonlinear_options.min_iterations == 0) {
-      converged = true;
-    } else {
-      converged = false;
-    }
-
-    final_iter = 0;
+    final_iter = it;
     final_norm = norm;
 
+    if (print_level == 1) {
+      mfem::out << "PcgBlock iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm
+                << '\n';
+    }
     if (!converged && print_level >= 1) {
-      mfem::out << "PcgBlock: No convergence! Algorithm implementation pending.\n";
+      mfem::out << "PcgBlock: No convergence!\n";
     }
   }
 };
