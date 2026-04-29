@@ -23,8 +23,6 @@ class FakeNonlinearBlockSolver : public NonlinearBlockSolverBase {
 
   FakeNonlinearBlockSolver(double abs_tol, double rel_tol) : abs_tol_(abs_tol), rel_tol_(rel_tol) {}
 
-  void completeSetup(const std::vector<FieldT>&) override {}
-
   std::vector<FieldPtr> solve(
       const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
