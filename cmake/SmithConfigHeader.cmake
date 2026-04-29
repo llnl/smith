@@ -8,8 +8,8 @@
 # Version information that go into the generated config header
 #------------------------------------------------------------------------------
 set(SMITH_VERSION_MAJOR 0)
-set(SMITH_VERSION_MINOR 0)
-set(SMITH_VERSION_PATCH 1)
+set(SMITH_VERSION_MINOR 1)
+set(SMITH_VERSION_PATCH 0)
 string(CONCAT SMITH_VERSION_FULL
     "v${SMITH_VERSION_MAJOR}"
     ".${SMITH_VERSION_MINOR}"
