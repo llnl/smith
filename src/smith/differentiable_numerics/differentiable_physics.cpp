@@ -120,7 +120,7 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
 {
   SLIC_ERROR_IF(
       state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-      axom::fmt::format("Could not find field named {0} in mesh with tag \"{1}\" to get", field_name, mesh_->tag()));
+      std::format("Could not find field named {0} in mesh with tag \"{1}\" to get", field_name, mesh_->tag()));
   size_t state_index = state_name_to_field_index_.at(field_name);
   return *field_states_[state_index].get();
 }
@@ -155,9 +155,9 @@ FiniteElementDual DifferentiablePhysics::loadCheckpointedDual(const std::string&
 FiniteElementState DifferentiablePhysics::loadCheckpointedState(const std::string& state_name, int cycle)
 {
   SLIC_ERROR_IF(cycle != cycle_,
-                axom::fmt::format("Due to checkpointing restrictions in smith::Mechanics, cannot ask for an arbitrary "
-                                  "checkpointed cycle, asking for cycle {}, but physics is at cycle {}",
-                                  cycle, cycle_));
+                std::format("Due to checkpointing restrictions in smith::Mechanics, cannot ask for an arbitrary "
+                            "checkpointed cycle, asking for cycle {}, but physics is at cycle {}",
+                            cycle, cycle_));
   return state(state_name);
 }
 
@@ -166,16 +166,16 @@ const FiniteElementState& DifferentiablePhysics::shapeDisplacement() const { ret
 const FiniteElementState& DifferentiablePhysics::parameter(std::size_t parameter_index) const
 {
   SLIC_ERROR_IF(parameter_index >= field_params_.size(),
-                axom::fmt::format("Parameter index {} requested, but only {} parameters exist in physics module {}.",
-                                  parameter_index, field_params_.size(), name_));
+                std::format("Parameter index {} requested, but only {} parameters exist in physics module {}.",
+                            parameter_index, field_params_.size(), name_));
   return *field_params_[parameter_index].get();
 }
 
 const FiniteElementState& DifferentiablePhysics::parameter(const std::string& parameter_name) const
 {
-  SLIC_ERROR_IF(param_name_to_field_index_.find(parameter_name) == param_name_to_field_index_.end(),
-                axom::fmt::format("Could not find parameter named {0} in mesh with tag \"{1}\" to get", parameter_name,
-                                  mesh_->tag()));
+  SLIC_ERROR_IF(
+      param_name_to_field_index_.find(parameter_name) == param_name_to_field_index_.end(),
+      std::format("Could not find parameter named {0} in mesh with tag \"{1}\" to get", parameter_name, mesh_->tag()));
   size_t param_index = param_name_to_field_index_.at(parameter_name);
   return parameter(param_index);
 }
@@ -183,8 +183,8 @@ const FiniteElementState& DifferentiablePhysics::parameter(const std::string& pa
 void DifferentiablePhysics::setParameter(const size_t parameter_index, const FiniteElementState& parameter_state)
 {
   SLIC_ERROR_IF(parameter_index >= field_params_.size(),
-                axom::fmt::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
-                                  parameter_index, field_params_.size(), name_));
+                std::format("Parameter '{}' requested when only '{}' parameters exist in physics module '{}'",
+                            parameter_index, field_params_.size(), name_));
   *field_params_[parameter_index].get() = parameter_state;
 }
 
@@ -196,9 +196,8 @@ void DifferentiablePhysics::setShapeDisplacement(const FiniteElementState& shape
 void DifferentiablePhysics::setState([[maybe_unused]] const std::string& field_name,
                                      [[maybe_unused]] const FiniteElementState& s)
 {
-  SLIC_ERROR_IF(
-      state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-      axom::fmt::format("Could not find field named {0} in mesh with tag {1} to set", field_name, mesh_->tag()));
+  SLIC_ERROR_IF(state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
+                std::format("Could not find field named {0} in mesh with tag {1} to set", field_name, mesh_->tag()));
   size_t state_index = state_name_to_field_index_.at(field_name);
   *field_states_[state_index].get() = s;
   *initial_field_states_[state_index].get() = s;

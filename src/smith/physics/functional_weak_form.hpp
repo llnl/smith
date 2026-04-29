@@ -58,8 +58,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(InputSpaces) != input_mfem_spaces.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} input mfem spaces were supplied.",
-                          sizeof...(InputSpaces), input_mfem_spaces.size()));
+        std::format("{} parameter spaces given in the template argument but {} input mfem spaces were supplied.",
+                    sizeof...(InputSpaces), input_mfem_spaces.size()));
 
     // Validate output space
     validateSpace<OutputSpace>(output_mfem_space, "output");

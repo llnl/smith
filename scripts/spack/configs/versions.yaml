@@ -1,0 +1,39 @@
+# Globally lock version of third party libraries
+packages:
+  axom:
+    require:
+    - spec: "@0.14.0.1"
+  adiak:
+    require:
+    - spec: "@0.4.1"
+  caliper:
+    require:
+    - spec: "@2.12.1"
+  camp:
+    require:
+    - spec: "@2025.09.2"
+  conduit:
+    require:
+    - spec: "@0.9.5"
+  # Hypre v3 causes equationsolver to fail TOSS 4
+  hypre:
+    require:
+    - spec: "@2.33.0"
+  mfem:
+    require:
+    - spec: "@4.9.0.2"
+  petsc:
+    require:
+    - spec: "@3.21.6"
+  raja:
+    require:
+    - spec: "@2025.09.0"
+  sundials:
+    require:
+    - spec: "@7.5.0"
+  tribol:
+    require:
+    - spec: "@0.1.0.26"
+  umpire:
+    require:
+    - spec: "@2025.09.0"

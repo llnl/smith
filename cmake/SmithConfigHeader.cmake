@@ -8,8 +8,8 @@
 # Version information that go into the generated config header
 #------------------------------------------------------------------------------
 set(SMITH_VERSION_MAJOR 0)
-set(SMITH_VERSION_MINOR 0)
-set(SMITH_VERSION_PATCH 1)
+set(SMITH_VERSION_MINOR 1)
+set(SMITH_VERSION_PATCH 0)
 string(CONCAT SMITH_VERSION_FULL
     "v${SMITH_VERSION_MAJOR}"
     ".${SMITH_VERSION_MINOR}"
@@ -36,7 +36,7 @@ message(STATUS "Configuring Smith version ${SMITH_VERSION_FULL}")
 #------------------------------------------------------------------------------
 # Create variable for every TPL
 #------------------------------------------------------------------------------
-set(TPL_DEPS ADIAK AXOM CALIPER CAMP CONDUIT CONTINUATION CUDA ENZYME FMT GRETL HDF5 HIP LUA MFEM MPI PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
+set(TPL_DEPS ADIAK AXOM CALIPER CAMP CONDUIT CONTINUATION CUDA ENZYME GRETL HDF5 HIP LUA MFEM MPI PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
 foreach(dep ${TPL_DEPS})
     if( ${dep}_FOUND OR ENABLE_${dep} )
         set(SMITH_USE_${dep} TRUE)

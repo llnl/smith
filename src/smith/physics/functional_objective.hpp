@@ -47,8 +47,8 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(InputSpaces) != input_mfem_spaces.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(InputSpaces), input_mfem_spaces.size()));
+        std::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
+                    sizeof...(InputSpaces), input_mfem_spaces.size()));
 
     if constexpr (sizeof...(InputSpaces) > 0) {
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { mfem_spaces[i] = input_mfem_spaces[i]; });

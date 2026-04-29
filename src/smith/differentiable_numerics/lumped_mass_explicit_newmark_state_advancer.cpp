@@ -59,7 +59,7 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> LumpedMassExplici
     auto lumped_mass = computeLumpedMass(mass_residual_eval_.get(), shape_disp, states[DISP], params[DENSITY]);
     auto diag_inv = diagInverse(lumped_mass);  // should return inverse of diagonal matrix as a field state
     m_diag_inv = std::make_unique<FieldState>(diag_inv);
-    auto zero_mass_res = evalResireaction(residual_eval_.get(), shape_disp, states, params, time_info, ACCEL);
+    auto zero_mass_res = evalReaction(residual_eval_.get(), shape_disp, states, params, time_info, ACCEL);
     auto a_initial = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
     states[ACCEL] = a_initial;
   }
@@ -93,8 +93,8 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> LumpedMassExplici
     std::vector<FieldState> state_pred{u_pred, v_half_step, zeroCopy(a)};
 
     // should return the evaluation of the residual for the current state variables
-    auto zero_mass_res = evalResireaction(residual_eval_.get(), shape_disp, state_pred, params,
-                                          TimeInfo(time.get(), time_info.dt(), time_info.cycle()), ACCEL);
+    auto zero_mass_res = evalReaction(residual_eval_.get(), shape_disp, state_pred, params,
+                                      TimeInfo(time.get(), time_info.dt(), time_info.cycle()), ACCEL);
 
     // m_diag_inv*zero_mass_res; // calculate the acceleration
     auto a_pred = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());

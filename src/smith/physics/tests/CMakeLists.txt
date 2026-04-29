@@ -13,7 +13,7 @@ smith_add_library(
     HEADERS     ${physics_test_headers}
     )
       
-set(physics_test_depends smith_physics smith_physics_test_utils smith_differentiable_numerics gtest)
+set(physics_test_depends smith_physics smith_differentiable_numerics smith_physics_test_utils gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -30,9 +30,12 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_functional_weak_form.cpp
-    thermomech_finite_diff.cpp
     thermomech_statics_patch.cpp
+<<<<<<< HEAD
     test_kinematic_objective.cpp
+=======
+    parameterized_thermomechanics_example.cpp
+>>>>>>> origin/tupek/system_solver
     )
 
 if (TRIBOL_FOUND)
