@@ -16,6 +16,7 @@ set(physics_sources
     heat_transfer_input.cpp
     solid_mechanics_input.cpp
     thermomechanics_input.cpp
+    energy_mortar_patch.cpp
     )
 
 set(physics_headers

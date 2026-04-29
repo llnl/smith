@@ -19,7 +19,6 @@
 #include "smith/physics/solid_mechanics_contact.hpp"
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/smith.hpp"
-#include <cmath>
 
 #include "smith/physics/contact/contact_config.hpp"
 #include "smith/physics/solid_mechanics_contact.hpp"
@@ -54,27 +53,43 @@ int main(int argc, char* argv[])
   // NOTE: dim must be equal to 2
   constexpr int dim = 2;
 
+  // COARSE
+  constexpr auto mesh_factor = 1;
+  std::string name_postfix = "coarse";
+
+  // REFINED
+  // constexpr auto mesh_factor = 2;
+  // std::string name_postfix = "refined";
+
   // Create DataStore
-  std::string name = "twisted_contact_ironing_2D_example";
+  std::string name = "contact_square_ironing_example";
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, name + "_data");
 
+  // Construct the appropiate dimension mesh and give it to the data store
+  //  std::string filename = smith_REPO_DIR "data/meshes/ironing_2D.mesh";
+  //  std::shared_ptr<smith::Mesh> mesh = std::make_shared<smith::Mesh>(filename, "ironing_2D_mesh", 2, 0);
+
   auto mesh = std::make_shared<smith::Mesh>(
-      shared::MeshBuilder::Unify(
-          {shared::MeshBuilder::SquareMesh(32, 32).updateBdrAttrib(1, 6).updateBdrAttrib(3, 9).scale({1.0, 0.5}),
-           shared::MeshBuilder::SquareMesh(8, 8)
-               .scale({0.25, 0.25})
-               .translate({0.0, 0.5})
-               .updateBdrAttrib(3, 5)
-               .updateBdrAttrib(1, 8)
-               .updateBdrAttrib(2, 8)
-               .updateBdrAttrib(4, 8)
-               .updateAttrib(1, 2)}),
-      "ironing_2D_mesh", 0, 0);
+      shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(64 * mesh_factor, 16 * mesh_factor)
+                                      .updateBdrAttrib(1, 6)
+                                      .updateBdrAttrib(3, 9)
+                                      .updateBdrAttrib(2, 1)
+                                      .scale({1.0, 0.25}),
+                                  shared::MeshBuilder::SquareMesh(16 * mesh_factor, 8 * mesh_factor)
+                                      .scale({0.25, 0.125})
+                                      .translate({0.0, 0.25})
+                                      .updateBdrAttrib(3, 5)
+                                      .updateBdrAttrib(1, 8)
+                                      .updateBdrAttrib(4, 2)
+                                      .updateAttrib(1, 2)}),
+      "square_ironing_mesh_" + name_postfix, 0, 0);
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack, .print_level = 0};
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,  // Strumpack,  // CG,
+                                            .preconditioner = smith::Preconditioner::HypreAMG,
+                                            .print_level = 0};
 
-  mfem::VisItDataCollection visit_dc("contact_ironing_twist_vist", &mesh->mfemParMesh());
+  mfem::VisItDataCollection visit_dc("contact_ironing_visit", &mesh->mfemParMesh());
 
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.Save();
@@ -84,37 +99,40 @@ int main(int argc, char* argv[])
   return 1;
 #endif
 
-  smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
-                                                  .relative_tol = 1.0e-8,
-                                                  .absolute_tol = 1.0e-10,
-                                                  .max_iterations = 50,
-                                                  .print_level = 1};
+  smith::NonlinearSolverOptions nonlinear_options{
+      .nonlin_solver = smith::NonlinearSolver::TrustRegion,  // NewtonLineSearch,  // TrustRegion,
+      .relative_tol = 1.0e-8,
+      .absolute_tol = 1.0e-10,
+      .max_iterations = 500,
+      .max_line_search_iterations = 10,
+      .print_level = 1};
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
-                                        .penalty = 4000,
+                                        .type = smith::ContactType::Frictionless,
+                                        .penalty = 30000.0,
                                         .penalty2 = 0,
                                         .jacobian = smith::ContactJacobian::Exact};
 
   smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
-      {"bulk_mod", "shear_mod"});
+      {"bulk_mod", "shear_mod"}, 0, 0.0, false, false);
 
   smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
 
-  mfem::Vector K_values({10.0, 100.0});
+  mfem::Vector K_values({1.0, 100.0});
   mfem::PWConstCoefficient K_coeff(K_values);
   K_field.project(K_coeff);
   solid_solver.setParameter(0, K_field);
 
   smith::FiniteElementState G_field(smith::StateManager::newState(smith::L2<0>{}, "shear_mod", mesh->tag()));
 
-  mfem::Vector G_values({0.25, 2.5});
+  mfem::Vector G_values({0.25, 25.0});
   mfem::PWConstCoefficient G_coeff(G_values);
   G_field.project(G_coeff);
   solid_solver.setParameter(1, G_field);
 
-  smith::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
+  smith::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 100.0, 1.0};
   solid_solver.setMaterial(smith::DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   // Pass the BC information to the solver object

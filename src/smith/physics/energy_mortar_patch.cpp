@@ -28,7 +28,7 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/materials/solid_material.hpp"
-#include "smith/serac_config.hpp"
+#include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include <fenv.h>
 
@@ -58,13 +58,13 @@ TEST_P(ContactTest, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(100, 100)
+  auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(20, 20)
                                                                             .translate({0.0, 1.0})
                                                                             .bdrAttribInfo()
                                                                             .updateBdrAttrib(4, 7)
                                                                             .updateBdrAttrib(3, 9)
                                                                             .updateBdrAttrib(1, 6),
-                                                                        shared::MeshBuilder::SquareMesh(80, 80)
+                                                                        shared::MeshBuilder::SquareMesh(20, 20)
                                                                             .bdrAttribInfo()
                                                                             .updateBdrAttrib(4, 7)
                                                                             .updateBdrAttrib(1, 8)
@@ -98,19 +98,6 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-  //   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
-  //                                            .relative_tol = 1.0e-13,
-  //                                            .absolute_tol = 1.0e-13,
-  //                                            .max_iterations = 20,
-  //                                            .max_line_search_iterations = 12,
-  //                                            .print_level = 1};
-
-  //   ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
-  //                                  .enforcement =smith::ContactEnforcement::Penalty,
-  //                                  .type = ContactType::Frictionless,
-  //                                  .penalty = 10000,
-  //                                  .penalty2 = 0,
-  //                                  .jacobian = smith::ContactJacobian::Exact};
 
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                                   .relative_tol = 1.0e-8,
@@ -121,7 +108,7 @@ TEST_P(ContactTest, patch)
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
                                         .type = smith::ContactType::Frictionless,
-                                        .penalty = 10000,
+                                        .penalty = 100000,
                                         .jacobian = smith::ContactJacobian::Exact};
 
   smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
@@ -173,10 +160,6 @@ TEST_P(ContactTest, patch)
   mfem::ParFiniteElementSpace elasticity_fes(solid_solver.reactions().space());
   mfem::ParGridFunction elasticity_sol(&elasticity_fes);
   elasticity_sol.ProjectCoefficient(elasticity_sol_coeff);
-  // mfem::ParGridFunction approx_error(elasticity_sol);
-  // approx_error -= solid_solver.displacement().gridFunction();
-  // auto approx_error_l2 = mfem::ParNormlp(approx_error, 2, MPI_COMM_WORLD);
-  // EXPECT_NEAR(0.0, approx_error_l2, 1.0e-2);
 
   // Set up test to only look at y component of error*********
   const mfem::ParFiniteElementSpace& u_space_const = solid_solver.displacement().space();

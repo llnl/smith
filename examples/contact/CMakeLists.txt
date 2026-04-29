@@ -13,7 +13,6 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         ironing_2D.cpp
         ironing_2D_circle.cpp
         twisted_ironing_2D.cpp
-        ironing_energy_mortar.cpp
         energy_mortar_hertzian_disp.cpp
         energy_mortar_hertzian_traction.cpp
     )
