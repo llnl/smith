@@ -497,8 +497,7 @@ double time_on_slowest_rank(Function&& function)
   function();
   auto stop = std::chrono::steady_clock::now();
 
-  double elapsed =
-      std::chrono::duration_cast<std::chrono::duration<double>>(stop - start).count();
+  double elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(stop - start).count();
   double max_elapsed = elapsed;
   if (num_ranks > 1) {
     MPI_Allreduce(&elapsed, &max_elapsed, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
@@ -562,8 +561,8 @@ TEST(Elasticity, DiagonalAssemblyBenchmark)
   (void)num_ranks;
   if (rank == 0) {
     std::cout << "DiagonalAssemblyBenchmark direct_seconds=" << direct_time / samples
-              << " sparse_getdiag_seconds=" << sparse_time / samples
-              << " speedup=" << sparse_time / direct_time << std::endl;
+              << " sparse_getdiag_seconds=" << sparse_time / samples << " speedup=" << sparse_time / direct_time
+              << std::endl;
   }
 
   EXPECT_GT(sparse_time / direct_time, 5.0);
