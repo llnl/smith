@@ -214,6 +214,18 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
+  std::unique_ptr<JacobianOperator> jacobianOperator(
+      TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+      size_t /*input_col*/, const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {}) const override
+  {
+    SLIC_ERROR_ROOT("DfemWeakForm does not support JacobianOperator construction");
+    dt_ = time_info.dt();
+    cycle_ = time_info.cycle();
+
+    return nullptr;
+  }
+
+  /// @overload
   void jvp(TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
            const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, ConstFieldPtr /*v_shape_disp*/,
            const std::vector<ConstFieldPtr>& /*v_fields*/,

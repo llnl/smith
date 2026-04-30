@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <variant>
 #include <utility>
 
@@ -59,25 +60,35 @@ class JacobianOperator : public mfem::Operator {
  */
 template <typename Gradient>
 class FunctionalJacobianOperator : public JacobianOperator {
+  using GradientT = std::remove_reference_t<Gradient>;
+
  public:
-  explicit FunctionalJacobianOperator(Gradient& gradient)
-      : JacobianOperator(gradient.Height(), gradient.Width()), gradient_(gradient)
+  explicit FunctionalJacobianOperator(GradientT& gradient)
+      : JacobianOperator(gradient.Height(), gradient.Width()), gradient_(&gradient)
   {
   }
 
-  void Mult(const mfem::Vector& dx, mfem::Vector& y) const override { gradient_.Mult(dx, y); }
+  explicit FunctionalJacobianOperator(GradientT&& gradient)
+      : JacobianOperator(gradient.Height(), gradient.Width()),
+        owned_gradient_(std::make_unique<GradientT>(std::move(gradient))),
+        gradient_(owned_gradient_.get())
+  {
+  }
+
+  void Mult(const mfem::Vector& dx, mfem::Vector& y) const override { gradient_->Mult(dx, y); }
 
   void AddMult(const mfem::Vector& dx, mfem::Vector& y, const double a = 1.0) const override
   {
-    gradient_.AddMult(dx, y, a);
+    gradient_->AddMult(dx, y, a);
   }
 
-  std::unique_ptr<mfem::HypreParMatrix> assemble() override { return gradient_.assemble(); }
+  std::unique_ptr<mfem::HypreParMatrix> assemble() override { return gradient_->assemble(); }
 
-  void assembleDiagonal(mfem::Vector& diag) const override { gradient_.assembleDiagonal(diag); }
+  void assembleDiagonal(mfem::Vector& diag) const override { gradient_->assembleDiagonal(diag); }
 
  private:
-  Gradient& gradient_;
+  std::unique_ptr<GradientT> owned_gradient_;
+  GradientT* gradient_;
 };
 
 /**

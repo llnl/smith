@@ -247,6 +247,38 @@ TEST_F(WeakFormFixture, JvpConsistency)
   }
 }
 
+TEST_F(WeakFormFixture, JacobianOperatorConsistency)
+{
+  auto input_fields = getConstFieldPointers(states, params);
+  auto field_tangents = getConstFieldPointers(state_tangents, param_tangents);
+
+  std::vector<double> jacobian_weights(input_fields.size());
+  jacobian_weights[DISP] = 1.0;
+
+  auto J = weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights);
+  auto J_op = weak_form->jacobianOperator(time_info, shape_disp.get(), input_fields, DISP);
+
+  smith::FiniteElementDual jvp_slow(states[DISP].space(), "jvp_slow");
+  smith::FiniteElementDual jvp_op(states[DISP].space(), "jvp_op");
+  J->Mult(*field_tangents[DISP], jvp_slow);
+  J_op->Mult(*field_tangents[DISP], jvp_op);
+  EXPECT_NEAR(jvp_slow.Norml2(), jvp_op.Norml2(), 1e-12);
+
+  std::unique_ptr<mfem::HypreParMatrix> J_op_assembled = J_op->assemble();
+  smith::FiniteElementDual jvp_op_assembled(states[DISP].space(), "jvp_op_assembled");
+  J_op_assembled->Mult(*field_tangents[DISP], jvp_op_assembled);
+  EXPECT_NEAR(jvp_slow.Norml2(), jvp_op_assembled.Norml2(), 1e-12);
+
+  mfem::Vector diag_direct(J_op->Height());
+  mfem::Vector diag_assembled(J->Height());
+  J_op->assembleDiagonal(diag_direct);
+  J->GetDiag(diag_assembled);
+
+  mfem::Vector diag_diff(diag_direct.Size());
+  subtract(diag_direct, diag_assembled, diag_diff);
+  EXPECT_NEAR(0.0, diag_diff.Norml2() / diag_assembled.Norml2(), 1.e-14);
+}
+
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
