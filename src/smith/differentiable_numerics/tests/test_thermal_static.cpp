@@ -9,7 +9,7 @@
 #include "smith/differentiable_numerics/thermal_system.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/common.hpp"
 #include "smith/physics/state/state_manager.hpp"
@@ -48,38 +48,39 @@ struct ThermalStaticFixture : public testing::Test {
     auto solver_options = NonlinearSolverOptions();
     solver_options.relative_tol = 1e-12;
     auto linear_options = LinearSolverOptions();
-    auto nonlinear_block_solver = buildNonlinearBlockSolver(solver_options, linear_options, *mesh);
+    auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
 
-    auto coupled_solver = std::make_shared<CoupledSystemSolver>(nonlinear_block_solver);
-    auto thermal_system = buildThermalSystem<2, temp_order>(mesh, coupled_solver);
+    using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
+    auto thermal_system =
+        buildThermalSystem<2, temp_order, TempRule>(solver_options, linear_options, ThermalOptions{}, field_store);
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
     // heat_flux is the physical flux (Fourier's law): q = -k * grad(T).
     // The system negates it to form the weak form integral(k * grad(T) . grad(v)).
-    thermal_system.setMaterial(
-        [=](auto /*temperature*/, auto grad_temperature) { return smith::tuple{0.0, -k * grad_temperature}; },
-        "entire_body");
+    thermal_system->setMaterial([=](const TimeInfo& /*t_info*/, auto /*temperature*/,
+                                    auto grad_temperature) { return smith::tuple{0.0, -k * grad_temperature}; },
+                                "entire_body");
 
-    thermal_system.addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
+    thermal_system->addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
       auto x = X[0];
       auto y = X[1];
       return 2.0 * k * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);
     });
 
-    thermal_system.temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
-                                                            [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
+    thermal_system->setTemperatureBC(mesh->entireBoundary(), [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
     TimeInfo t_info(0.0, 1.0);
-    auto [new_states, reactions] = thermal_system.advancer->advanceState(
-        t_info, thermal_system.field_store->getShapeDisp(), thermal_system.field_store->getAllFields(),
-        thermal_system.getParameterFields());
+    auto [new_states, reactions] = makeAdvancer(thermal_system)
+                                       ->advanceState(t_info, thermal_system->field_store->getShapeDisp(),
+                                                      thermal_system->field_store->getAllFields(),
+                                                      thermal_system->field_store->getParameterFields());
 
     for (size_t i = 0; i < new_states.size(); ++i) {
-      thermal_system.field_store->setField(i, new_states[i]);
+      thermal_system->field_store->setField(i, new_states[i]);
     }
 
-    auto temperature = thermal_system.field_store->getField(thermal_system.prefix("temperature"));
+    auto temperature = thermal_system->field_store->getField("temperature");
 
     auto exact_sol_func = [](const mfem::Vector& X, mfem::Vector& T) {
       double x = X(0);
@@ -136,45 +137,47 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   auto solver_options = NonlinearSolverOptions();
   solver_options.relative_tol = 1e-12;
   auto linear_options = LinearSolverOptions();
-  auto nonlinear_block_solver = buildNonlinearBlockSolver(solver_options, linear_options, *mesh);
-  auto coupled_solver = std::make_shared<CoupledSystemSolver>(nonlinear_block_solver);
 
   FieldType<L2<0>> conductivity_param("conductivity");
-  auto thermal_system = buildThermalSystem<2, 1>(mesh, coupled_solver, QuasiStaticFirstOrderTimeIntegrationRule{}, "",
-                                                 conductivity_param);
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
+
+  using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
+  auto param_fields = registerParameterFields(conductivity_param);
+  auto thermal_system =
+      buildThermalSystem<2, 1, TempRule>(solver_options, linear_options, ThermalOptions{}, field_store, param_fields);
 
   // Set the conductivity parameter field to k=1.0
-  thermal_system.parameter_fields[0].get()->setFromFieldFunction([](tensor<double, 2>) { return 1.0; });
+  thermal_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(
+      [](tensor<double, 2>) { return 1.0; });
 
   // Material uses the parameter field for conductivity
-  thermal_system.setMaterial(
-      [](auto /*temperature*/, auto grad_temperature, auto k_param) {
+  thermal_system->setMaterial(
+      [](const TimeInfo& /*t_info*/, auto /*temperature*/, auto grad_temperature, auto k_param) {
         auto k = get<0>(k_param);
         return smith::tuple{0.0, -k * grad_temperature};
       },
       "entire_body");
 
-  // Use DependsOn to specify that the heat source depends only on the temperature states (indices 0,1),
-  // not on the parameter field
-  thermal_system.addHeatSource(DependsOn<0, 1>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
+  // DependsOn now indexes only trailing coupling/parameter args, so empty means "state-only".
+  thermal_system->addHeatSource(DependsOn<>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
     auto x = X[0];
     auto y = X[1];
     return 2.0 * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);
   });
 
-  thermal_system.temperature_bc->template setScalarBCs<2>(mesh->entireBoundary(),
-                                                          [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
+  thermal_system->setTemperatureBC(mesh->entireBoundary(), [](double /*t*/, tensor<double, 2> /*X*/) { return 0.0; });
 
   TimeInfo t_info(0.0, 1.0);
-  auto [new_states, reactions] = thermal_system.advancer->advanceState(
-      t_info, thermal_system.field_store->getShapeDisp(), thermal_system.field_store->getAllFields(),
-      thermal_system.getParameterFields());
+  auto [new_states, reactions] = makeAdvancer(thermal_system)
+                                     ->advanceState(t_info, thermal_system->field_store->getShapeDisp(),
+                                                    thermal_system->field_store->getAllFields(),
+                                                    thermal_system->field_store->getParameterFields());
 
   for (size_t i = 0; i < new_states.size(); ++i) {
-    thermal_system.field_store->setField(i, new_states[i]);
+    thermal_system->field_store->setField(i, new_states[i]);
   }
 
-  auto temperature = thermal_system.field_store->getField(thermal_system.prefix("temperature"));
+  auto temperature = thermal_system->field_store->getField("temperature");
 
   auto exact_sol_func = [](const mfem::Vector& X, mfem::Vector& T) {
     double x = X(0);

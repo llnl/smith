@@ -11,7 +11,7 @@
 #include "smith/physics/mesh.hpp"
 
 #include "gretl/data_store.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/physics/functional_objective.hpp"
 
 #include "smith/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
@@ -146,7 +146,7 @@ struct MeshFixture : public testing::Test {
 
     std::vector<const mfem::ParFiniteElementSpace*> trial_spaces = {&disp.get()->space(), &disp.get()->space(),
                                                                     &disp.get()->space(), &density0.get()->space()};
-    auto solid_mechanics_residual = std::make_shared<smith::TimeDiscretizedWeakForm<
+    auto solid_mechanics_residual = std::make_shared<smith::FunctionalWeakForm<
         dim, VectorSpace, smith::Parameters<VectorSpace, VectorSpace, VectorSpace, DensitySpace>>>(
         physics_name, mesh_, disp.get()->space(), trial_spaces);
 

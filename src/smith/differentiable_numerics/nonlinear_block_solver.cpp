@@ -97,23 +97,35 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 
   auto* mfem_solver = &nonlinear_solver_->preconditioner();
 
-  auto configure_amg = [](mfem::Solver* s, int vdim) {
+  const bool use_elasticity_amg = retained_linear_options_ && retained_linear_options_->amg_elasticity;
+
+  auto configure_amg = [use_elasticity_amg](mfem::Solver* s, int vdim, const mfem::ParFiniteElementSpace* space) {
     if (!s) {
       return;
     }
     if (auto* amg = dynamic_cast<mfem::HypreBoomerAMG*>(s)) {
-      amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+      if (use_elasticity_amg) {
+        MFEM_VERIFY(space != nullptr, "Elasticity AMG requires a ParFiniteElementSpace");
+        amg->SetElasticityOptions(const_cast<mfem::ParFiniteElementSpace*>(space));
+      } else {
+        amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+      }
       return;
     }
     if (auto* wrapped = dynamic_cast<smith::SolverWithPreconditioner*>(s)) {
       if (auto* amg = dynamic_cast<mfem::HypreBoomerAMG*>(wrapped->preconditioner())) {
-        amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+        if (use_elasticity_amg) {
+          MFEM_VERIFY(space != nullptr, "Elasticity AMG requires a ParFiniteElementSpace");
+          amg->SetElasticityOptions(const_cast<mfem::ParFiniteElementSpace*>(space));
+        } else {
+          amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+        }
       }
     }
   };
 
   // Top-level AMG preconditioner
-  configure_amg(mfem_solver, best->space().GetVDim());
+  configure_amg(mfem_solver, best->space().GetVDim(), &best->space());
 
   // Block preconditioners: configure per-block AMG with each block's vdim.
   struct BlockSolverAccessor {
@@ -143,7 +155,8 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 
   if (acc.get) {
     for (int i = 0; i < acc.n && static_cast<size_t>(i) < us.size(); ++i) {
-      configure_amg(acc.get(acc.self, i), us[static_cast<size_t>(i)]->space().GetVDim());
+      const auto& ui = us[static_cast<size_t>(i)];
+      configure_amg(acc.get(acc.self, i), ui->space().GetVDim(), &ui->space());
     }
   }
 
@@ -293,7 +306,10 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solveAdjoi
   auto block_jac = std::make_unique<mfem::BlockOperator>(block_offsets);
   for (int i = 0; i < num_rows; ++i) {
     for (int j = 0; j < num_rows; ++j) {
-      block_jac->SetBlock(i, j, jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)].get());
+      auto& J = jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)];
+      if (J) {
+        block_jac->SetBlock(i, j, J.get());
+      }
     }
   }
 

@@ -110,6 +110,12 @@ class BoundaryCondition {
    */
   const mfem::Array<int>& getLocalDofList() const { return local_dofs_; }
 
+  /// @brief Returns stored coefficient.
+  const GeneralCoefficient& coefficient() const { return coef_; }
+
+  /// @brief Returns constrained vector component, if any.
+  const std::optional<int>& component() const { return component_; }
+
   /**
    * @brief Projects the associated coefficient over a solution vector on the DOFs constrained by the boundary condition
    * @param[in] time The time at which to project the boundary condition

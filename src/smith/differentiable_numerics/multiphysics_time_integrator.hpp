@@ -10,29 +10,17 @@
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/differentiable_numerics/field_store.hpp"
+#include "smith/differentiable_numerics/system_base.hpp"
+#include "smith/differentiable_numerics/combined_system.hpp"
 
 namespace smith {
 
-class CoupledSystemSolver;
+class SystemSolver;
 class DirichletBoundaryConditions;
 class BoundaryConditionManager;
-
-/**
- * @brief Solve a set of weak forms.
- * @param weak_forms List of weak forms to solve.
- * @param field_store Field store containing the fields.
- * @param solver The solver to use.
- * @param time_info Current time information.
- * @param params Optional parameter fields.
- * @return std::vector<FieldState> The updated state fields.
- */
-std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak_forms, const FieldStore& field_store,
-                              const CoupledSystemSolver* solver, const TimeInfo& time_info,
-                              const std::vector<FieldState>& params = {});
 
 /**
  * @brief Time integrator for multiphysics problems, coordinating multiple weak forms.
@@ -40,19 +28,17 @@ std::vector<FieldState> solve(const std::vector<std::shared_ptr<WeakForm>>& weak
 class MultiphysicsTimeIntegrator : public StateAdvancer {
  public:
   /**
-   * @brief Construct a new MultiphysicsTimeIntegrator object.
-   * @param field_store Field store containing the fields.
-   * @param weak_forms List of weak forms to coordinate.
-   * @param solver The block solver to use.
-   * @param cycle_zero_weak_form Optional weak form for initial acceleration solve at cycle 0.
-   * @param cycle_zero_solver Optional solver paired with `cycle_zero_weak_form` for the cycle-0 solve.
-   *        If null, the integrator falls back to the main solver supplied here.
+   * @brief Construct a multiphysics advancer around main and auxiliary systems.
+   * @param system Main system solved every timestep.
+   * @param cycle_zero_systems Optional startup systems solved independently before first regular step.
+   * @param post_solve_systems Optional systems solved after the main step.
    */
-  MultiphysicsTimeIntegrator(std::shared_ptr<FieldStore> field_store,
-                             const std::vector<std::shared_ptr<WeakForm>>& weak_forms,
-                             std::shared_ptr<smith::CoupledSystemSolver> solver,
-                             std::shared_ptr<WeakForm> cycle_zero_weak_form = nullptr,
-                             std::shared_ptr<smith::CoupledSystemSolver> cycle_zero_solver = nullptr);
+  MultiphysicsTimeIntegrator(std::shared_ptr<SystemBase> system,
+                             std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems = {},
+                             std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {});
+
+  /// @brief Register a system to be solved after the main solve and reaction computation.
+  void addPostSolveSystem(std::shared_ptr<SystemBase> system);
 
   /**
    * @brief Advance the multiphysics state by one time step.
@@ -67,11 +53,31 @@ class MultiphysicsTimeIntegrator : public StateAdvancer {
       const std::vector<FieldState>& params) const override;
 
  private:
-  std::shared_ptr<FieldStore> field_store_;
-  std::vector<std::shared_ptr<WeakForm>> weak_forms_;
-  std::shared_ptr<smith::CoupledSystemSolver> solver_;
-  std::shared_ptr<WeakForm> cycle_zero_weak_form_;
-  std::shared_ptr<smith::CoupledSystemSolver> cycle_zero_solver_;
+  std::shared_ptr<SystemBase> system_;
+  std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems_;
+  std::vector<std::shared_ptr<SystemBase>> post_solve_systems_;
+
+  std::map<std::string, size_t> main_unknown_name_to_local_idx_;
 };
+
+/**
+ * @brief Build a `MultiphysicsTimeIntegrator` from system-owned or explicit auxiliary systems.
+ *
+ * Missing optional arguments fall back to `system->cycle_zero_systems` and
+ * `system->post_solve_systems`.
+ */
+inline std::shared_ptr<MultiphysicsTimeIntegrator> makeAdvancer(
+    std::shared_ptr<SystemBase> system, std::vector<std::shared_ptr<SystemBase>> cycle_zero_systems = {},
+    std::vector<std::shared_ptr<SystemBase>> post_solve_systems = {})
+{
+  if (cycle_zero_systems.empty()) {
+    cycle_zero_systems = system->cycle_zero_systems;
+  }
+  if (post_solve_systems.empty()) {
+    post_solve_systems = system->post_solve_systems;
+  }
+  return std::make_shared<MultiphysicsTimeIntegrator>(std::move(system), std::move(cycle_zero_systems),
+                                                      std::move(post_solve_systems));
+}
 
 }  // namespace smith

@@ -161,6 +161,14 @@ class DirichletBoundaryConditions {
   /// @brief Return the smith BoundaryConditionManager
   const smith::BoundaryConditionManager& getBoundaryConditionManager() const { return bcs_; }
 
+  /// @brief Constrain the same DOFs as @p source, prescribing the time second derivative of the source values.
+  ///
+  /// Used for the cycle-zero acceleration BC: the constrained DOF set mirrors the displacement BC
+  /// (same mesh nodes, same components), and the prescribed acceleration is approximated by a
+  /// forward finite difference of the displacement boundary condition in time.
+  /// Must be called after the user has finished calling @c set*BCs on @p source.
+  void setSecondTimeDerivativeBCsMatchingDofs(const BoundaryConditionManager& source);
+
  private:
   smith::BoundaryConditionManager bcs_;  ///< boundary condition manager that does the heavy lifting
   mfem::ParFiniteElementSpace& space_;   ///< save the space for the field which will be constrained

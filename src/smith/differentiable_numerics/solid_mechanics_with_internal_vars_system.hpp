@@ -6,481 +6,131 @@
 
 /**
  * @file solid_mechanics_with_internal_vars_system.hpp
- * @brief Defines the SolidMechanicsWithInternalVarsSystem struct and its factory function
+ * @brief Helpers to wire internal-variable materials to composed solid and internal-variable systems.
  */
 
 #pragma once
 
-#include "smith/differentiable_numerics/field_store.hpp"
-#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/state_advancer.hpp"
-#include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
-#include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/numerics/functional/tuple.hpp"
-#include "smith/numerics/functional/tensor.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
-#include "smith/differentiable_numerics/differentiable_physics.hpp"
-#include "smith/physics/weak_form.hpp"
-#include "smith/differentiable_numerics/system_base.hpp"
+#include "smith/differentiable_numerics/solid_mechanics_system.hpp"
+#include "smith/differentiable_numerics/state_variable_system.hpp"
 
 namespace smith {
 
-/**
- * @brief System struct for solid mechanics with an additional internal variable (L2 state).
- *
- * Displacement uses a 4-state second-order layout (displacement_solve_state, displacement, velocity, acceleration).
- * Internal variable uses a 2-state first-order layout (state_solve_state, state).
- * Total: 6 state fields.
- *
- * @tparam dim Spatial dimension.
- * @tparam disp_order Polynomial order for displacement field.
- * @tparam StateSpace Finite element space for the internal variable (e.g., L2<order>).
- * @tparam DisplacementTimeRule Time integration rule for displacement (must have num_states == 4).
- * @tparam InternalVarTimeRule Time integration rule for the internal variable (must have num_states == 2).
- * @tparam parameter_space Parameter spaces for material properties.
- */
-template <int dim, int disp_order, typename StateSpace,
-          typename DisplacementTimeRule = QuasiStaticSecondOrderTimeIntegrationRule,
-          typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule, typename... parameter_space>
-struct SolidMechanicsWithInternalVarsSystem : public SystemBase {
-  static_assert(DisplacementTimeRule::num_states == 4,
-                "SolidMechanicsWithInternalVarsSystem requires a 4-state displacement rule");
-  static_assert(InternalVarTimeRule::num_states == 2,
-                "SolidMechanicsWithInternalVarsSystem requires a 2-state internal variable rule");
+namespace detail {
 
-  // Primary weak form: residual for displacement (u).
-  // Inputs: u, u_old, v_old, a_old, alpha, alpha_old, params...
-  /// using
-  using SolidWeakFormType =
-      TimeDiscretizedWeakForm<dim, H1<disp_order, dim>,
-                              Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<disp_order, dim>,
-                                         H1<disp_order, dim>, StateSpace, StateSpace, parameter_space...>>;
-
-  // State weak form: residual for internal variable (alpha).
-  // Inputs: alpha, alpha_old, u, u_old, v_old, a_old, params...
-  /// using
-  using StateWeakFormType =
-      TimeDiscretizedWeakForm<dim, StateSpace,
-                              Parameters<StateSpace, StateSpace, H1<disp_order, dim>, H1<disp_order, dim>,
-                                         H1<disp_order, dim>, H1<disp_order, dim>, parameter_space...>>;
-
-  // Cycle-zero weak form: test field = acceleration, inputs: u, v, a, alpha, params...
-  /// using
-  using CycleZeroSolidWeakFormType = TimeDiscretizedWeakForm<
-      dim, H1<disp_order, dim>,
-      Parameters<H1<disp_order, dim>, H1<disp_order, dim>, H1<disp_order, dim>, StateSpace, parameter_space...>>;
-
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;                      ///< Solid mechanics weak form.
-  std::shared_ptr<StateWeakFormType> state_weak_form;                      ///< Internal variable weak form.
-  std::shared_ptr<CycleZeroSolidWeakFormType> cycle_zero_solid_weak_form;  ///< Cycle-zero weak form.
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                    ///< Displacement boundary conditions.
-  std::shared_ptr<DirichletBoundaryConditions> state_bc;                   ///< Internal variable boundary conditions.
-  std::shared_ptr<DisplacementTimeRule> disp_time_rule;                    ///< Time integration for displacement.
-  std::shared_ptr<InternalVarTimeRule> state_time_rule;                    ///< Time integration for internal variable.
-
-  /**
-   * @brief Get the list of all state fields (disp_pred, disp, vel, accel, state_pred, state).
-   * @return std::vector<FieldState> List of state fields.
-   */
-  std::vector<FieldState> getStateFields() const
-  {
-    return {field_store->getField(prefix("displacement_solve_state")),
-            field_store->getField(prefix("displacement")),
-            field_store->getField(prefix("velocity")),
-            field_store->getField(prefix("acceleration")),
-            field_store->getField(prefix("state_solve_state")),
-            field_store->getField(prefix("state"))};
+template <typename MaterialType, typename AlphaType, typename AlphaDotType, typename DerivType, typename... ParamTypes>
+/// @brief Dispatch internal-variable material calls with or without explicit `TimeInfo`.
+auto evaluateCoupledInternalVariableMaterial(const MaterialType& material, const TimeInfo& t_info, AlphaType alpha,
+                                             AlphaDotType alpha_dot, DerivType deriv_u, ParamTypes&&... params)
+{
+  if constexpr (requires { material(t_info, alpha, alpha_dot, deriv_u, std::forward<ParamTypes>(params)...); }) {
+    return material(t_info, alpha, alpha_dot, deriv_u, std::forward<ParamTypes>(params)...);
+  } else {
+    return material(alpha, alpha_dot, deriv_u, std::forward<ParamTypes>(params)...);
   }
+}
 
-  /**
-   * @brief Get the list of physical, non-solve state fields.
-   * @return std::vector<FieldState> List of physical fields suitable for output.
-   */
-  std::vector<FieldState> getOutputFieldStates() const
+template <typename MaterialType, typename StateType, typename GradUType, typename GradVType, typename AlphaType,
+          typename... ParamTypes>
+/// @brief Evaluate solid/internal-variable material using TimeInfo-aware signature.
+auto evaluateSolidInternalVariableMaterial(const MaterialType& material, const TimeInfo& t_info, StateType& state,
+                                           const GradUType& grad_u, const GradVType& grad_v, AlphaType alpha,
+                                           ParamTypes&&... params)
+{
+  return material(t_info, state, grad_u, grad_v, alpha, std::forward<ParamTypes>(params)...);
+}
+
+template <typename MaterialType, typename InternalVariableRulePtr>
+/// @brief Adapts coupled internal-variable solids to solid-system material interface.
+struct CoupledSolidInternalVariableMaterialAdapter {
+  /// Material state type forwarded to solid system.
+  using State = typename MaterialType::State;
+
+  MaterialType material;                                ///< Wrapped constitutive model.
+  InternalVariableRulePtr internal_variable_time_rule;  ///< Time rule used to recover current internal variable.
+  double density;                                       ///< Material density exposed for solid residual.
+
+  template <typename StateType, typename GradUType, typename GradVType, typename AlphaType, typename AlphaOldType,
+            typename... ParamTypes>
+  /// @brief Evaluate wrapped material with current internal-variable value.
+  auto operator()(const TimeInfo& t_info, StateType& state, GradUType grad_u, GradVType grad_v, AlphaType alpha,
+                  AlphaOldType alpha_old, ParamTypes&&... params) const
   {
-    return {field_store->getField(prefix("displacement")), field_store->getField(prefix("velocity")),
-            field_store->getField(prefix("acceleration")), field_store->getField(prefix("state"))};
-  }
-
-  /**
-   * @brief Get information about reaction fields for this system.
-   * @return List of ReactionInfo structures.
-   */
-  std::vector<ReactionInfo> getReactionInfos() const
-  {
-    return {{prefix("solid_residual"), &field_store->getField(prefix("displacement")).get()->space()},
-            {prefix("state_residual"), &field_store->getField(prefix("state")).get()->space()}};
-  }
-
-  /**
-   * @brief Create a DifferentiablePhysics object for this system.
-   * @param physics_name The name of the physics.
-   * @return std::unique_ptr<DifferentiablePhysics> The differentiable physics object.
-   */
-  std::unique_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
-  {
-    return std::make_unique<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getReactionInfos());
-  }
-
-  /**
-   * @brief Set the material model for the solid mechanics part.
-   *
-   * The material is called as material(state, grad_u_current, alpha_current, params...) and
-   * must expose a `density` member for the cycle-zero acceleration solve.
-   *
-   * @tparam MaterialType The material model type.
-   * @param material The material model instance.
-   * @param domain_name The name of the domain to apply the material to.
-   */
-  template <typename MaterialType>
-  void setMaterial(const MaterialType& material, const std::string& domain_name)
-  {
-    auto captured_disp_rule = disp_time_rule;
-    auto captured_state_rule = state_time_rule;
-
-    solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto u, auto u_old, auto v_old,
-                                                      auto a_old, auto alpha, auto alpha_old, auto... params) {
-      auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-      auto alpha_current = captured_state_rule->value(t_info, alpha, alpha_old);
-
-      typename MaterialType::State state;
-      auto pk_stress = material(state, get<DERIVATIVE>(u_current), get<VALUE>(alpha_current), params...);
-
-      return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
-    });
-
-    // Cycle-zero: u and v are given, solve for a; alpha at initial condition
-    cycle_zero_solid_weak_form->addBodyIntegral(
-        domain_name, [=](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto alpha, auto... params) {
-          auto alpha_current = alpha;  // at cycle 0, use initial alpha
-          typename MaterialType::State state;
-          auto pk_stress = material(state, get<DERIVATIVE>(u), get<VALUE>(alpha_current), params...);
-
-          return smith::tuple{get<VALUE>(a) * material.density, pk_stress};
-        });
-  }
-
-  /**
-   * @brief Add a body force to the solid mechanics part (with DependsOn).
-   * @param depends_on Selects which primal and parameter fields the contribution depends on.
-   * @param domain_name The name of the domain where the body force is applied.
-   * @param force_function (t, X, u, v, a, alpha, alpha_dot, params...) -> force vector.
-   */
-  template <int... active_parameters, typename BodyForceType>
-  void addBodyForce(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
-                    BodyForceType force_function)
-  {
-    auto captured_disp_rule = disp_time_rule;
-    auto captured_state_rule = state_time_rule;
-    solid_weak_form->addBodySource(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto alpha, auto alpha_old,
-            auto... params) {
-          auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-          auto [alpha_current, alpha_dot] = captured_state_rule->interpolate(t_info, alpha, alpha_old);
-          return force_function(t_info.time(), X, u_current, v_current, a_current, alpha_current, alpha_dot, params...);
-        });
-
-    addCycleZeroBodySourceImpl(
-        domain_name,
-        [=](auto t_info, auto X, auto u, auto v, auto a, auto alpha, auto... params) {
-          auto alpha_dot = 0.0 * alpha;
-          return force_function(t_info.time(), X, u, v, a, alpha, alpha_dot, params...);
-        },
-        std::make_index_sequence<4 + sizeof...(parameter_space)>{});
-  }
-
-  /**
-   * @brief Add a body force that depends on all state and parameter fields.
-   * @param domain_name The name of the domain where the body force is applied.
-   * @param force_function (t, X, u, v, a, alpha, alpha_dot, params...) -> force vector.
-   */
-  template <typename BodyForceType>
-  void addBodyForce(const std::string& domain_name, BodyForceType force_function)
-  {
-    addBodyForceAllParams(domain_name, force_function, std::make_index_sequence<6 + sizeof...(parameter_space)>{});
-  }
-
-  /**
-   * @brief Add a surface traction to the solid mechanics part (with DependsOn).
-   * @param depends_on Selects which primal and parameter fields the contribution depends on.
-   * @param domain_name The name of the boundary where the traction is applied.
-   * @param traction_function (t, X, n, u, v, a, alpha, alpha_dot, params...) -> traction vector.
-   */
-  template <int... active_parameters, typename TractionType>
-  void addTraction(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
-                   TractionType traction_function)
-  {
-    auto captured_disp_rule = disp_time_rule;
-    auto captured_state_rule = state_time_rule;
-    solid_weak_form->addBoundaryFlux(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto alpha, auto alpha_old,
-            auto... params) {
-          auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-          auto [alpha_current, alpha_dot] = captured_state_rule->interpolate(t_info, alpha, alpha_old);
-          return traction_function(t_info.time(), X, n, u_current, v_current, a_current, alpha_current, alpha_dot,
-                                   params...);
-        });
-
-    addCycleZeroBoundaryFluxImpl(
-        domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto alpha, auto... params) {
-          auto alpha_dot = 0.0 * alpha;
-          return traction_function(t_info.time(), X, n, u, v, a, alpha, alpha_dot, params...);
-        },
-        std::make_index_sequence<4 + sizeof...(parameter_space)>{});
-  }
-
-  /**
-   * @brief Add a surface traction that depends on all state and parameter fields.
-   * @param domain_name The name of the boundary where the traction is applied.
-   * @param traction_function (t, X, n, u, v, a, alpha, alpha_dot, params...) -> traction vector.
-   */
-  template <typename TractionType>
-  void addTraction(const std::string& domain_name, TractionType traction_function)
-  {
-    addTractionAllParams(domain_name, traction_function, std::make_index_sequence<6 + sizeof...(parameter_space)>{});
-  }
-
-  /**
-   * @brief Add a pressure boundary condition (follower force) (with DependsOn).
-   * @param depends_on Selects which primal and parameter fields the contribution depends on.
-   * @param domain_name The name of the boundary where the pressure is applied.
-   * @param pressure_function (t, X, u, v, a, alpha, alpha_dot, params...) -> pressure scalar.
-   */
-  template <int... active_parameters, typename PressureType>
-  void addPressure(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
-                   PressureType pressure_function)
-  {
-    auto captured_disp_rule = disp_time_rule;
-    auto captured_state_rule = state_time_rule;
-    solid_weak_form->addBoundaryIntegral(
-        depends_on, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto alpha, auto alpha_old,
-            auto... params) {
-          auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-          auto [alpha_current, alpha_dot] = captured_state_rule->interpolate(t_info, alpha, alpha_old);
-
-          auto x_current = X + u_current;
-          auto n_deformed = cross(get<DERIVATIVE>(x_current));
-          auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
-
-          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), u_current, v_current, a_current,
-                                            alpha_current, alpha_dot, get<VALUE>(params)...);
-
-          return pressure * n_deformed * (1.0 / n_shape_norm);
-        });
-
-    addCycleZeroBoundaryIntegralImpl(
-        domain_name,
-        [=](auto t_info, auto X, auto u, auto v, auto a, auto alpha, auto... params) {
-          auto alpha_val = get<VALUE>(alpha);
-          auto alpha_dot = 0.0 * alpha_val;
-
-          auto x_current = X + u;
-          auto n_deformed = cross(get<DERIVATIVE>(x_current));
-          auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
-
-          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(u), get<VALUE>(v), get<VALUE>(a),
-                                            alpha_val, alpha_dot, get<VALUE>(params)...);
-
-          return pressure * n_deformed * (1.0 / n_shape_norm);
-        },
-        std::make_index_sequence<4 + sizeof...(parameter_space)>{});
-  }
-
-  /**
-   * @brief Add a pressure boundary condition that depends on all state and parameter fields.
-   * @param domain_name The name of the boundary where the pressure is applied.
-   * @param pressure_function (t, X, u, v, a, alpha, alpha_dot, params...) -> pressure scalar.
-   */
-  template <typename PressureType>
-  void addPressure(const std::string& domain_name, PressureType pressure_function)
-  {
-    addPressureAllParams(domain_name, pressure_function, std::make_index_sequence<6 + sizeof...(parameter_space)>{});
-  }
-
-  /**
-   * @brief Add the evolution law for the internal variable.
-   * @tparam EvolutionType The evolution law function type.
-   * @param domain_name The name of the domain.
-   * @param evolution_law Function (t_info, alpha, alpha_dot, grad_u, params...) returning the ODE residual.
-   */
-  template <typename EvolutionType>
-  void addStateEvolution(const std::string& domain_name, EvolutionType evolution_law)
-  {
-    auto captured_disp_rule = disp_time_rule;
-    auto captured_state_rule = state_time_rule;
-
-    state_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto u,
-                                                      auto u_old, auto v_old, auto a_old, auto... params) {
-      auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
-      auto [alpha_current, alpha_dot] = captured_state_rule->interpolate(t_info, alpha, alpha_old);
-
-      auto residual_val = evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot),
-                                        get<DERIVATIVE>(u_current), params...);
-
-      tensor<double, dim> flux{};
-      return smith::tuple{residual_val, flux};
-    });
-  }
-
- private:
-  template <typename BodyForceType, std::size_t... Is>
-  void addBodyForceAllParams(const std::string& domain_name, BodyForceType force_function, std::index_sequence<Is...>)
-  {
-    addBodyForce(DependsOn<static_cast<int>(Is)...>{}, domain_name, force_function);
-  }
-
-  template <typename TractionType, std::size_t... Is>
-  void addTractionAllParams(const std::string& domain_name, TractionType traction_function, std::index_sequence<Is...>)
-  {
-    addTraction(DependsOn<static_cast<int>(Is)...>{}, domain_name, traction_function);
-  }
-
-  template <typename PressureType, std::size_t... Is>
-  void addPressureAllParams(const std::string& domain_name, PressureType pressure_function, std::index_sequence<Is...>)
-  {
-    addPressure(DependsOn<static_cast<int>(Is)...>{}, domain_name, pressure_function);
-  }
-
-  // Cycle-zero helpers: use all-params DependsOn with the 5-state cycle-zero form (u, v, a, alpha, alpha_old)
-  template <typename IntegrandType, std::size_t... Is>
-  void addCycleZeroBodySourceImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
-  {
-    cycle_zero_solid_weak_form->addBodySource(DependsOn<static_cast<int>(Is)...>{}, name, f);
-  }
-
-  template <typename IntegrandType, std::size_t... Is>
-  void addCycleZeroBoundaryFluxImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
-  {
-    cycle_zero_solid_weak_form->addBoundaryFlux(DependsOn<static_cast<int>(Is)...>{}, name, f);
-  }
-
-  template <typename IntegrandType, std::size_t... Is>
-  void addCycleZeroBoundaryIntegralImpl(const std::string& name, IntegrandType f, std::index_sequence<Is...>)
-  {
-    cycle_zero_solid_weak_form->addBoundaryIntegral(DependsOn<static_cast<int>(Is)...>{}, name, f);
+    auto alpha_current = internal_variable_time_rule->value(t_info, alpha, alpha_old);
+    return evaluateSolidInternalVariableMaterial(material, t_info, state, grad_u, grad_v, get<VALUE>(alpha_current),
+                                                 std::forward<ParamTypes>(params)...);
   }
 };
 
+}  // namespace detail
+
 /**
- * @brief Factory function to build a solid mechanics system with internal variable.
- * @param mesh The mesh.
- * @param solver The coupled system solver.
- * @param disp_rule The displacement time integration rule.
- * @param state_rule The internal-variable time integration rule.
- * @param prepend_name Optional field-name prefix.
- * @param cycle_zero_solver Optional override for the cycle-zero solve. Defaults to
- *        `solver->singleBlockSolver(0)`.
- * @param parameter_types Optional parameter field descriptors.
+ * @brief Register a solid material integrand on a SolidMechanicsSystem that is coupled to
+ *        an InternalVariableSystem carrying internal variables.
+ *
+ * Assumes:
+ *  - solid was built with state fields as leading coupling fields
+ *    (first 2 coupling positions: state_solve_state, state).
+ *  - state was built with solid displacement fields as leading coupling fields
+ *    (first 4 coupling positions: displacement_solve_state, displacement, velocity, acceleration).
+ *
+ * Solid material callable must satisfy:
+ *   material(t_info, state, grad_u, grad_v, alpha_value, params...) -> PK1
  */
-template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
-SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule, InternalVarTimeRule,
-                                     parameter_space...>
-buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                          DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
-                                          std::string prepend_name = "",
-                                          std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
-                                          FieldType<parameter_space>... parameter_types)
+template <int dim, int disp_order, typename DispRule, typename SolidCoupling, typename StateSpace, typename StateRule,
+          typename StateCoupling, typename MaterialType>
+void setCoupledSolidMechanicsInternalVariableMaterial(
+    std::shared_ptr<SolidMechanicsSystem<dim, disp_order, DispRule, SolidCoupling>> solid,
+    std::shared_ptr<InternalVariableSystem<dim, StateSpace, StateRule, StateCoupling>> internal_variables,
+    const MaterialType& material, const std::string& domain_name)
 {
-  auto field_store = std::make_shared<FieldStore>(mesh, 100);
+  auto captured_internal_variable_rule = internal_variables->internal_variable_time_rule;
+  auto solid_material =
+      detail::CoupledSolidInternalVariableMaterialAdapter<MaterialType, decltype(captured_internal_variable_rule)>{
+          material, captured_internal_variable_rule, material.density};
 
-  auto prefix = [&](const std::string& name) {
-    if (prepend_name.empty()) {
-      return name;
-    }
-    return prepend_name + "_" + name;
-  };
-
-  // Add shape displacement
-  FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
-  field_store->addShapeDisp(shape_disp_type);
-
-  // 1. Displacement fields (4-state second-order)
-  auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>(disp_rule);
-  FieldType<H1<disp_order, dim>> disp_type(prefix("displacement_solve_state"));
-  auto disp_bc = field_store->addIndependent(disp_type, disp_time_rule_ptr);
-  auto disp_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::VAL, prefix("displacement"));
-  auto velo_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DOT, prefix("velocity"));
-  auto accel_old_type = field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, prefix("acceleration"));
-
-  // 2. Internal variable fields (2-state first-order)
-  auto state_time_rule_ptr = std::make_shared<InternalVarTimeRule>(state_rule);
-  FieldType<StateSpace> state_type(prefix("state_solve_state"));
-  auto state_bc = field_store->addIndependent(state_type, state_time_rule_ptr);
-  auto state_old_type = field_store->addDependent(state_type, FieldStore::TimeDerivative::VAL, prefix("state"));
-
-  // 3. Parameters
-  std::vector<FieldState> parameter_fields;
-  (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
-  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
-
-  using SystemType = SolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace, DisplacementTimeRule,
-                                                          InternalVarTimeRule, parameter_space...>;
-
-  // 4. Solid weak form: residual for u (inputs: u, u_old, v_old, a_old, alpha, alpha_old, params...)
-  std::string solid_res_name = prefix("solid_residual");
-  auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
-      solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-      field_store->createSpaces(solid_res_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
-                                state_type, state_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
-
-  // 5. State weak form: residual for alpha (inputs: alpha, alpha_old, u, u_old, v_old, a_old, params...)
-  std::string state_res_name = prefix("state_residual");
-  auto state_weak_form = std::make_shared<typename SystemType::StateWeakFormType>(
-      state_res_name, field_store->getMesh(), field_store->getField(state_type.name).get()->space(),
-      field_store->createSpaces(state_res_name, state_type.name, state_type, state_old_type, disp_type, disp_old_type,
-                                velo_old_type, accel_old_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
-
-  // 6. Cycle-zero weak form: solve for acceleration (inputs: u, v, a, alpha, params...)
-  std::string cycle_zero_name = prefix("solid_reaction");
-  auto cycle_zero_solid_weak_form = std::make_shared<typename SystemType::CycleZeroSolidWeakFormType>(
-      cycle_zero_name, field_store->getMesh(), field_store->getField(accel_old_type.name).get()->space(),
-      field_store->createSpaces(cycle_zero_name, accel_old_type.name, disp_type, velo_old_type, accel_old_type,
-                                state_type, FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
-
-  if (cycle_zero_solver == nullptr) {
-    cycle_zero_solver = solver->singleBlockSolver(0);
-  }
-  SLIC_ERROR_IF(cycle_zero_solver == nullptr,
-                "Could not derive a cycle-zero solver for block 0 from the provided internal-vars solid mechanics "
-                "solver.");
-
-  // Solver and Advancer
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, state_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver,
-                                                               cycle_zero_solid_weak_form, cycle_zero_solver);
-
-  return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
-                    solid_weak_form,
-                    state_weak_form,
-                    cycle_zero_solid_weak_form,
-                    disp_bc,
-                    state_bc,
-                    disp_time_rule_ptr,
-                    state_time_rule_ptr};
+  solid->setMaterial(solid_material, domain_name);
 }
 
 /**
- * @brief Factory function to build a solid mechanics with internal vars system (without physics name).
+ * @brief Register an internal-variable evolution law using solid displacement coupling.
+ *
+ * Evolution callable may satisfy either:
+ *   material(t_info, alpha, alpha_dot, grad_u, params...) -> residual
+ * or
+ *   material(alpha, alpha_dot, grad_u, params...) -> residual
  */
-template <int dim, int disp_order, typename StateSpace, typename DisplacementTimeRule, typename InternalVarTimeRule,
-          typename... parameter_space>
-auto buildSolidMechanicsWithInternalVarsSystem(std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-                                               DisplacementTimeRule disp_rule, InternalVarTimeRule state_rule,
-                                               std::shared_ptr<CoupledSystemSolver> cycle_zero_solver = nullptr,
-                                               FieldType<parameter_space>... parameter_types)
+template <int dim, typename StateSpace, typename StateRule, typename StateCoupling, int disp_order, typename DispRule,
+          typename SolidCoupling, typename MaterialType>
+void setCoupledInternalVariableMaterial(
+    std::shared_ptr<InternalVariableSystem<dim, StateSpace, StateRule, StateCoupling>> internal_variables,
+    std::shared_ptr<SolidMechanicsSystem<dim, disp_order, DispRule, SolidCoupling>> solid, const MaterialType& material,
+    const std::string& domain_name)
 {
-  return buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(mesh, solver, disp_rule, state_rule, "",
-                                                                                cycle_zero_solver, parameter_types...);
+  auto captured_disp_rule = solid->disp_time_rule;
+  internal_variables->addEvolution(domain_name, [=](auto t_info, auto alpha, auto alpha_dot, auto u, auto u_old,
+                                                    auto v_old, auto a_old, auto... params) {
+    auto [u_current, v_current, a_current] = captured_disp_rule->interpolate(t_info, u, u_old, v_old, a_old);
+    return detail::evaluateCoupledInternalVariableMaterial(material, t_info, alpha, alpha_dot,
+                                                           get<DERIVATIVE>(u_current), params...);
+  });
+}
+
+template <int dim, int disp_order, typename DispRule, typename SolidCoupling, typename StateSpace, typename StateRule,
+          typename StateCoupling, typename MaterialType>
+/**
+ * @brief Backward-compatible alias for `setCoupledSolidMechanicsInternalVariableMaterial`.
+ * @param solid Solid system receiving internal-variable coupling.
+ * @param state Backward-compatible internal-variable system alias.
+ * @param material Material model.
+ * @param domain_name Domain on which to apply the material.
+ */
+void setCoupledSolidMechanicsInternalVarsMaterial(
+    std::shared_ptr<SolidMechanicsSystem<dim, disp_order, DispRule, SolidCoupling>> solid,
+    std::shared_ptr<InternalVariableSystem<dim, StateSpace, StateRule, StateCoupling>> state,
+    const MaterialType& material, const std::string& domain_name)
+{
+  setCoupledSolidMechanicsInternalVariableMaterial(solid, state, material, domain_name);
 }
 
 }  // namespace smith

@@ -55,6 +55,9 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
    */
   virtual void SetOperator(const mfem::Operator& jacobian);
 
+  int numSubSolvers() const { return static_cast<int>(mfem_solvers_.size()); }
+  mfem::Solver* subSolver(int i) const { return mfem_solvers_.at(static_cast<size_t>(i)).get(); }
+
   virtual ~BlockDiagonalPreconditioner();
 
  private:
@@ -126,6 +129,9 @@ class BlockTriangularPreconditioner : public mfem::Solver {
    * @param jacobian The supplied linearized Jacobian. Note that it is always a block operator
    */
   virtual void SetOperator(const mfem::Operator& jacobian);
+
+  int numSubSolvers() const { return static_cast<int>(mfem_solvers_.size()); }
+  mfem::Solver* subSolver(int i) const { return mfem_solvers_.at(static_cast<size_t>(i)).get(); }
 
   virtual ~BlockTriangularPreconditioner();
 
@@ -230,6 +236,9 @@ class BlockSchurPreconditioner : public mfem::Solver {
    * @param jacobian The supplied linearized Jacobian. Note that it is always a block operator
    */
   virtual void SetOperator(const mfem::Operator& jacobian);
+
+  int numSubSolvers() const { return static_cast<int>(mfem_solvers_.size()); }
+  mfem::Solver* subSolver(int i) const { return mfem_solvers_.at(static_cast<size_t>(i)).get(); }
 
   virtual ~BlockSchurPreconditioner();
 

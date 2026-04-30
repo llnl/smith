@@ -103,12 +103,13 @@ struct TimesteppingOptions {
 /// Linear solution method indicator
 enum class LinearSolver
 {
-  CG,        /**< Conjugate gradient */
-  GMRES,     /**< Generalized minimal residual method */
-  SuperLU,   /**< SuperLU MPI-enabled direct nodal solver */
-  Strumpack, /**< Strumpack MPI-enabled direct frontal solver*/
-  PetscCG,   /**< PETSc MPI-enabled conjugate gradient solver */
-  PetscGMRES /**< PETSc MPI-enabled generalize minimal residual solver */
+  CG,         /**< Conjugate gradient */
+  GMRES,      /**< Generalized minimal residual method */
+  SuperLU,    /**< SuperLU MPI-enabled direct nodal solver */
+  Strumpack,  /**< Strumpack MPI-enabled direct frontal solver*/
+  PetscCG,    /**< PETSc MPI-enabled conjugate gradient solver */
+  PetscGMRES, /**< PETSc MPI-enabled generalize minimal residual solver */
+  None        /**< Preconditioner application only, No linear solver Krylov iterations */
 };
 // _linear_solvers_end
 
@@ -128,6 +129,8 @@ inline std::string linearName(const LinearSolver& s)
       return "PetscCG";
     case LinearSolver::PetscGMRES:
       return "PetscGMRES";
+    case LinearSolver::None:
+      return "None";
   }
   // This cannot happen, but GCC doesn't know that
   return "UNKNOWN";
@@ -141,6 +144,7 @@ inline std::map<std::string, LinearSolver> linearSolverMap = {
     {"CG", LinearSolver::CG},           {"GMRES", LinearSolver::GMRES},
     {"SuperLU", LinearSolver::SuperLU}, {"Strumpack", LinearSolver::Strumpack},
     {"PetscCG", LinearSolver::PetscCG}, {"PetscGMRES", LinearSolver::PetscGMRES},
+    {"None", LinearSolver::None},
 };
 
 // Add a custom list of strings? conduit node?
@@ -448,6 +452,9 @@ struct LinearSolverOptions {
 
   /// Schur approximation type
   SchurApproxType schur_approx_type = SchurApproxType::DiagInv;
+
+  /// Whether to use Hypre's elasticity-specific AMG options (requires byVDIM ordering)
+  bool amg_elasticity = false;
 };
 // _linear_options_end
 

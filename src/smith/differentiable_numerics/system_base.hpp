@@ -17,7 +17,7 @@
 #include <utility>
 #include "field_state.hpp"
 #include "field_store.hpp"
-#include "coupled_system_solver.hpp"
+#include "system_solver.hpp"
 #include "state_advancer.hpp"
 #include "smith/physics/common.hpp"
 #include "mfem.hpp"
@@ -26,14 +26,6 @@ namespace smith {
 
 template <typename... Args>
 struct Parameters;
-
-/**
- * @brief Information about a dual field.
- */
-struct ReactionInfo {
-  std::string name;                                    ///< The name of the dual field.
-  const mfem::ParFiniteElementSpace* space = nullptr;  ///< The finite element space of the dual field.
-};
 
 namespace detail {
 
@@ -58,33 +50,89 @@ using TimeRuleParams =
  * @brief Base struct for physics systems containing common members and helper functions.
  */
 struct SystemBase {
-  std::shared_ptr<FieldStore> field_store;      ///< Field store managing the system's fields.
-  std::shared_ptr<CoupledSystemSolver> solver;  ///< The solver for the system.
-  std::shared_ptr<StateAdvancer> advancer;      ///< The state advancer.
-  std::vector<FieldState> parameter_fields;     ///< Optional parameter fields.
-  std::string prepend_name;                     ///< Optional prepended name for all fields.
+  // --- equations ---
+  std::vector<std::shared_ptr<WeakForm>> weak_forms;  ///< Weak forms solved together by this system.
 
-  /**
-   * @brief Get the list of all parameter fields.
-   * @return const std::vector<FieldState>& List of parameter fields.
-   */
-  const std::vector<FieldState>& getParameterFields() const { return parameter_fields; }
+  // --- infrastructure ---
+  std::shared_ptr<FieldStore> field_store;  ///< Field store managing the system's fields.
+  std::shared_ptr<SystemSolver> solver;     ///< The solver for the system.
+  std::vector<std::shared_ptr<SystemBase>>
+      cycle_zero_systems;  ///< Optional startup solves executed before first timestep. Each entry is solved
+                           ///< independently; cycle-zero solves do not couple across subsystems.
+  std::vector<std::shared_ptr<SystemBase>> post_solve_systems;  ///< Optional systems solved after main state update.
 
+  /// @brief Construct an empty system shell.
+  SystemBase() = default;
   /**
-   * @brief Helper function to prepend the physics name to a string.
-   * @param name The name to prepend to.
-   * @return std::string The prepended name.
+   * @brief Construct a system from a field store, solver, and weak forms.
+   * @param fs Field store shared by all weak forms.
+   * @param sol Solver used for `solve`.
+   * @param wfs Weak forms owned by this system.
    */
-  std::string prefix(const std::string& name) const
+  explicit SystemBase(std::shared_ptr<FieldStore> fs, std::shared_ptr<SystemSolver> sol = nullptr,
+                      std::vector<std::shared_ptr<WeakForm>> wfs = {})
+      : weak_forms(std::move(wfs)), field_store(std::move(fs)), solver(std::move(sol))
   {
-    if (prepend_name.empty()) {
-      return name;
-    }
-    return prepend_name + "_" + name;
   }
+  virtual ~SystemBase() = default;
 
-  /// @brief Metadata for dual outputs exported by this system.
-  std::vector<ReactionInfo> getReactionInfos() const { return {}; }
+  /**
+   * @brief Solve the system using the internal weak_forms and solver.
+   * @param time_info Current time information.
+   * @return std::vector<FieldState> The updated state fields from the solver.
+   */
+  virtual std::vector<FieldState> solve(const TimeInfo& time_info) const;
+
+  /**
+   * @brief Compute reactions after solving the main state.
+   * @param time_info Current time information.
+   * @param states_for_reactions The fields configured for reaction computation.
+   * @return std::vector<ReactionState> Computed reactions across all weak_forms.
+   */
+  virtual std::vector<ReactionState> computeReactions(const TimeInfo& time_info,
+                                                      const std::vector<FieldState>& states_for_reactions) const;
 };
 
+/**
+ * @brief Convenience factory for a plain `SystemBase`.
+ */
+inline std::shared_ptr<SystemBase> makeSystem(std::shared_ptr<FieldStore> field_store,
+                                              std::shared_ptr<SystemSolver> solver,
+                                              std::vector<std::shared_ptr<WeakForm>> weak_forms)
+{
+  return std::make_shared<SystemBase>(std::move(field_store), std::move(solver), std::move(weak_forms));
+}
+
+}  // namespace smith
+
+namespace smith {
+namespace detail {
+
+/// @brief Expands coupling tuple into trailing weak-form space arguments.
+template <typename WeakFormT, typename FieldStorePtr, typename... Args, std::size_t... Is>
+auto buildWeakFormWithCouplingImpl(const FieldStorePtr& field_store, const std::string& weak_form_name,
+                                   const std::string& unknown_field_name, const std::tuple<Args...>& args_tuple,
+                                   std::index_sequence<Is...>)
+{
+  auto coupling_fields_tuple = std::get<sizeof...(Args) - 1>(args_tuple);
+  return std::apply(
+      [&](const auto&... coupling_fields) {
+        return std::make_shared<WeakFormT>(weak_form_name, field_store->getMesh(),
+                                           field_store->getField(unknown_field_name).get()->space(),
+                                           field_store->createSpaces(weak_form_name, unknown_field_name,
+                                                                     std::get<Is>(args_tuple)..., coupling_fields...));
+      },
+      coupling_fields_tuple);
+}
+
+/// @brief Builds weak form using regular args plus final coupling pack argument.
+template <typename WeakFormT, typename FieldStorePtr, typename... Args>
+auto buildWeakFormWithCoupling(const FieldStorePtr& field_store, const std::string& weak_form_name,
+                               const std::string& unknown_field_name, const Args&... args)
+{
+  return buildWeakFormWithCouplingImpl<WeakFormT>(field_store, weak_form_name, unknown_field_name, std::tie(args...),
+                                                  std::make_index_sequence<sizeof...(Args) - 1>{});
+}
+
+}  // namespace detail
 }  // namespace smith

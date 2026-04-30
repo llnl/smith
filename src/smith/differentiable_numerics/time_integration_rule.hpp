@@ -114,6 +114,7 @@ class QuasiStaticRule : public TimeIntegrationRule {
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1>
+  /// @brief Return the static field value.
   SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
   {
     return field_new;
@@ -121,6 +122,7 @@ class QuasiStaticRule : public TimeIntegrationRule {
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1>
+  /// @brief Return zero first derivative for a static field.
   SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
   {
     return zero{};
@@ -150,6 +152,65 @@ class QuasiStaticRule : public TimeIntegrationRule {
   {
     SLIC_ERROR("QuasiStaticRule does not support second derivatives.");
     return states[0];
+  }
+};
+
+/// @brief encodes rules for static postprocessing fields with zero time derivatives.
+class StaticTimeIntegrationRule : public TimeIntegrationRule {
+ public:
+  static constexpr int num_states = 1;  ///< number of states required by this rule (compile-time)
+
+  int num_args() const override { return num_states; }
+
+  /**
+   * @brief Return the static field value.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
+  {
+    return field_new;
+  }
+
+  /**
+   * @brief Return zero first derivative for a static field.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
+  {
+    return zero{};
+  }
+
+  /**
+   * @brief Return zero second derivative for a static field.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto ddot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
+  {
+    return zero{};
+  }
+
+  /**
+   * @brief Return value, first derivative, and second derivative for a static field.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto interpolate(const TimeInfo& t, const T1& field_new) const
+  {
+    return std::make_tuple(value(t, field_new), dot(t, field_new), ddot(t, field_new));
+  }
+
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
+    return value(t, states[0]);
+  }
+
+  FieldState corrected_dot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    return zeroCopy(states[0]);
+  }
+
+  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    return zeroCopy(states[0]);
   }
 };
 

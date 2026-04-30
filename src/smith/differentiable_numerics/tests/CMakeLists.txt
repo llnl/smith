@@ -12,12 +12,13 @@ set(differentiable_numerics_test_source
     test_solid_dynamics.cpp
     test_explicit_dynamics.cpp
     test_porous_heat_sink.cpp
-    test_thermo_mechanics.cpp
+    test_combined_thermo_mechanics.cpp
     test_thermal_static.cpp
     test_solid_static_with_internal_vars.cpp
     test_multiphysics_time_integrator.cpp
     test_mixed_poisson.cpp
     test_amg_vdim_block_preconditioner.cpp
+    test_thermo_mechanics_with_internal_vars.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

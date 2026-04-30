@@ -13,7 +13,7 @@
 #include "mpi.h"
 #include "mfem.hpp"
 
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/physics/functional_objective.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/physics/state/state_manager.hpp"
@@ -38,9 +38,9 @@ struct ConstrainedWeakFormFixture : public testing::Test {
   using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
 
   using SolidWeakFormT =
-      smith::TimeDiscretizedWeakForm<dim, smith::H1<disp_order, dim>,
-                                     smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
-                                                       smith::H1<disp_order, dim>, DensitySpace>>;
+      smith::FunctionalWeakForm<dim, smith::H1<disp_order, dim>,
+                                smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
+                                                  smith::H1<disp_order, dim>, DensitySpace>>;
 
   enum FIELD
   {
