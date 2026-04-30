@@ -926,6 +926,10 @@ class PcgBlockSolver : public mfem::NewtonSolver {
   mutable size_t num_residuals = 0;
   /// Internal counter for matrix assembles
   mutable size_t num_jacobian_assembles = 0;
+  /// Internal counter for JacobianOperator evaluations
+  mutable size_t num_jacobian_operator_evals = 0;
+  /// Internal counter for direct diagonal assemblies
+  mutable size_t num_diagonal_assembles = 0;
   /// Internal counter for preconditioner operator updates
   mutable size_t num_preconditioner_updates = 0;
   /// Internal counter for accepted prefix blocks
@@ -961,6 +965,8 @@ class PcgBlockSolver : public mfem::NewtonSolver {
 
   /// Optional matrix-free tangent action, y = J(x) dx
   MatrixFreeTangentAction matrix_free_tangent_action;
+  /// Optional JacobianOperator factory
+  JacobianOperatorFactory jacobian_operator_factory;
 
 #ifdef MFEM_USE_MPI
   /// Constructor
@@ -997,12 +1003,23 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     matrix_free_tangent_action = std::move(tangent_action);
   }
 
+  /// Set an optional JacobianOperator factory.
+  void setJacobianOperator(JacobianOperatorFactory jacobian_operator)
+  {
+    jacobian_operator_factory = std::move(jacobian_operator);
+  }
+
   /// Apply the tangent at x to dx.
   void hessVec(const mfem::Vector& x, const mfem::Vector& dx, mfem::Vector& y) const
   {
     SMITH_MARK_FUNCTION;
     ++num_hess_vecs;
-    if (matrix_free_tangent_action) {
+    if (jacobian_operator_factory) {
+      ++num_jacobian_operator_evals;
+      std::unique_ptr<JacobianOperator> jacobian_operator = jacobian_operator_factory(x);
+      SLIC_ERROR_ROOT_IF(!jacobian_operator, "JacobianOperator factory returned a null operator.");
+      jacobian_operator->Mult(dx, y);
+    } else if (matrix_free_tangent_action) {
       matrix_free_tangent_action(x, dx, y);
     } else {
       grad->Mult(dx, y);
@@ -1024,6 +1041,8 @@ class PcgBlockSolver : public mfem::NewtonSolver {
             .num_hess_vecs = num_hess_vecs,
             .num_preconds = num_preconds,
             .num_jacobian_assembles = num_jacobian_assembles,
+            .num_jacobian_operator_evals = num_jacobian_operator_evals,
+            .num_diagonal_assembles = num_diagonal_assembles,
             .num_preconditioner_updates = num_preconditioner_updates,
             .num_prefix_accepts = num_prefix_accepts,
             .num_momentum_resets = num_momentum_resets,
@@ -1056,6 +1075,8 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     num_preconds = 0;
     num_residuals = 0;
     num_jacobian_assembles = 0;
+    num_jacobian_operator_evals = 0;
+    num_diagonal_assembles = 0;
     num_preconditioner_updates = 0;
     num_prefix_accepts = 0;
     num_momentum_resets = 0;
@@ -1495,6 +1516,14 @@ void EquationSolver::setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_
   auto* pcg_block = dynamic_cast<PcgBlockSolver*>(nonlin_solver_.get());
   if (pcg_block) {
     pcg_block->setMatrixFreeTangentAction(std::move(tangent_action));
+  }
+}
+
+void EquationSolver::setJacobianOperator(JacobianOperatorFactory jacobian_operator)
+{
+  auto* pcg_block = dynamic_cast<PcgBlockSolver*>(nonlin_solver_.get());
+  if (pcg_block) {
+    pcg_block->setJacobianOperator(std::move(jacobian_operator));
   }
 }
 

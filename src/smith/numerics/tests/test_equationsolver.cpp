@@ -138,6 +138,7 @@ TEST(EquationSolver, PcgBlockUsesMatrixFreeTangentAction)
   using trial_space = H1<p>;
 
   auto [fes, fec] = smith::generateParFiniteElementSpace<test_space>(&pmesh);
+  (void)fec;
 
   mfem::HypreParVector x_exact(fes.get());
   mfem::HypreParVector x_computed(fes.get());
@@ -201,6 +202,121 @@ TEST(EquationSolver, PcgBlockUsesMatrixFreeTangentAction)
   ASSERT_TRUE(diagnostics.has_value());
   EXPECT_GT(num_tangent_actions, 0);
   EXPECT_EQ(diagnostics->num_hess_vecs, static_cast<size_t>(num_tangent_actions));
+  EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
+  EXPECT_LT(x_computed.DistanceTo(x_exact.GetData()), 1.0e-10);
+}
+
+TEST(EquationSolver, PcgBlockUsesJacobianOperator)
+{
+  class MatrixJacobianOperator : public JacobianOperator {
+   public:
+    explicit MatrixJacobianOperator(std::unique_ptr<mfem::HypreParMatrix> matrix)
+        : JacobianOperator(matrix->Height(), matrix->Width()), matrix_(std::move(matrix))
+    {
+    }
+
+    void Mult(const mfem::Vector& dx, mfem::Vector& y) const override { matrix_->Mult(dx, y); }
+
+    std::unique_ptr<mfem::HypreParMatrix> assemble() override { return std::move(matrix_); }
+
+    void assembleDiagonal(mfem::Vector& diag) const override { matrix_->GetDiag(diag); }
+
+   private:
+    std::unique_ptr<mfem::HypreParMatrix> matrix_;
+  };
+
+  auto mesh = mfem::Mesh::MakeCartesian2D(1, 1, mfem::Element::QUADRILATERAL);
+  auto pmesh = mfem::ParMesh(MPI_COMM_WORLD, mesh);
+
+  pmesh.EnsureNodes();
+  pmesh.ExchangeFaceNbrData();
+
+  constexpr int p = 1;
+  constexpr int dim = 2;
+  using test_space = H1<p>;
+  using trial_space = H1<p>;
+
+  auto [fes, fec] = smith::generateParFiniteElementSpace<test_space>(&pmesh);
+  (void)fec;
+
+  mfem::HypreParVector x_exact(fes.get());
+  mfem::HypreParVector x_computed(fes.get());
+  x_exact.Randomize(0);
+  x_computed = 0.0;
+
+  std::unique_ptr<mfem::HypreParMatrix> J;
+
+  Functional<test_space(trial_space)> residual(fes.get(), {fes.get()});
+  Domain domain = EntireDomain(pmesh);
+  residual.AddDomainIntegral(
+      Dimension<dim>{}, DependsOn<0>{},
+      [](double /*t*/, auto, auto scalar) {
+        auto [u, du_dx] = scalar;
+        return smith::tuple{u, du_dx};
+      },
+      domain);
+
+  {
+    constexpr double time = 0.0;
+    auto [val, grad] = residual(time, differentiate_wrt(x_exact));
+    FunctionalJacobianOperator<decltype(grad)> jacobian_operator(grad);
+
+    mfem::Vector dx(x_exact.Size());
+    mfem::Vector y_grad(x_exact.Size());
+    mfem::Vector y_operator(x_exact.Size());
+    dx.Randomize(1);
+    grad.Mult(dx, y_grad);
+    jacobian_operator.Mult(dx, y_operator);
+
+    EXPECT_LT(y_operator.DistanceTo(y_grad.GetData()), 1.0e-14);
+  }
+
+  StdFunctionOperator residual_opr(
+      fes->TrueVSize(),
+      [&x_exact, &residual](const mfem::Vector& x, mfem::Vector& r) {
+        constexpr double time = 0.0;
+        r = residual(time, x);
+        r -= residual(time, x_exact);
+      },
+      [&residual, &J](const mfem::Vector& x) -> mfem::Operator& {
+        constexpr double time = 0.0;
+        auto [val, grad] = residual(time, differentiate_wrt(x));
+        J = assemble(grad);
+        return *J;
+      });
+
+  const LinearSolverOptions lin_opts = {.linear_solver = LinearSolver::CG,
+                                        .preconditioner = Preconditioner::HypreJacobi,
+                                        .relative_tol = 1.0e-12,
+                                        .absolute_tol = 1.0e-14,
+                                        .max_iterations = 500,
+                                        .print_level = 0};
+
+  const NonlinearSolverOptions nonlin_opts = {.nonlin_solver = NonlinearSolver::PcgBlock,
+                                              .relative_tol = 1.0e-12,
+                                              .absolute_tol = 1.0e-14,
+                                              .max_iterations = 500,
+                                              .print_level = 0};
+
+  EquationSolver eq_solver(nonlin_opts, lin_opts);
+  eq_solver.setOperator(residual_opr);
+
+  int num_operator_evals = 0;
+  eq_solver.setJacobianOperator([&residual, &num_operator_evals](const mfem::Vector& x) {
+    constexpr double time = 0.0;
+    auto [val, grad] = residual(time, differentiate_wrt(x));
+    ++num_operator_evals;
+    return std::make_unique<MatrixJacobianOperator>(assemble(grad));
+  });
+
+  eq_solver.solve(x_computed);
+
+  const auto diagnostics = eq_solver.pcgBlockDiagnostics();
+  ASSERT_TRUE(diagnostics.has_value());
+  EXPECT_GT(num_operator_evals, 0);
+  EXPECT_EQ(diagnostics->num_hess_vecs, static_cast<size_t>(num_operator_evals));
+  EXPECT_EQ(diagnostics->num_jacobian_operator_evals, static_cast<size_t>(num_operator_evals));
+  EXPECT_EQ(diagnostics->num_diagonal_assembles, 0u);
   EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
   EXPECT_LT(x_computed.DistanceTo(x_exact.GetData()), 1.0e-10);
 }

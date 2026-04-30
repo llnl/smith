@@ -912,6 +912,8 @@ class Functional<test(trials...), exec> {
       form_.P_test_->MultTranspose(local_diag, diag);
     }
 
+    void assembleDiagonal(mfem::Vector& diag) const { AssembleDiagonal(diag); }
+
     std::unique_ptr<mfem::HypreParMatrix> assemble()
     {
       if (row_ptr.empty()) {
@@ -1040,7 +1042,6 @@ class Functional<test(trials...), exec> {
     };
 
     friend auto assemble(Gradient& g) { return g.assemble(); }
-    friend void assemble_diagonal(const Gradient& g, mfem::Vector& diag) { g.AssembleDiagonal(diag); }
 
    private:
     /// @brief The "parent" @p Functional to calculate gradients with

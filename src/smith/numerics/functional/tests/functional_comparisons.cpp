@@ -4,9 +4,10 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <set>
@@ -32,6 +33,8 @@
 using namespace smith;
 
 int nsamples = 1;  // because mfem doesn't take in unsigned int
+bool run_diagonal_benchmark = false;
+int diagonal_benchmark_samples = 5;
 
 constexpr bool verbose = false;
 std::unique_ptr<mfem::ParMesh> mesh2D;
@@ -185,7 +188,7 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
   std::unique_ptr<mfem::HypreParMatrix> J_func = assemble(drdU);
 
   mfem::Vector diag_direct(U.Size());
-  drdU.AssembleDiagonal(diag_direct);
+  drdU.assembleDiagonal(diag_direct);
 
   mfem::Vector diag_assembled(U.Size());
   J_func->GetDiag(diag_assembled);
@@ -311,7 +314,7 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
   std::unique_ptr<mfem::HypreParMatrix> J_func = assemble(drdU);
 
   mfem::Vector diag_direct(U.Size());
-  drdU.AssembleDiagonal(diag_direct);
+  drdU.assembleDiagonal(diag_direct);
 
   mfem::Vector diag_assembled(U.Size());
   J_func->GetDiag(diag_assembled);
@@ -479,6 +482,93 @@ TEST(Elasticity, 3DLinear) { functional_test(*mesh3D, H1<1, 3>{}, H1<1, 3>{}, Di
 TEST(Elasticity, 3DQuadratic) { functional_test(*mesh3D, H1<2, 3>{}, H1<2, 3>{}, Dimension<3>{}); }
 TEST(Elasticity, 3DCubic) { functional_test(*mesh3D, H1<3, 3>{}, H1<3, 3>{}, Dimension<3>{}); }
 
+namespace {
+
+template <typename Function>
+double time_on_slowest_rank(Function&& function)
+{
+  auto [num_ranks, rank] = smith::getMPIInfo();
+  (void)rank;
+  if (num_ranks > 1) {
+    MPI_Barrier(MPI_COMM_WORLD);
+  }
+
+  auto start = std::chrono::steady_clock::now();
+  function();
+  auto stop = std::chrono::steady_clock::now();
+
+  double elapsed =
+      std::chrono::duration_cast<std::chrono::duration<double>>(stop - start).count();
+  double max_elapsed = elapsed;
+  if (num_ranks > 1) {
+    MPI_Allreduce(&elapsed, &max_elapsed, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+  }
+  return max_elapsed;
+}
+
+}  // namespace
+
+TEST(Elasticity, DiagonalAssemblyBenchmark)
+{
+  if (!run_diagonal_benchmark) {
+    GTEST_SKIP() << "Set --run-diagonal-benchmark to time direct diagonal assembly.";
+  }
+
+  static constexpr int dim = 3;
+  using test_space = H1<2, dim>;
+  using trial_space = H1<2, dim>;
+
+  auto [fespace, fec] = smith::generateParFiniteElementSpace<test_space>(mesh3D.get());
+  (void)fec;
+
+  mfem::ParGridFunction u_global(fespace.get());
+  int seed = 9;
+  u_global.Randomize(seed);
+
+  mfem::Vector U(fespace->TrueVSize());
+  u_global.GetTrueDofs(U);
+
+  Functional<test_space(trial_space), exec_space> residual(fespace.get(), {fespace.get()});
+  Domain domain = EntireDomain(*mesh3D);
+  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, StressFunctor<dim>{}, domain);
+
+  auto [r, drdU] = residual(0.0, differentiate_wrt(U));
+
+  mfem::Vector diag_direct(U.Size());
+  mfem::Vector diag_assembled(U.Size());
+  drdU.assembleDiagonal(diag_direct);
+  std::unique_ptr<mfem::HypreParMatrix> J_warmup = assemble(drdU);
+  J_warmup->GetDiag(diag_assembled);
+
+  const int samples = std::max(diagonal_benchmark_samples, 1);
+  double direct_time = time_on_slowest_rank([&]() {
+    for (int sample = 0; sample < samples; sample++) {
+      drdU.assembleDiagonal(diag_direct);
+    }
+  });
+
+  double sparse_time = time_on_slowest_rank([&]() {
+    for (int sample = 0; sample < samples; sample++) {
+      std::unique_ptr<mfem::HypreParMatrix> J = assemble(drdU);
+      J->GetDiag(diag_assembled);
+    }
+  });
+
+  mfem::Vector diag_diff(U.Size());
+  subtract(diag_direct, diag_assembled, diag_diff);
+  EXPECT_NEAR(0.0, diag_diff.Norml2() / diag_assembled.Norml2(), 1.e-14);
+
+  auto [num_ranks, rank] = smith::getMPIInfo();
+  (void)num_ranks;
+  if (rank == 0) {
+    std::cout << "DiagonalAssemblyBenchmark direct_seconds=" << direct_time / samples
+              << " sparse_getdiag_seconds=" << sparse_time / samples
+              << " speedup=" << sparse_time / direct_time << std::endl;
+  }
+
+  EXPECT_GT(sparse_time / direct_time, 5.0);
+}
+
 // TODO: reenable these once hcurl implements of simplex elements is finished
 // TEST(Hcurl, 2DLinear) { functional_test(*mesh2D, Hcurl<1>{}, Hcurl<1>{}, Dimension<2>{}); }
 // TEST(Hcurl, 2DQuadratic) { functional_test(*mesh2D, Hcurl<2>{}, Hcurl<2>{}, Dimension<2>{}); }
@@ -501,6 +591,10 @@ int main(int argc, char* argv[])
   args.AddOption(&serial_refinement, "-r", "--ref", "");
   args.AddOption(&parallel_refinement, "-pr", "--pref", "");
   args.AddOption(&nsamples, "-n", "--n-samples", "Samples per test");
+  args.AddOption(&run_diagonal_benchmark, "-rdb", "--run-diagonal-benchmark", "-sdb", "--skip-diagonal-benchmark",
+                 "Run direct diagonal vs sparse assemble+GetDiag timing benchmark.");
+  args.AddOption(&diagonal_benchmark_samples, "-dbs", "--diagonal-benchmark-samples",
+                 "Samples for the diagonal assembly benchmark.");
 
   args.Parse();
   if (!args.Good()) {

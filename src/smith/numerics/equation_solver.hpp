@@ -23,10 +23,62 @@
 #include "mfem.hpp"
 
 #include "smith/infrastructure/input.hpp"
+#include "smith/infrastructure/logger.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/numerics/petsc_solvers.hpp"
 
 namespace smith {
+
+/**
+ * @brief Solver-facing interface for Jacobian operations.
+ *
+ * A JacobianOperator represents the operations available on J(x) after differentiating a residual but before
+ * necessarily assembling a sparse matrix. Concrete implementations may support matrix-free products, sparse assembly,
+ * diagonal extraction, or all of them. Unsupported operations should throw.
+ */
+class JacobianOperator : public mfem::Operator {
+ public:
+  using mfem::Operator::Operator;
+
+  /// Assemble the sparse Jacobian representation.
+  virtual std::unique_ptr<mfem::HypreParMatrix> assemble()
+  {
+    SLIC_ERROR("This JacobianOperator does not support sparse assembly.");
+    return nullptr;
+  }
+
+  /// Assemble the scalar true-dof diagonal of the Jacobian.
+  virtual void assembleDiagonal(mfem::Vector&) const
+  {
+    SLIC_ERROR("This JacobianOperator does not support diagonal assembly.");
+  }
+};
+
+/**
+ * @brief Adapter from a smith::functional Gradient object to the solver-facing JacobianOperator interface.
+ */
+template <typename Gradient>
+class FunctionalJacobianOperator : public JacobianOperator {
+ public:
+  explicit FunctionalJacobianOperator(Gradient& gradient)
+      : JacobianOperator(gradient.Height(), gradient.Width()), gradient_(gradient)
+  {
+  }
+
+  void Mult(const mfem::Vector& dx, mfem::Vector& y) const override { gradient_.Mult(dx, y); }
+
+  void AddMult(const mfem::Vector& dx, mfem::Vector& y, const double a = 1.0) const override
+  {
+    gradient_.AddMult(dx, y, a);
+  }
+
+  std::unique_ptr<mfem::HypreParMatrix> assemble() override { return gradient_.assemble(); }
+
+  void assembleDiagonal(mfem::Vector& diag) const override { gradient_.assembleDiagonal(diag); }
+
+ private:
+  Gradient& gradient_;
+};
 
 /**
  * @brief Matrix-free tangent action callback.
@@ -35,6 +87,11 @@ namespace smith {
  * without requiring EquationSolver to assemble J.
  */
 using MatrixFreeTangentAction = std::function<void(const mfem::Vector& x, const mfem::Vector& dx, mfem::Vector& y)>;
+
+/**
+ * @brief Callback that evaluates and returns a JacobianOperator at the supplied nonlinear state.
+ */
+using JacobianOperatorFactory = std::function<std::unique_ptr<JacobianOperator>(const mfem::Vector& x)>;
 
 /// Diagnostic counters for the nonlinear PCG-block solver
 struct PcgBlockDiagnostics {
@@ -46,6 +103,10 @@ struct PcgBlockDiagnostics {
   size_t num_preconds = 0;
   /// Number of assembled Jacobians
   size_t num_jacobian_assembles = 0;
+  /// Number of solver-facing JacobianOperator evaluations
+  size_t num_jacobian_operator_evals = 0;
+  /// Number of direct diagonal assemblies
+  size_t num_diagonal_assembles = 0;
   /// Number of preconditioner operator updates
   size_t num_preconditioner_updates = 0;
   /// Number of accepted prefix blocks
@@ -139,6 +200,17 @@ class EquationSolver {
    * @param[in] tangent_action Callback evaluating y = J(x) dx.
    */
   void setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_action);
+
+  /**
+   * @brief Sets an optional JacobianOperator factory for nonlinear solvers that can use matrix-free Jacobian products.
+   *
+   * This is the preferred replacement for the narrower matrix-free tangent-action callback. During migration,
+   * PCG-block uses this callback first when it is registered and otherwise falls back to MatrixFreeTangentAction or
+   * assembled gradients.
+   *
+   * @param[in] jacobian_operator Callback evaluating and returning J(x).
+   */
+  void setJacobianOperator(JacobianOperatorFactory jacobian_operator);
 
   /**
    * Solves the system F(x) = 0
