@@ -16,6 +16,8 @@ set(differentiable_numerics_test_source
     test_thermal_static.cpp
     test_solid_static_with_internal_vars.cpp
     test_multiphysics_time_integrator.cpp
+    test_mixed_poisson.cpp
+    test_amg_vdim_block_preconditioner.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

@@ -9,6 +9,8 @@
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/numerics/stdfunction_operator.hpp"
 #include "smith/numerics/equation_solver.hpp"
+#include "smith/numerics/block_preconditioner.hpp"
+#include "smith/numerics/solver_with_preconditioner.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/physics/mesh.hpp"
 #include "mfem.hpp"
@@ -95,9 +97,54 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 
   auto* mfem_solver = &nonlinear_solver_->preconditioner();
 
-  auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
-  if (amg_prec) {
-    amg_prec->SetSystemsOptions(best->space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
+  auto configure_amg = [](mfem::Solver* s, int vdim) {
+    if (!s) {
+      return;
+    }
+    if (auto* amg = dynamic_cast<mfem::HypreBoomerAMG*>(s)) {
+      amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+      return;
+    }
+    if (auto* wrapped = dynamic_cast<smith::SolverWithPreconditioner*>(s)) {
+      if (auto* amg = dynamic_cast<mfem::HypreBoomerAMG*>(wrapped->preconditioner())) {
+        amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+      }
+    }
+  };
+
+  // Top-level AMG preconditioner
+  configure_amg(mfem_solver, best->space().GetVDim());
+
+  // Block preconditioners: configure per-block AMG with each block's vdim.
+  struct BlockSolverAccessor {
+    int n = 0;
+    mfem::Solver* (*get)(void*, int) = nullptr;
+    void* self = nullptr;
+  };
+
+  const BlockSolverAccessor acc = [&]() {
+    if (auto* p = dynamic_cast<smith::BlockDiagonalPreconditioner*>(mfem_solver)) {
+      return BlockSolverAccessor{
+          p->numSubSolvers(),
+          +[](void* self, int i) { return static_cast<smith::BlockDiagonalPreconditioner*>(self)->subSolver(i); }, p};
+    }
+    if (auto* p = dynamic_cast<smith::BlockTriangularPreconditioner*>(mfem_solver)) {
+      return BlockSolverAccessor{
+          p->numSubSolvers(),
+          +[](void* self, int i) { return static_cast<smith::BlockTriangularPreconditioner*>(self)->subSolver(i); }, p};
+    }
+    if (auto* p = dynamic_cast<smith::BlockSchurPreconditioner*>(mfem_solver)) {
+      return BlockSolverAccessor{
+          p->numSubSolvers(),
+          +[](void* self, int i) { return static_cast<smith::BlockSchurPreconditioner*>(self)->subSolver(i); }, p};
+    }
+    return BlockSolverAccessor{};
+  }();
+
+  if (acc.get) {
+    for (int i = 0; i < acc.n && static_cast<size_t>(i) < us.size(); ++i) {
+      configure_amg(acc.get(acc.self, i), us[static_cast<size_t>(i)]->space().GetVDim());
+    }
   }
 
 #ifdef SMITH_USE_PETSC
