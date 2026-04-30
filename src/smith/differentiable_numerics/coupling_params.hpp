@@ -133,6 +133,7 @@ template <typename T, typename = void>
 inline constexpr bool has_time_rule_v = false;
 
 template <typename T>
+/// True if `T` is `PhysicsFields<...>` and its time rule is not `NoTimeRule`.
 inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>>> =
     !std::is_same_v<typename std::decay_t<T>::time_rule_type, NoTimeRule>;
 

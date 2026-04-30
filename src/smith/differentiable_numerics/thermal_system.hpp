@@ -232,6 +232,11 @@ namespace detail {
 
 template <int dim, int temp_order, typename TemperatureTimeRule, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
+/// @brief Build a thermal system from an already-registered field store and coupling pack.
+/// @param field_store Shared store containing the thermal fields.
+/// @param coupling Coupling pack supplying foreign fields/parameters.
+/// @param solver Nonlinear system solver for the thermal system.
+/// @param options Thermal options.
 auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
                             std::shared_ptr<SystemSolver> solver, const ThermalOptions& /*options*/)
 {
