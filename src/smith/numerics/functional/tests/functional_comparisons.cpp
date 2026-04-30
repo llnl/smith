@@ -184,6 +184,15 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
 
   std::unique_ptr<mfem::HypreParMatrix> J_func = assemble(drdU);
 
+  mfem::Vector diag_direct(U.Size());
+  drdU.AssembleDiagonal(diag_direct);
+
+  mfem::Vector diag_assembled(U.Size());
+  J_func->GetDiag(diag_assembled);
+
+  mfem::Vector diag_diff(U.Size());
+  subtract(diag_direct, diag_assembled, diag_diff);
+
   // Compute the gradient action using standard MFEM and functional
   // mfem::Vector g1 = (*J_mfem) * U;
   mfem::Vector g1(U.Size());
@@ -209,6 +218,7 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
   }
 
   // Ensure the two methods generate the same result
+  EXPECT_NEAR(0.0, diag_diff.Norml2() / diag_assembled.Norml2(), 1.e-14);
   EXPECT_NEAR(0.0, diff1.Norml2() / g1.Norml2(), 1.e-14);
   EXPECT_NEAR(0.0, diff2.Norml2() / g1.Norml2(), 1.e-14);
 }
@@ -300,6 +310,15 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
 
   std::unique_ptr<mfem::HypreParMatrix> J_func = assemble(drdU);
 
+  mfem::Vector diag_direct(U.Size());
+  drdU.AssembleDiagonal(diag_direct);
+
+  mfem::Vector diag_assembled(U.Size());
+  J_func->GetDiag(diag_assembled);
+
+  mfem::Vector diag_diff(U.Size());
+  subtract(diag_direct, diag_assembled, diag_diff);
+
   // mfem::Vector g1 = (*J_mfem) * U;
   mfem::Vector g1(U.Size());
   J_mfem->Mult(U, g1);
@@ -325,6 +344,7 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
     std::cout << "||g1-g3||/||g1||: " << diff2.Norml2() / g1.Norml2() << std::endl;
   }
 
+  EXPECT_NEAR(0., diag_diff.Norml2() / diag_assembled.Norml2(), 1.e-14);
   EXPECT_NEAR(0., diff1.Norml2() / g1.Norml2(), 1.e-14);
   EXPECT_NEAR(0., diff2.Norml2() / g1.Norml2(), 1.e-14);
 }

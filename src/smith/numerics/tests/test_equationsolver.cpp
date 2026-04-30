@@ -124,6 +124,87 @@ TEST_P(EquationSolverSuite, All)
   }
 }
 
+TEST(EquationSolver, PcgBlockUsesMatrixFreeTangentAction)
+{
+  auto mesh = mfem::Mesh::MakeCartesian2D(1, 1, mfem::Element::QUADRILATERAL);
+  auto pmesh = mfem::ParMesh(MPI_COMM_WORLD, mesh);
+
+  pmesh.EnsureNodes();
+  pmesh.ExchangeFaceNbrData();
+
+  constexpr int p = 1;
+  constexpr int dim = 2;
+  using test_space = H1<p>;
+  using trial_space = H1<p>;
+
+  auto [fes, fec] = smith::generateParFiniteElementSpace<test_space>(&pmesh);
+
+  mfem::HypreParVector x_exact(fes.get());
+  mfem::HypreParVector x_computed(fes.get());
+  x_exact.Randomize(0);
+  x_computed = 0.0;
+
+  std::unique_ptr<mfem::HypreParMatrix> J;
+
+  Functional<test_space(trial_space)> residual(fes.get(), {fes.get()});
+  Domain domain = EntireDomain(pmesh);
+  residual.AddDomainIntegral(
+      Dimension<dim>{}, DependsOn<0>{},
+      [](double /*t*/, auto, auto scalar) {
+        auto [u, du_dx] = scalar;
+        return smith::tuple{u, du_dx};
+      },
+      domain);
+
+  StdFunctionOperator residual_opr(
+      fes->TrueVSize(),
+      [&x_exact, &residual](const mfem::Vector& x, mfem::Vector& r) {
+        constexpr double time = 0.0;
+        r = residual(time, x);
+        r -= residual(time, x_exact);
+      },
+      [&residual, &J](const mfem::Vector& x) -> mfem::Operator& {
+        constexpr double time = 0.0;
+        auto [val, grad] = residual(time, differentiate_wrt(x));
+        J = assemble(grad);
+        return *J;
+      });
+
+  const LinearSolverOptions lin_opts = {.linear_solver = LinearSolver::CG,
+                                        .preconditioner = Preconditioner::HypreJacobi,
+                                        .relative_tol = 1.0e-12,
+                                        .absolute_tol = 1.0e-14,
+                                        .max_iterations = 500,
+                                        .print_level = 0};
+
+  const NonlinearSolverOptions nonlin_opts = {.nonlin_solver = NonlinearSolver::PcgBlock,
+                                              .relative_tol = 1.0e-12,
+                                              .absolute_tol = 1.0e-14,
+                                              .max_iterations = 500,
+                                              .print_level = 0};
+
+  EquationSolver eq_solver(nonlin_opts, lin_opts);
+  eq_solver.setOperator(residual_opr);
+
+  int num_tangent_actions = 0;
+  eq_solver.setMatrixFreeTangentAction(
+      [&residual, &num_tangent_actions](const mfem::Vector& x, const mfem::Vector& dx, mfem::Vector& y) {
+        constexpr double time = 0.0;
+        auto [val, grad] = residual(time, differentiate_wrt(x));
+        grad.Mult(dx, y);
+        ++num_tangent_actions;
+      });
+
+  eq_solver.solve(x_computed);
+
+  const auto diagnostics = eq_solver.pcgBlockDiagnostics();
+  ASSERT_TRUE(diagnostics.has_value());
+  EXPECT_GT(num_tangent_actions, 0);
+  EXPECT_EQ(diagnostics->num_hess_vecs, static_cast<size_t>(num_tangent_actions));
+  EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
+  EXPECT_LT(x_computed.DistanceTo(x_exact.GetData()), 1.0e-10);
+}
+
 /**
  * @brief Nonlinear solvers to test. Always includes NonlinearSolver::Newton and NonlinearSolver::LBFGS
  * If SMITH_USE_SUNDIALS is set, adds: NonlinearSolver::KINFullStep, NonlinearSolver::KINBacktrackingLineSearch, and

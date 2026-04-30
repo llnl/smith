@@ -7,6 +7,7 @@
 #include "smith/numerics/equation_solver.hpp"
 
 #include <cstdlib>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
@@ -925,6 +926,16 @@ class PcgBlockSolver : public mfem::NewtonSolver {
   mutable size_t num_residuals = 0;
   /// Internal counter for matrix assembles
   mutable size_t num_jacobian_assembles = 0;
+  /// Internal counter for preconditioner operator updates
+  mutable size_t num_preconditioner_updates = 0;
+  /// Internal counter for accepted prefix blocks
+  mutable size_t num_prefix_accepts = 0;
+  /// Internal counter for momentum resets
+  mutable size_t num_momentum_resets = 0;
+  /// Internal counter for nonzero PCG beta values
+  mutable size_t num_nonzero_beta = 0;
+  /// Internal counter for zero PCG beta values
+  mutable size_t num_zero_beta = 0;
   /// Internal counter for accepted blocks
   mutable size_t num_blocks = 0;
   /// Internal counter for rejected blocks
@@ -947,6 +958,9 @@ class PcgBlockSolver : public mfem::NewtonSolver {
   mutable double final_h_scale = 1.0;
   /// Last accepted block trust ratio
   mutable double last_trust_ratio = 0.0;
+
+  /// Optional matrix-free tangent action, y = J(x) dx
+  MatrixFreeTangentAction matrix_free_tangent_action;
 
 #ifdef MFEM_USE_MPI
   /// Constructor
@@ -977,12 +991,22 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     return Norm(residual);
   }
 
-  /// Apply the assembled Jacobian to a vector.
-  void hessVec(const mfem::Vector& x, mfem::Vector& v) const
+  /// Set an optional matrix-free tangent action.
+  void setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_action)
+  {
+    matrix_free_tangent_action = std::move(tangent_action);
+  }
+
+  /// Apply the tangent at x to dx.
+  void hessVec(const mfem::Vector& x, const mfem::Vector& dx, mfem::Vector& y) const
   {
     SMITH_MARK_FUNCTION;
     ++num_hess_vecs;
-    grad->Mult(x, v);
+    if (matrix_free_tangent_action) {
+      matrix_free_tangent_action(x, dx, y);
+    } else {
+      grad->Mult(dx, y);
+    }
   }
 
   /// Apply the configured nonlinear PCG preconditioner.
@@ -996,7 +1020,16 @@ class PcgBlockSolver : public mfem::NewtonSolver {
   /// Return solver diagnostic counters.
   PcgBlockDiagnostics diagnostics() const
   {
-    return {.num_blocks = num_blocks,
+    return {.num_residuals = num_residuals,
+            .num_hess_vecs = num_hess_vecs,
+            .num_preconds = num_preconds,
+            .num_jacobian_assembles = num_jacobian_assembles,
+            .num_preconditioner_updates = num_preconditioner_updates,
+            .num_prefix_accepts = num_prefix_accepts,
+            .num_momentum_resets = num_momentum_resets,
+            .num_nonzero_beta = num_nonzero_beta,
+            .num_zero_beta = num_zero_beta,
+            .num_blocks = num_blocks,
             .num_block_rejects = num_block_rejects,
             .num_powell_restarts = num_powell_restarts,
             .num_descent_restarts = num_descent_restarts,
@@ -1023,6 +1056,11 @@ class PcgBlockSolver : public mfem::NewtonSolver {
     num_preconds = 0;
     num_residuals = 0;
     num_jacobian_assembles = 0;
+    num_preconditioner_updates = 0;
+    num_prefix_accepts = 0;
+    num_momentum_resets = 0;
+    num_nonzero_beta = 0;
+    num_zero_beta = 0;
     num_blocks = 0;
     num_block_rejects = 0;
     num_powell_restarts = 0;
@@ -1098,6 +1136,7 @@ class PcgBlockSolver : public mfem::NewtonSolver {
       rho_old = 0.0;
       p_old = 0.0;
       z_old = 0.0;
+      ++num_momentum_resets;
     };
 
     auto window_max = [&](const std::vector<double>& history) {
@@ -1151,6 +1190,7 @@ class PcgBlockSolver : public mfem::NewtonSolver {
       }
 
       assembleJacobian(X);
+      ++num_preconditioner_updates;
       pcg_precond.SetOperator(*grad);
 
       r_block = r;
@@ -1208,8 +1248,13 @@ class PcgBlockSolver : public mfem::NewtonSolver {
             force_dot_p = rho;
             ++num_descent_restarts;
           }
+          if (beta == 0.0) {
+            ++num_zero_beta;
+          } else {
+            ++num_nonzero_beta;
+          }
 
-          hessVec(p, Hp);
+          hessVec(X, p, Hp);
           const double pHp = Dot(p, Hp);
 
           double alpha = 0.0;
@@ -1337,6 +1382,9 @@ class PcgBlockSolver : public mfem::NewtonSolver {
         const bool prefix_accept = accept_block && trial_ended_after_inner_failure;
         bool reset_next_momentum = false;
         if (accept_block) {
+          if (prefix_accept) {
+            ++num_prefix_accepts;
+          }
           X = x_trial;
           cumulative_work = trial_cumulative_work;
           work_history = std::move(trial_work_history);
@@ -1439,6 +1487,14 @@ void EquationSolver::setOperator(const mfem::Operator& op)
   if (!nonlin_solver_set_solver_called_) {
     nonlin_solver_->SetSolver(linearSolver());
     nonlin_solver_set_solver_called_ = true;
+  }
+}
+
+void EquationSolver::setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_action)
+{
+  auto* pcg_block = dynamic_cast<PcgBlockSolver*>(nonlin_solver_.get());
+  if (pcg_block) {
+    pcg_block->setMatrixFreeTangentAction(std::move(tangent_action));
   }
 }
 

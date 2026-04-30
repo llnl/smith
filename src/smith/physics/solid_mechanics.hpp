@@ -1061,6 +1061,25 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         });
   }
 
+  /// @brief Matrix-free action of the quasistatic tangent with essential boundary conditions applied.
+  void quasistaticTangentAction(const mfem::Vector& u, const mfem::Vector& du, mfem::Vector& dr) const
+  {
+    SMITH_MARK_FUNCTION;
+
+    mfem::Vector du_interior(du);
+    du_interior.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
+
+    auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), acceleration_,
+                                  *parameters_[parameter_indices].state...);
+    drdu.Mult(du_interior, dr);
+
+    const auto& constrained_dofs = bcs_.allEssentialTrueDofs();
+    for (int i = 0; i < constrained_dofs.Size(); ++i) {
+      const int dof = constrained_dofs[i];
+      dr[dof] = du[dof];
+    }
+  }
+
   /**
    * @brief Return the assembled stiffness matrix
    *
@@ -1139,6 +1158,10 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 #endif
 
     nonlin_solver_->setOperator(*residual_with_bcs_);
+    if (is_quasistatic_) {
+      nonlin_solver_->setMatrixFreeTangentAction([this](const mfem::Vector& u, const mfem::Vector& du,
+                                                        mfem::Vector& dr) { quasistaticTangentAction(u, du, dr); });
+    }
 
     if (checkpoint_to_disk_) {
       outputStateToDisk();

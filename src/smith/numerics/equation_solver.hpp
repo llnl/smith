@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -27,8 +28,34 @@
 
 namespace smith {
 
+/**
+ * @brief Matrix-free tangent action callback.
+ *
+ * The callback evaluates y = J(x) dx for the current nonlinear state x
+ * without requiring EquationSolver to assemble J.
+ */
+using MatrixFreeTangentAction = std::function<void(const mfem::Vector& x, const mfem::Vector& dx, mfem::Vector& y)>;
+
 /// Diagnostic counters for the nonlinear PCG-block solver
 struct PcgBlockDiagnostics {
+  /// Number of nonlinear residual evaluations
+  size_t num_residuals = 0;
+  /// Number of assembled Jacobian-vector products
+  size_t num_hess_vecs = 0;
+  /// Number of preconditioner applications
+  size_t num_preconds = 0;
+  /// Number of assembled Jacobians
+  size_t num_jacobian_assembles = 0;
+  /// Number of preconditioner operator updates
+  size_t num_preconditioner_updates = 0;
+  /// Number of accepted prefix blocks
+  size_t num_prefix_accepts = 0;
+  /// Number of momentum resets
+  size_t num_momentum_resets = 0;
+  /// Number of steps with nonzero PCG beta
+  size_t num_nonzero_beta = 0;
+  /// Number of steps with zero PCG beta
+  size_t num_zero_beta = 0;
   /// Number of accepted blocks
   size_t num_blocks = 0;
   /// Number of rejected blocks
@@ -102,6 +129,16 @@ class EquationSolver {
    * due to the use of Hypre-based linear solvers.
    */
   void setOperator(const mfem::Operator& op);
+
+  /**
+   * @brief Sets an optional matrix-free tangent action for nonlinear solvers that can use J(x) dx directly.
+   *
+   * Solvers that do not support matrix-free tangent actions ignore this callback. Supported solvers retain their
+   * assembled-gradient fallback when no callback is set.
+   *
+   * @param[in] tangent_action Callback evaluating y = J(x) dx.
+   */
+  void setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_action);
 
   /**
    * Solves the system F(x) = 0

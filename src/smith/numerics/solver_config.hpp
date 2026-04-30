@@ -478,7 +478,7 @@ struct NonlinearSolverOptions {
   int pcg_block_len = 10;
 
   /// Powell restart threshold for nonlinear PCG residual orthogonality
-  double pcg_powell_eta = 0.2;
+  double pcg_powell_eta = 0.005;
 
   /// Trust-ratio threshold below which the PCG-block trust scale shrinks
   double pcg_trust_eta_bad = 0.1;
