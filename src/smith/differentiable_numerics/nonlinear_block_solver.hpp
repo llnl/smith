@@ -98,8 +98,27 @@ class NonlinearBlockSolverBase {
   /// @brief Set an inner-solve tolerance multiplier, e.g. for staggered solves.
   virtual void setInnerToleranceMultiplier(double multiplier) = 0;
 
+  /// @brief Apply or clear relaxed intermediate-solve policy.
+  virtual void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
+                                              int max_iterations)
+  {
+    static_cast<void>(enabled);
+    static_cast<void>(abs_tol_factor);
+    static_cast<void>(rel_tol_floor);
+    static_cast<void>(max_iterations);
+  }
+
+  /// @brief Effective nonlinear solver print level for user-facing diagnostics.
+  virtual int printLevel() const { return 0; }
+
+  /// @brief Returns true if the most recent @ref solve call satisfied its convergence criterion.
+  /// Subclasses must write @c last_solve_converged_ at the end of their solve path.
+  /// True before first call (optimistic default — ramp predicate sees only the NaN check then).
+  bool lastSolveConverged() const { return last_solve_converged_; }
+
  protected:
-  mutable bool is_setup_ = false;  ///< Records if this block solver has its preconditioner initialized.
+  mutable bool is_setup_ = false;             ///< Records if this block solver has its preconditioner initialized.
+  mutable bool last_solve_converged_ = true;  ///< Set by subclasses after each solve.
   mutable NonlinearConvergenceContext convergence_context_ = {};  ///< Solver-owned convergence state for one solve.
 };
 
@@ -140,8 +159,21 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// @brief Set the inner tolerance multiplier.
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
 
+  /// @overload
+  void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
+                                      int max_iterations) override
+  {
+    use_intermediate_tolerances_ = enabled;
+    intermediate_abs_tol_factor_ = abs_tol_factor;
+    intermediate_rel_tol_floor_ = rel_tol_floor;
+    intermediate_max_iterations_ = max_iterations;
+  }
+
   /// @brief Build a fresh solver instance from retained config.
   std::shared_ptr<NonlinearBlockSolver> cloneFresh() const;
+
+  /// @overload
+  int printLevel() const override;
 
   mutable std::unique_ptr<mfem::BlockOperator>
       block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
@@ -152,10 +184,14 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 
-  MPI_Comm comm_;                      ///< MPI communicator for parallel norm computation
-  double abs_tol_;                     ///< absolute residual tolerance for convergence check
-  double rel_tol_;                     ///< relative residual tolerance for convergence check
-  double inner_tol_multiplier_ = 1.0;  ///< multiplier for tolerances during inner solves
+  MPI_Comm comm_;                                     ///< MPI communicator for parallel norm computation
+  double abs_tol_;                                    ///< absolute residual tolerance for convergence check
+  double rel_tol_;                                    ///< relative residual tolerance for convergence check
+  double inner_tol_multiplier_ = 1.0;                 ///< multiplier for tolerances during inner solves
+  mutable bool use_intermediate_tolerances_ = false;  ///< whether to relax cutback solves
+  mutable double intermediate_abs_tol_factor_ = 1.0;  ///< abs_tol multiplier for cutback solves
+  mutable double intermediate_rel_tol_floor_ = 0.0;   ///< rel_tol floor for cutback solves
+  mutable int intermediate_max_iterations_ = 0;       ///< max nonlinear iterations for cutback solves
   std::optional<NonlinearSolverOptions> retained_nonlinear_options_ = std::nullopt;  ///< retained nonlinear config
   std::optional<LinearSolverOptions> retained_linear_options_ = std::nullopt;        ///< retained linear config
 };

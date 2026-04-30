@@ -68,6 +68,11 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
                                                 nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
+int NonlinearBlockSolver::printLevel() const
+{
+  return retained_nonlinear_options_ ? retained_nonlinear_options_->print_level : 0;
+}
+
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
                                                           const std::vector<mfem::Vector>& residuals,
                                                           NonlinearConvergenceContext& context) const
@@ -192,10 +197,25 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
         }
         return *block_jac_;
       });
-  nonlinear_solver_->setConvergenceTolerances(inner_tol_multiplier_ * abs_tol_, inner_tol_multiplier_ * rel_tol_,
-                                              comm_);
+  double effective_abs_tol = inner_tol_multiplier_ * abs_tol_;
+  double effective_rel_tol = inner_tol_multiplier_ * rel_tol_;
+  if (use_intermediate_tolerances_) {
+    effective_abs_tol = std::max(effective_abs_tol, intermediate_abs_tol_factor_ * abs_tol_);
+    effective_rel_tol = std::max(effective_rel_tol, intermediate_rel_tol_floor_);
+  }
+  nonlinear_solver_->setConvergenceTolerances(effective_abs_tol, effective_rel_tol, comm_);
+  if (retained_nonlinear_options_) {
+    const int max_iterations = use_intermediate_tolerances_
+                                   ? std::min(retained_nonlinear_options_->max_iterations, intermediate_max_iterations_)
+                                   : retained_nonlinear_options_->max_iterations;
+    nonlinear_solver_->nonlinearSolver().SetMaxIter(max_iterations);
+  }
   nonlinear_solver_->setOperator(*residual_op_);
+  last_solve_converged_ = false;
   nonlinear_solver_->solve(*block_u);
+
+  // Record convergence for SystemSolver cutback decisions.
+  last_solve_converged_ = (nonlinear_solver_->nonlinearSolver().GetConverged() == 1);
 
   for (int row_i = 0; row_i < num_rows; ++row_i) {
     *u_guesses[static_cast<size_t>(row_i)] = block_u->GetBlock(row_i);

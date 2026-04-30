@@ -12,6 +12,7 @@
 #include "mfem.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <unordered_map>
 #include <string>
@@ -64,6 +65,47 @@ void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_so
   }
 }
 
+// Returns true if any solution component is non-finite (NaN/Inf).
+// Used as the failure predicate for the BC ramp cutback.
+static bool anyNonFinite(const std::vector<FieldState>& solutions)
+{
+  for (const auto& fs : solutions) {
+    const auto& vec = *fs.get();
+    for (int i = 0; i < vec.Size(); ++i) {
+      if (!std::isfinite(vec[i])) return true;
+    }
+  }
+  return false;
+}
+
+// Build a per-block BC override field at fraction alpha along the segment
+// from prev_bc to target_bc, restricted to the BC manager's essential tdofs.
+// Unconstrained dofs are left at target_bc values (irrelevant — only the
+// constrained dofs are read by applyBoundaryConditions when bc_field_ptr is set).
+static FEFieldPtr lerpBcField(const FEFieldPtr& prev_bc, const FEFieldPtr& target_bc,
+                              const BoundaryConditionManager* bc_mgr, double alpha)
+{
+  auto out = std::make_shared<FiniteElementState>(*target_bc);
+  if (!bc_mgr) return out;
+  const auto& tdofs = bc_mgr->allEssentialTrueDofs();
+  for (int i = 0; i < tdofs.Size(); ++i) {
+    int j = tdofs[i];
+    (*out)[j] = (1.0 - alpha) * (*prev_bc)[j] + alpha * (*target_bc)[j];
+  }
+  return out;
+}
+
+static bool bcRampShouldPrint(const std::vector<SystemSolver::Stage>& stages)
+{
+  int max_print_level = 0;
+  for (const auto& stage : stages) {
+    if (stage.solver) {
+      max_print_level = std::max(max_print_level, stage.solver->printLevel());
+    }
+  }
+  return max_print_level >= 1;
+}
+
 std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
                                             const std::vector<std::vector<size_t>>& block_indices,
                                             const FieldState& shape_disp,
@@ -73,7 +115,122 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
                                             const std::vector<const BoundaryConditionManager*>& bc_managers) const
 {
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
+  last_hidden_solve_count_ = 0;
 
+  size_t num_residuals = residual_evals.size();
+
+  // Default path: cutback disabled.
+  if (!bc_ramp_options_.enabled) {
+    return solveInner(residual_evals, block_indices, shape_disp, states, params, time_info, bc_managers, {}, false)
+        .first;
+  }
+
+  SLIC_ERROR_IF(bc_ramp_options_.shrink_factor <= 0.0 || bc_ramp_options_.shrink_factor >= 1.0,
+                "BcRampOptions.shrink_factor must be in (0, 1)");
+  SLIC_ERROR_IF(bc_ramp_options_.max_cutbacks <= 0, "BcRampOptions.max_cutbacks must be > 0");
+  SLIC_ERROR_IF(bc_ramp_options_.intermediate_relative_tol < 0.0 || bc_ramp_options_.intermediate_relative_tol > 1.0,
+                "BcRampOptions.intermediate_relative_tol must be in [0, 1]");
+  SLIC_ERROR_IF(bc_ramp_options_.intermediate_absolute_tol_fac < 1.0,
+                "BcRampOptions.intermediate_absolute_tol_fac must be >= 1");
+  SLIC_ERROR_IF(bc_ramp_options_.intermediate_max_iterations <= 0,
+                "BcRampOptions.intermediate_max_iterations must be > 0");
+
+  // target_bc: clone of pre-BC diagonal with BCs applied at time_info.time().
+  // prev_bc:   from cache (last successful snapshot) or, on cache miss, the
+  //            pre-BC diagonal. This handles t=0 jump BCs correctly: prev=0,
+  //            target=large-displacement, alpha=1 fails → cutback to alpha=0.5, etc.
+  //
+  // On a cache miss, prev = pre-BC diagonal. Call clearBcRampCache()
+  // whenever BC managers are replaced, since the cache is keyed by pointer.
+  std::vector<FEFieldPtr> prev_bc(num_residuals);
+  std::vector<FEFieldPtr> target_bc(num_residuals);
+  for (size_t r = 0; r < num_residuals; ++r) {
+    size_t s_idx = block_indices[r][r];
+    const FEFieldPtr& diag = states[r][s_idx].get();
+
+    auto tgt = std::make_shared<FiniteElementState>(*diag);
+    applyBoundaryConditions(time_info.time(), bc_managers[r], tgt, nullptr);
+    target_bc[r] = tgt;
+
+    auto it = bc_managers[r] ? prev_bc_cache_.find(bc_managers[r]) : prev_bc_cache_.end();
+    prev_bc[r] = (it != prev_bc_cache_.end()) ? it->second : std::make_shared<FiniteElementState>(*diag);
+  }
+
+  // Cutback loop: try alpha=1; on failure (non-convergence or NaN) shrink and
+  // retry. On accept at alpha<1, advance prev and initial guess, then retry
+  // alpha=1.
+  //
+  // working_states: mutable copy of states; diagonal entry updated to the
+  // accepted partial solution after each accept so subsequent solves start
+  // from the last accepted state.
+  std::vector<std::vector<FieldState>> working_states = states;
+  std::vector<FieldState> last_good;
+  double alpha = 1.0;
+  int cutbacks = 0;
+  const bool print_bc_ramp = bcRampShouldPrint(stages_);
+  while (true) {
+    std::vector<FEFieldPtr> overrides(num_residuals);
+    for (size_t r = 0; r < num_residuals; ++r) {
+      overrides[r] = lerpBcField(prev_bc[r], target_bc[r], bc_managers[r], alpha);
+    }
+
+    std::vector<FieldState> sols;
+    bool failed = false;
+    try {
+      auto [s, converged] = solveInner(residual_evals, block_indices, shape_disp, working_states, params, time_info,
+                                       bc_managers, overrides, alpha < 1.0);
+      bool nonfinite = anyNonFinite(s);
+      if (print_bc_ramp && (alpha < 1.0 || !converged || nonfinite)) {
+        mfem::out << "[BcRamp] attempted alpha=" << alpha << " cutbacks=" << cutbacks << " converged=" << converged
+                  << "\n";
+      }
+      failed = !converged || nonfinite;
+      if (!failed) sols = std::move(s);
+    } catch (...) {
+      failed = true;
+      if (print_bc_ramp) {
+        mfem::out << "[BcRamp] exception\n";
+      }
+    }
+
+    if (failed) {
+      SLIC_ERROR_IF(cutbacks >= bc_ramp_options_.max_cutbacks,
+                    axom::fmt::format("BC ramp exhausted max_cutbacks={} without reaching target.",
+                                      bc_ramp_options_.max_cutbacks));
+      cutbacks++;
+      last_hidden_solve_count_++;
+      alpha *= bc_ramp_options_.shrink_factor;
+      continue;
+    }
+
+    last_good = std::move(sols);
+    if (alpha >= 1.0) break;
+
+    // Accepted at alpha<1: advance prev BC and initial guess, retry full jump.
+    for (size_t r = 0; r < num_residuals; ++r) {
+      prev_bc[r] = std::make_shared<FiniteElementState>(*last_good[r].get());
+      working_states[r][block_indices[r][r]] = last_good[r];
+    }
+    last_hidden_solve_count_++;
+    alpha = 1.0;
+  }
+
+  for (size_t r = 0; r < num_residuals; ++r) {
+    if (bc_managers[r]) {
+      prev_bc_cache_[bc_managers[r]] = std::make_shared<FiniteElementState>(*last_good[r].get());
+    }
+  }
+
+  return last_good;
+}
+
+std::pair<std::vector<FieldState>, bool> SystemSolver::solveInner(
+    const std::vector<WeakForm*>& residual_evals, const std::vector<std::vector<size_t>>& block_indices,
+    const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
+    const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
+    const std::vector<const BoundaryConditionManager*>& bc_managers, const std::vector<FEFieldPtr>& bc_field_overrides,
+    bool use_intermediate_tolerances) const
+{
   size_t num_residuals = residual_evals.size();
   std::vector<Stage> active_stages = stages_;
   for (auto& stage : active_stages) {
@@ -93,6 +250,9 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   const double inner_tol_factor = (active_stages.size() == 1) ? 1.0 : 0.6;
   for (auto& stage : active_stages) {
     stage.solver->setInnerToleranceMultiplier(inner_tol_factor);
+    stage.solver->setIntermediateTolerancePolicy(
+        use_intermediate_tolerances, bc_ramp_options_.intermediate_absolute_tol_fac,
+        bc_ramp_options_.intermediate_relative_tol, bc_ramp_options_.intermediate_max_iterations);
   }
 
   // Reset each stage solver's convergence tracking (e.g. initial residual norm for rel-tol)
@@ -152,6 +312,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
       std::vector<std::vector<FieldState>> stage_states;
       std::vector<std::vector<FieldState>> stage_params;
       std::vector<const BoundaryConditionManager*> stage_bc_managers;
+      std::vector<FEFieldPtr> stage_bc_overrides;
 
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_row = stage.block_indices[i];
@@ -159,6 +320,9 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         stage_bc_managers.push_back(bc_managers[global_row]);
         stage_states.push_back(current_states[global_row]);
         stage_params.push_back(params[global_row]);
+        if (!bc_field_overrides.empty()) {
+          stage_bc_overrides.push_back(bc_field_overrides[global_row]);
+        }
 
         std::vector<size_t> row_indices(num_stage_blocks, invalid_block_index);
         for (size_t col_idx = 0; col_idx < num_stage_blocks; ++col_idx) {
@@ -170,7 +334,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
 
       std::vector<FieldState> stage_solutions =
           block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
-                      stage.solver.get(), stage_bc_managers);
+                      stage.solver.get(), stage_bc_managers, stage_bc_overrides);
 
       // Propagate updated fields to every residual input that references the solved field.
       // Match by field name (looked up via the pre-computed routing map): coupling fields appear
@@ -219,7 +383,15 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
     }
   }
 
-  // Return the diagonal (unknown) states as the final solution
+  // All-stages convergence flag for the BC ramp cutback predicate.
+  bool all_converged = true;
+  for (const auto& stage : active_stages) {
+    if (!stage.solver->lastSolveConverged()) {
+      all_converged = false;
+      break;
+    }
+  }
+
   std::vector<FieldState> final_solutions;
   final_solutions.reserve(num_residuals);
   for (size_t r = 0; r < num_residuals; ++r) {
@@ -227,7 +399,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
     final_solutions.push_back(current_states[r][s_idx]);
   }
 
-  return final_solutions;
+  return {final_solutions, all_converged};
 }
 
 std::shared_ptr<SystemSolver> SystemSolver::singleBlockSolver(size_t block_index) const

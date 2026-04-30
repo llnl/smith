@@ -17,6 +17,8 @@ set(differentiable_numerics_test_source
     test_solid_static_with_internal_vars.cpp
     test_multiphysics_time_integrator.cpp
     test_thermo_mechanics_with_internal_vars.cpp
+    test_bc_ramp.cpp
+    shallow_arch_buckling.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

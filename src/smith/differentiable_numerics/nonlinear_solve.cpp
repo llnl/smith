@@ -31,8 +31,19 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
-                                    const std::vector<const BoundaryConditionManager*>& bc_managers)
+                                    const std::vector<const BoundaryConditionManager*>& bc_managers,
+                                    const std::vector<FEFieldPtr>& bc_field_overrides)
 {
+  SLIC_ERROR_IF(!bc_field_overrides.empty() && bc_field_overrides.size() != residual_evals.size(),
+                "bc_field_overrides must have size 0 or match residual_evals size");
+  // Lambda for fetching the per-row override (or null when not overridden).
+  // Captured by the eval lambdas below; passed to applyBoundaryConditions so
+  // the BC ramp can lerp values into constrained tdofs without touching the
+  // BC coefficient time evaluation.
+  auto bc_override_for = [bc_field_overrides](size_t row_i) -> FEFieldPtr {
+    if (bc_field_overrides.empty()) return nullptr;
+    return bc_field_overrides[row_i];
+  };
   SMITH_MARK_FUNCTION;
   size_t num_rows_ = residual_evals.size();
 
@@ -123,7 +134,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
-      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
+      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, bc_override_for(row_i));
     }
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
@@ -145,7 +156,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
-        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
+        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, bc_override_for(row_i));
       }
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         residuals[row_i] = residual_evals[row_i]->residual(time_info, shape_disp_ptr.get(),
@@ -165,7 +176,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
-        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, nullptr);
+        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, bc_override_for(row_i));
       }
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {

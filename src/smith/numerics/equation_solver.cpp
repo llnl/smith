@@ -248,7 +248,10 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     ConvergenceStatus status = evaluateConvergence(x, r);
     real_t norm = status.global_norm;
     initial_norm = norm;
-    if (norm == 0.0) return;
+    if (norm == 0.0) {
+      converged = true;
+      return;
+    }
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -268,6 +271,7 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
       }
 
       if ((print_level >= 1) && (norm != norm)) {
+        converged = false;
         mfem::out << "Initial residual for Newton iteration is undefined/nan.\n";
         mfem::out << "Newton: No convergence!\n";
         return;
@@ -357,6 +361,7 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
 
     final_iter = it;
     final_norm = norm;
+    this->converged = converged ? 1 : 0;  // write back so GetConverged() is reliable
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm << '\n';
@@ -844,7 +849,10 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     real_t norm = status.global_norm;
     real_t norm_goal = status.global_goal;
     initial_norm = norm;
-    if (norm == 0.0) return;
+    if (norm == 0.0) {
+      converged = true;
+      return;
+    }
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -889,6 +897,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       }
 
       if (print_level >= 1 && (norm != norm)) {
+        converged = false;
         mfem::out << "Initial residual for trust-region iteration is undefined/nan." << std::endl;
         mfem::out << "TrustRegion: No convergence!\n";
         return;
@@ -1064,6 +1073,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
     final_iter = it;
     final_norm = norm;
+    this->converged = converged ? 1 : 0;  // write back so GetConverged() is reliable
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm
