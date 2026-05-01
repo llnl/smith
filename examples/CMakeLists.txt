@@ -42,4 +42,4 @@ add_subdirectory(uniaxial)
 add_subdirectory(inertia_relief)
 
 # Add the sentient_materials_si_examples
-add_subdirectory(sentient_materials_physics)
+add_subdirectory(sentient-materials-physics)

@@ -201,19 +201,20 @@ int main(int argc, char* argv[])
                                                          example_tm::makeThermalLinearOptions(), *mesh);
 
   auto staggered_solver = std::make_shared<smith::CoupledSystemSolver>(12);
-  staggered_solver->addSubsystemSolver({0}, mechanics_solver, {.relative_tols = {1.0e-6}, .absolute_tols = {1.0e-7}});
-  staggered_solver->addSubsystemSolver({1}, thermal_solver, {.relative_tols = {1.0e-6}, .absolute_tols = {1.0e-7}});
+  staggered_solver->addSubsystemSolver({0}, mechanics_solver);
+  staggered_solver->addSubsystemSolver({1}, thermal_solver);
 
   auto system =
       ::smith::buildThermoMechanicsSystem<example_tm::dim, example_tm::displacement_order, example_tm::temperature_order>(
           mesh, staggered_solver, ::smith::QuasiStaticSecondOrderTimeIntegrationRule{},
-          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered");
+          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered",
+          std::shared_ptr<::smith::CoupledSystemSolver>{});
 
   example_tm::LocalGreenSaintVenantThermoelasticMaterial material;
   system.setMaterial(material, mesh->entireBodyName());
 
   system.disp_bc->setFixedVectorBCs<example_tm::dim>(mesh->domain("left"));
-  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("right"), {0},
+  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("right"), std::vector<int>{0},
                                                 [pull_rate = options.pull_rate](double t, auto X) {
                                                   auto displacement = 0.0 * X;
                                                   displacement[0] = pull_rate * t;

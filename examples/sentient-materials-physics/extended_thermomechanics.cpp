@@ -204,19 +204,24 @@ smith::LinearSolverOptions makeThermalStateStageLinearSolverOptions(CoupledLinea
         options.preconditioner = smith::Preconditioner::BlockDiagonal;
         break;
       case GmresBlockPreconditioner::LowerTriangular:
-        options.preconditioner = smith::Preconditioner::BlockTriangularLower;
+        options.preconditioner = smith::Preconditioner::BlockTriangular;
+        options.block_triangular_type = smith::BlockTriangularType::Lower;
         break;
       case GmresBlockPreconditioner::SchurDiagonal:
-        options.preconditioner = smith::Preconditioner::BlockSchurDiagonal;
+        options.preconditioner = smith::Preconditioner::BlockSchur;
+        options.block_schur_type = smith::BlockSchurType::Diagonal;
         break;
       case GmresBlockPreconditioner::SchurLower:
-        options.preconditioner = smith::Preconditioner::BlockSchurLower;
+        options.preconditioner = smith::Preconditioner::BlockSchur;
+        options.block_schur_type = smith::BlockSchurType::Lower;
         break;
       case GmresBlockPreconditioner::SchurUpper:
-        options.preconditioner = smith::Preconditioner::BlockSchurUpper;
+        options.preconditioner = smith::Preconditioner::BlockSchur;
+        options.block_schur_type = smith::BlockSchurType::Upper;
         break;
       case GmresBlockPreconditioner::SchurFull:
-        options.preconditioner = smith::Preconditioner::BlockSchurFull;
+        options.preconditioner = smith::Preconditioner::BlockSchur;
+        options.block_schur_type = smith::BlockSchurType::Full;
         break;
     }
 

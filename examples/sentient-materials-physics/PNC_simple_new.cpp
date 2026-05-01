@@ -357,31 +357,32 @@ int main(int argc, char* argv[])
                                                          example_tm::makeThermalLinearOptions(), *mesh);
 
   auto staggered_solver = std::make_shared<smith::CoupledSystemSolver>(12);
-  staggered_solver->addSubsystemSolver({0}, mechanics_solver, {.relative_tols = {1.0e-6}, .absolute_tols = {1.0e-7}});
-  staggered_solver->addSubsystemSolver({1}, thermal_solver, {.relative_tols = {1.0e-6}, .absolute_tols = {1.0e-7}});
+  staggered_solver->addSubsystemSolver({0}, mechanics_solver);
+  staggered_solver->addSubsystemSolver({1}, thermal_solver);
 
   auto system =
       ::smith::buildThermoMechanicsSystem<example_tm::dim, example_tm::displacement_order, example_tm::temperature_order>(
           mesh, staggered_solver, ::smith::QuasiStaticSecondOrderTimeIntegrationRule{},
-          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered");
+          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered",
+          std::shared_ptr<::smith::CoupledSystemSolver>{});
 
   example_tm::LocalSimplePNCMaterial material;
   system.setMaterial(material, mesh->entireBodyName());
 
   system.disp_bc->setFixedVectorBCs<example_tm::dim>(mesh->domain("bottom"));
-  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("top"), {1},
+  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("top"), std::vector<int>{1},
                                                 [](double t, auto X) {
                                                   auto output = 0.0 * X;
                                                   output[1] = -0.50 * sin(M_PI * t / 2.0);
                                                   return output;
                                                 });
-  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("front"), {2},
+  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("front"), std::vector<int>{2},
                                                 [](double t, auto X) {
                                                   auto output = 0.0 * X;
                                                   output[2] = 0.0 * t;
                                                   return output;
                                                 });
-  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("back"), {2},
+  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("back"), std::vector<int>{2},
                                                 [](double t, auto X) {
                                                   auto output = 0.0 * X;
                                                   output[2] = 0.0 * t;
