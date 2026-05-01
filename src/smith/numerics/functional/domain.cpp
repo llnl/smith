@@ -473,7 +473,7 @@ mfem::Array<int> Domain::dof_list(const smith::fes_t* fes) const
     GetDofs = [&](int i, mfem::Array<int>& vdofs) { return fes->GetElementDofs(i, vdofs); };
   }
 
-  if (type_ == Type::BoundaryElements) {
+  if (type_ == Type::BoundaryElements || type_ == Type::InteriorBoundaryElements) {
     GetDofs = [&](int i, mfem::Array<int>& vdofs) { return fes->GetFaceDofs(i, vdofs); };
   }
 
