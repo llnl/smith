@@ -113,17 +113,8 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// constructor directly.  The builder function buildNonlinearBlockSolver
   /// applies a 0.6x inner-tolerance factor automatically.
   NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MPI_Comm comm, double abs_tol = 1e-12, double rel_tol = 1e-8,
-<<<<<<< HEAD
-                       BlockConvergenceTolerances block_tolerances = {},
                        std::optional<NonlinearSolverOptions> retained_nonlinear_options = std::nullopt,
                        std::optional<LinearSolverOptions> retained_linear_options = std::nullopt);
-
-  /// @overload
-  void completeSetup(const std::vector<FieldT>& us) override;
-=======
-                       std::optional<NonlinearSolverOptions> retained_nonlinear_options = std::nullopt,
-                       std::optional<LinearSolverOptions> retained_linear_options = std::nullopt);
->>>>>>> origin/tupek/system_solver
 
   /// @overload
   ConvergenceStatus convergenceStatus(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
@@ -149,13 +140,8 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// @brief Set the inner tolerance multiplier.
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
 
-<<<<<<< HEAD
-  /// @brief Build a fresh solver instance from retained config, optionally narrowed to one block tolerance entry.
-  std::shared_ptr<NonlinearBlockSolver> cloneFresh(std::optional<size_t> local_block_index = std::nullopt) const;
-=======
   /// @brief Build a fresh solver instance from retained config.
   std::shared_ptr<NonlinearBlockSolver> cloneFresh() const;
->>>>>>> origin/tupek/system_solver
 
   mutable std::unique_ptr<mfem::BlockOperator>
       block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
@@ -166,18 +152,10 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 
-<<<<<<< HEAD
-  MPI_Comm comm_;                                ///< MPI communicator for parallel norm computation
-  double abs_tol_;                               ///< absolute residual tolerance for convergence check
-  double rel_tol_;                               ///< relative residual tolerance for convergence check
-  BlockConvergenceTolerances block_tolerances_;  ///< optional per-block convergence tolerances
-  double inner_tol_multiplier_ = 1.0;            ///< multiplier for tolerances during inner solves
-=======
   MPI_Comm comm_;                      ///< MPI communicator for parallel norm computation
   double abs_tol_;                     ///< absolute residual tolerance for convergence check
   double rel_tol_;                     ///< relative residual tolerance for convergence check
   double inner_tol_multiplier_ = 1.0;  ///< multiplier for tolerances during inner solves
->>>>>>> origin/tupek/system_solver
   std::optional<NonlinearSolverOptions> retained_nonlinear_options_ = std::nullopt;  ///< retained nonlinear config
   std::optional<LinearSolverOptions> retained_linear_options_ = std::nullopt;        ///< retained linear config
 };

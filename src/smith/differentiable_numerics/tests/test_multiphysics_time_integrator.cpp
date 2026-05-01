@@ -29,20 +29,12 @@ namespace {
 
 class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
  public:
-<<<<<<< HEAD
-  void completeSetup(const std::vector<FieldT>&) override {}
-
-=======
->>>>>>> origin/tupek/system_solver
   std::vector<FieldPtr> solve(
       const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
   {
-<<<<<<< HEAD
-=======
     ++solve_calls_;
     last_num_unknowns_ = static_cast<int>(u_guesses.size());
->>>>>>> origin/tupek/system_solver
     return u_guesses;
   }
 
@@ -52,38 +44,12 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
   }
 
   ConvergenceStatus convergenceStatus(double, const std::vector<mfem::Vector>& residuals,
-<<<<<<< HEAD
-                                      const BlockConvergenceTolerances&, NonlinearConvergenceContext&) const override
-=======
                                       NonlinearConvergenceContext&) const override
->>>>>>> origin/tupek/system_solver
   {
     ConvergenceStatus status;
     status.global_converged = true;
     status.converged = true;
     status.block_norms.resize(residuals.size(), 0.0);
-<<<<<<< HEAD
-    status.block_goals.resize(residuals.size(), 0.0);
-    return status;
-  }
-
-  void primeConvergenceContext(const std::vector<mfem::Vector>&, const BlockConvergenceTolerances&,
-                               NonlinearConvergenceContext&) const override
-  {
-  }
-
-  std::vector<double> effectiveRelativeTolerances(size_t num_blocks, const BlockConvergenceTolerances&) const override
-  {
-    return std::vector<double>(num_blocks, 0.0);
-  }
-
-  std::vector<double> effectiveAbsoluteTolerances(size_t num_blocks, const BlockConvergenceTolerances&) const override
-  {
-    return std::vector<double>(num_blocks, 0.0);
-  }
-
-  void setInnerToleranceMultiplier(double) override {}
-=======
     return status;
   }
 
@@ -98,7 +64,6 @@ class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
  private:
   mutable int solve_calls_ = 0;
   mutable int last_num_unknowns_ = -1;
->>>>>>> origin/tupek/system_solver
 };
 
 class CountingNoOpNonlinearBlockSolver : public NoOpNonlinearBlockSolver {
@@ -107,19 +72,8 @@ class CountingNoOpNonlinearBlockSolver : public NoOpNonlinearBlockSolver {
       const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> f,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> j) const override
   {
-<<<<<<< HEAD
-    ++solve_calls_;
     return NoOpNonlinearBlockSolver::solve(u_guesses, std::move(f), std::move(j));
   }
-
-  int solveCalls() const { return solve_calls_; }
-
- private:
-  mutable int solve_calls_ = 0;
-=======
-    return NoOpNonlinearBlockSolver::solve(u_guesses, std::move(f), std::move(j));
-  }
->>>>>>> origin/tupek/system_solver
 };
 
 class NeedsInitialSolveRule : public QuasiStaticRule {
@@ -271,8 +225,6 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   StateManager::reset();
 }
 
-<<<<<<< HEAD
-=======
 TEST(CoupledSystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
 {
   axom::sidre::DataStore datastore;
@@ -317,7 +269,6 @@ TEST(CoupledSystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequested
   StateManager::reset();
 }
 
->>>>>>> origin/tupek/system_solver
 }  // namespace smith
 
 int main(int argc, char* argv[])

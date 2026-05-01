@@ -55,5 +55,4 @@ blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS DEFAULT ${_extra_flags
 
 # Clang specific warnings
 # Note: pedantic is a gcc flag but throws a false positive in src/smith/numerics/petsc_solvers.cpp
-#blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wpedantic -Wunused-private-field")
-blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wpedantic -Wno-c++2a-extensions -Wunused-private-field")
+blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wpedantic -Wunused-private-field")

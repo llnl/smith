@@ -81,9 +81,9 @@ endif()
 
 # Tune BLT to our needs
 if (NOT BLT_CXX_STD)
-    set(BLT_CXX_STD "c++17" CACHE STRING "")
-#elseif (BLT_CXX_STD MATCHES "^c\\+\\+([0-9]+)$" AND CMAKE_MATCH_1 VERSION_LESS 20)
-#    message(FATAL_ERROR "Smith requires BLT_CXX_STD to be c++17 or higher.")
+    set(BLT_CXX_STD "c++20" CACHE STRING "")
+elseif (BLT_CXX_STD MATCHES "^c\\+\\+([0-9]+)$" AND CMAKE_MATCH_1 VERSION_LESS 20)
+    message(FATAL_ERROR "Smith requires BLT_CXX_STD to be c++20 or higher.")
 endif()
 
 # These BLT tools are not used in Smith, turn them off
@@ -185,7 +185,6 @@ include(${PROJECT_SOURCE_DIR}/cmake/SmithConfigHeader.cmake)
 add_subdirectory(src)
 
 add_subdirectory(examples)
-
 
 #------------------------------------------------------------------------------
 # Generate helper script for running ATS

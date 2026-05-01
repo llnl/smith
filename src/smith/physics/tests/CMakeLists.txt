@@ -31,11 +31,7 @@ set(physics_serial_test_sources
     solid_multi_material.cpp
     test_functional_weak_form.cpp
     thermomech_statics_patch.cpp
-<<<<<<< HEAD
-    test_kinematic_objective.cpp
-=======
     parameterized_thermomechanics_example.cpp
->>>>>>> origin/tupek/system_solver
     )
 
 if (TRIBOL_FOUND)
@@ -80,7 +76,6 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
-    parameterized_thermomechanics_example.cpp 
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
