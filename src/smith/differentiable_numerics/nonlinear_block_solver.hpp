@@ -20,6 +20,7 @@
 
 #include "smith/numerics/solver_config.hpp"
 #include "smith/numerics/nonlinear_convergence.hpp"
+#include "smith/differentiable_numerics/bc_ramp_options.hpp"
 
 namespace mfem {
 class Solver;
@@ -100,7 +101,7 @@ class NonlinearBlockSolverBase {
 
   /// @brief Apply or clear relaxed intermediate-solve policy.
   virtual void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
-                                              int max_iterations)
+                                              int max_iterations) const
   {
     static_cast<void>(enabled);
     static_cast<void>(abs_tol_factor);
@@ -116,10 +117,17 @@ class NonlinearBlockSolverBase {
   /// True before first call (optimistic default — ramp predicate sees only the NaN check then).
   bool lastSolveConverged() const { return last_solve_converged_; }
 
+  /// @brief Configure BC cutback behavior for block_solve when this solver is in use.
+  void setBcRampOptions(const BcRampOptions& options) { bc_ramp_options_ = options; }
+
+  /// @brief Read current BC ramp options.
+  const BcRampOptions& bcRampOptions() const { return bc_ramp_options_; }
+
  protected:
   mutable bool is_setup_ = false;             ///< Records if this block solver has its preconditioner initialized.
   mutable bool last_solve_converged_ = true;  ///< Set by subclasses after each solve.
   mutable NonlinearConvergenceContext convergence_context_ = {};  ///< Solver-owned convergence state for one solve.
+  BcRampOptions bc_ramp_options_{};                               ///< BC ramp configuration (default: disabled).
 };
 
 /// @brief Nonlinear block solver backed by an EquationSolver forward solve and linear adjoint solves.
@@ -161,7 +169,7 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
 
   /// @overload
   void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
-                                      int max_iterations) override
+                                      int max_iterations) const override
   {
     use_intermediate_tolerances_ = enabled;
     intermediate_abs_tol_factor_ = abs_tol_factor;

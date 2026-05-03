@@ -65,7 +65,7 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
 
   void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
-                                      int max_iterations) override
+                                      int max_iterations) const override
   {
     intermediate_enabled_ = enabled;
     intermediate_abs_tol_factor_ = abs_tol_factor;
@@ -162,10 +162,9 @@ TEST(BcRampOptionsTest, DefaultsAreDisabled)
 
 TEST(BcRampOptionsTest, SetGetRoundTrip)
 {
-  SystemSolver solver(/*max_staggered_iterations=*/1);
+  RecordingRampSolver solver(std::vector<bool>{true});
   BcRampOptions opts{.enabled = true,
                      .shrink_factor = 0.25,
-                     .j_floor = 1e-6,
                      .max_cutbacks = 8,
                      .intermediate_max_iterations = 7,
                      .intermediate_relative_tol = 0.75,
@@ -175,23 +174,10 @@ TEST(BcRampOptionsTest, SetGetRoundTrip)
   const auto& got = solver.bcRampOptions();
   EXPECT_TRUE(got.enabled);
   EXPECT_DOUBLE_EQ(got.shrink_factor, 0.25);
-  EXPECT_DOUBLE_EQ(got.j_floor, 1e-6);
   EXPECT_EQ(got.max_cutbacks, 8);
   EXPECT_EQ(got.intermediate_max_iterations, 7);
   EXPECT_DOUBLE_EQ(got.intermediate_relative_tol, 0.75);
   EXPECT_DOUBLE_EQ(got.intermediate_absolute_tol_fac, 42.0);
-}
-
-TEST(BcRampOptionsTest, HiddenSolveCounterStartsZero)
-{
-  SystemSolver solver(/*max_staggered_iterations=*/1);
-  EXPECT_EQ(solver.lastHiddenSolveCount(), 0);
-}
-
-TEST(BcRampOptionsTest, ClearCacheCompiles)
-{
-  SystemSolver solver(/*max_staggered_iterations=*/1);
-  solver.clearBcRampCache();
 }
 
 TEST(BcRamp, CutbackUsesIntermediateTolerancePolicy)
@@ -199,14 +185,15 @@ TEST(BcRamp, CutbackUsesIntermediateTolerancePolicy)
   ScalarRampHarness harness;
 
   auto recording_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true});
-  auto system_solver = std::make_shared<SystemSolver>(recording_solver);
   BcRampOptions opts;
   opts.enabled = true;
   opts.max_cutbacks = 4;
   opts.intermediate_max_iterations = 10;
   opts.intermediate_relative_tol = 0.9;
   opts.intermediate_absolute_tol_fac = 1e3;
-  system_solver->setBcRampOptions(opts);
+  recording_solver->setBcRampOptions(opts);
+
+  auto system_solver = std::make_shared<SystemSolver>(recording_solver);
 
   auto solved_states =
       system_solver->solve(harness.residuals, harness.block_indices, harness.field_store->getShapeDisp(),
@@ -215,10 +202,9 @@ TEST(BcRamp, CutbackUsesIntermediateTolerancePolicy)
   EXPECT_EQ(solved_states.size(), 1);
   EXPECT_EQ(recording_solver->intermediateFlags().size(), 3);
   EXPECT_EQ(recording_solver->intermediateFlags(), std::vector<bool>({false, true, false}));
-  EXPECT_EQ(recording_solver->maxIterations(), std::vector<int>({10, 10, 10}));
+  EXPECT_EQ(recording_solver->maxIterations(), std::vector<int>({0, 10, 10}));
   EXPECT_DOUBLE_EQ(recording_solver->absTolFactors()[1], 1e3);
   EXPECT_DOUBLE_EQ(recording_solver->relTolFloors()[1], 0.9);
-  EXPECT_EQ(system_solver->lastHiddenSolveCount(), 2);
 }
 
 TEST(BcRamp, RampDisabledIsBitIdentical)
@@ -227,10 +213,10 @@ TEST(BcRamp, RampDisabledIsBitIdentical)
 
   auto base_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{true});
   auto disabled_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{true});
+  disabled_solver->setBcRampOptions(BcRampOptions{.enabled = false});
 
   SystemSolver base_system(base_solver);
   SystemSolver explicit_disabled_system(disabled_solver);
-  explicit_disabled_system.setBcRampOptions(BcRampOptions{.enabled = false});
 
   auto base_states = base_system.solve(harness.residuals, harness.block_indices, harness.field_store->getShapeDisp(),
                                        harness.states, harness.params, TimeInfo(0.0, 1.0, 0), harness.bc_managers);
