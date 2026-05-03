@@ -363,7 +363,7 @@ int main(int argc, char* argv[])
   auto system =
       ::smith::buildThermoMechanicsSystem<example_tm::dim, example_tm::displacement_order, example_tm::temperature_order>(
           mesh, staggered_solver, ::smith::QuasiStaticSecondOrderTimeIntegrationRule{},
-          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered");
+          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered", std::shared_ptr<::smith::CoupledSystemSolver>(nullptr));
 
   example_tm::LocalSimplePNCMaterial material;
   system.setMaterial(material, mesh->entireBodyName());

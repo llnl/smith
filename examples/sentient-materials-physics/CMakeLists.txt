@@ -42,8 +42,8 @@ smith_add_executable(NAME       extended_thermomechanics
                      DEPENDS_ON smith
                      )
 
-smith_add_executable(NAME       bibeam_test_2d
-                     SOURCES    bibeam_test_2d.cpp
+smith_add_executable(NAME       bibeam_test
+                     SOURCES    bibeam_test.cpp
                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                      DEPENDS_ON smith
                      )

@@ -154,6 +154,7 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
   SMITH_MARK_FUNCTION;
   SLIC_ERROR_IF(!nonlinear_solver_, "NonlinearBlockSolver requires an EquationSolver instance before solve()");
 
+  initializeSolver(&nonlinear_solver_->preconditioner(), *u_guesses[0]);  
   nonlinear_solver_->resetConvergenceState();
 
   int num_rows = static_cast<int>(u_guesses.size());
