@@ -15,6 +15,10 @@ to 1. for Pa, 1000 for kPa, 1e6 for MPa, etc
 */
 
 #include <cstdlib>
+#include <cmath>
+#include <fstream>
+#include <functional>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -39,6 +43,7 @@ namespace example_tm {
 static constexpr int dim = 3;
 static constexpr int displacement_order = 1;
 static constexpr int temperature_order = 1;
+static constexpr double pi = 3.14159265358979323846;
 
 struct Options {
   int scale = 1;
@@ -357,31 +362,32 @@ int main(int argc, char* argv[])
                                                          example_tm::makeThermalLinearOptions(), *mesh);
 
   auto staggered_solver = std::make_shared<smith::CoupledSystemSolver>(12);
-  staggered_solver->addSubsystemSolver({0}, mechanics_solver, {.relative_tols = {1.0e-6}, .absolute_tols = {1.0e-7}});
-  staggered_solver->addSubsystemSolver({1}, thermal_solver, {.relative_tols = {1.0e-6}, .absolute_tols = {1.0e-7}});
+  staggered_solver->addSubsystemSolver({0}, mechanics_solver);
+  staggered_solver->addSubsystemSolver({1}, thermal_solver);
 
   auto system =
       ::smith::buildThermoMechanicsSystem<example_tm::dim, example_tm::displacement_order, example_tm::temperature_order>(
           mesh, staggered_solver, ::smith::QuasiStaticSecondOrderTimeIntegrationRule{},
-          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered", std::shared_ptr<::smith::CoupledSystemSolver>(nullptr));
+          ::smith::QuasiStaticFirstOrderTimeIntegrationRule{}, "bz_staggered",
+          std::shared_ptr<::smith::CoupledSystemSolver>{});
 
   example_tm::LocalSimplePNCMaterial material;
   system.setMaterial(material, mesh->entireBodyName());
 
   system.disp_bc->setFixedVectorBCs<example_tm::dim>(mesh->domain("bottom"));
-  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("top"), {1},
+  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("top"), std::vector<int>{1},
                                                 [](double t, auto X) {
                                                   auto output = 0.0 * X;
-                                                  output[1] = -0.50 * sin(M_PI * t / 2.0);
+                                                  output[1] = -0.50 * std::sin(example_tm::pi * t / 2.0);
                                                   return output;
                                                 });
-  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("front"), {2},
+  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("front"), std::vector<int>{2},
                                                 [](double t, auto X) {
                                                   auto output = 0.0 * X;
                                                   output[2] = 0.0 * t;
                                                   return output;
                                                 });
-  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("back"), {2},
+  system.disp_bc->setVectorBCs<example_tm::dim>(mesh->domain("back"), std::vector<int>{2},
                                                 [](double t, auto X) {
                                                   auto output = 0.0 * X;
                                                   output[2] = 0.0 * t;
@@ -405,9 +411,9 @@ int main(int argc, char* argv[])
    });
 
    // function for the BC - need for reaction forces
-  std::function<double(double, tensor<double, example_tm::dim>)> boundary_condition;
-  boundary_condition = [](double t, tensor<double, example_tm::dim> /*X*/) -> double {
-    return -0.50 * sin(M_PI * t / 2.0);
+  std::function<double(double, smith::tensor<double, example_tm::dim>)> boundary_condition;
+  boundary_condition = [](double t, smith::tensor<double, example_tm::dim> /*X*/) -> double {
+    return -0.50 * std::sin(example_tm::pi * t / 2.0);
   };
 
 
@@ -448,7 +454,7 @@ int main(int argc, char* argv[])
 
     //-----------ADD FROM PNC_double_network_simple------------
     auto reactions = physics->getReactionStates();
-    TimeInfo time_info(physics->time() - time_increment, time_increment);
+    smith::TimeInfo time_info(physics->time() - time_increment, time_increment);
     double reaction = CalculateReaction(*reactions[0].get(), mesh, "top", 1);
     if (mfem::Mpi::Root()) {
       std::cout << "Reaction: " << reaction << std::endl;

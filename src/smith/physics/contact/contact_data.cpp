@@ -7,6 +7,8 @@
 #include "smith/physics/contact/contact_data.hpp"
 
 #include <cstddef>
+#include <format>
+#include <memory>
 
 #include "axom/slic.hpp"
 #include "mpi.h"
@@ -16,6 +18,7 @@
 #ifdef SMITH_USE_TRIBOL
 #include "tribol/interface/tribol.hpp"
 #include "tribol/interface/mfem_tribol.hpp"
+#include "tribol/mesh/CouplingScheme.hpp"
 #endif
 
 namespace smith {
@@ -37,6 +40,11 @@ ContactData::~ContactData() { tribol::finalize(); }
 void ContactData::addContactInteraction(int interaction_id, const std::set<int>& bdry_attr_surf1,
                                         const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts)
 {
+  // Disallow duplicate ids globally: Tribol coupling schemes are keyed by cs_id (interaction_id) globally.
+  auto* cs = tribol::CouplingSchemeManager::getInstance().findData(static_cast<tribol::IndexT>(interaction_id));
+  SLIC_ERROR_ROOT_IF(cs != nullptr,
+                     std::format("Contact interaction id {} is already registered with Tribol.", interaction_id));
+
   interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_, contact_opts);
   if (contact_opts.enforcement == ContactEnforcement::LagrangeMultiplier) {
     have_lagrange_multipliers_ = true;
@@ -56,10 +64,10 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
     contact_bdry_attribs[bdry_attr - 1] = 1;
   }
   // dofs for the current contact interaction
-  mfem::Array<int> contact_interaction_dofs_;
-  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(contact_bdry_attribs, contact_interaction_dofs_);
+  mfem::Array<int> contact_interaction_dofs;
+  reference_nodes_->ParFESpace()->GetEssentialTrueDofs(contact_bdry_attribs, contact_interaction_dofs);
   // add dofs for current contact interaction call to all contact_dofs_
-  contact_dofs_.Append(contact_interaction_dofs_.GetData(), contact_interaction_dofs_.Size());
+  contact_dofs_.Append(contact_interaction_dofs);
   // sort and delete duplicates
   contact_dofs_.Sort();
   contact_dofs_.Unique();
@@ -195,9 +203,10 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
   }
 
   for (size_t i{0}; i < interactions_.size(); ++i) {
-    // this is the BlockOperator for one of the contact interactions
-    auto interaction_J = interactions_[i].jacobian();
+    // this is the BlockOperator for one of the contact interactions, post-processed for Smith's assembly conventions
+    auto interaction_J = interactions_[i].jacobianContribution();
     interaction_J->owns_blocks = false;  // we'll manage the ownership of the blocks on our own...
+
     // add the contact interaction's contribution to df_(contact)/dx (the 0, 0 block)
     if (!interaction_J->IsZeroBlock(0, 0)) {
       SLIC_ERROR_ROOT_IF(!dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0)),
@@ -211,42 +220,16 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
         delete &interaction_J->GetBlock(0, 0);
       }
     }
-    // add the contact interaction's (other) contribution to df_(contact)/dx (for penalty) or to df_(contact)/dp and
-    // dg/dx (for Lagrange multipliers)
+
+    // add the contact interaction's contribution to df_(contact)/dp and dg/dx (for Lagrange multipliers)
     if (!interaction_J->IsZeroBlock(1, 0) && !interaction_J->IsZeroBlock(0, 1)) {
       auto dgdu = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(1, 0));
       auto dfdp = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 1));
       SLIC_ERROR_ROOT_IF(!dgdu, "Only HypreParMatrix constraint matrix blocks are currently supported.");
       SLIC_ERROR_ROOT_IF(!dfdp, "Only HypreParMatrix constraint matrix blocks are currently supported.");
-      // zero out rows and cols not in the active set
-      auto inactive_dofs = interactions_[i].inactiveDofs();
-      dgdu->EliminateRows(inactive_dofs);
-      auto dfdp_elim = std::unique_ptr<mfem::HypreParMatrix>(dfdp->EliminateCols(inactive_dofs));
-      if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::Penalty) {
-        // compute contribution to df_(contact)/dx (the 0, 0 block) for penalty
-        std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
-        delete &interaction_J->GetBlock(1, 0);
-        delete &interaction_J->GetBlock(0, 1);
-        if (block_J->IsZeroBlock(0, 0)) {
-          mfem::Vector penalty(reference_nodes_->ParFESpace()->GetTrueVSize());
-          penalty = interactions_[i].getContactOptions().penalty;
-          BTB->ScaleRows(penalty);
-          block_J->SetBlock(0, 0, BTB.release());
-        } else {
-          block_J->SetBlock(0, 0,
-                            mfem::Add(1.0, static_cast<mfem::HypreParMatrix&>(block_J->GetBlock(0, 0)),
-                                      interactions_[i].getContactOptions().penalty, *BTB));
-        }
-      } else  // enforcement == ContactEnforcement::LagrangeMultiplier
-      {
-        // compute contribution to off-diagonal blocks for Lagrange multiplier
-        dgdu_blocks(static_cast<int>(i), 0) = dgdu;
-        dfdp_blocks(0, static_cast<int>(i)) = dfdp;
-      }
-      if (!interaction_J->IsZeroBlock(1, 1)) {
-        // we track our own active set, so get rid of the tribol inactive dof block
-        delete &interaction_J->GetBlock(1, 1);
-      }
+
+      dgdu_blocks(static_cast<int>(i), 0) = dgdu;
+      dfdp_blocks(0, static_cast<int>(i)) = dfdp;
     }
   }
   if (haveLagrangeMultipliers()) {
@@ -276,6 +259,7 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
         inactive_tdofs_ct += inactive_tdofs_vector[i]->Size();
       }
     }
+    inactive_tdofs.GetMemory().SetHostPtrOwner(false);
     mfem::Array<int> rows(numPressureDofs() + 1);
     rows = 0;
     inactive_tdofs_ct = 0;
@@ -285,21 +269,19 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
       }
       rows[i + 1] = inactive_tdofs_ct;
     }
+    rows.GetMemory().SetHostPtrOwner(false);
     mfem::Vector ones(inactive_tdofs_ct);
     ones = 1.0;
+    ones.GetMemory().SetHostPtrOwner(false);
     mfem::SparseMatrix inactive_diag(rows.GetData(), inactive_tdofs.GetData(), ones.GetData(), numPressureDofs(),
                                      numPressureDofs(), false, false, true);
-    rows.GetMemory().ClearOwnerFlags();
-    inactive_tdofs.GetMemory().ClearOwnerFlags();
-    ones.GetMemory().ClearOwnerFlags();
-    inactive_diag.GetMemoryI().ClearOwnerFlags();
-    inactive_diag.GetMemoryJ().ClearOwnerFlags();
-    inactive_diag.GetMemoryData().ClearOwnerFlags();
+    // if the size of ones is zero, SparseMatrix creates its own memory which it
+    // owns.  explicitly prevent this...
+    inactive_diag.SetDataOwner(false);
     auto block_1_1 =
         new mfem::HypreParMatrix(mesh_.GetComm(), global_pressure_dof_offsets_[global_pressure_dof_offsets_.Size() - 1],
                                  global_pressure_dof_offsets_, &inactive_diag);
-    constexpr int mfem_owned_host_flag = 3;
-    block_1_1->SetOwnerFlags(mfem_owned_host_flag, block_1_1->OwnsOffd(), block_1_1->OwnsColMap());
+    block_1_1->SetOwnerFlags(3, 3, 1);
     block_J->SetBlock(1, 1, block_1_1);
     // end building I_(inactive)
   }

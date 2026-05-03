@@ -26,7 +26,6 @@ class CoupledSystemSolver {
   struct Stage {
     std::vector<size_t> block_indices;                 ///< Which blocks (residuals) to solve in this stage.
     std::shared_ptr<NonlinearBlockSolverBase> solver;  ///< Solver to use for this stage.
-    BlockConvergenceTolerances block_tolerances = {};  ///< Optional stage-local convergence overrides.
     double relaxation_factor = 1.0;                    ///< Per-stage relaxation factor. Values in (0, 1) under-relax
                                                        ///< the update: x_new = omega * x_solved + (1 - omega) * x_old.
                                                        ///< A value of 1.0 (default) means no relaxation (full update).
@@ -48,10 +47,9 @@ class CoupledSystemSolver {
   /// @brief Convenience method to add a solver stage.
   /// @param block_indices Indices of the blocks to solve.
   /// @param solver Nonlinear block solver for this stage.
-  /// @param block_tolerances Optional stage-local convergence overrides.
   /// @param relaxation_factor Per-stage relaxation factor in `(0, 1]`.
   void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolverBase> solver,
-                          BlockConvergenceTolerances block_tolerances = {}, double relaxation_factor = 1.0);
+                          double relaxation_factor = 1.0);
 
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.

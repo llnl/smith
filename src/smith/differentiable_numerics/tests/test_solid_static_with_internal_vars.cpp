@@ -146,8 +146,8 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   // Staggered solver: stage 0 solves displacement (block 0), stage 1 solves state (block 1).
   // Use relaxation_factor = 0.5 on the displacement stage to exercise the relaxation path.
   auto staggered_solver = std::make_shared<CoupledSystemSolver>(20);
-  staggered_solver->addSubsystemSolver({0}, disp_solver, {}, 0.5);
-  staggered_solver->addSubsystemSolver({1}, state_solver, {}, 1.0);
+  staggered_solver->addSubsystemSolver({0}, disp_solver, 0.5);
+  staggered_solver->addSubsystemSolver({1}, state_solver, 1.0);
 
   auto system = buildSolidMechanicsWithInternalVarsSystem<dim, disp_order, StateSpace>(
       mesh, staggered_solver, QuasiStaticSecondOrderTimeIntegrationRule{}, BackwardEulerFirstOrderTimeIntegrationRule{},

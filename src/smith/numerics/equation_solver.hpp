@@ -84,14 +84,8 @@ class EquationSolver {
    */
   void solve(mfem::Vector& x) const;
 
-  /// @brief Configure optional block convergence metadata for the nonlinear solver.
-  void setConvergenceBlockData(const std::vector<int>& block_offsets,
-                               const BlockConvergenceTolerances& block_tolerances) const;
-
-  /// @brief Configure block convergence metadata, lazily creating convergence state if needed.
-  void setConvergenceBlockData(const std::vector<int>& block_offsets,
-                               const BlockConvergenceTolerances& block_tolerances, double abs_tol, double rel_tol,
-                               MPI_Comm comm) const;
+  /// @brief Update scalar convergence tolerances for the managed nonlinear convergence path.
+  void setConvergenceTolerances(double abs_tol, double rel_tol, MPI_Comm comm) const;
 
   /// @brief Reset nonlinear convergence state stored across iterations of a single solve.
   void resetConvergenceState() const;

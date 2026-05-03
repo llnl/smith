@@ -12,10 +12,10 @@
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/numerics/functional/dual.hpp"
 
-using namespace smith;
 
+namespace smith {
 /// Thermomechanics helper data types
-namespace smith::thermomechanics {
+namespace thermomechanics {
 /// @brief Alternative Green-Saint Venant isotropic thermoelastic model
 struct AlternativeGreenSaintVenantThermoelasticMaterial {
   double density;    ///< density
@@ -1179,3 +1179,4 @@ struct ViscoThermalStiffeningMaterial {
 ///////////////////////////////////////////////////////////////////////////////
 
 };  // namespace smith::thermomechanics
+}; // namespace smith
