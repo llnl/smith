@@ -35,6 +35,7 @@ constexpr double top_tol = 1.0e-8;
 std::string solver_name = "TrustRegion";
 int print_level = 2;
 int nonlinear_max_iters = 30000;
+bool warm_start = false;
 
 NonlinearSolver selectedNonlinearSolver()
 {
@@ -52,6 +53,8 @@ void parseCommandLine(int& argc, char** argv)
       solver_name = arg.substr(9);
     else if (arg.rfind("--print-level=", 0) == 0)
       print_level = std::stoi(arg.substr(14));
+    else if (arg.rfind("--warm-start=", 0) == 0)
+      warm_start = std::stoi(arg.substr(14));
     else if (arg.rfind("--nonlinear-max-iterations=", 0) == 0)
       nonlinear_max_iters = std::stoi(arg.substr(27));
     else {
@@ -100,7 +103,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
                                                   .relative_tol = 1.0e-8,
                                                   .absolute_tol = 1.0e-10,
                                                   .max_iterations = nonlinear_max_iters,
-                                                  .print_level = print_level};
+                                                  .print_level = print_level,
+                                                  .warm_start = warm_start};
 
   using TimeRule = QuasiStaticSecondOrderTimeIntegrationRule;
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "arch_");
