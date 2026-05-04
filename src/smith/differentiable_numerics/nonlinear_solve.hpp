@@ -28,14 +28,12 @@ class DirichletBoundaryConditions;
 /// @brief magic number for representing a field which is not an argument of the weak form.
 static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max() - 1;
 
-/// @brief Apply boundary conditions to @p primal_field by evaluating BC coefficients at @p time.
-void applyBoundaryConditions(const BoundaryConditionManager* bc_manager, double time, FEFieldPtr& primal_field);
-
-/// @brief Apply boundary conditions to @p primal_field as @c alpha * bc(t_new) + (1 - alpha) * bc(t_old)
-/// at each essential tdof. Evaluates BC coefficients at both endpoints (preserving any user-defined
-/// non-smoothness in the BC ramp) and lerps in tdof space.
-void applyBoundaryConditions(const BoundaryConditionManager* bc_manager, double t_new, double t_old, double alpha,
-                             FEFieldPtr& primal_field);
+/// @brief Apply boundary conditions to @p primal_field. When @p bc_field_ptr is
+/// non-null, its values at the BC manager's essential tdofs are written
+/// directly (override path used by SystemSolver BC ramp). Otherwise BC
+/// coefficients are evaluated at @p time.
+void applyBoundaryConditions(double time, const BoundaryConditionManager* bc_manager, FEFieldPtr& primal_field,
+                             const FEFieldPtr& bc_field_ptr = nullptr);
 
 /// @brief Solve a block nonlinear system of equations as defined by the vector of weak form
 /// @param residual_evals Vector of weak forms which define the equations to be solved
@@ -52,13 +50,19 @@ void applyBoundaryConditions(const BoundaryConditionManager* bc_manager, double 
 /// @param time_info Timestep information (time, dt, cycle)
 /// @param solver The nonlinear block solver used to solve the system of equations
 /// @param bc_managers Holds information about which degrees of freedom (DOFS)
+/// @param bc_field_overrides Optional per-block fields whose values at the BC manager's
+///        essential tdofs are written to the primal field instead of evaluating the BC
+///        coefficient at @p time_info.time(). Used by the SystemSolver BC ramp to lerp
+///        between previously-applied BC values and the target. Empty (or null entries)
+///        means use the coefficient-at-time path. Length must be 0 or num_rows.
 /// @return Vector of field solutions satisfying the weak forms
 std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
-                                    const std::vector<const BoundaryConditionManager*>& bc_managers);
+                                    const std::vector<const BoundaryConditionManager*>& bc_managers,
+                                    const std::vector<FEFieldPtr>& bc_field_overrides = {});
 
 /// @brief Solve a single nonlinear system of equations as defined by one weak form.
 /// @param residual_eval The weak form that defines the residual.

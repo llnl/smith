@@ -499,6 +499,9 @@ struct NonlinearSolverOptions {
 
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
+
+  /// Option to use the previous stiffness matrix to solve with updated boundary conditions to 'pre-smooth' the solution
+  bool warm_start = false;
 };
 // _nonlinear_options_end
 
