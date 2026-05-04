@@ -31,7 +31,7 @@ namespace {
  */
 class PreconditionerOnlySolver : public mfem::IterativeSolver {
  public:
-  PreconditionerOnlySolver(MPI_Comm comm) : mfem::IterativeSolver(comm) {}
+  PreconditionerOnlySolver(MPI_Comm mpi_comm) : mfem::IterativeSolver(mpi_comm) {}
 
   /// @overload
   void Mult(const mfem::Vector& x, mfem::Vector& y) const override
