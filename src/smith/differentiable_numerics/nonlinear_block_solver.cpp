@@ -126,17 +126,17 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
     if (auto* p = dynamic_cast<smith::BlockDiagonalPreconditioner*>(mfem_solver)) {
       return BlockSolverAccessor{
           p->numSubSolvers(),
-          +[](void* self, int i) { return static_cast<smith::BlockDiagonalPreconditioner*>(self)->subSolver(i); }, p};
+          static_cast<mfem::Solver* (*)(void*, int)>([](void* self, int i) { return static_cast<smith::BlockDiagonalPreconditioner*>(self)->subSolver(i); }), p};
     }
     if (auto* p = dynamic_cast<smith::BlockTriangularPreconditioner*>(mfem_solver)) {
       return BlockSolverAccessor{
           p->numSubSolvers(),
-          +[](void* self, int i) { return static_cast<smith::BlockTriangularPreconditioner*>(self)->subSolver(i); }, p};
+          static_cast<mfem::Solver* (*)(void*, int)>([](void* self, int i) { return static_cast<smith::BlockTriangularPreconditioner*>(self)->subSolver(i); }), p};
     }
     if (auto* p = dynamic_cast<smith::BlockSchurPreconditioner*>(mfem_solver)) {
       return BlockSolverAccessor{
           p->numSubSolvers(),
-          +[](void* self, int i) { return static_cast<smith::BlockSchurPreconditioner*>(self)->subSolver(i); }, p};
+          static_cast<mfem::Solver* (*)(void*, int)>([](void* self, int i) { return static_cast<smith::BlockSchurPreconditioner*>(self)->subSolver(i); }), p};
     }
     return BlockSolverAccessor{};
   }();

@@ -57,6 +57,14 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
 
   virtual ~BlockDiagonalPreconditioner();
 
+  int numSubSolvers() const { return num_blocks_; }
+
+  mfem::Solver* subSolver(int i) const
+  {
+    MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockDiagonalPreconditioner::subSolver index out of range");
+    return mfem_solvers_[static_cast<size_t>(i)].get();
+  }
+
  private:
   // Offsets for extracting block vector segments, populated by SetOperator().
   mfem::Array<int> block_offsets_;
@@ -128,6 +136,14 @@ class BlockTriangularPreconditioner : public mfem::Solver {
   virtual void SetOperator(const mfem::Operator& jacobian);
 
   virtual ~BlockTriangularPreconditioner();
+
+  int numSubSolvers() const { return num_blocks_; }
+
+  mfem::Solver* subSolver(int i) const
+  {
+    MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockTriangularPreconditioner::subSolver index out of range");
+    return mfem_solvers_[static_cast<size_t>(i)].get();
+  }
 
  private:
   // Offsets for extracting block vector segments, populated by SetOperator().
@@ -232,6 +248,14 @@ class BlockSchurPreconditioner : public mfem::Solver {
   virtual void SetOperator(const mfem::Operator& jacobian);
 
   virtual ~BlockSchurPreconditioner();
+
+  int numSubSolvers() const { return static_cast<int>(mfem_solvers_.size()); }
+
+  mfem::Solver* subSolver(int i) const
+  {
+    MFEM_VERIFY(i >= 0 && i < static_cast<int>(mfem_solvers_.size()), "BlockSchurPreconditioner::subSolver index out of range");
+    return mfem_solvers_[static_cast<size_t>(i)].get();
+  }
 
  private:
   // Offsets for extracting block vector segments, populated by SetOperator().
