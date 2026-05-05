@@ -29,7 +29,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ### Fixed
 
-## [v0.1.0] - Release date 2026-04-28
+## [Version 0.1.0] - Release date 2026-04-28
 
 ## Legend for sections
 
