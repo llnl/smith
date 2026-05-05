@@ -100,8 +100,8 @@ template <int i, int dim, typename... trials, typename lambda, typename qpt_data
 auto get_derivative_type(const lambda& qf, qpt_data_type qpt_data)
 {
   using qf_arguments = smith::tuple<typename QFunctionArgument<trials, smith::Dimension<dim>>::type...>;
-  return get_gradient(apply_qf(qf, double{}, smith::tuple<tensor<double, dim>, tensor<double, dim, dim>>{}, qpt_data,
-                               make_dual_wrt<i>(qf_arguments{})));
+  return get_gradient(apply_qf(qf, double{}, smith::tuple<tensor<double, dim>, tensor<double, dim, dim>>{},
+                                      qpt_data, make_dual_wrt<i>(qf_arguments{})));
 };
 
 template <typename lambda, int dim, int n, typename... T>

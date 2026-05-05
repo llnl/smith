@@ -277,6 +277,18 @@ constexpr auto make_dual_wrt(const smith::tuple<T...>& args)
 }
 
 /**
+ * @brief Retrieves the value components of a set of (possibly dual) numbers
+ * @param[in] tuple_of_values The tuple of numbers to retrieve values from
+ * @pre The tuple must contain only scalars or tensors of @p dual numbers or doubles
+ */
+template <typename... T>
+SMITH_HOST_DEVICE auto get_value(const smith::tuple<T...>& tuple_of_values)
+{
+  return smith::apply([](const auto&... each_value) { return smith::tuple{get_value(each_value)...}; },
+                      tuple_of_values);
+}
+
+/**
  * @brief Extracts all of the values from a tensor of dual numbers
  *
  * @tparam T1 the first type of the tuple stored in the tensor
@@ -288,23 +300,11 @@ constexpr auto make_dual_wrt(const smith::tuple<T...>& args)
 template <typename T1, typename T2, int n>
 SMITH_HOST_DEVICE auto get_value(const tensor<tuple<T1, T2>, n>& input)
 {
-  tensor<decltype(get_value(tuple<T1, T2>{})), n> output{};
+  tensor<decltype(smith::get_value(smith::tuple<T1, T2>{})), n> output{};
   for (int i = 0; i < n; i++) {
     output[i] = get_value(input[i]);
   }
   return output;
-}
-
-/**
- * @brief Retrieves the value components of a set of (possibly dual) numbers
- * @param[in] tuple_of_values The tuple of numbers to retrieve values from
- * @pre The tuple must contain only scalars or tensors of @p dual numbers or doubles
- */
-template <typename... T>
-SMITH_HOST_DEVICE auto get_value(const smith::tuple<T...>& tuple_of_values)
-{
-  return smith::apply([](const auto&... each_value) { return smith::tuple{get_value(each_value)...}; },
-                      tuple_of_values);
 }
 
 /**
@@ -332,7 +332,8 @@ SMITH_HOST_DEVICE auto get_gradient(const tensor<dual<smith::tuple<T...>>, n...>
 template <typename... T>
 SMITH_HOST_DEVICE auto get_gradient(smith::tuple<T...> tuple_of_values)
 {
-  return smith::apply([](auto... each_value) { return smith::tuple{get_gradient(each_value)...}; }, tuple_of_values);
+  return smith::apply([](auto... each_value) { return smith::tuple{get_gradient(each_value)...}; },
+                      tuple_of_values);
 }
 
 /**
