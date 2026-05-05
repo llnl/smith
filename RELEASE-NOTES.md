@@ -29,6 +29,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ### Fixed
 
+## [v0.1.0] - Release date 2026-04-28
+
 ## Legend for sections
 
 ###  Added
@@ -48,3 +50,5 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ###  Security
 - Use this section in case of vulnerabilities
+
+[Version 0.1.0]: https://github.com/llnl/smith/releases/tag/v0.1.0
