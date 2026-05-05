@@ -182,6 +182,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/SmithConfigHeader.cmake)
 # Add subdirectories
 #------------------------------------------------------------------------------
 
+include(${PROJECT_SOURCE_DIR}/cmake/SmithVersion.cmake)
 add_subdirectory(src)
 
 add_subdirectory(examples)
