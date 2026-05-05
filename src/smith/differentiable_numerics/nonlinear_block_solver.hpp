@@ -27,6 +27,8 @@ class Solver;
 class Vector;
 class HypreParMatrix;
 class BlockOperator;
+template <class T>
+class Array;
 }  // namespace mfem
 
 namespace smith {
@@ -123,6 +125,29 @@ class NonlinearBlockSolverBase {
   /// @brief Read current BC ramp options.
   const BcRampOptions& bcRampOptions() const { return bc_ramp_options_; }
 
+  /// @brief Linearized warm-start step from last-converged state to target BCs.
+  ///
+  /// Solves the partitioned linear system K_ff du_f = -K_fc du_c (with du_c the
+  /// BC delta at constrained dofs) and returns u_prev + s*du with s ∈ (0, 1]
+  /// scaled down until @p residual_finite(u_prev + s*du) is true. Single-row
+  /// only. Default returns success=false; subclasses with a linear solver may
+  /// override.
+  struct WarmStart {
+    bool success = false;
+    double alpha = 1.0;      ///< accepted scale s; aligns with BC ramp alpha
+    FieldPtr initial_guess;  ///< u_prev + s*du
+  };
+  virtual WarmStart linearWarmStart(const FieldPtr& /*u_prev*/, const FieldPtr& /*target_bc*/,
+                                    mfem::HypreParMatrix& /*K_raw_at_u_prev*/,
+                                    const mfem::Array<int>& /*constrained_tdofs*/,
+                                    const std::function<bool(const FieldPtr&)>& /*residual_finite*/) const
+  {
+    return {};
+  }
+
+  /// @brief Whether this solver should attempt linearWarmStart in block_solve.
+  virtual bool warmStartEnabled() const { return false; }
+
  protected:
   mutable bool is_setup_ = false;             ///< Records if this block solver has its preconditioner initialized.
   mutable bool last_solve_converged_ = true;  ///< Set by subclasses after each solve.
@@ -182,6 +207,17 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
 
   /// @overload
   int printLevel() const override;
+
+  /// @overload
+  bool warmStartEnabled() const override
+  {
+    return retained_nonlinear_options_ && retained_nonlinear_options_->warm_start;
+  }
+
+  /// @overload
+  WarmStart linearWarmStart(const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
+                            const mfem::Array<int>& constrained_tdofs,
+                            const std::function<bool(const FieldPtr&)>& residual_finite) const override;
 
   mutable std::unique_ptr<mfem::BlockOperator>
       block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface

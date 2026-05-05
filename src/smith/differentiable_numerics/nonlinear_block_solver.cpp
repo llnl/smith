@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/numerics/stdfunction_operator.hpp"
@@ -114,6 +115,51 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
     space_dep_pc->SetFESpace(space);
   }
 #endif
+}
+
+NonlinearBlockSolverBase::WarmStart NonlinearBlockSolver::linearWarmStart(
+    const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
+    const mfem::Array<int>& constrained_tdofs, const std::function<bool(const FieldPtr&)>& residual_finite) const
+{
+  WarmStart result;
+  if (!nonlinear_solver_) return result;
+
+  mfem::Vector delta(K_raw_at_u_prev.Height());
+  delta = 0.0;
+  for (int i = 0; i < constrained_tdofs.Size(); ++i) {
+    int j = constrained_tdofs[i];
+    delta[j] = (*target_bc)[j] - (*u_prev)[j];
+  }
+
+  // Canonical lift via mfem::EliminateBC: K[free, bc] entries feed Ke; sidesteps
+  // any NaN sentinels the assembler may have left in BC rows of the raw J.
+  std::unique_ptr<mfem::HypreParMatrix> Ke(K_raw_at_u_prev.EliminateRowsCols(constrained_tdofs));
+  mfem::Vector b(K_raw_at_u_prev.Height());
+  b = 0.0;
+  mfem::EliminateBC(K_raw_at_u_prev, *Ke, constrained_tdofs, delta, b);
+  if (anyNonFinite(b)) return result;
+
+  mfem::Vector du(K_raw_at_u_prev.Height());
+  du = 0.0;
+  auto& lin = nonlinear_solver_->linearSolver();
+  lin.SetOperator(K_raw_at_u_prev);
+  lin.Mult(b, du);
+  if (anyNonFinite(du)) return result;
+
+  auto trial = std::make_shared<FiniteElementState>(*u_prev);
+  double s = 1.0;
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    *trial = *u_prev;
+    trial->Add(s, du);
+    if (residual_finite(trial)) {
+      result.success = true;
+      result.alpha = s;
+      result.initial_guess = std::make_shared<FiniteElementState>(*trial);
+      return result;
+    }
+    s *= 0.5;
+  }
+  return result;
 }
 
 std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(

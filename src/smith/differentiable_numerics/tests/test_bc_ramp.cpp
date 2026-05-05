@@ -148,10 +148,9 @@ struct ScalarRampHarness {
 
 }  // namespace
 
-TEST(BcRampOptionsTest, DefaultsAreDisabled)
+TEST(BcRampOptionsTest, Defaults)
 {
   BcRampOptions opts{};
-  EXPECT_FALSE(opts.enabled);
   EXPECT_GT(opts.shrink_factor, 0.0);
   EXPECT_LT(opts.shrink_factor, 1.0);
   EXPECT_GT(opts.max_cutbacks, 0);
@@ -163,8 +162,7 @@ TEST(BcRampOptionsTest, DefaultsAreDisabled)
 TEST(BcRampOptionsTest, SetGetRoundTrip)
 {
   RecordingRampSolver solver(std::vector<bool>{true});
-  BcRampOptions opts{.enabled = true,
-                     .shrink_factor = 0.25,
+  BcRampOptions opts{.shrink_factor = 0.25,
                      .max_cutbacks = 8,
                      .intermediate_max_iterations = 7,
                      .intermediate_relative_tol = 0.75,
@@ -172,7 +170,6 @@ TEST(BcRampOptionsTest, SetGetRoundTrip)
   solver.setBcRampOptions(opts);
 
   const auto& got = solver.bcRampOptions();
-  EXPECT_TRUE(got.enabled);
   EXPECT_DOUBLE_EQ(got.shrink_factor, 0.25);
   EXPECT_EQ(got.max_cutbacks, 8);
   EXPECT_EQ(got.intermediate_max_iterations, 7);
@@ -186,7 +183,6 @@ TEST(BcRamp, CutbackUsesIntermediateTolerancePolicy)
 
   auto recording_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true});
   BcRampOptions opts;
-  opts.enabled = true;
   opts.max_cutbacks = 4;
   opts.intermediate_max_iterations = 10;
   opts.intermediate_relative_tol = 0.9;
@@ -201,19 +197,19 @@ TEST(BcRamp, CutbackUsesIntermediateTolerancePolicy)
 
   EXPECT_EQ(solved_states.size(), 1);
   EXPECT_EQ(recording_solver->intermediateFlags().size(), 3);
-  EXPECT_EQ(recording_solver->intermediateFlags(), std::vector<bool>({false, true, false}));
+  EXPECT_EQ(recording_solver->intermediateFlags(), std::vector<bool>({false, true, true}));
   EXPECT_EQ(recording_solver->maxIterations(), std::vector<int>({0, 10, 10}));
   EXPECT_DOUBLE_EQ(recording_solver->absTolFactors()[1], 1e3);
   EXPECT_DOUBLE_EQ(recording_solver->relTolFloors()[1], 0.9);
 }
 
-TEST(BcRamp, RampDisabledIsBitIdentical)
+TEST(BcRamp, FirstAttemptConvergesIsBitIdentical)
 {
   ScalarRampHarness harness;
 
   auto base_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{true});
   auto disabled_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{true});
-  disabled_solver->setBcRampOptions(BcRampOptions{.enabled = false});
+  disabled_solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 0});
 
   SystemSolver base_system(base_solver);
   SystemSolver explicit_disabled_system(disabled_solver);

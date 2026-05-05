@@ -18,12 +18,22 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/physics/common.hpp"
 
+namespace mfem {
+class Vector;
+}
+
 namespace smith {
 
 class WeakForm;
 class NonlinearBlockSolverBase;
 class BoundaryConditionManager;
 class DirichletBoundaryConditions;
+
+/// @brief Returns true if any component of @p v is NaN or Inf.
+bool anyNonFinite(const mfem::Vector& v);
+
+/// @brief Returns true if any component of any field in @p fields is NaN or Inf.
+bool anyNonFinite(const std::vector<FEFieldPtr>& fields);
 
 /// @brief magic number for representing a field which is not an argument of the weak form.
 static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max() - 1;

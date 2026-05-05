@@ -4,10 +4,11 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <cstring>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -47,31 +48,25 @@ NonlinearSolver selectedNonlinearSolver()
 
 void parseCommandLine(int& argc, char** argv)
 {
-  auto matches = [](const std::string& arg, const char* hyphen, const char* underscore, std::string& value) {
-    if (arg.rfind(hyphen, 0) == 0) {
-      value = arg.substr(std::strlen(hyphen));
-      return true;
-    }
-    if (arg.rfind(underscore, 0) == 0) {
-      value = arg.substr(std::strlen(underscore));
-      return true;
-    }
-    return false;
+  // Returns the value if @p arg starts with @p prefix, else empty optional.
+  auto strip = [](std::string_view arg, std::string_view prefix) -> std::optional<std::string> {
+    if (arg.substr(0, prefix.size()) == prefix) return std::string(arg.substr(prefix.size()));
+    return std::nullopt;
   };
-  std::string v;
   int write_arg = 1;
   for (int read_arg = 1; read_arg < argc; ++read_arg) {
-    const std::string arg = argv[read_arg];
-    if (matches(arg, "--solver=", "--solver=", v))
-      solver_name = v;
-    else if (matches(arg, "--print-level=", "--print_level=", v))
-      print_level = std::stoi(v);
-    else if (matches(arg, "--warm-start=", "--warm_start=", v))
-      warm_start = std::stoi(v);
-    else if (matches(arg, "--nonlinear-max-iterations=", "--nonlinear_max_iterations=", v))
-      nonlinear_max_iters = std::stoi(v);
-    else
+    const std::string_view arg = argv[read_arg];
+    if (auto v = strip(arg, "--solver=")) {
+      solver_name = *v;
+    } else if (auto v_pl = strip(arg, "--print-level=")) {
+      print_level = std::stoi(*v_pl);
+    } else if (auto v_ws = strip(arg, "--warm-start=")) {
+      warm_start = std::stoi(*v_ws);
+    } else if (auto v_ni = strip(arg, "--nonlinear-max-iterations=")) {
+      nonlinear_max_iters = std::stoi(*v_ni);
+    } else {
       argv[write_arg++] = argv[read_arg];
+    }
   }
   argc = write_arg;
 }
@@ -153,7 +148,6 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
                             });
 
   BcRampOptions ramp_opts;
-  ramp_opts.enabled = true;
   ramp_opts.max_cutbacks = 100;
   solid_system->solver->setBcRampOptions(ramp_opts);
 
