@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -46,20 +47,31 @@ NonlinearSolver selectedNonlinearSolver()
 
 void parseCommandLine(int& argc, char** argv)
 {
+  auto matches = [](const std::string& arg, const char* hyphen, const char* underscore, std::string& value) {
+    if (arg.rfind(hyphen, 0) == 0) {
+      value = arg.substr(std::strlen(hyphen));
+      return true;
+    }
+    if (arg.rfind(underscore, 0) == 0) {
+      value = arg.substr(std::strlen(underscore));
+      return true;
+    }
+    return false;
+  };
+  std::string v;
   int write_arg = 1;
   for (int read_arg = 1; read_arg < argc; ++read_arg) {
     const std::string arg = argv[read_arg];
-    if (arg.rfind("--solver=", 0) == 0)
-      solver_name = arg.substr(9);
-    else if (arg.rfind("--print-level=", 0) == 0)
-      print_level = std::stoi(arg.substr(14));
-    else if (arg.rfind("--warm-start=", 0) == 0)
-      warm_start = std::stoi(arg.substr(14));
-    else if (arg.rfind("--nonlinear-max-iterations=", 0) == 0)
-      nonlinear_max_iters = std::stoi(arg.substr(27));
-    else {
+    if (matches(arg, "--solver=", "--solver=", v))
+      solver_name = v;
+    else if (matches(arg, "--print-level=", "--print_level=", v))
+      print_level = std::stoi(v);
+    else if (matches(arg, "--warm-start=", "--warm_start=", v))
+      warm_start = std::stoi(v);
+    else if (matches(arg, "--nonlinear-max-iterations=", "--nonlinear_max_iterations=", v))
+      nonlinear_max_iters = std::stoi(v);
+    else
       argv[write_arg++] = argv[read_arg];
-    }
   }
   argc = write_arg;
 }
@@ -118,7 +130,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   solid_system->setDisplacementBC(mesh->domain("left_end"));
 
   // Right end: X prescribed (compression ramp), Y fixed to zero.
-  constexpr double final_compression = 0.2;
+  constexpr double final_compression = 0.8;
   solid_system->setDisplacementBC(
       mesh->domain("right_end"),
       [](double t, tensor<double, dim> /*X*/) -> tensor<double, dim> { return {-final_compression * t, 0.0}; });
@@ -142,6 +154,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 
   BcRampOptions ramp_opts;
   ramp_opts.enabled = true;
+  ramp_opts.max_cutbacks = 100;
   solid_system->solver->setBcRampOptions(ramp_opts);
 
   auto advancer = makeAdvancer(solid_system);

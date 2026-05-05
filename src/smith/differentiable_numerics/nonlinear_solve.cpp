@@ -48,8 +48,10 @@ std::vector<FEFieldPtr> deepCopyFields(const std::vector<FEFieldPtr>& src)
 
 namespace {
 
-static FEFieldPtr lerpBcField(const FEFieldPtr& prev_bc, const FEFieldPtr& target_bc,
-                              const BoundaryConditionManager* bc_mgr, double alpha)
+// Field whose constrained tdofs are alpha-interpolated between prev_bc and target_bc.
+// Unconstrained values irrelevant — applyBoundaryConditions only reads tdofs.
+FEFieldPtr lerpBcField(const FEFieldPtr& prev_bc, const FEFieldPtr& target_bc, const BoundaryConditionManager* bc_mgr,
+                       double alpha)
 {
   auto out = std::make_shared<FiniteElementState>(*target_bc);
   if (!bc_mgr) return out;
@@ -59,171 +61,226 @@ static FEFieldPtr lerpBcField(const FEFieldPtr& prev_bc, const FEFieldPtr& targe
     (*out)[j] = (1.0 - alpha) * (*prev_bc)[j] + alpha * (*target_bc)[j];
   }
   return out;
-  return out;
 }
 
-template <typename JacFn>
-static void warmStartBlockSolve(
-    const NonlinearBlockSolverBase* solver_base, std::vector<FEFieldPtr>& diagonal_fields,
-    const std::function<std::vector<mfem::Vector>(const std::vector<FEFieldPtr>&)>& eval_residuals,
-    const JacFn& eval_jacobians, TimeInfo& current_time_info, const TimeInfo& time_info, size_t num_rows)
+bool blockVectorFinite(const mfem::Vector& v)
 {
-  auto* solver = dynamic_cast<const NonlinearBlockSolver*>(solver_base);
-  if (!solver || !solver->retained_nonlinear_options_ || !solver->retained_nonlinear_options_->warm_start) {
-    return;
+  for (int i = 0; i < v.Size(); ++i)
+    if (!std::isfinite(v[i])) return false;
+  return true;
+}
+
+struct WarmStartResult {
+  bool success = false;
+  double alpha = 1.0;                     ///< scale s that produced finite residual; aligns with BC ramp alpha
+  std::vector<FEFieldPtr> initial_guess;  ///< u_prev + s*delta (interior + BC at alpha=s)
+};
+
+// Linear BC-lift predictor at the last-converged anchor (single-row only).
+//
+// Standard partitioned form for free (f) / constrained (c) dofs:
+//   K_ff du_f + K_fc du_c = 0    ⇒    K_ff du_f = -K_fc du_c
+// where du_c = u_target_BC - u_prev_BC. This is purely linear; no residual
+// evaluation at the (potentially invalid) BC-perturbed state is required.
+//
+// After solving for du = (du_f, du_c), the candidate predictor is u_prev + du.
+// If R(u_prev + du) is non-finite (interior distortion inverts elements),
+// scale delta down by s ∈ (0,1] until R(u_prev + s*delta) is finite. Since
+// du_c is linear in BC alpha, scaling by s is equivalent to ramping BCs to
+// alpha = s. Returns (s, u_prev + s*du) so the BC ramp can start at alpha=s
+// with this state as its initial guess.
+template <typename ResFn, typename AssembleRawJ>
+WarmStartResult warmStartPredictor(const NonlinearBlockSolver* solver, const std::vector<FEFieldPtr>& u_prev_snapshot,
+                                   const ResFn& eval_residuals, const AssembleRawJ& assemble_raw_jacobian,
+                                   const std::vector<const BoundaryConditionManager*>& bc_managers,
+                                   const TimeInfo& time_info, std::vector<FEFieldPtr>& current_bc_overrides,
+                                   size_t num_rows)
+{
+  WarmStartResult result;
+  const bool print = solver->printLevel() >= 1;
+  if (num_rows != 1) {
+    if (print) mfem::out << "[WarmStart] skipped: num_rows != 1\n";
+    return result;
+  }
+  if (!solver->nonlinear_solver_) {
+    if (print) mfem::out << "[WarmStart] skipped: no nonlinear_solver_\n";
+    return result;
+  }
+  if (!bc_managers[0]) {
+    if (print) mfem::out << "[WarmStart] skipped: no bc_manager\n";
+    return result;
+  }
+  if (print) mfem::out << "[WarmStart] entering predictor\n";
+
+  // Assemble K at u_prev WITHOUT BC elimination, pinning BC dofs to their u_prev values
+  // (override = u_prev_snapshot) so applyBoundaryConditions inside the assembler does NOT
+  // re-evaluate the BC coefficient at t_old (which can be ill-defined: e.g. t<0 for
+  // ramp BCs, leading to NaN-producing pre-deformation in the assembly).
+  current_bc_overrides[0] = std::make_shared<FiniteElementState>(*u_prev_snapshot[0]);
+  auto K_raw = assemble_raw_jacobian(u_prev_snapshot);  // unique_ptr<HypreParMatrix>
+  current_bc_overrides[0] = nullptr;
+  if (!K_raw) {
+    if (print) mfem::out << "[WarmStart] skipped: K_raw null\n";
+    return result;
   }
 
-  // 1. Evaluate residual at t_old
-  current_time_info =
-      TimeInfo(time_info.time() - time_info.dt(), time_info.dt(), time_info.cycle() > 0 ? time_info.cycle() - 1 : 0);
-  auto r_old = eval_residuals(diagonal_fields);
-
-  // 2. Evaluate residual at t_new
-  current_time_info = time_info;
-  auto r_new = eval_residuals(diagonal_fields);
-
-  // 3. Form RHS = -(r_new - r_old)
-  mfem::Array<int> block_offsets(static_cast<int>(num_rows) + 1);
-  block_offsets[0] = 0;
-  for (size_t r = 0; r < num_rows; ++r) {
-    block_offsets[static_cast<int>(r + 1)] = diagonal_fields[r]->space().TrueVSize();
-  }
-  block_offsets.PartialSum();
-
-  mfem::BlockVector block_rhs(block_offsets);
-  for (size_t r = 0; r < num_rows; ++r) {
-    auto& rhs_block = block_rhs.GetBlock(static_cast<int>(r));
-    for (int i = 0; i < rhs_block.Size(); ++i) {
-      rhs_block[i] = -(r_new[r][i] - r_old[r][i]);
-    }
+  // Build du with BC delta at constrained tdofs, zero elsewhere.
+  auto target_state = std::make_shared<FiniteElementState>(*u_prev_snapshot[0]);
+  applyBoundaryConditions(time_info.time(), bc_managers[0], target_state);
+  const auto& tdofs = bc_managers[0]->allEssentialTrueDofs();
+  mfem::Vector delta(K_raw->Height());
+  delta = 0.0;
+  for (int i = 0; i < tdofs.Size(); ++i) {
+    int j = tdofs[i];
+    delta[j] = (*target_state)[j] - (*u_prev_snapshot[0])[j];
   }
 
-  // 4. Evaluate Jacobians
-  auto jacobians = eval_jacobians(diagonal_fields);
+  // Canonical lift via mfem::EliminateBC: extract Ke (eliminated cols of free rows; BC rows
+  // are zeroed in K and replaced with identity). This sidesteps any NaN sentinels the
+  // assembler may have left in BC rows of the raw J — only K[free, bc] entries feed Ke.
+  std::unique_ptr<mfem::HypreParMatrix> Ke(K_raw->EliminateRowsCols(tdofs));
+  mfem::Vector b(K_raw->Height());
+  b = 0.0;
+  mfem::EliminateBC(*K_raw, *Ke, tdofs, delta, b);
+  if (!blockVectorFinite(b)) {
+    if (print) mfem::out << "[WarmStart] skipped: lift RHS non-finite\n";
+    return result;
+  }
 
-  // 5. Form BlockOperator
-  mfem::BlockOperator block_jac(block_offsets);
-  for (size_t i = 0; i < num_rows; ++i) {
-    for (size_t j = 0; j < num_rows; ++j) {
-      auto& J = jacobians[i][j];
-      if (J) {
-        block_jac.SetBlock(static_cast<int>(i), static_cast<int>(j), J.get());
+  mfem::Vector du(K_raw->Height());
+  du = 0.0;
+  auto& lin = solver->nonlinear_solver_->linearSolver();
+  lin.SetOperator(*K_raw);
+  lin.Mult(b, du);
+  if (!blockVectorFinite(du)) {
+    if (print) mfem::out << "[WarmStart] skipped: linear solve produced non-finite du\n";
+    return result;
+  }
+  // du now has the lift at free dofs and the BC delta at constrained dofs.
+  std::vector<FEFieldPtr> trial(1);
+  trial[0] = std::make_shared<FiniteElementState>(*u_prev_snapshot[0]);
+
+  double s = 1.0;
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    *trial[0] = *u_prev_snapshot[0];
+    trial[0]->Add(s, du);
+    auto r = eval_residuals(trial);
+    bool finite = true;
+    for (const auto& blk : r) {
+      if (!blockVectorFinite(blk)) {
+        finite = false;
+        break;
       }
     }
-  }
-
-  // 6. Solve
-  mfem::BlockVector block_du(block_offsets);
-  block_du = 0.0;
-
-  if (solver->nonlinear_solver_) {
-    auto& lin_solver = solver->nonlinear_solver_->linearSolver();
-    if (num_rows == 1) {
-      lin_solver.SetOperator(*jacobians[0][0]);
-      lin_solver.Mult(block_rhs.GetBlock(0), block_du.GetBlock(0));
-    } else {
-      lin_solver.SetOperator(block_jac);
-      lin_solver.Mult(block_rhs, block_du);
+    if (finite) {
+      if (print) mfem::out << "[WarmStart] accepted predictor scale s=" << s << "\n";
+      result.success = true;
+      result.alpha = s;
+      result.initial_guess = {std::make_shared<FiniteElementState>(*trial[0])};
+      return result;
     }
+    s *= 0.5;
   }
+  if (print) mfem::out << "[WarmStart] all scales produced non-finite residual; skipping predictor\n";
+  return result;
+}
 
-  // 7. Update interior fields
-  for (size_t r = 0; r < num_rows; ++r) {
-    *diagonal_fields[r] += block_du.GetBlock(static_cast<int>(r));
+// Set BC override and intermediate tolerance policy for a given alpha. alpha>=1 clears both.
+void configureForAlpha(const NonlinearBlockSolverBase* solver, std::vector<FEFieldPtr>& current_bc_overrides,
+                       const std::vector<FEFieldPtr>& prev_bc, const std::vector<FEFieldPtr>& target_bc,
+                       const std::vector<const BoundaryConditionManager*>& bc_managers, double alpha)
+{
+  const auto& opts = solver->bcRampOptions();
+  if (alpha >= 1.0) {
+    for (auto& o : current_bc_overrides) o = nullptr;
+    solver->setIntermediateTolerancePolicy(false, 1.0, 0.0, 0);
+  } else {
+    for (size_t r = 0; r < current_bc_overrides.size(); ++r)
+      current_bc_overrides[r] = lerpBcField(prev_bc[r], target_bc[r], bc_managers[r], alpha);
+    solver->setIntermediateTolerancePolicy(true, opts.intermediate_absolute_tol_fac, opts.intermediate_relative_tol,
+                                           opts.intermediate_max_iterations);
   }
 }
 
 template <typename ResFn, typename JacFn>
-std::vector<FEFieldPtr> runBcRampCutbackLoop(const NonlinearBlockSolverBase* solver, std::vector<FEFieldPtr> last_good,
-                                             const ResFn& res_fn, const JacFn& jac_fn,
-                                             const std::vector<FEFieldPtr>& prev_bc,
-                                             const std::vector<FEFieldPtr>& target_bc,
-                                             const std::vector<const BoundaryConditionManager*>& bc_managers,
-                                             std::shared_ptr<std::vector<FEFieldPtr>> current_bc_overrides,
-                                             size_t num_rows)
+std::vector<FEFieldPtr> runBcRamp(const NonlinearBlockSolverBase* solver,
+                                  const std::vector<FEFieldPtr>& diagonal_fields,
+                                  const std::vector<FEFieldPtr>& u_prev_snapshot, const ResFn& res_fn,
+                                  const JacFn& jac_fn, const std::vector<const BoundaryConditionManager*>& bc_managers,
+                                  std::vector<FEFieldPtr>& current_bc_overrides, double time, double dt,
+                                  size_t num_rows, double initial_alpha)
 {
+  // prev_bc = u_prev_snapshot directly: BC dofs already hold the values applied at t_old
+  // by the previous step's solve (or zero at the initial step). Re-evaluating the BC
+  // coefficient at t-dt may be ill-defined for the very first step (e.g. negative t).
+  std::vector<FEFieldPtr> prev_bc(num_rows), target_bc(num_rows);
+  for (size_t r = 0; r < num_rows; ++r) {
+    prev_bc[r] = std::make_shared<FiniteElementState>(*u_prev_snapshot[r]);
+    target_bc[r] = std::make_shared<FiniteElementState>(*u_prev_snapshot[r]);
+    applyBoundaryConditions(time, bc_managers[r], target_bc[r]);
+  }
+  static_cast<void>(dt);
+
+  // First attempt at initial_alpha with diagonal_fields (== predictor state if warm-start succeeded).
+  configureForAlpha(solver, current_bc_overrides, prev_bc, target_bc, bc_managers, initial_alpha);
+  auto sols = solver->solve(diagonal_fields, res_fn, jac_fn);
+  bool converged = solver->lastSolveConverged() && !anyNonFinite(sols);
+
+  if (!solver->bcRampOptions().enabled) {
+    for (auto& o : current_bc_overrides) o = nullptr;
+    return sols;
+  }
+  if (converged && initial_alpha >= 1.0) {
+    for (auto& o : current_bc_overrides) o = nullptr;
+    return sols;
+  }
+
   const auto& opts = solver->bcRampOptions();
-  SLIC_ERROR_IF(num_rows != 1,
-                axom::fmt::format("BC ramp cutback only supports single-block solves (got {} rows)", num_rows));
+  SLIC_ERROR_IF(num_rows != 1, "BC ramp cutback only supports single-block solves");
   SLIC_ERROR_IF(opts.shrink_factor <= 0.0 || opts.shrink_factor >= 1.0,
                 "BcRampOptions.shrink_factor must be in (0, 1)");
   SLIC_ERROR_IF(opts.max_cutbacks <= 0, "BcRampOptions.max_cutbacks must be > 0");
-  SLIC_ERROR_IF(opts.intermediate_max_iterations <= 0, "BcRampOptions.intermediate_max_iterations must be > 0");
+  SLIC_ERROR_IF(opts.intermediate_max_iterations <= 0, "intermediate_max_iterations must be > 0");
 
-  double last_good_alpha = 0.0;
-  // Fast path at alpha=1 already failed; start cutback at the first shrunk fraction.
-  double alpha = last_good_alpha + (1.0 - last_good_alpha) * opts.shrink_factor;
-  int cutbacks = 1;  // count the failed alpha=1 fast path
   const bool print_ramp = solver->printLevel() >= 1;
+  if (print_ramp)
+    mfem::out << "[BcRamp] initial alpha=" << initial_alpha << " converged=" << converged << ", entering cutback\n";
+
+  std::vector<FEFieldPtr> last_good;
+  double last_good_alpha;
+  double alpha;
+  int cutbacks = 1;
+  if (converged) {
+    last_good = deepCopyFields(sols);
+    last_good_alpha = initial_alpha;
+    alpha = 1.0;
+  } else {
+    last_good = deepCopyFields(u_prev_snapshot);
+    last_good_alpha = 0.0;
+    alpha = initial_alpha * opts.shrink_factor;
+  }
 
   while (true) {
-    for (size_t r = 0; r < num_rows; ++r) {
-      (*current_bc_overrides)[r] = lerpBcField(prev_bc[r], target_bc[r], bc_managers[r], alpha);
-    }
-    const bool intermediate = (alpha < 1.0);
-    solver->setIntermediateTolerancePolicy(intermediate, opts.intermediate_absolute_tol_fac,
-                                           opts.intermediate_relative_tol, opts.intermediate_max_iterations);
+    configureForAlpha(solver, current_bc_overrides, prev_bc, target_bc, bc_managers, alpha);
+    auto attempt = solver->solve(last_good, res_fn, jac_fn);
+    bool ok = solver->lastSolveConverged() && !anyNonFinite(attempt);
+    if (print_ramp) mfem::out << "[BcRamp] alpha=" << alpha << " cutbacks=" << cutbacks << " converged=" << ok << "\n";
 
-    auto sols = solver->solve(last_good, res_fn, jac_fn);
-    const bool converged = solver->lastSolveConverged() && !anyNonFinite(sols);
-    if (print_ramp && !(converged && alpha >= 1.0)) {
-      mfem::out << "[BcRamp] attempted alpha=" << alpha << " cutbacks=" << cutbacks << " converged=" << converged
-                << "\n";
-    }
-
-    if (converged) {
-      last_good = deepCopyFields(sols);
+    if (ok) {
+      last_good = deepCopyFields(attempt);
       last_good_alpha = alpha;
       if (alpha >= 1.0) {
-        for (size_t r = 0; r < num_rows; ++r) (*current_bc_overrides)[r] = nullptr;
+        for (auto& o : current_bc_overrides) o = nullptr;
         return last_good;
       }
       alpha = 1.0;
     } else {
       SLIC_ERROR_IF(cutbacks >= opts.max_cutbacks,
-                    axom::fmt::format("BC ramp exhausted max_cutbacks={} without reaching target.", opts.max_cutbacks));
+                    axom::fmt::format("BC ramp exhausted max_cutbacks={}", opts.max_cutbacks));
       cutbacks++;
       alpha = last_good_alpha + (alpha - last_good_alpha) * opts.shrink_factor;
     }
   }
-}
-
-template <typename ResFn, typename JacFn>
-std::vector<FEFieldPtr> solveWithOptionalBcRamp(const NonlinearBlockSolverBase* solver,
-                                                const std::vector<FEFieldPtr>& diagonal_fields, const ResFn& res_fn,
-                                                const JacFn& jac_fn,
-                                                const std::vector<const BoundaryConditionManager*>& bc_managers,
-                                                std::shared_ptr<std::vector<FEFieldPtr>> current_bc_overrides,
-                                                double time, double dt, size_t num_rows)
-{
-  // Fast path: alpha=1 single-time BC eval. Bit-identical to ramp-disabled behavior.
-  for (size_t r = 0; r < num_rows; ++r) (*current_bc_overrides)[r] = nullptr;
-  solver->setIntermediateTolerancePolicy(false, 1.0, 0.0, 0);
-  auto guess_snapshot = deepCopyFields(diagonal_fields);
-  auto sols = solver->solve(diagonal_fields, res_fn, jac_fn);
-
-  if (!solver->bcRampOptions().enabled) return sols;
-  if (solver->lastSolveConverged() && !anyNonFinite(sols)) return sols;
-
-  if (solver->printLevel() >= 1) {
-    mfem::out << "[BcRamp] alpha=1 fast path failed (converged=" << solver->lastSolveConverged()
-              << "), entering cutback\n";
-  }
-
-  // Precompute prev_bc and target_bc for cutbacks
-  std::vector<FEFieldPtr> prev_bc(num_rows);
-  std::vector<FEFieldPtr> target_bc(num_rows);
-  for (size_t r = 0; r < num_rows; ++r) {
-    prev_bc[r] = std::make_shared<FiniteElementState>(*guess_snapshot[r]);
-    applyBoundaryConditions(time - dt, bc_managers[r], prev_bc[r], nullptr);
-
-    target_bc[r] = std::make_shared<FiniteElementState>(*guess_snapshot[r]);
-    applyBoundaryConditions(time, bc_managers[r], target_bc[r], nullptr);
-  }
-
-  // Cutback path: re-anchor at the last non-NaN guess and ramp alpha back from 1.
-  return runBcRampCutbackLoop(solver, std::move(guess_snapshot), res_fn, jac_fn, prev_bc, target_bc, bc_managers,
-                              current_bc_overrides, num_rows);
 }
 
 }  // namespace
@@ -233,8 +290,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
-                                    const std::vector<const BoundaryConditionManager*>& bc_managers,
-                                    const std::vector<FEFieldPtr>& bc_field_overrides)
+                                    const std::vector<const BoundaryConditionManager*>& bc_managers)
 {
   SMITH_MARK_FUNCTION;
   size_t num_rows_ = residual_evals.size();
@@ -302,13 +358,8 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     std::vector<std::vector<FEFieldPtr>> input_fields(num_rows);
     SLIC_ERROR_IF(num_rows != num_param_inputs.size(), "row count for params and states are inconsistent");
 
-    // The override pointer state changes over the cutback loop.
-    auto current_bc_overrides = std::make_shared<std::vector<FEFieldPtr>>(num_rows, nullptr);
-    if (!bc_field_overrides.empty()) {
-      for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-        (*current_bc_overrides)[row_i] = bc_field_overrides[row_i];
-      }
-    }
+    // BC overrides written by the BC ramp cutback loop; nullptr means evaluate BC coefficient at time.
+    std::vector<FEFieldPtr> current_bc_overrides(num_rows, nullptr);
 
     // The order of inputs in upstreams is:
     // states of residual 0, states of residual 1, ... , params of residual 0, params of residual 1, ...
@@ -332,9 +383,12 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       diagonal_fields[row_i] = std::make_shared<FiniteElementState>(*input_fields[row_i][prime_unknown_row_i]);
     }
 
+    // Anchor for warm start and BC ramp: snapshot pre-BC.
+    auto u_prev_snapshot = deepCopyFields(diagonal_fields);
+
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
-      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, (*current_bc_overrides)[row_i]);
+      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, current_bc_overrides[row_i]);
     }
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
@@ -350,7 +404,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     TimeInfo current_time_info = time_info;
 
-    auto eval_residuals = [=, &current_time_info](const std::vector<FEFieldPtr>& unknowns) {
+    auto eval_residuals = [=, &current_time_info, &current_bc_overrides](const std::vector<FEFieldPtr>& unknowns) {
       SLIC_ERROR_IF(unknowns.size() != num_rows,
                     "block solver unknowns size must match the number or residuals in block_solve");
       std::vector<mfem::Vector> residuals(num_rows);
@@ -359,7 +413,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
         applyBoundaryConditions(current_time_info.time(), bc_managers[row_i], primal_field_row_i,
-                                (*current_bc_overrides)[row_i]);
+                                current_bc_overrides[row_i]);
       }
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         residuals[row_i] = residual_evals[row_i]->residual(current_time_info, shape_disp_ptr.get(),
@@ -371,7 +425,8 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       return residuals;
     };
 
-    auto eval_jacobians = [=, &current_time_info](const std::vector<FEFieldPtr>& unknowns) {
+    auto assemble_jacobians_raw = [=, &current_time_info,
+                                   &current_bc_overrides](const std::vector<FEFieldPtr>& unknowns) {
       SLIC_ERROR_IF(unknowns.size() != num_rows,
                     "block solver unknown size must match the number or residuals in block_solve");
       std::vector<std::vector<std::unique_ptr<mfem::HypreParMatrix>>> jacobians(num_rows);
@@ -380,7 +435,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
         applyBoundaryConditions(current_time_info.time(), bc_managers[row_i], primal_field_row_i,
-                                (*current_bc_overrides)[row_i]);
+                                current_bc_overrides[row_i]);
       }
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
@@ -399,40 +454,49 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
           }
         }
       }
+      return jacobians;
+    };
 
-      // Apply BCs to the block system
+    auto eval_jacobians = [=, &assemble_jacobians_raw](const std::vector<FEFieldPtr>& unknowns) {
+      auto jacobians = assemble_jacobians_raw(unknowns);
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-        if (!bc_managers[row_i]) {
-          continue;
-        }
+        if (!bc_managers[row_i]) continue;
         if (jacobians[row_i][row_i]) {
           jacobians[row_i][row_i]->EliminateBC(bc_managers[row_i]->allEssentialTrueDofs(),
                                                mfem::Operator::DiagonalPolicy::DIAG_ONE);
         }
         for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-          if (col_j != row_i) {
-            if (jacobians[row_i][col_j]) {
-              jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
-            }
-            if (jacobians[col_j][row_i]) {
-              mfem::HypreParMatrix* Jji =
-                  jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
-              delete Jji;
-            }
-          }
+          if (col_j == row_i) continue;
+          if (jacobians[row_i][col_j])
+            jacobians[row_i][col_j]->EliminateRows(bc_managers[row_i]->allEssentialTrueDofs());
+          if (jacobians[col_j][row_i])
+            delete jacobians[col_j][row_i]->EliminateCols(bc_managers[row_i]->allEssentialTrueDofs());
         }
       }
       return jacobians;
     };
 
-    if (bc_field_overrides.empty()) {
-      warmStartBlockSolve(solver, diagonal_fields, eval_residuals, eval_jacobians, current_time_info, time_info,
-                          num_rows);
-      diagonal_fields = solveWithOptionalBcRamp(solver, diagonal_fields, eval_residuals, eval_jacobians, bc_managers,
-                                                current_bc_overrides, time_info.time(), time_info.dt(), num_rows);
-    } else {
-      diagonal_fields = solver->solve(diagonal_fields, eval_residuals, eval_jacobians);
+    // Single-row raw J assembler used by warm-start lift. Returns the (0,0) block un-eliminated.
+    auto assemble_single_raw_jacobian =
+        [=, &assemble_jacobians_raw](const std::vector<FEFieldPtr>& unknowns) -> std::unique_ptr<mfem::HypreParMatrix> {
+      auto jacs = assemble_jacobians_raw(unknowns);
+      if (jacs.empty() || jacs[0].empty()) return nullptr;
+      return std::move(jacs[0][0]);
+    };
+
+    double initial_alpha = 1.0;
+    std::vector<FEFieldPtr> initial_guess = diagonal_fields;
+    if (auto* nbs = dynamic_cast<const NonlinearBlockSolver*>(solver);
+        nbs && nbs->retained_nonlinear_options_ && nbs->retained_nonlinear_options_->warm_start) {
+      auto ws = warmStartPredictor(nbs, u_prev_snapshot, eval_residuals, assemble_single_raw_jacobian, bc_managers,
+                                   time_info, current_bc_overrides, num_rows);
+      if (ws.success) {
+        initial_alpha = ws.alpha;
+        initial_guess = ws.initial_guess;
+      }
     }
+    diagonal_fields = runBcRamp(solver, initial_guess, u_prev_snapshot, eval_residuals, eval_jacobians, bc_managers,
+                                current_bc_overrides, time_info.time(), time_info.dt(), num_rows, initial_alpha);
 
     downstream.set<std::vector<FEFieldPtr>, std::vector<FEDualPtr>>(diagonal_fields);
 

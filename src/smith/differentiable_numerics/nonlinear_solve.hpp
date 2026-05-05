@@ -50,19 +50,13 @@ void applyBoundaryConditions(double time, const BoundaryConditionManager* bc_man
 /// @param time_info Timestep information (time, dt, cycle)
 /// @param solver The nonlinear block solver used to solve the system of equations
 /// @param bc_managers Holds information about which degrees of freedom (DOFS)
-/// @param bc_field_overrides Optional per-block fields whose values at the BC manager's
-///        essential tdofs are written to the primal field instead of evaluating the BC
-///        coefficient at @p time_info.time(). Used by the SystemSolver BC ramp to lerp
-///        between previously-applied BC values and the target. Empty (or null entries)
-///        means use the coefficient-at-time path. Length must be 0 or num_rows.
 /// @return Vector of field solutions satisfying the weak forms
 std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
                                     const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
                                     const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
-                                    const std::vector<const BoundaryConditionManager*>& bc_managers,
-                                    const std::vector<FEFieldPtr>& bc_field_overrides = {});
+                                    const std::vector<const BoundaryConditionManager*>& bc_managers);
 
 /// @brief Solve a single nonlinear system of equations as defined by one weak form.
 /// @param residual_eval The weak form that defines the residual.
