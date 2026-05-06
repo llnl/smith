@@ -176,13 +176,13 @@ include(${PROJECT_SOURCE_DIR}/cmake/thirdparty/SetupSmithThirdParty.cmake)
 set(CMAKE_C_FLAGS   ${SMITH_CMAKE_C_FLAGS})
 set(CMAKE_CXX_FLAGS ${SMITH_CMAKE_CXX_FLAGS})
 
+include(${PROJECT_SOURCE_DIR}/cmake/SmithVersion.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/SmithConfigHeader.cmake)
 
 #------------------------------------------------------------------------------
 # Add subdirectories
 #------------------------------------------------------------------------------
 
-include(${PROJECT_SOURCE_DIR}/cmake/SmithVersion.cmake)
 add_subdirectory(src)
 
 add_subdirectory(examples)
