@@ -332,8 +332,7 @@ SMITH_HOST_DEVICE auto get_gradient(const tensor<dual<smith::tuple<T...>>, n...>
 template <typename... T>
 SMITH_HOST_DEVICE auto get_gradient(smith::tuple<T...> tuple_of_values)
 {
-  return smith::apply([](auto... each_value) { return smith::tuple{get_gradient(each_value)...}; },
-                      tuple_of_values);
+  return smith::apply([](auto... each_value) { return smith::tuple{get_gradient(each_value)...}; }, tuple_of_values);
 }
 
 /**
