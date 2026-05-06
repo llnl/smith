@@ -11,7 +11,7 @@
  */
 #pragma once
 
-#include "mfem/fem/dfem/tuple.hpp"
+#include "mfem.hpp"
 
 #include "smith/infrastructure/accelerator.hpp"
 
