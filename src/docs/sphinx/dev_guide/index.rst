@@ -15,6 +15,7 @@ Developer Guide
    docker_env
    equation_solver
    functional
+   gitflow_branching
    logging
    macmini
    memory_checking
@@ -22,6 +23,7 @@ Developer Guide
    new_docker_image
    profiling
    release
+   semantic_versioning
    state_manager
    style_guide
    tensor_dual
