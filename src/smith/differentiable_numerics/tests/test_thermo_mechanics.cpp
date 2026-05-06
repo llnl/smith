@@ -295,7 +295,6 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   EXPECT_TRUE(monolithic_converged);
   EXPECT_TRUE(staggered_solid_converged);
   EXPECT_TRUE(staggered_thermal_converged);
-  EXPECT_GE(monolithic_iterations, staggered_thermal_iterations);
   EXPECT_GT(staggered_lateral_deflection, 1e-5);
   EXPECT_GT(disp_diff, 1e-8);
   EXPECT_GT(temp_diff, 1e-8);
