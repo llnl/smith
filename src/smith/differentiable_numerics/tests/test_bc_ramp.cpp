@@ -27,7 +27,8 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
  public:
   using NonlinearBlockSolverBase::convergenceStatus;
 
-  explicit RecordingRampSolver(std::vector<bool> converged_by_call) : converged_by_call_(std::move(converged_by_call))
+  explicit RecordingRampSolver(std::vector<bool> converged_by_call, bool warm_start_enabled = false)
+      : converged_by_call_(std::move(converged_by_call)), warm_start_enabled_(warm_start_enabled)
   {
   }
 
@@ -64,6 +65,8 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
 
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
 
+  bool warmStartEnabled() const override { return warm_start_enabled_; }
+
   void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
                                       int max_iterations) const override
   {
@@ -94,6 +97,7 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
   mutable int intermediate_max_iterations_ = 0;
   mutable double inner_tol_multiplier_ = 1.0;
   mutable std::vector<int> max_iterations_;
+  bool warm_start_enabled_ = false;
 };
 
 template <typename FieldTypeT>
@@ -201,6 +205,30 @@ TEST(BcRamp, CutbackUsesIntermediateTolerancePolicy)
   EXPECT_EQ(recording_solver->maxIterations(), std::vector<int>({0, 10, 10}));
   EXPECT_DOUBLE_EQ(recording_solver->absTolFactors()[1], 1e3);
   EXPECT_DOUBLE_EQ(recording_solver->relTolFloors()[1], 0.9);
+}
+
+TEST(BcRamp, WarmStartCutbackUsesFullTolerancePolicy)
+{
+  ScalarRampHarness harness;
+
+  auto recording_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true}, true);
+  BcRampOptions opts;
+  opts.max_cutbacks = 4;
+  opts.intermediate_max_iterations = 10;
+  opts.intermediate_relative_tol = 0.9;
+  opts.intermediate_absolute_tol_fac = 1e3;
+  recording_solver->setBcRampOptions(opts);
+
+  auto system_solver = std::make_shared<SystemSolver>(recording_solver);
+
+  auto solved_states =
+      system_solver->solve(harness.residuals, harness.block_indices, harness.field_store->getShapeDisp(),
+                           harness.states, harness.params, TimeInfo(0.0, 1.0, 0), harness.bc_managers);
+
+  EXPECT_EQ(solved_states.size(), 1);
+  EXPECT_EQ(recording_solver->intermediateFlags().size(), 3);
+  EXPECT_EQ(recording_solver->intermediateFlags(), std::vector<bool>({false, false, false}));
+  EXPECT_EQ(recording_solver->maxIterations(), std::vector<int>({0, 0, 0}));
 }
 
 TEST(BcRamp, FirstAttemptConvergesIsBitIdentical)

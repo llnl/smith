@@ -129,7 +129,7 @@ class NonlinearBlockSolverBase {
   ///
   /// Solves the partitioned linear system K_ff du_f = -K_fc du_c (with du_c the
   /// BC delta at constrained dofs) and returns u_prev + s*du with s ∈ (0, 1]
-  /// scaled down until @p residual_finite(u_prev + s*du) is true. Single-row
+  /// scaled down until @p residual_finite(u_prev + s*du, s) is true. Single-row
   /// only. Default returns success=false; subclasses with a linear solver may
   /// override.
   struct WarmStart {
@@ -140,7 +140,7 @@ class NonlinearBlockSolverBase {
   virtual WarmStart linearWarmStart(const FieldPtr& /*u_prev*/, const FieldPtr& /*target_bc*/,
                                     mfem::HypreParMatrix& /*K_raw_at_u_prev*/,
                                     const mfem::Array<int>& /*constrained_tdofs*/,
-                                    const std::function<bool(const FieldPtr&)>& /*residual_finite*/) const
+                                    const std::function<bool(const FieldPtr&, double)>& /*residual_finite*/) const
   {
     return {};
   }
@@ -217,7 +217,7 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// @overload
   WarmStart linearWarmStart(const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
                             const mfem::Array<int>& constrained_tdofs,
-                            const std::function<bool(const FieldPtr&)>& residual_finite) const override;
+                            const std::function<bool(const FieldPtr&, double)>& residual_finite) const override;
 
   mutable std::unique_ptr<mfem::BlockOperator>
       block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
