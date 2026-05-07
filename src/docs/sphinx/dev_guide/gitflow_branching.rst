@@ -103,7 +103,7 @@ Gitflow Illustrated
 
 The figure below shows how branches interact in Gitflow.
 
-.. figure:: gitflow-workflow.png
+.. figure:: gitflow-workflow.svg
 
    This figure shows typical interactions between branches in the Gitflow 
    workflow. Here, main was merged into develop after tagging version v0.1. 
