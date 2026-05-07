@@ -6,16 +6,13 @@
 from spack.package import *
 from spack.spec import UnsupportedCompilerError
 from spack.util.executable import which_string
+
 from spack_repo.builtin.build_systems.cached_cmake import (
     CachedCMakePackage,
     cmake_cache_option,
     cmake_cache_path,
     cmake_cache_string,
 )
-from spack_repo.builtin.build_systems.cuda import CudaPackage
-from spack_repo.builtin.build_systems.rocm import ROCmPackage
-
-from spack_repo.builtin.build_systems.cached_cmake import CachedCMakePackage
 from spack_repo.builtin.build_systems.cuda import CudaPackage
 from spack_repo.builtin.build_systems.rocm import ROCmPackage
 
@@ -50,10 +47,15 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     maintainers("chapman39", "white238")
 
-    homepage = "https://www.github.com/LLNL/smith"
-    git      = "https://github.com/LLNL/smith.git"
+    homepage   = "https://www.github.com/LLNL/smith"
+    git        = "https://github.com/LLNL/smith.git"
+    submodules = True
 
-    version("develop", branch="develop", submodules=True, preferred=True)
+    license("BSD-3-Clause")
+
+    version("main", branch="main")
+    version("develop", branch="develop")
+    version("0.1.0", tag="v0.1.0", commit="cbe2e173eb1cbc36525ba454a386e4fe0b7e6440")
 
     # -----------------------------------------------------------------------
     # Variants
@@ -111,7 +113,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("cuda+allow-unsupported-compilers", when="+enzyme+cuda")
     depends_on("enzyme %libllvm=llvm-amdgpu", when="+enzyme+rocm")
 
-    # Devtool dependencies these need to match smith_devtools/package.py
+    # Devtool dependencies these need to match smithdevtools/package.py
     with when("+devtools"):
         depends_on("cppcheck")
         depends_on("doxygen")
@@ -501,16 +503,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         if spec["mpi"].name == "spectrum-mpi":
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "mpibind"))
-
-        # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
-        # TODO Remove this once we move past https://github.com/spack/spack/pull/49033
-        if 'toss_4' in self._get_sys_type(spec):
-            srun_wrapper = which_string("srun")
-            mpi_exec_index = [index for index,entry in enumerate(entries)
-                                                  if "MPIEXEC_EXECUTABLE" in entry]
-            if len(mpi_exec_index) != 0:
-                del entries[mpi_exec_index[0]]
-            entries.append(cmake_cache_path("MPIEXEC_EXECUTABLE", srun_wrapper))
 
         return entries
 
