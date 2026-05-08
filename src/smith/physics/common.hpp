@@ -1,4 +1,4 @@
-// Copyright (c) Lawrence Livermore National Security, LLC and
+// Copyright (c) Lawre   nce Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
 //

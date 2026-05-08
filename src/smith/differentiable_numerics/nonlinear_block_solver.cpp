@@ -68,15 +68,17 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
                                                 nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
-void NonlinearBlockSolver::completeSetup(const std::vector<FieldT>& us)
+void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 {
   if (us.empty() || !nonlinear_solver_) return;
   if (!retained_linear_options_ || retained_linear_options_->preconditioner == Preconditioner::None) return;
 
   // Pick the field with the highest vdim (typically the displacement field for vector problems).
-  const FieldT* best = &us[0];
+  SLIC_ERROR_IF(!us[0], "NonlinearBlockSolver::completeSetup received a null field");
+  const FieldT* best = us[0].get();
   for (const auto& u : us) {
-    if (u.space().GetVDim() > best->space().GetVDim()) best = &u;
+    SLIC_ERROR_IF(!u, "NonlinearBlockSolver::completeSetup received a null field");
+    if (u->space().GetVDim() > best->space().GetVDim()) best = u.get();
   }
 
   auto* mfem_solver = &nonlinear_solver_->preconditioner();
@@ -142,11 +144,17 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
 
   auto block_r = std::make_unique<mfem::BlockVector>(block_offsets);
 
+  if (!is_setup_) {
+    is_setup_ = true;
+    completeSetup(u_guesses);
+  }
+
   auto residual_op_ = std::make_unique<mfem_ext::StdFunctionOperator>(
       block_u->Size(),
       [&residual_funcs, num_rows, &u_guesses, &block_r, &block_offsets](const mfem::Vector& u_, mfem::Vector& r_) {
         const mfem::BlockVector* u = dynamic_cast<const mfem::BlockVector*>(&u_);
         mfem::BlockVector u_block_wrapper;
+
         if (!u) {
           u_block_wrapper.Update(const_cast<double*>(u_.GetData()), block_offsets);
           u = &u_block_wrapper;
@@ -154,6 +162,7 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
+
         auto residuals = residual_funcs(u_guesses);
         SLIC_ERROR_IF(!block_r, "Invalid residual block cast to an mfem::BlockVector");
         for (int row_i = 0; row_i < num_rows; ++row_i) {
