@@ -123,8 +123,7 @@ template <typename ResFn, typename RawJacFn>
 NonlinearBlockSolverBase::WarmStart tryRampWarmStart(const NonlinearBlockSolverBase* solver,
                                                      const FEFieldPtr& base_state, double base_alpha,
                                                      double target_alpha, const ResFn& res_fn,
-                                                     const RawJacFn& raw_jac_fn,
-                                                     const std::vector<FEFieldPtr>& prev_bc,
+                                                     const RawJacFn& raw_jac_fn, const std::vector<FEFieldPtr>& prev_bc,
                                                      const std::vector<FEFieldPtr>& target_bc,
                                                      const std::vector<const BoundaryConditionManager*>& bc_managers,
                                                      std::vector<FEFieldPtr>& current_bc_overrides, double time)
@@ -200,8 +199,7 @@ std::vector<FEFieldPtr> runBcRamp(const NonlinearBlockSolverBase* solver,
   // Warm-started cutback solves use full tolerances; non-warm-start cutbacks can relax.
   setCutbackTolerancePolicy(solver);
   if (print_ramp_root) {
-    mfem::out << "[BcRamp] initial alpha=" << initial_alpha << " converged=" << converged
-              << ", entering cutback\n";
+    mfem::out << "[BcRamp] initial alpha=" << initial_alpha << " converged=" << converged << ", entering cutback\n";
   }
 
   std::vector<FEFieldPtr> last_good;
@@ -499,9 +497,9 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     double initial_alpha = ws.success ? ws.alpha : 1.0;
     std::vector<FEFieldPtr> initial_guess = ws.success ? std::vector<FEFieldPtr>{ws.initial_guess} : diagonal_fields;
 
-    diagonal_fields = runBcRamp(solver, initial_guess, u_prev_snapshot, eval_residuals, eval_jacobians,
-                                assemble_single_raw, bc_managers, current_bc_overrides, time_info.time(), num_rows,
-                                initial_alpha);
+    diagonal_fields =
+        runBcRamp(solver, initial_guess, u_prev_snapshot, eval_residuals, eval_jacobians, assemble_single_raw,
+                  bc_managers, current_bc_overrides, time_info.time(), num_rows, initial_alpha);
 
     downstream.set<std::vector<FEFieldPtr>, std::vector<FEDualPtr>>(diagonal_fields);
 
