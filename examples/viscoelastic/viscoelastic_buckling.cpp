@@ -78,7 +78,6 @@ int main(int argc, char* argv[])
   // Mesh options
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  double dt = 0.1;
 
   // Solver options
   NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
@@ -100,10 +99,10 @@ int main(int argc, char* argv[])
   // Initialize and automatically finalize MPI and other libraries
   smith::ApplicationManager applicationManager(argc, argv);
 
-  // default mesh file
-  std::string meshfile{"cap_coarse.g"};
-
+  std::string meshfile{"cap_thin.g"};
   double load = 0.2;
+  double max_time = 10.0;
+  int steps = 20;
 
   // Handle command line arguments
   axom::CLI::App app{"Viscoelastic buckling of a curved shell"};
@@ -124,14 +123,18 @@ int main(int argc, char* argv[])
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum smith::PetscPCType)")
       ->expected(0, 14);
-  app.add_option("--dt", dt, "Size of time step")->check(axom::CLI::PositiveNumber);
+  //app.add_option("--dt", dt, "Size of time step")->check(axom::CLI::PositiveNumber);
+  app.add_option("--steps", steps, "Number of time steps")->check(axom::CLI::PositiveNumber);
   app.add_option("--load", load, "Total load")->check(axom::CLI::PositiveNumber);
+  app.add_option("--time", max_time, "Total time")->check(axom::CLI::PositiveNumber);
   // Misc options
   app.set_help_flag("--help");
 
   // Need to allow extra arguments for PETSc support
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
+
+  double dt = max_time/steps;
 
     // Create DataStore
   std::string name = "viscoelastic_buckling";
@@ -175,20 +178,26 @@ int main(int argc, char* argv[])
 
   solid_solver.setTraction(
     [&](auto, auto, double t) {
-      return smith::vec3{0, -load/area*std::sin(M_PI*t), 0};
+      return smith::vec3{0, -load/area*std::sin(M_PI*t/max_time), 0};
     },
      mesh->domain("top"));
 
+  double rho = 1.0;
   double G_inf = 1e3;
   double G_0 = 3*G_inf;
   double G_g = G_inf + G_0;
   double nu_g = 0.45;
   double K = 2.0/3.0*G_g*(1.0 + nu_g)/(1.0 - 2.0*nu_g);
-  double tau_0 = 10.0;
+  double tau_0 = 1.0;
   double eta_0 = G_0*tau_0;
+  double alpha_inf = 0.0;
+  double theta_r = 300.0;
+  double theta_sf = theta_r;
+  double C_1 = 0.0;
+  double C_2 = 50.0;
   
   // VISCOELASTIC
-  solid_mechanics::ViscoelasticOldInterface mat(K, G_inf, 0.0, 300.0, G_0, eta_0, 300.0, 0.0, 50.0, 1.0);
+  solid_mechanics::ViscoelasticOldInterface mat(rho, K, G_inf, alpha_inf, theta_sf, G_0, eta_0, theta_r, C_1, C_2);
   auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
   solid_solver.setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
 
@@ -257,7 +266,7 @@ int main(int argc, char* argv[])
   SLIC_INFO_ROOT(axom::fmt::format("Snap-through of viscoelastic shell\n{} displacement dofs",
                                    solid_solver.displacement().GlobalSize()));
   smith::logger::flush();
-  while (solid_solver.time() < 1.0 && std::abs(solid_solver.time() - 1) > DBL_EPSILON) {
+  while (solid_solver.time() < max_time && std::abs(solid_solver.time() - max_time) > DBL_EPSILON) {
     SLIC_INFO_ROOT("---------------------------------------------");
     SLIC_INFO_ROOT(axom::fmt::format("start time = {}, dt = {}", solid_solver.time(), dt));
     smith::logger::flush();
@@ -269,7 +278,7 @@ int main(int argc, char* argv[])
     double u = applied_displacement(solid_solver.time(), solid_solver.displacement());
     double f = compute_net_force(solid_solver.dual("reactions"));
     if (rank == 0) {
-      file << solid_solver.time() << " " << u << " " << f << "\n";
+      file << solid_solver.time() << " " << u << " " << f << std::endl;
     }
   }
   file.close();
