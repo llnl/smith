@@ -74,28 +74,16 @@ int NonlinearBlockSolver::printLevel() const
   return retained_nonlinear_options_ ? retained_nonlinear_options_->print_level : 0;
 }
 
-ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
-                                                          const std::vector<mfem::Vector>& residuals,
-                                                          NonlinearConvergenceContext& context) const
-{
-  auto block_norms = computeResidualBlockNorms(residuals, comm_);
-  return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, block_norms, context);
-}
-
-void NonlinearBlockSolver::primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
-                                                   NonlinearConvergenceContext& context) const
-{
-  static_cast<void>(convergenceStatus(1.0, residuals, context));
-}
-
 void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 {
   if (us.empty() || !nonlinear_solver_) return;
   if (!retained_linear_options_ || retained_linear_options_->preconditioner == Preconditioner::None) return;
 
   // Pick the field with the highest vdim (typically the displacement field for vector problems).
+  SLIC_ERROR_IF(!us[0], "NonlinearBlockSolver::completeSetup received a null field");
   const FieldT* best = us[0].get();
   for (const auto& u : us) {
+    SLIC_ERROR_IF(!u, "NonlinearBlockSolver::completeSetup received a null field");
     if (u->space().GetVDim() > best->space().GetVDim()) best = u.get();
   }
 
@@ -103,7 +91,11 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 
   auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
   if (amg_prec) {
-    amg_prec->SetSystemsOptions(best->space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
+    if (retained_linear_options_->amg_elasticity) {
+      amg_prec->SetElasticityOptions(const_cast<mfem::ParFiniteElementSpace*>(&best->space()));
+    } else {
+      amg_prec->SetSystemsOptions(best->space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
+    }
   }
 
 #ifdef SMITH_USE_PETSC
@@ -117,56 +109,18 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 #endif
 }
 
-NonlinearBlockSolverBase::WarmStart NonlinearBlockSolver::linearWarmStart(
-    const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
-    const mfem::Array<int>& constrained_tdofs,
-    const std::function<bool(const FieldPtr&, double)>& residual_finite) const
+ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
+                                                          const std::vector<mfem::Vector>& residuals,
+                                                          NonlinearConvergenceContext& context) const
 {
-  WarmStart result;
-  if (!nonlinear_solver_) return result;
+  auto block_norms = computeResidualBlockNorms(residuals, comm_);
+  return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, block_norms, context);
+}
 
-  if (!is_setup_) {
-    is_setup_ = true;
-    completeSetup({u_prev});
-  }
-
-  mfem::Vector delta(K_raw_at_u_prev.Height());
-  delta = 0.0;
-  for (int i = 0; i < constrained_tdofs.Size(); ++i) {
-    int j = constrained_tdofs[i];
-    delta[j] = (*target_bc)[j] - (*u_prev)[j];
-  }
-
-  // Canonical lift via mfem::EliminateBC: K[free, bc] entries feed Ke; sidesteps
-  // any NaN sentinels the assembler may have left in BC rows of the raw J.
-  std::unique_ptr<mfem::HypreParMatrix> Ke(K_raw_at_u_prev.EliminateRowsCols(constrained_tdofs));
-  K_raw_at_u_prev.EliminateBC(constrained_tdofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
-  mfem::Vector b(K_raw_at_u_prev.Height());
-  b = 0.0;
-  mfem::EliminateBC(K_raw_at_u_prev, *Ke, constrained_tdofs, delta, b);
-  if (anyNonFinite(b)) return result;
-
-  mfem::Vector du(K_raw_at_u_prev.Height());
-  du = 0.0;
-  auto& lin = nonlinear_solver_->linearSolver();
-  lin.SetOperator(K_raw_at_u_prev);
-  lin.Mult(b, du);
-  if (anyNonFinite(du)) return result;
-
-  auto trial = std::make_shared<FiniteElementState>(*u_prev);
-  double s = 1.0;
-  for (int attempt = 0; attempt < 8; ++attempt) {
-    *trial = *u_prev;
-    trial->Add(s, du);
-    if (residual_finite(trial, s)) {
-      result.success = true;
-      result.alpha = s;
-      result.initial_guess = std::make_shared<FiniteElementState>(*trial);
-      return result;
-    }
-    s *= 0.5;
-  }
-  return result;
+void NonlinearBlockSolver::primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
+                                                   NonlinearConvergenceContext& context) const
+{
+  static_cast<void>(convergenceStatus(1.0, residuals, context));
 }
 
 std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(

@@ -15,7 +15,7 @@ smith_add_library(
       
 set(physics_test_depends smith_physics smith_differentiable_numerics smith_physics_test_utils gtest)
 
-set(physics_serial_test_sources
+set(physics_serial_test_sources 
     beam_bending.cpp
     fit_test.cpp
     test_mesh_wrapper.cpp
