@@ -109,6 +109,58 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 #endif
 }
 
+NonlinearBlockSolverBase::WarmStart NonlinearBlockSolver::linearWarmStart(
+    const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
+    const mfem::Array<int>& constrained_tdofs,
+    const std::function<bool(const FieldPtr&, double)>& residual_finite) const
+{
+  WarmStart result;
+  if (!nonlinear_solver_) return result;
+
+  if (!is_setup_) {
+    is_setup_ = true;
+    completeSetup({u_prev});
+  }
+
+  mfem::Vector delta(K_raw_at_u_prev.Height());
+  delta = 0.0;
+  for (int i = 0; i < constrained_tdofs.Size(); ++i) {
+    int j = constrained_tdofs[i];
+    delta[j] = (*target_bc)[j] - (*u_prev)[j];
+  }
+
+  // Use MFEM's BC elimination helpers so the lifted RHS matches the constrained operator layout.
+  std::unique_ptr<mfem::HypreParMatrix> Ke(K_raw_at_u_prev.EliminateRowsCols(constrained_tdofs));
+  K_raw_at_u_prev.EliminateBC(constrained_tdofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
+  mfem::Vector b(K_raw_at_u_prev.Height());
+  b = 0.0;
+  mfem::EliminateBC(K_raw_at_u_prev, *Ke, constrained_tdofs, delta, b);
+  if (anyNonFinite(b)) return result;
+
+  mfem::Vector du(K_raw_at_u_prev.Height());
+  du = 0.0;
+  auto& lin = nonlinear_solver_->linearSolver();
+  lin.SetOperator(K_raw_at_u_prev);
+  lin.Mult(b, du);
+  if (anyNonFinite(du)) return result;
+
+  auto trial = std::make_shared<FiniteElementState>(*u_prev);
+  double s = 1.0;
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    *trial = *u_prev;
+    trial->Add(s, du);
+    if (residual_finite(trial, s)) {
+      result.success = true;
+      result.alpha = s;
+      result.initial_guess = std::make_shared<FiniteElementState>(*trial);
+      return result;
+    }
+    s *= 0.5;
+  }
+
+  return result;
+}
+
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
                                                           const std::vector<mfem::Vector>& residuals,
                                                           NonlinearConvergenceContext& context) const
