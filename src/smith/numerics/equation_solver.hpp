@@ -146,10 +146,190 @@ struct PcgBlockDiagnostics {
   size_t num_accepted_steps = 0;
   /// Number of trial inner PCG steps
   size_t num_trial_steps = 0;
+  /// Time spent evaluating nonlinear residuals
+  double residual_seconds = 0.0;
+  /// Time spent applying Jacobian-vector products
+  double hess_vec_seconds = 0.0;
+  /// Time spent applying JacobianOperator products
+  double jacobian_operator_hess_vec_seconds = 0.0;
+  /// Time spent applying assembled Jacobian products
+  double assembled_hess_vec_seconds = 0.0;
+  /// Time spent applying legacy matrix-free tangent products
+  double matrix_free_hess_vec_seconds = 0.0;
+  /// Time spent applying preconditioners
+  double preconditioner_seconds = 0.0;
+  /// Time spent evaluating JacobianOperator factories
+  double jacobian_operator_eval_seconds = 0.0;
+  /// Time spent assembling sparse Jacobians
+  double jacobian_assembly_seconds = 0.0;
+  /// Time spent directly assembling diagonals
+  double diagonal_assembly_seconds = 0.0;
+  /// Time spent inverting direct diagonals
+  double diagonal_invert_seconds = 0.0;
+  /// Time spent refreshing preconditioner data
+  double preconditioner_update_seconds = 0.0;
+  /// Time spent in preconditioner SetOperator calls
+  double preconditioner_setup_seconds = 0.0;
   /// Last trust scale used by the solver
   double final_h_scale = 1.0;
   /// Last accepted block trust ratio
   double last_trust_ratio = 0.0;
+};
+
+/// Diagnostic counters for the TrustRegion nonlinear solver
+struct TrustRegionDiagnostics {
+  /// Number of nonlinear residual evaluations
+  size_t num_residuals = 0;
+  /// Number of Jacobian-vector products
+  size_t num_hess_vecs = 0;
+  /// Number of Hessian-vector products in model CG solves
+  size_t num_model_hess_vecs = 0;
+  /// Number of Hessian-vector products in Cauchy-point construction
+  size_t num_cauchy_hess_vecs = 0;
+  /// Number of Hessian-vector products in line-search model checks
+  size_t num_line_search_hess_vecs = 0;
+  /// Number of preconditioner applications
+  size_t num_preconds = 0;
+  /// Number of assembled Jacobians
+  size_t num_jacobian_assembles = 0;
+  /// Number of solver-facing JacobianOperator evaluations
+  size_t num_jacobian_operator_evals = 0;
+  /// Number of direct diagonal assemblies
+  size_t num_diagonal_assembles = 0;
+  /// Number of trust-region model CG iterations
+  size_t num_cg_iterations = 0;
+  /// Number of subspace solves
+  size_t num_subspace_solves = 0;
+  /// Number of retained-leftmost Hessian-vector products for subspace solves
+  size_t num_subspace_leftmost_hess_vecs = 0;
+  /// Number of batched Hessian-vector groups used for subspace solves
+  size_t num_subspace_hess_vec_batches = 0;
+  /// Number of Hessian-vector products inside subspace batches
+  size_t num_subspace_batched_hess_vecs = 0;
+  /// Number of accepted-step history vectors added to subspace solves
+  size_t num_subspace_past_step_vectors = 0;
+  /// Number of Hessian-vector products for accepted-step history vectors
+  size_t num_subspace_past_step_hess_vecs = 0;
+  /// Number of nonlinear-solve-start directions added to subspace solves
+  size_t num_subspace_solve_start_vectors = 0;
+  /// Number of Hessian-vector products for nonlinear-solve-start directions
+  size_t num_subspace_solve_start_hess_vecs = 0;
+  /// Number of quadratic subspace backend solves
+  size_t num_quadratic_subspace_solves = 0;
+  /// Number of cubic subspace backend attempts
+  size_t num_cubic_subspace_attempts = 0;
+  /// Number of cubic subspace attempts that used the cubic candidate
+  size_t num_cubic_subspace_uses = 0;
+  /// Number of cubic subspace attempts that fell back to the quadratic candidate
+  size_t num_cubic_subspace_quadratic_fallbacks = 0;
+  /// Number of preconditioner operator updates
+  size_t num_preconditioner_updates = 0;
+  /// Number of nonmonotone accepted TrustRegion steps based on work surrogate
+  size_t num_nonmonotone_work_accepts = 0;
+  /// Number of accepted TrustRegion work-surrogate steps that monotone acceptance would have rejected
+  size_t num_monotone_work_would_reject = 0;
+  /// Time spent evaluating nonlinear residuals
+  double residual_seconds = 0.0;
+  /// Time spent applying Jacobian-vector products
+  double hess_vec_seconds = 0.0;
+  /// Time spent applying Hessian-vector products in model CG solves
+  double model_hess_vec_seconds = 0.0;
+  /// Time spent applying Hessian-vector products in Cauchy-point construction
+  double cauchy_hess_vec_seconds = 0.0;
+  /// Time spent applying Hessian-vector products in line-search model checks
+  double line_search_hess_vec_seconds = 0.0;
+  /// Time spent applying JacobianOperator products
+  double jacobian_operator_hess_vec_seconds = 0.0;
+  /// Time spent evaluating JacobianOperator factories
+  double jacobian_operator_eval_seconds = 0.0;
+  /// Time spent directly assembling diagonals
+  double diagonal_assembly_seconds = 0.0;
+  /// Time spent inverting direct diagonals
+  double diagonal_invert_seconds = 0.0;
+  /// Time spent applying preconditioners
+  double preconditioner_seconds = 0.0;
+  /// Total time spent in the nonlinear solve
+  double total_seconds = 0.0;
+  /// Time spent solving trust-region model problems
+  double model_solve_seconds = 0.0;
+  /// Total time spent in trust-region subspace solves
+  double subspace_seconds = 0.0;
+  /// Time spent building/applying retained leftmost directions for subspace solves
+  double subspace_leftmost_seconds = 0.0;
+  /// Time spent in subspace Hessian-vector batches
+  double subspace_hess_vec_batch_seconds = 0.0;
+  /// Time spent removing dependent directions before subspace solves
+  double subspace_filter_seconds = 0.0;
+  /// Time spent in dense subspace backend assembly/solve work
+  double subspace_backend_seconds = 0.0;
+  /// Time spent projecting dense subspace Hessian
+  double subspace_project_A_seconds = 0.0;
+  /// Time spent projecting dense subspace Gram matrix
+  double subspace_project_gram_seconds = 0.0;
+  /// Time spent projecting dense subspace gradient
+  double subspace_project_b_seconds = 0.0;
+  /// Time spent building dense subspace orthonormal basis
+  double subspace_basis_seconds = 0.0;
+  /// Time spent forming reduced dense Hessian
+  double subspace_reduced_A_seconds = 0.0;
+  /// Time spent in dense subspace eigensystems
+  double subspace_dense_eigensystem_seconds = 0.0;
+  /// Time spent in dense trust-region solve outside eigensystems
+  double subspace_dense_trust_solve_seconds = 0.0;
+  /// Time spent reconstructing full-space subspace solution
+  double subspace_reconstruct_solution_seconds = 0.0;
+  /// Time spent reconstructing retained leftmost vectors
+  double subspace_reconstruct_leftmost_seconds = 0.0;
+  /// Time spent in subspace postprocessing and model-energy comparison
+  double subspace_finalize_seconds = 0.0;
+  /// Time spent building the Cauchy point
+  double cauchy_point_seconds = 0.0;
+  /// Time spent in dogleg step construction
+  double dogleg_seconds = 0.0;
+  /// Time spent in line-search and trust-radius acceptance logic
+  double line_search_seconds = 0.0;
+  /// Time spent in TrustRegion dot products
+  double dot_seconds = 0.0;
+  /// Number of TrustRegion dot products
+  size_t num_dot_products = 0;
+  /// Number of TrustRegion dot batches/reductions
+  size_t num_dot_reductions = 0;
+  /// Number of dot products in trust-region model solves
+  size_t num_model_dot_products = 0;
+  /// Number of dot products in Cauchy-point construction
+  size_t num_cauchy_dot_products = 0;
+  /// Number of dot products in dogleg construction
+  size_t num_dogleg_dot_products = 0;
+  /// Number of dot products in line-search and acceptance logic
+  size_t num_line_search_dot_products = 0;
+  /// Number of setup dot products outside the main per-step kernels
+  size_t num_setup_dot_products = 0;
+  /// Time spent in trust-region model-solve dot products
+  double model_dot_seconds = 0.0;
+  /// Time spent in Cauchy-point dot products
+  double cauchy_dot_seconds = 0.0;
+  /// Time spent in dogleg dot products
+  double dogleg_dot_seconds = 0.0;
+  /// Time spent in line-search dot products
+  double line_search_dot_seconds = 0.0;
+  /// Time spent in setup dot products
+  double setup_dot_seconds = 0.0;
+  /// Time spent in TrustRegion vector add/update operations
+  double vector_update_seconds = 0.0;
+  /// Time spent in TrustRegion vector copies and scaling operations
+  double vector_copy_scale_seconds = 0.0;
+  /// Time spent in TrustRegion boundary projection operations
+  double projection_seconds = 0.0;
+  /// Time spent assembling sparse Jacobians
+  double jacobian_assembly_seconds = 0.0;
+  /// Time spent refreshing preconditioner data
+  double preconditioner_update_seconds = 0.0;
+  /// Time spent in preconditioner SetOperator calls
+  double preconditioner_setup_seconds = 0.0;
+  /// Last TrustRegion accumulated work-surrogate level used by nonmonotone acceptance
+  double last_work_objective = 0.0;
+  /// Last nonmonotone reference work-surrogate level
+  double last_nonmonotone_work_reference = 0.0;
 };
 
 /**
@@ -246,6 +426,12 @@ class EquationSolver {
    * @return Optional PCG-block diagnostics; empty for other nonlinear solvers
    */
   std::optional<PcgBlockDiagnostics> pcgBlockDiagnostics() const;
+
+  /**
+   * Returns diagnostic counters when the nonlinear solver is TrustRegion.
+   * @return Optional TrustRegion diagnostics; empty for other nonlinear solvers
+   */
+  std::optional<TrustRegionDiagnostics> trustRegionDiagnostics() const;
 
   /**
    * Returns the underlying linear solver object

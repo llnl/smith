@@ -465,11 +465,29 @@ struct NonlinearSolverOptions {
   /// Scaling for the initial trust region size
   double trust_region_scaling = 0.1;
 
+  /// Nonmonotone TrustRegion acceptance window. Zero preserves monotone acceptance.
+  int trust_nonmonotone_window = 0;
+
+  /// Use JacobianOperator products and diagonal preconditioning in TrustRegion instead of assembled sparse products.
+  bool trust_use_jacobian_operator = false;
+
+  /// Use a dense cubic subspace model built from retained Hessian-vector changes.
+  bool trust_use_cubic_subspace = false;
+
   /// Option for how when the subspace solver should be utilized within trust-region solver
   SubSpaceOptions subspace_option = SubSpaceOptions::NEVER;
 
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
+
+  /// Number of additional older accepted TrustRegion steps to include in subspace solves.
+  int trust_num_past_steps = 0;
+
+  /// Include the displacement from current nonlinear-solve state back to the nonlinear-solve initial state.
+  bool trust_use_solve_start_direction = false;
+
+  /// Include the displacement from current nonlinear-solve state to the state with the minimum residual seen so far in this nonlinear solve.
+  bool trust_use_min_residual_direction = false;
 
   /// Should the gradient be converted to a monolithic matrix
   bool force_monolithic = false;
@@ -518,6 +536,12 @@ struct NonlinearSolverOptions {
 
   /// Running-mean window for successful PCG-block trust-radius reference steps
   int pcg_delta_avg_window = 5;
+
+  /// Use a direct scalar diagonal extracted from the JacobianOperator as the PCG-block preconditioner
+  bool pcg_use_jacobian_diagonal_preconditioner = false;
+
+  /// Relative floor used when inverting the absolute Jacobian diagonal for PCG-block diagonal preconditioning
+  double pcg_diagonal_floor = 1e-14;
 };
 // _nonlinear_options_end
 

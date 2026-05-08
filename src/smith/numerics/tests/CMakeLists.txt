@@ -13,6 +13,7 @@ set(numerics_serial_test_sources
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
     test_block_preconditioner_custom_operators.cpp
+    test_trust_region_solver_mfem.cpp
     )
 
 smith_add_tests( SOURCES       ${numerics_serial_test_sources}
@@ -30,7 +31,7 @@ if(PETSC_FOUND)
     if(SLEPC_FOUND)
         set(slepc_solver_tests
             test_eigensolver.cpp
-            test_trust_region_solver.cpp
+            test_trust_region_solver_petsc.cpp
             )
         smith_add_tests(SOURCES       ${slepc_solver_tests}
                         DEPENDS_ON    ${numerics_test_dependencies}

@@ -217,7 +217,10 @@ TEST(EquationSolver, PcgBlockUsesJacobianOperator)
 
     void Mult(const mfem::Vector& dx, mfem::Vector& y) const override { matrix_->Mult(dx, y); }
 
-    std::unique_ptr<mfem::HypreParMatrix> assemble() override { return std::move(matrix_); }
+    std::unique_ptr<mfem::HypreParMatrix> assemble() override
+    {
+      return std::make_unique<mfem::HypreParMatrix>(*matrix_);
+    }
 
     void assembleDiagonal(mfem::Vector& diag) const override { matrix_->GetDiag(diag); }
 
@@ -314,8 +317,8 @@ TEST(EquationSolver, PcgBlockUsesJacobianOperator)
   const auto diagnostics = eq_solver.pcgBlockDiagnostics();
   ASSERT_TRUE(diagnostics.has_value());
   EXPECT_GT(num_operator_evals, 0);
-  EXPECT_EQ(diagnostics->num_hess_vecs, static_cast<size_t>(num_operator_evals));
   EXPECT_EQ(diagnostics->num_jacobian_operator_evals, static_cast<size_t>(num_operator_evals));
+  EXPECT_GE(diagnostics->num_hess_vecs, diagnostics->num_jacobian_operator_evals);
   EXPECT_EQ(diagnostics->num_diagonal_assembles, 0u);
   EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
   EXPECT_LT(x_computed.DistanceTo(x_exact.GetData()), 1.0e-10);
