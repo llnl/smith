@@ -6,7 +6,7 @@
 
 #include "smith/numerics/trust_region_solver.hpp"
 
-#ifdef SMITH_USE_SLEPC
+#if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
 
 #include <iostream>
 

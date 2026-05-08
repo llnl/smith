@@ -152,7 +152,6 @@ enum class NonlinearSolver
   LBFGS,                     /**< MFEM-native Limited memory BFGS */
   NewtonLineSearch,          /**< Custom solver using preconditioned earch direction with backtracking line search */
   TrustRegion,               /**< Custom solver using a trust region solver */
-  PcgBlock,                  /**< Custom nonlinear preconditioned conjugate-gradient block solver */
   KINFullStep,               /**< KINSOL Full Newton (Sundials must be enabled) */
   KINBacktrackingLineSearch, /**< KINSOL Newton with Backtracking Line Search (Sundials must be enabled) */
   KINPicard,                 /**< KINSOL Picard (Sundials must be enabled) */
@@ -175,8 +174,6 @@ inline std::string nonlinearName(const NonlinearSolver& s)
       return "NewtonLineSearch";
     case NonlinearSolver::TrustRegion:
       return "TrustRegion";
-    case NonlinearSolver::PcgBlock:
-      return "PcgBlock";
     case NonlinearSolver::KINFullStep:
       return "KINFullStep";
     case NonlinearSolver::KINBacktrackingLineSearch:
@@ -205,7 +202,6 @@ inline std::map<std::string, NonlinearSolver> nonlinearSolverMap = {
     {"LBFGS", NonlinearSolver::LBFGS},
     {"NewtonLineSearch", NonlinearSolver::NewtonLineSearch},
     {"TrustRegion", NonlinearSolver::TrustRegion},
-    {"PcgBlock", NonlinearSolver::PcgBlock},
     {"KINFullStep", NonlinearSolver::KINFullStep},
     {"KINBacktrackingLineSearch", NonlinearSolver::KINBacktrackingLineSearch},
     {"KINPicard", NonlinearSolver::KINPicard},
@@ -465,15 +461,6 @@ struct NonlinearSolverOptions {
   /// Scaling for the initial trust region size
   double trust_region_scaling = 0.1;
 
-  /// Nonmonotone TrustRegion acceptance window. Zero preserves monotone acceptance.
-  int trust_nonmonotone_window = 0;
-
-  /// Use JacobianOperator products and diagonal preconditioning in TrustRegion instead of assembled sparse products.
-  bool trust_use_jacobian_operator = false;
-
-  /// Use a dense cubic subspace model built from retained Hessian-vector changes.
-  bool trust_use_cubic_subspace = false;
-
   /// Option for how when the subspace solver should be utilized within trust-region solver
   SubSpaceOptions subspace_option = SubSpaceOptions::NEVER;
 
@@ -491,57 +478,6 @@ struct NonlinearSolverOptions {
 
   /// Should the gradient be converted to a monolithic matrix
   bool force_monolithic = false;
-
-  /// Number of speculative nonlinear PCG steps per accepted/rejected block
-  int pcg_block_len = 10;
-
-  /// Powell restart threshold for nonlinear PCG residual orthogonality
-  double pcg_powell_eta = 0.005;
-
-  /// Trust-ratio threshold below which the PCG-block trust scale shrinks
-  double pcg_trust_eta_bad = 0.1;
-
-  /// Trust-ratio threshold above which the PCG-block trust scale grows
-  double pcg_trust_eta_good = 0.75;
-
-  /// PCG-block trust-scale shrink factor
-  double pcg_shrink = 0.5;
-
-  /// PCG-block trust-scale growth factor
-  double pcg_growth = 1.25;
-
-  /// Initial PCG-block trust scale
-  double pcg_h_scale_init = 1.0;
-
-  /// Minimum PCG-block trust scale before declaring failure
-  double pcg_min_h_scale = 1e-8;
-
-  /// Maximum number of rejected PCG blocks before declaring failure
-  int pcg_max_block_retries = 20;
-
-  /// Nonmonotone cumulative gradient-work acceptance window
-  int pcg_window = 5;
-
-  /// Armijo coefficient for PCG-block inner step backtracking
-  double pcg_ls_armijo_c = 1e-4;
-
-  /// Maximum number of PCG-block inner step backtracks
-  int pcg_ls_max_backtracks = 8;
-
-  /// PCG-block inner step backtracking shrink factor
-  double pcg_ls_shrink = 0.5;
-
-  /// Descent and model denominator tolerance for PCG-block guards
-  double pcg_eps_descent = 1e-12;
-
-  /// Running-mean window for successful PCG-block trust-radius reference steps
-  int pcg_delta_avg_window = 5;
-
-  /// Use a direct scalar diagonal extracted from the JacobianOperator as the PCG-block preconditioner
-  bool pcg_use_jacobian_diagonal_preconditioner = false;
-
-  /// Relative floor used when inverting the absolute Jacobian diagonal for PCG-block diagonal preconditioning
-  double pcg_diagonal_floor = 1e-14;
 };
 // _nonlinear_options_end
 

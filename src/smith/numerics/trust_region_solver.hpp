@@ -66,8 +66,6 @@ void resetTrustRegionSubspaceTimings();
 
 TrustRegionSubspaceTimings trustRegionSubspaceTimings();
 
-using DenseCubicTrustRegionResult = std::tuple<mfem::Vector, double>;
-
 /// @brief computes the global size of mfem::Vector
 int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm);
 
@@ -80,7 +78,7 @@ TrustRegionSubspaceResult solveSubspaceProblem(
     const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
     const mfem::Vector& b, double delta, int num_leftmost);
 
-#ifdef SMITH_USE_SLEPC
+#if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
 TrustRegionSubspaceResult solveSubspaceProblemPetsc(
     const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
     const mfem::Vector& b, double delta, int num_leftmost);
@@ -90,22 +88,7 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(
     const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
     const mfem::Vector& b, double delta, int num_leftmost);
 
-/// @brief solves a small dense cubic trust-region model
-///   1/2 x^T A x - b^T x + 1/6 sum_k x_k x^T cubic[k] x, ||x|| <= delta.
-DenseCubicTrustRegionResult solveDenseCubicTrustRegionProblemMfem(
-    const mfem::DenseMatrix& A, const mfem::Vector& b, const std::vector<mfem::DenseMatrix>& cubic, double delta);
-
-TrustRegionSubspaceResult solveCubicSubspaceProblemMfem(
-    const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const std::vector<const mfem::Vector*>& previous_A_directions, const mfem::Vector& previous_step,
-    const mfem::Vector& b, double delta, int num_leftmost, bool* used_cubic = nullptr);
-
 std::pair<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>> removeDependentDirections(
     std::vector<const mfem::Vector*> directions, std::vector<const mfem::Vector*> A_directions);
-
-std::tuple<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>>
-removeDependentDirectionTriples(std::vector<const mfem::Vector*> directions,
-                                std::vector<const mfem::Vector*> A_directions,
-                                std::vector<const mfem::Vector*> previous_A_directions);
 
 }  // namespace smith

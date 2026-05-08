@@ -13,10 +13,8 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
 #include <memory>
 #include <optional>
-#include <type_traits>
 #include <variant>
 #include <utility>
 
@@ -29,152 +27,6 @@
 #include "smith/numerics/petsc_solvers.hpp"
 
 namespace smith {
-
-/**
- * @brief Solver-facing interface for Jacobian operations.
- *
- * A JacobianOperator represents the operations available on J(x) after differentiating a residual but before
- * necessarily assembling a sparse matrix. Concrete implementations may support matrix-free products, sparse assembly,
- * diagonal extraction, or all of them. Unsupported operations should throw.
- */
-class JacobianOperator : public mfem::Operator {
- public:
-  using mfem::Operator::Operator;
-
-  /// Assemble the sparse Jacobian representation.
-  virtual std::unique_ptr<mfem::HypreParMatrix> assemble()
-  {
-    SLIC_ERROR("This JacobianOperator does not support sparse assembly.");
-    return nullptr;
-  }
-
-  /// Assemble the scalar true-dof diagonal of the Jacobian.
-  virtual void assembleDiagonal(mfem::Vector&) const
-  {
-    SLIC_ERROR("This JacobianOperator does not support diagonal assembly.");
-  }
-};
-
-/**
- * @brief Adapter from a smith::functional Gradient object to the solver-facing JacobianOperator interface.
- */
-template <typename Gradient>
-class FunctionalJacobianOperator : public JacobianOperator {
-  using GradientT = std::remove_reference_t<Gradient>;
-
- public:
-  explicit FunctionalJacobianOperator(GradientT& gradient)
-      : JacobianOperator(gradient.Height(), gradient.Width()), gradient_(&gradient)
-  {
-  }
-
-  explicit FunctionalJacobianOperator(GradientT&& gradient)
-      : JacobianOperator(gradient.Height(), gradient.Width()),
-        owned_gradient_(std::make_unique<GradientT>(std::move(gradient))),
-        gradient_(owned_gradient_.get())
-  {
-  }
-
-  void Mult(const mfem::Vector& dx, mfem::Vector& y) const override { gradient_->Mult(dx, y); }
-
-  void AddMult(const mfem::Vector& dx, mfem::Vector& y, const double a = 1.0) const override
-  {
-    gradient_->AddMult(dx, y, a);
-  }
-
-  std::unique_ptr<mfem::HypreParMatrix> assemble() override { return gradient_->assemble(); }
-
-  void assembleDiagonal(mfem::Vector& diag) const override { gradient_->assembleDiagonal(diag); }
-
- private:
-  std::unique_ptr<GradientT> owned_gradient_;
-  GradientT* gradient_;
-};
-
-/**
- * @brief Matrix-free tangent action callback.
- *
- * The callback evaluates y = J(x) dx for the current nonlinear state x
- * without requiring EquationSolver to assemble J.
- */
-using MatrixFreeTangentAction = std::function<void(const mfem::Vector& x, const mfem::Vector& dx, mfem::Vector& y)>;
-
-/**
- * @brief Callback that evaluates and returns a JacobianOperator at the supplied nonlinear state.
- */
-using JacobianOperatorFactory = std::function<std::unique_ptr<JacobianOperator>(const mfem::Vector& x)>;
-
-/// Diagnostic counters for the nonlinear PCG-block solver
-struct PcgBlockDiagnostics {
-  /// Number of nonlinear residual evaluations
-  size_t num_residuals = 0;
-  /// Number of assembled Jacobian-vector products
-  size_t num_hess_vecs = 0;
-  /// Number of preconditioner applications
-  size_t num_preconds = 0;
-  /// Number of assembled Jacobians
-  size_t num_jacobian_assembles = 0;
-  /// Number of solver-facing JacobianOperator evaluations
-  size_t num_jacobian_operator_evals = 0;
-  /// Number of direct diagonal assemblies
-  size_t num_diagonal_assembles = 0;
-  /// Number of preconditioner operator updates
-  size_t num_preconditioner_updates = 0;
-  /// Number of accepted prefix blocks
-  size_t num_prefix_accepts = 0;
-  /// Number of momentum resets
-  size_t num_momentum_resets = 0;
-  /// Number of steps with nonzero PCG beta
-  size_t num_nonzero_beta = 0;
-  /// Number of steps with zero PCG beta
-  size_t num_zero_beta = 0;
-  /// Number of accepted blocks
-  size_t num_blocks = 0;
-  /// Number of rejected blocks
-  size_t num_block_rejects = 0;
-  /// Number of Powell restarts
-  size_t num_powell_restarts = 0;
-  /// Number of descent-guard restarts
-  size_t num_descent_restarts = 0;
-  /// Number of non-positive curvature directions
-  size_t num_negative_curvature = 0;
-  /// Number of line-search backtracks
-  size_t num_line_search_backtracks = 0;
-  /// Number of positive-curvature steps capped by the trust radius
-  size_t num_trust_capped_steps = 0;
-  /// Number of accepted inner PCG steps
-  size_t num_accepted_steps = 0;
-  /// Number of trial inner PCG steps
-  size_t num_trial_steps = 0;
-  /// Time spent evaluating nonlinear residuals
-  double residual_seconds = 0.0;
-  /// Time spent applying Jacobian-vector products
-  double hess_vec_seconds = 0.0;
-  /// Time spent applying JacobianOperator products
-  double jacobian_operator_hess_vec_seconds = 0.0;
-  /// Time spent applying assembled Jacobian products
-  double assembled_hess_vec_seconds = 0.0;
-  /// Time spent applying legacy matrix-free tangent products
-  double matrix_free_hess_vec_seconds = 0.0;
-  /// Time spent applying preconditioners
-  double preconditioner_seconds = 0.0;
-  /// Time spent evaluating JacobianOperator factories
-  double jacobian_operator_eval_seconds = 0.0;
-  /// Time spent assembling sparse Jacobians
-  double jacobian_assembly_seconds = 0.0;
-  /// Time spent directly assembling diagonals
-  double diagonal_assembly_seconds = 0.0;
-  /// Time spent inverting direct diagonals
-  double diagonal_invert_seconds = 0.0;
-  /// Time spent refreshing preconditioner data
-  double preconditioner_update_seconds = 0.0;
-  /// Time spent in preconditioner SetOperator calls
-  double preconditioner_setup_seconds = 0.0;
-  /// Last trust scale used by the solver
-  double final_h_scale = 1.0;
-  /// Last accepted block trust ratio
-  double last_trust_ratio = 0.0;
-};
 
 /// Diagnostic counters for the TrustRegion nonlinear solver
 struct TrustRegionDiagnostics {
@@ -192,10 +44,6 @@ struct TrustRegionDiagnostics {
   size_t num_preconds = 0;
   /// Number of assembled Jacobians
   size_t num_jacobian_assembles = 0;
-  /// Number of solver-facing JacobianOperator evaluations
-  size_t num_jacobian_operator_evals = 0;
-  /// Number of direct diagonal assemblies
-  size_t num_diagonal_assembles = 0;
   /// Number of trust-region model CG iterations
   size_t num_cg_iterations = 0;
   /// Number of subspace solves
@@ -216,18 +64,8 @@ struct TrustRegionDiagnostics {
   size_t num_subspace_solve_start_hess_vecs = 0;
   /// Number of quadratic subspace backend solves
   size_t num_quadratic_subspace_solves = 0;
-  /// Number of cubic subspace backend attempts
-  size_t num_cubic_subspace_attempts = 0;
-  /// Number of cubic subspace attempts that used the cubic candidate
-  size_t num_cubic_subspace_uses = 0;
-  /// Number of cubic subspace attempts that fell back to the quadratic candidate
-  size_t num_cubic_subspace_quadratic_fallbacks = 0;
   /// Number of preconditioner operator updates
   size_t num_preconditioner_updates = 0;
-  /// Number of nonmonotone accepted TrustRegion steps based on work surrogate
-  size_t num_nonmonotone_work_accepts = 0;
-  /// Number of accepted TrustRegion work-surrogate steps that monotone acceptance would have rejected
-  size_t num_monotone_work_would_reject = 0;
   /// Time spent evaluating nonlinear residuals
   double residual_seconds = 0.0;
   /// Time spent applying Jacobian-vector products
@@ -238,14 +76,6 @@ struct TrustRegionDiagnostics {
   double cauchy_hess_vec_seconds = 0.0;
   /// Time spent applying Hessian-vector products in line-search model checks
   double line_search_hess_vec_seconds = 0.0;
-  /// Time spent applying JacobianOperator products
-  double jacobian_operator_hess_vec_seconds = 0.0;
-  /// Time spent evaluating JacobianOperator factories
-  double jacobian_operator_eval_seconds = 0.0;
-  /// Time spent directly assembling diagonals
-  double diagonal_assembly_seconds = 0.0;
-  /// Time spent inverting direct diagonals
-  double diagonal_invert_seconds = 0.0;
   /// Time spent applying preconditioners
   double preconditioner_seconds = 0.0;
   /// Total time spent in the nonlinear solve
@@ -326,10 +156,6 @@ struct TrustRegionDiagnostics {
   double preconditioner_update_seconds = 0.0;
   /// Time spent in preconditioner SetOperator calls
   double preconditioner_setup_seconds = 0.0;
-  /// Last TrustRegion accumulated work-surrogate level used by nonmonotone acceptance
-  double last_work_objective = 0.0;
-  /// Last nonmonotone reference work-surrogate level
-  double last_nonmonotone_work_reference = 0.0;
 };
 
 /**
@@ -383,27 +209,6 @@ class EquationSolver {
   void setOperator(const mfem::Operator& op);
 
   /**
-   * @brief Sets an optional matrix-free tangent action for nonlinear solvers that can use J(x) dx directly.
-   *
-   * Solvers that do not support matrix-free tangent actions ignore this callback. Supported solvers retain their
-   * assembled-gradient fallback when no callback is set.
-   *
-   * @param[in] tangent_action Callback evaluating y = J(x) dx.
-   */
-  void setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_action);
-
-  /**
-   * @brief Sets an optional JacobianOperator factory for nonlinear solvers that can use matrix-free Jacobian products.
-   *
-   * This is the preferred replacement for the narrower matrix-free tangent-action callback. During migration,
-   * PCG-block uses this callback first when it is registered and otherwise falls back to MatrixFreeTangentAction or
-   * assembled gradients.
-   *
-   * @param[in] jacobian_operator Callback evaluating and returning J(x).
-   */
-  void setJacobianOperator(JacobianOperatorFactory jacobian_operator);
-
-  /**
    * Solves the system F(x) = 0
    * @param[in,out] x Solution to the system of nonlinear equations
    * @note The input value of @a x will be used as an initial guess for iterative nonlinear solution methods
@@ -420,12 +225,6 @@ class EquationSolver {
    * @overload
    */
   const mfem::NewtonSolver& nonlinearSolver() const { return *nonlin_solver_; }
-
-  /**
-   * Returns diagnostic counters when the nonlinear solver is PcgBlock.
-   * @return Optional PCG-block diagnostics; empty for other nonlinear solvers
-   */
-  std::optional<PcgBlockDiagnostics> pcgBlockDiagnostics() const;
 
   /**
    * Returns diagnostic counters when the nonlinear solver is TrustRegion.

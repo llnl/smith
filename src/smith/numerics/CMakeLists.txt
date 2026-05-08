@@ -21,7 +21,6 @@ set(numerics_sources
     equation_solver.cpp
     petsc_trust_region_subspace.cpp
     mfem_trust_region_subspace.cpp
-    trust_region_cubic_subspace.cpp
     odes.cpp
     petsc_solvers.cpp
     block_preconditioner.cpp

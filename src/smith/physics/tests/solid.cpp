@@ -236,66 +236,6 @@ TEST(SolidMechanics, 2DQuadParameterizedStatic) { functional_parameterized_solid
 
 TEST(SolidMechanics, 3DQuadStaticJ2) { functional_solid_test_static_J2(); }
 
-TEST(SolidMechanics, PcgBlockLinearElasticity)
-{
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  constexpr int p = 1;
-  constexpr int dim = 2;
-  constexpr int serial_refinement = 1;
-  constexpr int parallel_refinement = 0;
-
-  axom::sidre::DataStore datastore;
-  smith::StateManager::initialize(datastore, "pcg_block_linear_elasticity");
-
-  std::string filename = SMITH_REPO_DIR "/data/meshes/square.mesh";
-  auto mesh =
-      std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "mesh", serial_refinement, parallel_refinement);
-  mesh->addDomainOfBoundaryElements("fixed", by_attr<dim>(1));
-
-  smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
-                                            .preconditioner = Preconditioner::HypreL1Jacobi,
-                                            .relative_tol = 1.0e-14,
-                                            .absolute_tol = 1.0e-16,
-                                            .max_iterations = 500,
-                                            .print_level = 0};
-
-  smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::PcgBlock,
-                                                  .relative_tol = 1.0e-12,
-                                                  .absolute_tol = 1.0e-14,
-                                                  .max_iterations = 200,
-                                                  .print_level = 0,
-                                                  .pcg_block_len = 10};
-
-  SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
-                               "pcg_block_solid", mesh);
-
-  solid_mechanics::LinearIsotropic mat{.density = 1.0, .K = 0.5, .G = 1.0};
-  solid.setMaterial(mat, mesh->entireBody());
-  solid.setFixedBCs(mesh->domain("fixed"));
-
-  tensor<double, dim> constant_force{};
-  constant_force[0] = 0.1;
-  constant_force[1] = -0.05;
-  solid_mechanics::ConstantBodyForce<dim> force{constant_force};
-  solid.addBodyForce(force, mesh->entireBody());
-
-  solid.completeSetup();
-  solid.advanceTimestep(1.0);
-
-  const auto& nonlinear_solver = solid.equationSolver().nonlinearSolver();
-  const auto diagnostics = solid.equationSolver().pcgBlockDiagnostics();
-
-  ASSERT_TRUE(diagnostics.has_value());
-  EXPECT_TRUE(nonlinear_solver.GetConverged());
-  EXPECT_LE(nonlinear_solver.GetNumIterations(), solid.displacement().space().GlobalTrueVSize());
-  EXPECT_LT(nonlinear_solver.GetFinalRelNorm(), 1.0e-10);
-  EXPECT_EQ(diagnostics->num_block_rejects, 0u);
-  EXPECT_EQ(diagnostics->num_powell_restarts, 0u);
-  EXPECT_EQ(diagnostics->num_negative_curvature, 0u);
-  EXPECT_EQ(diagnostics->num_line_search_backtracks, 0u);
-}
-
 TEST(SolidMechanics, TDofBoundaryCondition)
 {
   /*

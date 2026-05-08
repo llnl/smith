@@ -93,50 +93,6 @@ std::pair<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>> re
   return std::make_pair(directions_new, A_directions_new);
 }
 
-std::tuple<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>>
-removeDependentDirectionTriples(std::vector<const mfem::Vector*> directions,
-                                std::vector<const mfem::Vector*> A_directions,
-                                std::vector<const mfem::Vector*> previous_A_directions)
-{
-  SMITH_MARK_FUNCTION;
-  MFEM_VERIFY(directions.size() == A_directions.size() && directions.size() == previous_A_directions.size(),
-              "Direction triple lists must have matching sizes.");
-
-  std::vector<double> norms;
-  size_t num_dirs = directions.size();
-
-  for (size_t i = 0; i < num_dirs; ++i) {
-    norms.push_back(std::sqrt(mfem::InnerProduct(MPI_COMM_WORLD, *directions[i], *directions[i])));
-  }
-
-  std::vector<std::pair<const mfem::Vector*, size_t>> kepts;
-  for (size_t i = 0; i < num_dirs; ++i) {
-    bool keepi = norms[i] != 0.0;
-    for (auto&& kept_and_j : kepts) {
-      size_t j = kept_and_j.second;
-      double dot_ij = mfem::InnerProduct(MPI_COMM_WORLD, *directions[i], *kept_and_j.first);
-      if (dot_ij > 0.999 * norms[i] * norms[j]) {
-        keepi = false;
-      }
-    }
-    if (keepi) {
-      kepts.emplace_back(std::make_pair(directions[i], i));
-    }
-  }
-
-  std::vector<const mfem::Vector*> directions_new;
-  std::vector<const mfem::Vector*> A_directions_new;
-  std::vector<const mfem::Vector*> previous_A_directions_new;
-
-  for (auto kept_and_j : kepts) {
-    directions_new.push_back(directions[kept_and_j.second]);
-    A_directions_new.push_back(A_directions[kept_and_j.second]);
-    previous_A_directions_new.push_back(previous_A_directions[kept_and_j.second]);
-  }
-
-  return std::make_tuple(directions_new, A_directions_new, previous_A_directions_new);
-}
-
 #ifdef MFEM_USE_LAPACK
 
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
@@ -568,7 +524,7 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
                                                const std::vector<const mfem::Vector*>& A_directions,
                                                const mfem::Vector& b, double delta, int num_leftmost)
 {
-#ifdef SMITH_USE_SLEPC
+#if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
   return solveSubspaceProblemPetsc(directions, A_directions, b, delta, num_leftmost);
 #else
   throw PetscException("MFEM trust-region subspace solve requires MFEM LAPACK support.");

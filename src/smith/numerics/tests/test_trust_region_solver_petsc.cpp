@@ -23,6 +23,8 @@
 #include "smith/physics/state/finite_element_vector.hpp"
 #include "smith/numerics/petsc_solvers.hpp"
 
+#ifdef SMITH_TRUST_REGION_USE_PETSC_SUBSPACE
+
 const std::string MESHTAG = "mesh";
 
 static constexpr int scalar_field_order = 1;
@@ -212,6 +214,8 @@ TEST_F(MeshFixture, MfemSubspaceSolveMatchesPetsc)
 
   MatDestroy(&A_parallel);
 }
+
+#endif  // SMITH_TRUST_REGION_USE_PETSC_SUBSPACE
 
 int main(int argc, char* argv[])
 {

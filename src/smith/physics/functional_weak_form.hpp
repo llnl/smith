@@ -333,26 +333,6 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  std::unique_ptr<JacobianOperator> jacobianOperator(
-      TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields, size_t input_col,
-      [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
-  {
-    SLIC_ERROR_IF(input_col >= fields.size(), "Invalid JacobianOperator input column.");
-
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
-
-    auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time_info.time(),
-                                  shape_disp, fields);
-    auto K = smith::get<DERIVATIVE>(jacs[input_col](time_info.time(), shape_disp, fields));
-
-    SLIC_ERROR_IF(K.Height() != K.Width(),
-                  "WeakForm::jacobianOperator currently supports square one-field derivatives only.");
-
-    return std::make_unique<FunctionalJacobianOperator<decltype(K)>>(std::move(K));
-  }
-
-  /// @overload
   void jvp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
            [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,

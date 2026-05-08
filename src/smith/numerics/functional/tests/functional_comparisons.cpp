@@ -187,15 +187,6 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
 
   std::unique_ptr<mfem::HypreParMatrix> J_func = assemble(drdU);
 
-  mfem::Vector diag_direct(U.Size());
-  drdU.assembleDiagonal(diag_direct);
-
-  mfem::Vector diag_assembled(U.Size());
-  J_func->GetDiag(diag_assembled);
-
-  mfem::Vector diag_diff(U.Size());
-  subtract(diag_direct, diag_assembled, diag_diff);
-
   // Compute the gradient action using standard MFEM and functional
   // mfem::Vector g1 = (*J_mfem) * U;
   mfem::Vector g1(U.Size());
@@ -221,7 +212,6 @@ void functional_test(mfem::ParMesh& mesh, H1<p> test, H1<p> trial, Dimension<dim
   }
 
   // Ensure the two methods generate the same result
-  EXPECT_NEAR(0.0, diag_diff.Norml2() / diag_assembled.Norml2(), 1.e-14);
   EXPECT_NEAR(0.0, diff1.Norml2() / g1.Norml2(), 1.e-14);
   EXPECT_NEAR(0.0, diff2.Norml2() / g1.Norml2(), 1.e-14);
 }
@@ -313,15 +303,6 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
 
   std::unique_ptr<mfem::HypreParMatrix> J_func = assemble(drdU);
 
-  mfem::Vector diag_direct(U.Size());
-  drdU.assembleDiagonal(diag_direct);
-
-  mfem::Vector diag_assembled(U.Size());
-  J_func->GetDiag(diag_assembled);
-
-  mfem::Vector diag_diff(U.Size());
-  subtract(diag_direct, diag_assembled, diag_diff);
-
   // mfem::Vector g1 = (*J_mfem) * U;
   mfem::Vector g1(U.Size());
   J_mfem->Mult(U, g1);
@@ -347,7 +328,6 @@ void functional_test(mfem::ParMesh& mesh, H1<p, dim> test, H1<p, dim> trial, Dim
     std::cout << "||g1-g3||/||g1||: " << diff2.Norml2() / g1.Norml2() << std::endl;
   }
 
-  EXPECT_NEAR(0., diag_diff.Norml2() / diag_assembled.Norml2(), 1.e-14);
   EXPECT_NEAR(0., diff1.Norml2() / g1.Norml2(), 1.e-14);
   EXPECT_NEAR(0., diff2.Norml2() / g1.Norml2(), 1.e-14);
 }
@@ -506,67 +486,6 @@ double time_on_slowest_rank(Function&& function)
 }
 
 }  // namespace
-
-TEST(Elasticity, DiagonalAssemblyBenchmark)
-{
-  if (!run_diagonal_benchmark) {
-    GTEST_SKIP() << "Set --run-diagonal-benchmark to time direct diagonal assembly.";
-  }
-
-  static constexpr int dim = 3;
-  using test_space = H1<2, dim>;
-  using trial_space = H1<2, dim>;
-
-  auto [fespace, fec] = smith::generateParFiniteElementSpace<test_space>(mesh3D.get());
-  (void)fec;
-
-  mfem::ParGridFunction u_global(fespace.get());
-  int seed = 9;
-  u_global.Randomize(seed);
-
-  mfem::Vector U(fespace->TrueVSize());
-  u_global.GetTrueDofs(U);
-
-  Functional<test_space(trial_space), exec_space> residual(fespace.get(), {fespace.get()});
-  Domain domain = EntireDomain(*mesh3D);
-  residual.AddDomainIntegral(Dimension<dim>{}, DependsOn<0>{}, StressFunctor<dim>{}, domain);
-
-  auto [r, drdU] = residual(0.0, differentiate_wrt(U));
-
-  mfem::Vector diag_direct(U.Size());
-  mfem::Vector diag_assembled(U.Size());
-  drdU.assembleDiagonal(diag_direct);
-  std::unique_ptr<mfem::HypreParMatrix> J_warmup = assemble(drdU);
-  J_warmup->GetDiag(diag_assembled);
-
-  const int samples = std::max(diagonal_benchmark_samples, 1);
-  double direct_time = time_on_slowest_rank([&]() {
-    for (int sample = 0; sample < samples; sample++) {
-      drdU.assembleDiagonal(diag_direct);
-    }
-  });
-
-  double sparse_time = time_on_slowest_rank([&]() {
-    for (int sample = 0; sample < samples; sample++) {
-      std::unique_ptr<mfem::HypreParMatrix> J = assemble(drdU);
-      J->GetDiag(diag_assembled);
-    }
-  });
-
-  mfem::Vector diag_diff(U.Size());
-  subtract(diag_direct, diag_assembled, diag_diff);
-  EXPECT_NEAR(0.0, diag_diff.Norml2() / diag_assembled.Norml2(), 1.e-14);
-
-  auto [num_ranks, rank] = smith::getMPIInfo();
-  (void)num_ranks;
-  if (rank == 0) {
-    std::cout << "DiagonalAssemblyBenchmark direct_seconds=" << direct_time / samples
-              << " sparse_getdiag_seconds=" << sparse_time / samples << " speedup=" << sparse_time / direct_time
-              << std::endl;
-  }
-
-  EXPECT_GT(sparse_time / direct_time, 5.0);
-}
 
 // TODO: reenable these once hcurl implements of simplex elements is finished
 // TEST(Hcurl, 2DLinear) { functional_test(*mesh2D, Hcurl<1>{}, Hcurl<1>{}, Dimension<2>{}); }

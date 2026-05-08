@@ -56,17 +56,6 @@
 
 namespace smith {
 
-struct SolidMechanicsJacobianTimings {
-  size_t legacy_jacobian_evals = 0;
-  size_t jacobian_operator_evals = 0;
-  size_t jacobian_operator_assemblies = 0;
-  double legacy_derivative_seconds = 0.0;
-  double legacy_sparse_assembly_seconds = 0.0;
-  double legacy_essential_elimination_seconds = 0.0;
-  double jacobian_operator_derivative_seconds = 0.0;
-  double jacobian_operator_sparse_assembly_seconds = 0.0;
-  double jacobian_operator_essential_elimination_seconds = 0.0;
-};
 namespace solid_mechanics {
 
 namespace detail {
@@ -1065,124 +1054,14 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
         // gradient of residual function
         [this](const mfem::Vector& u) -> mfem::Operator& {
           SMITH_MARK_FUNCTION;
-          using Clock = std::chrono::steady_clock;
-          auto seconds_since = [](Clock::time_point start) {
-            return std::chrono::duration_cast<std::chrono::duration<double>>(Clock::now() - start).count();
-          };
-          auto derivative_start = Clock::now();
           auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                         *parameters_[parameter_indices].state...);
-          jacobian_timings_.legacy_derivative_seconds += seconds_since(derivative_start);
-          ++jacobian_timings_.legacy_jacobian_evals;
           J_.reset();
-          auto assembly_start = Clock::now();
           J_ = assemble(drdu);
-          jacobian_timings_.legacy_sparse_assembly_seconds += seconds_since(assembly_start);
           J_e_.reset();
-          auto elimination_start = Clock::now();
           J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
-          jacobian_timings_.legacy_essential_elimination_seconds += seconds_since(elimination_start);
           return *J_;
         });
-  }
-
-  /// @brief Matrix-free action of the quasistatic tangent with essential boundary conditions applied.
-  void quasistaticTangentAction(const mfem::Vector& u, const mfem::Vector& du, mfem::Vector& dr) const
-  {
-    SMITH_MARK_FUNCTION;
-
-    mfem::Vector du_interior(du);
-    du_interior.SetSubVector(bcs_.allEssentialTrueDofs(), 0.0);
-
-    auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), acceleration_,
-                                  *parameters_[parameter_indices].state...);
-    drdu.Mult(du_interior, dr);
-
-    const auto& constrained_dofs = bcs_.allEssentialTrueDofs();
-    for (int i = 0; i < constrained_dofs.Size(); ++i) {
-      const int dof = constrained_dofs[i];
-      dr[dof] = du[dof];
-    }
-  }
-
-  /// @brief Build a quasistatic JacobianOperator with essential boundary conditions applied.
-  std::unique_ptr<JacobianOperator> quasistaticJacobianOperator(const mfem::Vector& u) const
-  {
-    SMITH_MARK_FUNCTION;
-
-    using Clock = std::chrono::steady_clock;
-    auto seconds_since = [](Clock::time_point start) {
-      return std::chrono::duration_cast<std::chrono::duration<double>>(Clock::now() - start).count();
-    };
-    auto derivative_start = Clock::now();
-    auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), acceleration_,
-                                  *parameters_[parameter_indices].state...);
-    jacobian_timings_.jacobian_operator_derivative_seconds += seconds_since(derivative_start);
-    ++jacobian_timings_.jacobian_operator_evals;
-
-    using GradientT = std::remove_reference_t<decltype(drdu)>;
-
-    class QuasistaticJacobianOperator : public JacobianOperator {
-     public:
-      QuasistaticJacobianOperator(
-          const GradientT& gradient, const mfem::Array<int>& constrained_dofs,
-          std::function<std::unique_ptr<mfem::HypreParMatrix>(mfem::HypreParMatrix&)> eliminate_essential_dofs,
-          SolidMechanicsJacobianTimings& timings)
-          : JacobianOperator(gradient.Height(), gradient.Width()),
-            gradient_(gradient),
-            constrained_dofs_(constrained_dofs),
-            eliminate_essential_dofs_(std::move(eliminate_essential_dofs)),
-            timings_(timings)
-      {
-      }
-
-      void Mult(const mfem::Vector& du, mfem::Vector& dr) const override
-      {
-        mfem::Vector du_interior(du);
-        du_interior.SetSubVector(constrained_dofs_, 0.0);
-
-        gradient_.Mult(du_interior, dr);
-        for (int i = 0; i < constrained_dofs_.Size(); ++i) {
-          const int dof = constrained_dofs_[i];
-          dr[dof] = du[dof];
-        }
-      }
-
-      std::unique_ptr<mfem::HypreParMatrix> assemble() override
-      {
-        using AssemblyClock = std::chrono::steady_clock;
-        auto seconds_since = [](AssemblyClock::time_point start) {
-          return std::chrono::duration_cast<std::chrono::duration<double>>(AssemblyClock::now() - start).count();
-        };
-        auto assembly_start = AssemblyClock::now();
-        std::unique_ptr<mfem::HypreParMatrix> matrix = gradient_.assemble();
-        timings_.jacobian_operator_sparse_assembly_seconds += seconds_since(assembly_start);
-        auto elimination_start = AssemblyClock::now();
-        eliminate_essential_dofs_(*matrix);
-        timings_.jacobian_operator_essential_elimination_seconds += seconds_since(elimination_start);
-        ++timings_.jacobian_operator_assemblies;
-        return matrix;
-      }
-
-      void assembleDiagonal(mfem::Vector& diag) const override
-      {
-        gradient_.assembleDiagonal(diag);
-        for (int i = 0; i < constrained_dofs_.Size(); ++i) {
-          diag[constrained_dofs_[i]] = 1.0;
-        }
-      }
-
-     private:
-      GradientT gradient_;
-      mfem::Array<int> constrained_dofs_;
-      std::function<std::unique_ptr<mfem::HypreParMatrix>(mfem::HypreParMatrix&)> eliminate_essential_dofs_;
-      SolidMechanicsJacobianTimings& timings_;
-    };
-
-    return std::make_unique<QuasistaticJacobianOperator>(
-        drdu, bcs_.allEssentialTrueDofs(),
-        [this](mfem::HypreParMatrix& matrix) { return bcs_.eliminateAllEssentialDofsFromMatrix(matrix); },
-        jacobian_timings_);
   }
 
   /**
@@ -1263,11 +1142,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 #endif
 
     nonlin_solver_->setOperator(*residual_with_bcs_);
-    if (is_quasistatic_) {
-      nonlin_solver_->setMatrixFreeTangentAction([this](const mfem::Vector& u, const mfem::Vector& du,
-                                                        mfem::Vector& dr) { quasistaticTangentAction(u, du, dr); });
-      nonlin_solver_->setJacobianOperator([this](const mfem::Vector& u) { return quasistaticJacobianOperator(u); });
-    }
 
     if (checkpoint_to_disk_) {
       outputStateToDisk();
@@ -1512,18 +1386,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// @brief getter for nodal forces (before zeroing-out essential dofs)
   const smith::FiniteElementDual& reactions() const { return reactions_; };
 
-  /// @brief Get the equation solver used by this physics module
-  smith::EquationSolver& equationSolver() { return *nonlin_solver_; }
-
-  /// @overload
-  const smith::EquationSolver& equationSolver() const { return *nonlin_solver_; }
-
-  /// @brief Return accumulated Jacobian construction timings for this physics object.
-  const SolidMechanicsJacobianTimings& jacobianTimings() const { return jacobian_timings_; }
-
-  /// @brief Reset accumulated Jacobian construction timings for this physics object.
-  void resetJacobianTimings() const { jacobian_timings_ = {}; }
-
  protected:
   /// The compile-time finite element trial space for displacement and velocity (H1 of order p)
   using trial = H1<order, dim>;
@@ -1591,9 +1453,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// rows and columns of J_ that have been separated out
   /// because are associated with essential boundary conditions
   std::unique_ptr<mfem::HypreParMatrix> J_e_;
-
-  /// Accumulated timing diagnostics for quasistatic Jacobian construction paths.
-  mutable SolidMechanicsJacobianTimings jacobian_timings_;
 
   /// an intermediate variable used to store the predicted end-step displacement
   mfem::Vector predicted_displacement_;

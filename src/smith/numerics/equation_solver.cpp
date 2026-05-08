@@ -407,26 +407,12 @@ class TrustRegion : public mfem::NewtonSolver {
   mutable size_t num_subspace_solve_start_hess_vecs = 0;
   /// internal counter for quadratic subspace backend solves
   mutable size_t num_quadratic_subspace_solves = 0;
-  /// internal counter for cubic subspace backend attempts
-  mutable size_t num_cubic_subspace_attempts = 0;
-  /// internal counter for cubic subspace candidates used
-  mutable size_t num_cubic_subspace_uses = 0;
-  /// internal counter for cubic attempts that returned quadratic candidate
-  mutable size_t num_cubic_subspace_quadratic_fallbacks = 0;
   /// internal counter for matrix assembles
   mutable size_t num_jacobian_assembles = 0;
-  /// internal counter for JacobianOperator evaluations
-  mutable size_t num_jacobian_operator_evals = 0;
-  /// internal counter for direct diagonal assemblies
-  mutable size_t num_diagonal_assembles = 0;
   /// internal counter for model CG iterations
   mutable size_t num_cg_iterations = 0;
   /// internal counter for preconditioner operator updates
   mutable size_t num_preconditioner_updates = 0;
-  /// internal counter for nonmonotone accepted steps
-  mutable size_t num_nonmonotone_work_accepts = 0;
-  /// internal counter for accepted steps that monotone acceptance would reject
-  mutable size_t num_monotone_work_would_reject = 0;
   /// time spent evaluating residuals
   mutable double residual_seconds = 0.0;
   /// time spent applying Hessian-vector products
@@ -437,14 +423,6 @@ class TrustRegion : public mfem::NewtonSolver {
   mutable double cauchy_hess_vec_seconds = 0.0;
   /// time spent applying line-search Hessian-vector products
   mutable double line_search_hess_vec_seconds = 0.0;
-  /// time spent applying JacobianOperator Hessian-vector products
-  mutable double jacobian_operator_hess_vec_seconds = 0.0;
-  /// time spent evaluating JacobianOperator factories
-  mutable double jacobian_operator_eval_seconds = 0.0;
-  /// time spent directly assembling diagonals
-  mutable double diagonal_assembly_seconds = 0.0;
-  /// time spent inverting direct diagonals
-  mutable double diagonal_invert_seconds = 0.0;
   /// time spent applying preconditioners
   mutable double preconditioner_seconds = 0.0;
   /// total time spent in the nonlinear solve
@@ -507,21 +485,6 @@ class TrustRegion : public mfem::NewtonSolver {
   mutable double preconditioner_update_seconds = 0.0;
   /// time spent in preconditioner SetOperator calls
   mutable double preconditioner_setup_seconds = 0.0;
-  /// current accumulated actual work-surrogate level for nonmonotone acceptance
-  mutable double current_work_objective = 0.0;
-  /// last nonmonotone reference work surrogate
-  mutable double last_nonmonotone_work_reference = 0.0;
-  /// Optional JacobianOperator factory
-  JacobianOperatorFactory jacobian_operator_factory;
-  /// Cached JacobianOperator for current TrustRegion iteration
-  mutable std::unique_ptr<JacobianOperator> current_jacobian_operator;
-  /// Inverted scalar diagonal preconditioner for JacobianOperator mode
-  mutable mfem::Vector inverse_diagonal_preconditioner;
-  /// Current assembled Hessian clone used to preserve a valid previous Hessian
-  mutable std::unique_ptr<mfem::Operator> current_hessian;
-  /// Previous assembled Hessian used for cubic finite-difference subspace models
-  mutable std::unique_ptr<mfem::Operator> previous_hessian;
-
 #ifdef MFEM_USE_MPI
   /// constructor
   TrustRegion(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts,
@@ -691,26 +654,6 @@ class TrustRegion : public mfem::NewtonSolver {
     ++num_line_search_hess_vecs;
   }
 
-  double nonmonotoneWorkReference(const std::vector<double>& work_objective_history) const
-  {
-    if (work_objective_history.empty()) {
-      return current_work_objective;
-    }
-    return *std::max_element(work_objective_history.begin(), work_objective_history.end());
-  }
-
-  void pushWorkObjectiveHistory(std::vector<double>& work_objective_history, double objective) const
-  {
-    const int window = nonlinear_options.trust_nonmonotone_window;
-    if (window <= 0) {
-      return;
-    }
-    work_objective_history.push_back(objective);
-    while (work_objective_history.size() > static_cast<size_t>(window)) {
-      work_objective_history.erase(work_objective_history.begin());
-    }
-  }
-
   void pushAcceptedStepHistory(const mfem::Vector& step) const
   {
     if (nonlinear_options.trust_num_past_steps <= 0) {
@@ -745,10 +688,7 @@ class TrustRegion : public mfem::NewtonSolver {
                                [[maybe_unused]] const std::vector<const mfem::Vector*> Hds,
                                [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta,
                                [[maybe_unused]] int num_leftmost,
-                               [[maybe_unused]] std::vector<std::shared_ptr<mfem::Vector>>& candidate_left_mosts,
-                               [[maybe_unused]] const mfem::Vector& previous_step,
-                               [[maybe_unused]] const mfem::Vector* previous_H_previous_step,
-                               [[maybe_unused]] bool allow_cubic_subspace) const
+                               [[maybe_unused]] std::vector<std::shared_ptr<mfem::Vector>>& candidate_left_mosts) const
   {
     SMITH_MARK_FUNCTION;
     auto subspace_start = Clock::now();
@@ -780,31 +720,9 @@ class TrustRegion : public mfem::NewtonSolver {
 
     try {
       auto backend_start = Clock::now();
-      if (nonlinear_options.trust_use_cubic_subspace && allow_cubic_subspace && previous_hessian) {
-        std::vector<mfem::Vector> previous_H_vectors;
-        std::vector<const mfem::Vector*> previous_H_directions;
-        previous_H_vectors.reserve(directions.size());
-        previous_H_directions.reserve(directions.size());
-        for (const auto* direction : directions) {
-          previous_H_vectors.emplace_back(direction->Size());
-          previous_hessian->Mult(*direction, previous_H_vectors.back());
-          previous_H_directions.emplace_back(&previous_H_vectors.back());
-        }
-        ++num_cubic_subspace_attempts;
-        bool used_cubic = false;
-        std::tie(sol, leftvecs, leftvals, energy_change) = solveCubicSubspaceProblemMfem(
-            directions, H_directions, previous_H_directions, previous_step, b, delta, num_leftmost, &used_cubic);
-        if (used_cubic) {
-          ++num_cubic_subspace_uses;
-        } else {
-          ++num_cubic_subspace_quadratic_fallbacks;
-          ++num_quadratic_subspace_solves;
-        }
-      } else {
-        ++num_quadratic_subspace_solves;
-        std::tie(sol, leftvecs, leftvals, energy_change) =
-            solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
-      }
+      ++num_quadratic_subspace_solves;
+      std::tie(sol, leftvecs, leftvals, energy_change) =
+          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
       subspace_backend_seconds += secondsSince(backend_start);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
@@ -1031,61 +949,12 @@ class TrustRegion : public mfem::NewtonSolver {
     SMITH_MARK_FUNCTION;
     auto start = Clock::now();
     ++num_jacobian_assembles;
-    if (nonlinear_options.trust_use_cubic_subspace) {
-      previous_hessian = std::move(current_hessian);
-    }
     grad = &oper->GetGradient(x);
     if (nonlinear_options.force_monolithic) {
       auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
       if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
     }
-    if (nonlinear_options.trust_use_cubic_subspace) {
-      current_hessian = cloneAssembledOperator(*grad);
-    }
     jacobian_assembly_seconds += secondsSince(start);
-  }
-
-  /// Set an optional JacobianOperator factory.
-  void setJacobianOperator(JacobianOperatorFactory jacobian_operator)
-  {
-    jacobian_operator_factory = std::move(jacobian_operator);
-  }
-
-  /// Evaluate and cache the JacobianOperator at x.
-  void updateJacobianOperator(const mfem::Vector& x) const
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(!jacobian_operator_factory, "No JacobianOperator factory is registered.");
-    auto start = Clock::now();
-    ++num_jacobian_operator_evals;
-    current_jacobian_operator = jacobian_operator_factory(x);
-    SLIC_ERROR_ROOT_IF(!current_jacobian_operator, "JacobianOperator factory returned a null operator.");
-    jacobian_operator_eval_seconds += secondsSince(start);
-  }
-
-  /// Assemble and invert the scalar diagonal preconditioner from the current JacobianOperator.
-  void updateDiagonalPreconditioner() const
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(!current_jacobian_operator, "Cannot build diagonal preconditioner without a JacobianOperator.");
-
-    auto diagonal_start = Clock::now();
-    current_jacobian_operator->assembleDiagonal(inverse_diagonal_preconditioner);
-    diagonal_assembly_seconds += secondsSince(diagonal_start);
-    ++num_diagonal_assembles;
-
-    auto invert_start = Clock::now();
-    double max_abs_diag = 0.0;
-    for (int i = 0; i < inverse_diagonal_preconditioner.Size(); ++i) {
-      max_abs_diag = std::max(max_abs_diag, std::abs(inverse_diagonal_preconditioner[i]));
-    }
-
-    const double floor = nonlinear_options.pcg_diagonal_floor * max_abs_diag;
-    SLIC_ERROR_ROOT_IF(!(floor > 0.0), "Cannot invert a zero Jacobian diagonal for TrustRegion preconditioning.");
-    for (int i = 0; i < inverse_diagonal_preconditioner.Size(); ++i) {
-      inverse_diagonal_preconditioner[i] = 1.0 / std::max(std::abs(inverse_diagonal_preconditioner[i]), floor);
-    }
-    diagonal_invert_seconds += secondsSince(invert_start);
   }
 
   /// evaluate the nonlinear residual
@@ -1106,16 +975,8 @@ class TrustRegion : public mfem::NewtonSolver {
     SMITH_MARK_FUNCTION;
     auto start = Clock::now();
     ++num_hess_vecs;
-    if (nonlinear_options.trust_use_jacobian_operator) {
-      SLIC_ERROR_ROOT_IF(!current_jacobian_operator, "TrustRegion JacobianOperator mode has no current operator.");
-      current_jacobian_operator->Mult(x_, v_);
-      const double seconds = secondsSince(start);
-      hess_vec_seconds += seconds;
-      jacobian_operator_hess_vec_seconds += seconds;
-    } else {
-      grad->Mult(x_, v_);
-      hess_vec_seconds += secondsSince(start);
-    }
+    grad->Mult(x_, v_);
+    hess_vec_seconds += secondsSince(start);
   }
 
   /// apply trust region specific preconditioner
@@ -1124,16 +985,7 @@ class TrustRegion : public mfem::NewtonSolver {
     SMITH_MARK_FUNCTION;
     auto start = Clock::now();
     ++num_preconds;
-    if (nonlinear_options.trust_use_jacobian_operator) {
-      SLIC_ERROR_ROOT_IF(inverse_diagonal_preconditioner.Size() != x_.Size(),
-                         "TrustRegion JacobianOperator diagonal preconditioner is not initialized.");
-      v_.SetSize(x_.Size());
-      for (int i = 0; i < x_.Size(); ++i) {
-        v_[i] = inverse_diagonal_preconditioner[i] * x_[i];
-      }
-    } else {
-      tr_precond.Mult(x_, v_);
-    }
+    tr_precond.Mult(x_, v_);
     preconditioner_seconds += secondsSince(start);
   };
 
@@ -1147,8 +999,6 @@ class TrustRegion : public mfem::NewtonSolver {
             .num_line_search_hess_vecs = num_line_search_hess_vecs,
             .num_preconds = num_preconds,
             .num_jacobian_assembles = num_jacobian_assembles,
-            .num_jacobian_operator_evals = num_jacobian_operator_evals,
-            .num_diagonal_assembles = num_diagonal_assembles,
             .num_cg_iterations = num_cg_iterations,
             .num_subspace_solves = num_subspace_solves,
             .num_subspace_leftmost_hess_vecs = num_subspace_leftmost_hess_vecs,
@@ -1159,21 +1009,12 @@ class TrustRegion : public mfem::NewtonSolver {
             .num_subspace_solve_start_vectors = num_subspace_solve_start_vectors,
             .num_subspace_solve_start_hess_vecs = num_subspace_solve_start_hess_vecs,
             .num_quadratic_subspace_solves = num_quadratic_subspace_solves,
-            .num_cubic_subspace_attempts = num_cubic_subspace_attempts,
-            .num_cubic_subspace_uses = num_cubic_subspace_uses,
-            .num_cubic_subspace_quadratic_fallbacks = num_cubic_subspace_quadratic_fallbacks,
             .num_preconditioner_updates = num_preconditioner_updates,
-            .num_nonmonotone_work_accepts = num_nonmonotone_work_accepts,
-            .num_monotone_work_would_reject = num_monotone_work_would_reject,
             .residual_seconds = residual_seconds,
             .hess_vec_seconds = hess_vec_seconds,
             .model_hess_vec_seconds = model_hess_vec_seconds,
             .cauchy_hess_vec_seconds = cauchy_hess_vec_seconds,
             .line_search_hess_vec_seconds = line_search_hess_vec_seconds,
-            .jacobian_operator_hess_vec_seconds = jacobian_operator_hess_vec_seconds,
-            .jacobian_operator_eval_seconds = jacobian_operator_eval_seconds,
-            .diagonal_assembly_seconds = diagonal_assembly_seconds,
-            .diagonal_invert_seconds = diagonal_invert_seconds,
             .preconditioner_seconds = preconditioner_seconds,
             .total_seconds = total_seconds,
             .model_solve_seconds = model_solve_seconds,
@@ -1213,9 +1054,7 @@ class TrustRegion : public mfem::NewtonSolver {
             .projection_seconds = projection_seconds,
             .jacobian_assembly_seconds = jacobian_assembly_seconds,
             .preconditioner_update_seconds = preconditioner_update_seconds,
-            .preconditioner_setup_seconds = preconditioner_setup_seconds,
-            .last_work_objective = current_work_objective,
-            .last_nonmonotone_work_reference = last_nonmonotone_work_reference};
+            .preconditioner_setup_seconds = preconditioner_setup_seconds};
   }
 
   /// @overload
@@ -1246,25 +1085,14 @@ class TrustRegion : public mfem::NewtonSolver {
     num_subspace_solve_start_vectors = 0;
     num_subspace_solve_start_hess_vecs = 0;
     num_quadratic_subspace_solves = 0;
-    num_cubic_subspace_attempts = 0;
-    num_cubic_subspace_uses = 0;
-    num_cubic_subspace_quadratic_fallbacks = 0;
     num_jacobian_assembles = 0;
-    num_jacobian_operator_evals = 0;
-    num_diagonal_assembles = 0;
     num_cg_iterations = 0;
     num_preconditioner_updates = 0;
-    num_nonmonotone_work_accepts = 0;
-    num_monotone_work_would_reject = 0;
     residual_seconds = 0.0;
     hess_vec_seconds = 0.0;
     model_hess_vec_seconds = 0.0;
     cauchy_hess_vec_seconds = 0.0;
     line_search_hess_vec_seconds = 0.0;
-    jacobian_operator_hess_vec_seconds = 0.0;
-    jacobian_operator_eval_seconds = 0.0;
-    diagonal_assembly_seconds = 0.0;
-    diagonal_invert_seconds = 0.0;
     preconditioner_seconds = 0.0;
     total_seconds = 0.0;
     model_solve_seconds = 0.0;
@@ -1296,19 +1124,13 @@ class TrustRegion : public mfem::NewtonSolver {
     jacobian_assembly_seconds = 0.0;
     preconditioner_update_seconds = 0.0;
     preconditioner_setup_seconds = 0.0;
-    current_work_objective = 0.0;
-    last_nonmonotone_work_reference = 0.0;
     accepted_step_history.clear();
     resetTrustRegionSubspaceTimings();
     solve_start_x.SetSize(X.Size());
     solve_start_x = X;
     min_residual_x.SetSize(X.Size());
     min_residual_x = X;
-    current_jacobian_operator.reset();
-    inverse_diagonal_preconditioner.SetSize(0);
     previous_H_left_mosts.clear();
-    current_hessian.reset();
-    previous_hessian.reset();
 
     real_t norm, norm_goal = 0.0;
     norm = initial_norm = computeResidual(X, r);
@@ -1320,11 +1142,6 @@ class TrustRegion : public mfem::NewtonSolver {
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
     }
-
-    SLIC_ERROR_ROOT_IF(nonlinear_options.trust_nonmonotone_window < 0,
-                       "TrustRegion requires trust_nonmonotone_window >= 0");
-    std::vector<double> work_objective_history;
-    pushWorkObjectiveHistory(work_objective_history, current_work_objective);
 
     prec->iterative_mode = false;
     tr_precond.iterative_mode = false;
@@ -1381,26 +1198,17 @@ class TrustRegion : public mfem::NewtonSolver {
         break;
       }
 
-      if (nonlinear_options.trust_use_jacobian_operator) {
-        SLIC_ERROR_ROOT_IF(!jacobian_operator_factory,
-                           "TrustRegion JacobianOperator mode requires a registered JacobianOperator factory.");
-        updateJacobianOperator(X);
-        updateDiagonalPreconditioner();
+      assembleJacobian(X);
+
+      if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
+                      cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
+        auto preconditioner_update_start = Clock::now();
+        auto preconditioner_setup_start = Clock::now();
+        tr_precond.SetOperator(*grad);
+        preconditioner_setup_seconds += secondsSince(preconditioner_setup_start);
+        preconditioner_update_seconds += secondsSince(preconditioner_update_start);
         ++num_preconditioner_updates;
         cumulative_cg_iters_from_last_precond_update = 0;
-      } else {
-        assembleJacobian(X);
-
-        if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
-                        cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
-          auto preconditioner_update_start = Clock::now();
-          auto preconditioner_setup_start = Clock::now();
-          tr_precond.SetOperator(*grad);
-          preconditioner_setup_seconds += secondsSince(preconditioner_setup_start);
-          preconditioner_update_seconds += secondsSince(preconditioner_update_start);
-          ++num_preconditioner_updates;
-          cumulative_cg_iters_from_last_precond_update = 0;
-        }
       }
 
       auto hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { hessVec(x_, v_); };
@@ -1481,8 +1289,6 @@ class TrustRegion : public mfem::NewtonSolver {
                                        ((d_norm > (1.0 - 1.0e-6) * tr_size) && lineSearchIter > 1));
         bool use_with_option2 = (subspace_option >= 2) && (d_norm > (1.0 - 1.0e-6) * tr_size);
         bool use_with_option3 = (subspace_option >= 3);
-        const bool allow_cubic_subspace =
-            trResults.interior_status == TrustRegionResults::Status::NegativeCurvature || use_with_option2;
 
         if (use_with_option1 || use_with_option2 || use_with_option3) {
           if (!have_computed_Hvs) {
@@ -1581,9 +1387,7 @@ class TrustRegion : public mfem::NewtonSolver {
               H_ds.push_back(&H_min_residual_direction);
             }
           }
-          solveTheSubspaceProblem(trResults.d, hess_vec_func, ds, H_ds, r, tr_size, num_leftmost, candidate_left_mosts,
-                                  trResults.d_old,
-                                  trResults.has_d_old ? &trResults.H_d_old_at_accept : nullptr, allow_cubic_subspace);
+          solveTheSubspaceProblem(trResults.d, hess_vec_func, ds, H_ds, r, tr_size, num_leftmost, candidate_left_mosts);
         }
 
         static constexpr double roundOffTol = 0.0;  // 1e-14;
@@ -1614,9 +1418,6 @@ class TrustRegion : public mfem::NewtonSolver {
           normPred = std::numeric_limits<double>::max();
         }
 
-        const double trial_work_objective = current_work_objective + realObjective;
-        last_nonmonotone_work_reference = nonmonotoneWorkReference(work_objective_history);
-
         if (normPred <= norm_goal) {
           trResults.d_old = trResults.d;
           trResults.H_d_old_at_accept = trResults.H_d;
@@ -1630,8 +1431,6 @@ class TrustRegion : public mfem::NewtonSolver {
           r = r_pred;
           vector_copy_scale_seconds += secondsSince(copy_start);
           norm = normPred;
-          current_work_objective = trial_work_objective;
-          pushWorkObjectiveHistory(work_objective_history, current_work_objective);
           line_search_seconds += secondsSince(line_search_start);
           if (print_level >= 2) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
@@ -1671,11 +1470,7 @@ class TrustRegion : public mfem::NewtonSolver {
         // modelRes = g + Jd
         // modelResNorm = np.linalg.norm(modelRes)
         // realResNorm = np.linalg.norm(gy)
-        const bool monotoneAccept = rho >= settings.eta1 && rho <= settings.eta4;
-        const bool nonmonotoneAccept =
-            nonlinear_options.trust_nonmonotone_window > 0 && modelObjective < 0.0 && rho <= settings.eta4 &&
-            trial_work_objective <= last_nonmonotone_work_reference + settings.eta1 * modelObjective;
-        bool willAccept = monotoneAccept || nonmonotoneAccept;  // or (rho >= -0 and realResNorm <= gNorm)
+        const bool willAccept = rho >= settings.eta1 && rho <= settings.eta4;
 
         if (print_level >= 2) {
           printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, willAccept);
@@ -1691,17 +1486,11 @@ class TrustRegion : public mfem::NewtonSolver {
           if (!candidate_left_mosts.empty()) {
             left_mosts = std::move(candidate_left_mosts);
           }
-          if (nonmonotoneAccept && !monotoneAccept) {
-            ++num_nonmonotone_work_accepts;
-            ++num_monotone_work_would_reject;
-          }
           copy_start = Clock::now();
           X = x_pred;
           r = r_pred;
           vector_copy_scale_seconds += secondsSince(copy_start);
           norm = normPred;
-          current_work_objective = trial_work_objective;
-          pushWorkObjectiveHistory(work_objective_history, current_work_objective);
           line_search_seconds += secondsSince(line_search_start);
           break;
         }
@@ -1731,754 +1520,6 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 };
 
-/**
- * @brief Skeleton for a nonlinear preconditioned conjugate-gradient block solver.
- *
- * The full algorithm is added in a follow-on chunk. This class establishes the Smith/MFEM integration points used by
- * that implementation: residual evaluation, Jacobian assembly, Hessian-vector products, preconditioning, counters, and
- * standard nonlinear convergence bookkeeping.
- */
-class PcgBlockSolver : public mfem::NewtonSolver {
- protected:
-  /// Trial solution vector
-  mutable mfem::Vector x_trial;
-  /// Trial residual vector
-  mutable mfem::Vector r_trial;
-  /// Scratch vector
-  mutable mfem::Vector scratch;
-
-  /// Nonlinear solution options
-  NonlinearSolverOptions nonlinear_options;
-
-  /// Preconditioner used by the PCG-block recurrence
-  Solver& pcg_precond;
-
-  /// Reconstructed Smith print level
-  mutable size_t print_level = 0;
-
- public:
-  /// Internal counter for hess-vecs
-  mutable size_t num_hess_vecs = 0;
-  /// Internal counter for preconditions
-  mutable size_t num_preconds = 0;
-  /// Internal counter for residuals
-  mutable size_t num_residuals = 0;
-  /// Internal counter for matrix assembles
-  mutable size_t num_jacobian_assembles = 0;
-  /// Internal counter for JacobianOperator evaluations
-  mutable size_t num_jacobian_operator_evals = 0;
-  /// Internal counter for direct diagonal assemblies
-  mutable size_t num_diagonal_assembles = 0;
-  /// Internal counter for preconditioner operator updates
-  mutable size_t num_preconditioner_updates = 0;
-  /// Internal counter for accepted prefix blocks
-  mutable size_t num_prefix_accepts = 0;
-  /// Internal counter for momentum resets
-  mutable size_t num_momentum_resets = 0;
-  /// Internal counter for nonzero PCG beta values
-  mutable size_t num_nonzero_beta = 0;
-  /// Internal counter for zero PCG beta values
-  mutable size_t num_zero_beta = 0;
-  /// Internal counter for accepted blocks
-  mutable size_t num_blocks = 0;
-  /// Internal counter for rejected blocks
-  mutable size_t num_block_rejects = 0;
-  /// Internal counter for Powell restarts
-  mutable size_t num_powell_restarts = 0;
-  /// Internal counter for descent-guard restarts
-  mutable size_t num_descent_restarts = 0;
-  /// Internal counter for non-positive curvature directions
-  mutable size_t num_negative_curvature = 0;
-  /// Internal counter for line-search backtracks
-  mutable size_t num_line_search_backtracks = 0;
-  /// Internal counter for positive-curvature steps capped by the trust radius
-  mutable size_t num_trust_capped_steps = 0;
-  /// Internal counter for accepted inner PCG steps
-  mutable size_t num_accepted_steps = 0;
-  /// Internal counter for trial inner PCG steps
-  mutable size_t num_trial_steps = 0;
-  /// Last trust scale used by the solver
-  mutable double final_h_scale = 1.0;
-  /// Last accepted block trust ratio
-  mutable double last_trust_ratio = 0.0;
-  /// Time spent evaluating residuals
-  mutable double residual_seconds = 0.0;
-  /// Time spent applying all Hessian-vector products
-  mutable double hess_vec_seconds = 0.0;
-  /// Time spent applying JacobianOperator Hessian-vector products
-  mutable double jacobian_operator_hess_vec_seconds = 0.0;
-  /// Time spent applying assembled Hessian-vector products
-  mutable double assembled_hess_vec_seconds = 0.0;
-  /// Time spent applying legacy matrix-free tangent products
-  mutable double matrix_free_hess_vec_seconds = 0.0;
-  /// Time spent applying preconditioners
-  mutable double preconditioner_seconds = 0.0;
-  /// Time spent evaluating JacobianOperator factories
-  mutable double jacobian_operator_eval_seconds = 0.0;
-  /// Time spent assembling sparse Jacobians
-  mutable double jacobian_assembly_seconds = 0.0;
-  /// Time spent directly assembling diagonals
-  mutable double diagonal_assembly_seconds = 0.0;
-  /// Time spent inverting direct diagonals
-  mutable double diagonal_invert_seconds = 0.0;
-  /// Time spent refreshing preconditioner data
-  mutable double preconditioner_update_seconds = 0.0;
-  /// Time spent in preconditioner SetOperator calls
-  mutable double preconditioner_setup_seconds = 0.0;
-
-  /// Optional matrix-free tangent action, y = J(x) dx
-  MatrixFreeTangentAction matrix_free_tangent_action;
-  /// Optional JacobianOperator factory
-  JacobianOperatorFactory jacobian_operator_factory;
-  /// Cached JacobianOperator for the current PCG block
-  mutable std::unique_ptr<JacobianOperator> current_jacobian_operator;
-  /// Owned sparse Jacobian assembled through the JacobianOperator fallback path
-  mutable std::unique_ptr<mfem::HypreParMatrix> assembled_jacobian_from_operator;
-  /// Inverted scalar diagonal preconditioner for the current PCG block
-  mutable mfem::Vector inverse_diagonal_preconditioner;
-  /// Whether the current PCG block should use the scalar diagonal preconditioner
-  mutable bool use_inverse_diagonal_preconditioner = false;
-
-#ifdef MFEM_USE_MPI
-  /// Constructor
-  PcgBlockSolver(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, Solver& preconditioner)
-      : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts), pcg_precond(preconditioner)
-  {
-  }
-#endif
-
-  /// Assemble the Jacobian at x.
-  void assembleJacobian(const mfem::Vector& x) const
-  {
-    SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_jacobian_assembles;
-    grad = &oper->GetGradient(x);
-    if (nonlinear_options.force_monolithic) {
-      auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
-      if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
-    }
-    jacobian_assembly_seconds += secondsSince(start);
-  }
-
-  /// Evaluate the nonlinear residual.
-  mfem::real_t computeResidual(const mfem::Vector& x, mfem::Vector& residual) const
-  {
-    SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_residuals;
-    oper->Mult(x, residual);
-    const auto norm = Norm(residual);
-    residual_seconds += secondsSince(start);
-    return norm;
-  }
-
-  /// Set an optional matrix-free tangent action.
-  void setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_action)
-  {
-    matrix_free_tangent_action = std::move(tangent_action);
-  }
-
-  /// Set an optional JacobianOperator factory.
-  void setJacobianOperator(JacobianOperatorFactory jacobian_operator)
-  {
-    jacobian_operator_factory = std::move(jacobian_operator);
-  }
-
-  /// Evaluate and cache the JacobianOperator at x.
-  void updateJacobianOperator(const mfem::Vector& x) const
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(!jacobian_operator_factory, "No JacobianOperator factory is registered.");
-    auto start = Clock::now();
-    ++num_jacobian_operator_evals;
-    current_jacobian_operator = jacobian_operator_factory(x);
-    SLIC_ERROR_ROOT_IF(!current_jacobian_operator, "JacobianOperator factory returned a null operator.");
-    jacobian_operator_eval_seconds += secondsSince(start);
-  }
-
-  /// Assemble and invert the scalar diagonal preconditioner from the current JacobianOperator.
-  void updateDiagonalPreconditioner() const
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(!current_jacobian_operator, "Cannot build diagonal preconditioner without a JacobianOperator.");
-
-    auto diagonal_start = Clock::now();
-    current_jacobian_operator->assembleDiagonal(inverse_diagonal_preconditioner);
-    diagonal_assembly_seconds += secondsSince(diagonal_start);
-    ++num_diagonal_assembles;
-
-    auto invert_start = Clock::now();
-    double max_abs_diag = 0.0;
-    for (int i = 0; i < inverse_diagonal_preconditioner.Size(); ++i) {
-      max_abs_diag = std::max(max_abs_diag, std::abs(inverse_diagonal_preconditioner[i]));
-    }
-
-    const double floor = nonlinear_options.pcg_diagonal_floor * max_abs_diag;
-    SLIC_ERROR_ROOT_IF(!(floor > 0.0), "Cannot invert a zero Jacobian diagonal for PCG-block preconditioning.");
-    for (int i = 0; i < inverse_diagonal_preconditioner.Size(); ++i) {
-      inverse_diagonal_preconditioner[i] = 1.0 / std::max(std::abs(inverse_diagonal_preconditioner[i]), floor);
-    }
-    diagonal_invert_seconds += secondsSince(invert_start);
-
-    use_inverse_diagonal_preconditioner = true;
-  }
-
-  /// Refresh the tangent and preconditioner used by the next PCG block attempt.
-  void refreshBlockOperators(const mfem::Vector& x) const
-  {
-    auto refresh_start = Clock::now();
-    if (jacobian_operator_factory) {
-      updateJacobianOperator(x);
-      ++num_preconditioner_updates;
-      if (nonlinear_options.pcg_use_jacobian_diagonal_preconditioner) {
-        updateDiagonalPreconditioner();
-      } else {
-        use_inverse_diagonal_preconditioner = false;
-        auto assembly_start = Clock::now();
-        ++num_jacobian_assembles;
-        assembled_jacobian_from_operator = current_jacobian_operator->assemble();
-        jacobian_assembly_seconds += secondsSince(assembly_start);
-        grad = assembled_jacobian_from_operator.get();
-        auto setup_start = Clock::now();
-        pcg_precond.SetOperator(*grad);
-        preconditioner_setup_seconds += secondsSince(setup_start);
-      }
-    } else {
-      SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_use_jacobian_diagonal_preconditioner,
-                         "PCG-block diagonal preconditioning requires a registered JacobianOperator.");
-      current_jacobian_operator.reset();
-      use_inverse_diagonal_preconditioner = false;
-      assembleJacobian(x);
-      ++num_preconditioner_updates;
-      auto setup_start = Clock::now();
-      pcg_precond.SetOperator(*grad);
-      preconditioner_setup_seconds += secondsSince(setup_start);
-    }
-    preconditioner_update_seconds += secondsSince(refresh_start);
-  }
-
-  /// Apply the tangent at x to dx.
-  void hessVec(const mfem::Vector& x, const mfem::Vector& dx, mfem::Vector& y) const
-  {
-    SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_hess_vecs;
-    if (current_jacobian_operator) {
-      current_jacobian_operator->Mult(dx, y);
-      const double seconds = secondsSince(start);
-      hess_vec_seconds += seconds;
-      jacobian_operator_hess_vec_seconds += seconds;
-    } else if (jacobian_operator_factory) {
-      updateJacobianOperator(x);
-      current_jacobian_operator->Mult(dx, y);
-      const double seconds = secondsSince(start);
-      hess_vec_seconds += seconds;
-      jacobian_operator_hess_vec_seconds += seconds;
-    } else if (matrix_free_tangent_action) {
-      matrix_free_tangent_action(x, dx, y);
-      const double seconds = secondsSince(start);
-      hess_vec_seconds += seconds;
-      matrix_free_hess_vec_seconds += seconds;
-    } else {
-      grad->Mult(dx, y);
-      const double seconds = secondsSince(start);
-      hess_vec_seconds += seconds;
-      assembled_hess_vec_seconds += seconds;
-    }
-  }
-
-  /// Apply the configured nonlinear PCG preconditioner.
-  void precond(const mfem::Vector& x, mfem::Vector& v) const
-  {
-    SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_preconds;
-    if (use_inverse_diagonal_preconditioner) {
-      SLIC_ERROR_ROOT_IF(inverse_diagonal_preconditioner.Size() != x.Size(),
-                         "PCG-block diagonal preconditioner size does not match the residual vector.");
-      v.SetSize(x.Size());
-      for (int i = 0; i < x.Size(); ++i) {
-        v[i] = inverse_diagonal_preconditioner[i] * x[i];
-      }
-    } else {
-      pcg_precond.Mult(x, v);
-    }
-    preconditioner_seconds += secondsSince(start);
-  }
-
-  /// Return solver diagnostic counters.
-  PcgBlockDiagnostics diagnostics() const
-  {
-    return {.num_residuals = num_residuals,
-            .num_hess_vecs = num_hess_vecs,
-            .num_preconds = num_preconds,
-            .num_jacobian_assembles = num_jacobian_assembles,
-            .num_jacobian_operator_evals = num_jacobian_operator_evals,
-            .num_diagonal_assembles = num_diagonal_assembles,
-            .num_preconditioner_updates = num_preconditioner_updates,
-            .num_prefix_accepts = num_prefix_accepts,
-            .num_momentum_resets = num_momentum_resets,
-            .num_nonzero_beta = num_nonzero_beta,
-            .num_zero_beta = num_zero_beta,
-            .num_blocks = num_blocks,
-            .num_block_rejects = num_block_rejects,
-            .num_powell_restarts = num_powell_restarts,
-            .num_descent_restarts = num_descent_restarts,
-            .num_negative_curvature = num_negative_curvature,
-            .num_line_search_backtracks = num_line_search_backtracks,
-            .num_trust_capped_steps = num_trust_capped_steps,
-            .num_accepted_steps = num_accepted_steps,
-            .num_trial_steps = num_trial_steps,
-            .residual_seconds = residual_seconds,
-            .hess_vec_seconds = hess_vec_seconds,
-            .jacobian_operator_hess_vec_seconds = jacobian_operator_hess_vec_seconds,
-            .assembled_hess_vec_seconds = assembled_hess_vec_seconds,
-            .matrix_free_hess_vec_seconds = matrix_free_hess_vec_seconds,
-            .preconditioner_seconds = preconditioner_seconds,
-            .jacobian_operator_eval_seconds = jacobian_operator_eval_seconds,
-            .jacobian_assembly_seconds = jacobian_assembly_seconds,
-            .diagonal_assembly_seconds = diagonal_assembly_seconds,
-            .diagonal_invert_seconds = diagonal_invert_seconds,
-            .preconditioner_update_seconds = preconditioner_update_seconds,
-            .preconditioner_setup_seconds = preconditioner_setup_seconds,
-            .final_h_scale = final_h_scale,
-            .last_trust_ratio = last_trust_ratio};
-  }
-
-  /// @overload
-  void Mult(const mfem::Vector&, mfem::Vector& X) const
-  {
-    MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
-    MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
-
-    print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
-    print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
-    print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
-
-    num_hess_vecs = 0;
-    num_preconds = 0;
-    num_residuals = 0;
-    num_jacobian_assembles = 0;
-    num_jacobian_operator_evals = 0;
-    num_diagonal_assembles = 0;
-    num_preconditioner_updates = 0;
-    num_prefix_accepts = 0;
-    num_momentum_resets = 0;
-    num_nonzero_beta = 0;
-    num_zero_beta = 0;
-    num_blocks = 0;
-    num_block_rejects = 0;
-    num_powell_restarts = 0;
-    num_descent_restarts = 0;
-    num_negative_curvature = 0;
-    num_line_search_backtracks = 0;
-    num_trust_capped_steps = 0;
-    num_accepted_steps = 0;
-    num_trial_steps = 0;
-    final_h_scale = nonlinear_options.pcg_h_scale_init;
-    last_trust_ratio = 0.0;
-    residual_seconds = 0.0;
-    hess_vec_seconds = 0.0;
-    jacobian_operator_hess_vec_seconds = 0.0;
-    assembled_hess_vec_seconds = 0.0;
-    matrix_free_hess_vec_seconds = 0.0;
-    preconditioner_seconds = 0.0;
-    jacobian_operator_eval_seconds = 0.0;
-    jacobian_assembly_seconds = 0.0;
-    diagonal_assembly_seconds = 0.0;
-    diagonal_invert_seconds = 0.0;
-    preconditioner_update_seconds = 0.0;
-    preconditioner_setup_seconds = 0.0;
-    current_jacobian_operator.reset();
-    assembled_jacobian_from_operator.reset();
-    inverse_diagonal_preconditioner.SetSize(0);
-    use_inverse_diagonal_preconditioner = false;
-
-    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_block_len <= 0, "PcgBlock requires pcg_block_len > 0");
-    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_window <= 0, "PcgBlock requires pcg_window > 0");
-    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_ls_max_backtracks < 0, "PcgBlock requires pcg_ls_max_backtracks >= 0");
-    SLIC_ERROR_ROOT_IF(nonlinear_options.pcg_delta_avg_window <= 0, "PcgBlock requires pcg_delta_avg_window > 0");
-
-    mfem::real_t norm = computeResidual(X, r);
-    initial_norm = norm;
-    if (norm == 0.0) {
-      converged = true;
-      final_iter = 0;
-      final_norm = norm;
-      return;
-    }
-
-    const mfem::real_t norm_goal = std::max(rel_tol * initial_norm, abs_tol);
-
-    if (print_level == 1) {
-      mfem::out << "PcgBlock iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
-    }
-
-    pcg_precond.iterative_mode = false;
-
-    x_trial.SetSize(X.Size());
-    x_trial = 0.0;
-    r_trial.SetSize(X.Size());
-    r_trial = 0.0;
-    scratch.SetSize(X.Size());
-    scratch = 0.0;
-
-    mfem::Vector r_block(X.Size());
-    mfem::Vector r_candidate(X.Size());
-    mfem::Vector force(X.Size());
-    mfem::Vector z(X.Size());
-    mfem::Vector z_old(X.Size());
-    mfem::Vector p(X.Size());
-    mfem::Vector p_old(X.Size());
-    mfem::Vector Hp(X.Size());
-    mfem::Vector step(X.Size());
-    mfem::Vector x_candidate(X.Size());
-
-    bool have_momentum = false;
-    double rho_old = 0.0;
-    double h_scale = nonlinear_options.pcg_h_scale_init;
-    int retries_remaining = nonlinear_options.pcg_max_block_retries;
-    int it = 0;
-    double cumulative_work = 0.0;
-    std::vector<double> work_history{cumulative_work};
-    std::vector<double> accepted_step_norms;
-
-    auto append_bounded = [](std::vector<double>& history, double value, int max_size) {
-      history.push_back(value);
-      const auto bound = static_cast<size_t>(max_size);
-      if (history.size() > bound) {
-        const auto num_to_remove = static_cast<std::vector<double>::difference_type>(history.size() - bound);
-        history.erase(history.begin(), history.begin() + num_to_remove);
-      }
-    };
-
-    auto reset_momentum = [&]() {
-      have_momentum = false;
-      rho_old = 0.0;
-      p_old = 0.0;
-      z_old = 0.0;
-      ++num_momentum_resets;
-    };
-
-    auto window_max = [&](const std::vector<double>& history) {
-      const int window = nonlinear_options.pcg_window;
-      const auto begin = history.size() > static_cast<size_t>(window) ? history.end() - window : history.begin();
-      return *std::max_element(begin, history.end());
-    };
-
-    auto current_delta_ref = [&]() {
-      if (accepted_step_norms.empty()) {
-        return 0.0;
-      }
-      const int window = nonlinear_options.pcg_delta_avg_window;
-      const auto begin = accepted_step_norms.size() > static_cast<size_t>(window) ? accepted_step_norms.end() - window
-                                                                                  : accepted_step_norms.begin();
-      double sum = 0.0;
-      for (auto iter = begin; iter != accepted_step_norms.end(); ++iter) {
-        sum += *iter;
-      }
-      return sum / static_cast<double>(accepted_step_norms.end() - begin);
-    };
-
-    for (; true;) {
-      MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
-      if (print_level >= 2) {
-        mfem::out << "PcgBlock iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
-        if (it > 0) {
-          mfem::out << ", ||r||/||r_0|| = " << std::setw(13) << (initial_norm != 0.0 ? norm / initial_norm : norm);
-        } else {
-          mfem::out << ", norm goal = " << std::setw(13) << norm_goal;
-        }
-        mfem::out << '\n';
-      }
-
-      if (print_level >= 1 && (norm != norm)) {
-        mfem::out << "Initial residual for PCG-block iteration is undefined/nan." << std::endl;
-        mfem::out << "PcgBlock: No convergence!\n";
-        converged = false;
-        break;
-      }
-
-      if (norm <= norm_goal && it >= nonlinear_options.min_iterations) {
-        converged = true;
-        break;
-      } else if (it >= max_iter) {
-        converged = false;
-        break;
-      } else if (retries_remaining <= 0 || h_scale < nonlinear_options.pcg_min_h_scale) {
-        converged = false;
-        break;
-      }
-
-      refreshBlockOperators(X);
-
-      r_block = r;
-      const double norm_block = norm;
-      bool block_finished = false;
-
-      while (!block_finished) {
-        x_trial = X;
-        r = r_block;
-        norm = norm_block;
-
-        double block_predicted = 0.0;
-        double block_actual = 0.0;
-        double block_delta_ref = current_delta_ref();
-        double block_trust_size = h_scale * (block_delta_ref > 0.0 ? block_delta_ref : 1.0);
-        double trial_cumulative_work = cumulative_work;
-        int trial_steps = 0;
-        bool trial_failed = false;
-        bool trial_ended_after_inner_failure = false;
-        std::vector<double> trial_step_norms;
-        auto trial_work_history = work_history;
-
-        for (int block_it = 0; block_it < nonlinear_options.pcg_block_len && it + trial_steps < max_iter; ++block_it) {
-          force = r;
-          force *= -1.0;
-          precond(force, z);
-          ++num_trial_steps;
-
-          const double rho = Dot(force, z);
-          if (!mfem::IsFinite(rho) || rho <= 0.0) {
-            trial_ended_after_inner_failure = trial_steps > 0;
-            trial_failed = trial_steps == 0;
-            break;
-          }
-
-          double beta = 0.0;
-          if (have_momentum) {
-            const double force_dot_z_old = Dot(force, z_old);
-            beta = std::max(0.0, (rho - force_dot_z_old) / rho_old);
-            if (std::abs(force_dot_z_old) > nonlinear_options.pcg_powell_eta * rho) {
-              beta = 0.0;
-              ++num_powell_restarts;
-            }
-          }
-
-          p = z;
-          if (have_momentum && beta != 0.0) {
-            p.Add(beta, p_old);
-          }
-
-          double force_dot_p = Dot(force, p);
-          if (force_dot_p <= nonlinear_options.pcg_eps_descent * rho) {
-            beta = 0.0;
-            p = z;
-            force_dot_p = rho;
-            ++num_descent_restarts;
-          }
-          if (beta == 0.0) {
-            ++num_zero_beta;
-          } else {
-            ++num_nonzero_beta;
-          }
-
-          hessVec(X, p, Hp);
-          const double pHp = Dot(p, Hp);
-
-          double alpha = 0.0;
-          double alpha_quad = std::numeric_limits<double>::quiet_NaN();
-          const bool positive_curvature = pHp > 0.0 && mfem::IsFinite(pHp);
-          if (positive_curvature) {
-            alpha_quad = force_dot_p / pHp;
-            alpha = alpha_quad;
-          } else {
-            ++num_negative_curvature;
-          }
-
-          const double p_norm = Norm(p);
-          double delta_ref = current_delta_ref();
-          if (delta_ref <= 0.0 && alpha > 0.0 && mfem::IsFinite(alpha) && p_norm > 0.0) {
-            delta_ref = alpha * p_norm;
-          } else if (delta_ref <= 0.0) {
-            delta_ref = 1.0;
-          }
-          block_delta_ref = delta_ref;
-          block_trust_size = h_scale * delta_ref;
-
-          const bool apply_trust_cap = !positive_curvature || h_scale < nonlinear_options.pcg_h_scale_init;
-          bool trust_capped = false;
-          if (apply_trust_cap && p_norm > 0.0) {
-            const double alpha_cap = h_scale * delta_ref / p_norm;
-            if (alpha > 0.0 && mfem::IsFinite(alpha)) {
-              if (alpha_cap < alpha) {
-                ++num_trust_capped_steps;
-                trust_capped = true;
-              }
-              alpha = std::min(alpha, alpha_cap);
-            } else {
-              alpha = alpha_cap;
-              trust_capped = true;
-            }
-          }
-
-          if (!(alpha > 0.0) || !mfem::IsFinite(alpha)) {
-            trial_ended_after_inner_failure = trial_steps > 0;
-            trial_failed = trial_steps == 0;
-            break;
-          }
-
-          bool accepted_step = false;
-          double accepted_work = 0.0;
-          double accepted_predicted = 0.0;
-          double accepted_step_norm = 0.0;
-          int accepted_ls_count = 0;
-
-          for (int ls = 0; ls <= nonlinear_options.pcg_ls_max_backtracks; ++ls) {
-            step = p;
-            step *= alpha;
-            add(x_trial, step, x_candidate);
-
-            const double norm_candidate = computeResidual(x_candidate, r_candidate);
-            const double work = -0.5 * Dot(r, step) - 0.5 * Dot(r_candidate, step);
-            const double cumulative_candidate = trial_cumulative_work + work;
-            const double work_ref = window_max(trial_work_history);
-            const bool finite_candidate = mfem::IsFinite(norm_candidate) && mfem::IsFinite(work);
-            const bool sufficient_work =
-                cumulative_candidate >= work_ref - nonlinear_options.pcg_ls_armijo_c * alpha * force_dot_p;
-
-            if (finite_candidate && (sufficient_work || norm_candidate <= norm_goal)) {
-              const double predicted = alpha * force_dot_p - 0.5 * alpha * alpha * pHp;
-              accepted_predicted = std::max(predicted, 0.0);
-              accepted_work = work;
-              accepted_step_norm = Norm(step);
-              accepted_ls_count = ls;
-              norm = norm_candidate;
-              accepted_step = true;
-              break;
-            }
-
-            alpha *= nonlinear_options.pcg_ls_shrink;
-          }
-
-          if (!accepted_step) {
-            trial_ended_after_inner_failure = trial_steps > 0;
-            trial_failed = trial_steps == 0;
-            break;
-          }
-
-          x_trial = x_candidate;
-          r = r_candidate;
-          trial_cumulative_work += accepted_work;
-          append_bounded(trial_work_history, trial_cumulative_work, nonlinear_options.pcg_window);
-          append_bounded(trial_step_norms, accepted_step_norm, nonlinear_options.pcg_delta_avg_window);
-          block_predicted += accepted_predicted;
-          block_actual += accepted_work;
-          num_line_search_backtracks += static_cast<size_t>(accepted_ls_count);
-
-          if (print_level >= 2) {
-            mfem::out << "  PcgBlock step " << std::setw(3) << (it + trial_steps + 1) << " : alpha = " << std::setw(13)
-                      << alpha << ", approx work = " << std::setw(13) << accepted_predicted
-                      << ", achieved work = " << std::setw(13) << accepted_work << ", trust size = " << std::setw(13)
-                      << block_trust_size << ", capped = " << trust_capped << ", ls = " << accepted_ls_count << '\n';
-          }
-
-          p_old = p;
-          z_old = z;
-          rho_old = rho;
-          have_momentum = true;
-          ++trial_steps;
-          ++num_accepted_steps;
-
-          if (norm <= norm_goal && it + trial_steps >= nonlinear_options.min_iterations) {
-            break;
-          }
-        }
-
-        double trust_ratio = 1.0;
-        if (block_predicted > nonlinear_options.pcg_eps_descent) {
-          trust_ratio = block_actual / block_predicted;
-        } else if (block_actual < 0.0) {
-          trust_ratio = -std::numeric_limits<double>::infinity();
-        }
-
-        const bool block_converged = norm <= norm_goal && it + trial_steps >= nonlinear_options.min_iterations;
-        const bool accept_block =
-            trial_steps > 0 && !trial_failed &&
-            (block_converged || (block_actual >= 0.0 && trust_ratio >= nonlinear_options.pcg_trust_eta_bad));
-
-        const double old_h_scale = h_scale;
-        const bool prefix_accept = accept_block && trial_ended_after_inner_failure;
-        bool reset_next_momentum = false;
-        if (accept_block) {
-          if (prefix_accept) {
-            ++num_prefix_accepts;
-          }
-          X = x_trial;
-          cumulative_work = trial_cumulative_work;
-          work_history = std::move(trial_work_history);
-          accepted_step_norms.insert(accepted_step_norms.end(), trial_step_norms.begin(), trial_step_norms.end());
-          if (accepted_step_norms.size() > static_cast<size_t>(nonlinear_options.pcg_delta_avg_window)) {
-            accepted_step_norms.erase(accepted_step_norms.begin(),
-                                      accepted_step_norms.end() - nonlinear_options.pcg_delta_avg_window);
-          }
-          it += trial_steps;
-          ++num_blocks;
-
-          if (trust_ratio < nonlinear_options.pcg_trust_eta_bad) {
-            h_scale = std::max(h_scale * nonlinear_options.pcg_shrink, nonlinear_options.pcg_min_h_scale);
-            reset_momentum();
-            reset_next_momentum = true;
-          } else if (trial_ended_after_inner_failure) {
-            reset_momentum();
-            reset_next_momentum = true;
-          } else if (trust_ratio >= nonlinear_options.pcg_trust_eta_good) {
-            h_scale = std::min(h_scale * nonlinear_options.pcg_growth, nonlinear_options.pcg_h_scale_init);
-          }
-          const double next_trust_size = h_scale * block_delta_ref;
-
-          if (print_level >= 2) {
-            mfem::out << "PcgBlock block accepted: steps = " << std::setw(3) << trial_steps
-                      << ", prefix = " << prefix_accept << ", approx work = " << std::setw(13) << block_predicted
-                      << ", achieved work = " << std::setw(13) << block_actual << ", rho = " << std::setw(13)
-                      << trust_ratio << ", h_scale = " << std::setw(13) << old_h_scale << " -> " << std::setw(13)
-                      << h_scale << ", trust size = " << std::setw(13) << block_trust_size << " -> " << std::setw(13)
-                      << next_trust_size << ", reset momentum = " << reset_next_momentum << '\n';
-          }
-          last_trust_ratio = trust_ratio;
-
-          block_finished = true;
-        } else {
-          r = r_block;
-          norm = norm_block;
-          h_scale *= nonlinear_options.pcg_shrink;
-          reset_momentum();
-          --retries_remaining;
-          ++num_block_rejects;
-          const double next_trust_size = h_scale * block_delta_ref;
-
-          if (print_level >= 2) {
-            mfem::out << "PcgBlock block rejected: steps = " << std::setw(3) << trial_steps
-                      << ", approx work = " << std::setw(13) << block_predicted << ", achieved work = " << std::setw(13)
-                      << block_actual << ", rho = " << std::setw(13) << trust_ratio << ", h_scale = " << std::setw(13)
-                      << old_h_scale << " -> " << std::setw(13) << h_scale << ", trust size = " << std::setw(13)
-                      << block_trust_size << " -> " << std::setw(13) << next_trust_size << ", reset momentum = 1"
-                      << ", retries left = " << retries_remaining << '\n';
-          }
-
-          if (retries_remaining <= 0 || h_scale < nonlinear_options.pcg_min_h_scale) {
-            block_finished = true;
-          } else {
-            refreshBlockOperators(X);
-          }
-        }
-      }
-    }
-
-    final_iter = it;
-    final_norm = norm;
-    final_h_scale = h_scale;
-
-    if (print_level == 1) {
-      mfem::out << "PcgBlock iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm
-                << '\n';
-    }
-    if (!converged && print_level >= 1) {
-      mfem::out << "PcgBlock: No convergence!\n";
-    }
-  }
-};
 
 EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions lin_opts, MPI_Comm comm)
 {
@@ -2512,27 +1553,6 @@ void EquationSolver::setOperator(const mfem::Operator& op)
   }
 }
 
-void EquationSolver::setMatrixFreeTangentAction(MatrixFreeTangentAction tangent_action)
-{
-  auto* pcg_block = dynamic_cast<PcgBlockSolver*>(nonlin_solver_.get());
-  if (pcg_block) {
-    pcg_block->setMatrixFreeTangentAction(std::move(tangent_action));
-  }
-}
-
-void EquationSolver::setJacobianOperator(JacobianOperatorFactory jacobian_operator)
-{
-  auto* pcg_block = dynamic_cast<PcgBlockSolver*>(nonlin_solver_.get());
-  if (pcg_block) {
-    pcg_block->setJacobianOperator(std::move(jacobian_operator));
-    return;
-  }
-  auto* trust_region = dynamic_cast<TrustRegion*>(nonlin_solver_.get());
-  if (trust_region) {
-    trust_region->setJacobianOperator(std::move(jacobian_operator));
-  }
-}
-
 void EquationSolver::solve(mfem::Vector& x) const
 {
   mfem::Vector zero(x);
@@ -2540,15 +1560,6 @@ void EquationSolver::solve(mfem::Vector& x) const
   // KINSOL does not handle non-zero RHS, so we enforce that the RHS
   // of the nonlinear system is zero
   nonlin_solver_->Mult(zero, x);
-}
-
-std::optional<PcgBlockDiagnostics> EquationSolver::pcgBlockDiagnostics() const
-{
-  auto* pcg_block = dynamic_cast<const PcgBlockSolver*>(nonlin_solver_.get());
-  if (!pcg_block) {
-    return std::nullopt;
-  }
-  return pcg_block->diagnostics();
 }
 
 std::optional<TrustRegionDiagnostics> EquationSolver::trustRegionDiagnostics() const
@@ -2671,8 +1682,6 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions 
     nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::TrustRegion) {
     nonlinear_solver = std::make_unique<TrustRegion>(comm, nonlinear_opts, linear_opts, prec);
-  } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::PcgBlock) {
-    nonlinear_solver = std::make_unique<PcgBlockSolver>(comm, nonlinear_opts, prec);
 #ifdef SMITH_USE_PETSC
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::PetscNewton) {
     nonlinear_solver = std::make_unique<mfem_ext::PetscNewtonSolver>(comm, nonlinear_opts);
@@ -2931,7 +1940,7 @@ void EquationSolver::defineInputFileSchema(axom::inlet::Container& container)
   nonlinear_container.addInt("max_iter", "Maximum iterations for the Newton solve.").defaultValue(500);
   nonlinear_container.addInt("print_level", "Nonlinear print level.").defaultValue(0);
   nonlinear_container
-      .addString("solver_type", "Solver type (Newton|NewtonLineSearch|TrustRegion|PcgBlock|KINFullStep|KINLineSearch)")
+      .addString("solver_type", "Solver type (Newton|NewtonLineSearch|TrustRegion|KINFullStep|KINLineSearch)")
       .defaultValue("Newton");
 }
 
@@ -3011,8 +2020,6 @@ smith::NonlinearSolverOptions FromInlet<smith::NonlinearSolverOptions>::operator
     options.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch;
   } else if (solver_type == "TrustRegion") {
     options.nonlin_solver = smith::NonlinearSolver::TrustRegion;
-  } else if (solver_type == "PcgBlock") {
-    options.nonlin_solver = smith::NonlinearSolver::PcgBlock;
   } else if (solver_type == "KINFullStep") {
     options.nonlin_solver = smith::NonlinearSolver::KINFullStep;
   } else if (solver_type == "KINLineSearch") {

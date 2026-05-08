@@ -26,7 +26,6 @@ class HypreParMatrix;
 
 namespace smith {
 
-class JacobianOperator;
 class FiniteElementState;
 class FiniteElementDual;
 
@@ -70,22 +69,6 @@ class WeakForm {
       TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
       const std::vector<double>& field_argument_tangents,
       const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const = 0;
-
-  /** @brief Derivative of the residual with respect to one field argument as a solver-facing JacobianOperator.
-   *
-   * The returned operator represents one derivative column, d{r}/d{fields}_field_argument_index. The first supported
-   * use case is the square solved-field derivative used by PCG-block tangent products and diagonal extraction.
-   *
-   * @param time_info time and timestep information
-   * @param shape_disp smith::FiniteElementState*, change in model coordinates relative to the initially read in mesh
-   * @param fields vector of smith::FiniteElementState*
-   * @param field_argument_index field argument to differentiate with respect to
-   * @param quad_fields vector of ConstQuadratureFieldPtr
-   * @return std::unique_ptr<JacobianOperator> returns d{r}/d{fields}_field_argument_index
-   */
-  virtual std::unique_ptr<JacobianOperator> jacobianOperator(
-      TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-      size_t field_argument_index, const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const = 0;
 
   /**
    * @brief Jacobian-vector product, will overwrite any existing values in jvp_reactions
