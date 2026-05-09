@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
   };
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, TempSpace>> qoi("thermo_mechanical_energy_proxy", mesh,
                                                                                smith::spaces(fetch_qoi_fields()));
-  qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(), [](double, auto /*X*/, auto U, auto Theta) {
+  qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(), [](auto, auto /*X*/, auto U, auto Theta) {
     auto u = smith::get<smith::VALUE>(U);
     auto theta = smith::get<smith::VALUE>(Theta);
     return 0.5 * u[0] * u[0] + 0.05 * theta * theta;

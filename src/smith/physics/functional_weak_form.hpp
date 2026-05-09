@@ -115,14 +115,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     weak_form_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
         [dt, cycle, integrand](double time, auto X, auto... inputs) {
-          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, inputs...);
+          return integrand(TimeInfo(time, *dt, *cycle), X, inputs...);
         },
         mesh_->domain(body_name));
 
     v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
         [dt, cycle, integrand](double time, auto X, auto V, auto... inputs) {
-          auto orig_tuple = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, inputs...);
+          auto orig_tuple = integrand(TimeInfo(time, *dt, *cycle), X, inputs...);
           return smith::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  smith::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
@@ -160,8 +160,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
   {
     addBodyIntegral(depends_on, body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
-      return smith::tuple{-invokeTimeAwareSource(load_function, t_info, get<VALUE>(X), get<VALUE>(inputs)...),
-                          smith::zero{}};
+      return smith::tuple{-load_function(t_info, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
     });
   }
 
@@ -204,14 +203,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     weak_form_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
         [dt, cycle, integrand](double time, auto X, auto... params) {
-          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+          return integrand(TimeInfo(time, *dt, *cycle), X, params...);
         },
         mesh_->domain(boundary_name));
 
     v_dot_weak_form_residual_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
         [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
-          auto orig_surface_flux = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+          auto orig_surface_flux = integrand(TimeInfo(time, *dt, *cycle), X, params...);
           return smith::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
@@ -252,7 +251,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     weak_form_->AddInteriorFaceIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
         [dt, cycle, integrand](double time, auto X, auto... params) {
-          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+          return integrand(TimeInfo(time, *dt, *cycle), X, params...);
         },
         mesh_->domain(interior_name));
 
@@ -260,7 +259,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
         [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
           auto [V1, V2] = V;
-          auto orig_surface_flux = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+          auto orig_surface_flux = integrand(TimeInfo(time, *dt, *cycle), X, params...);
           auto [flux_pos, flux_neg] = orig_surface_flux;
           return smith::inner(V1, flux_pos) + smith::inner(V2, flux_neg);
         },
@@ -302,7 +301,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   {
     addBoundaryIntegral(depends_on, boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
       auto n = cross(get<DERIVATIVE>(X));
-      return -invokeTimeAwareFlux(flux_function, t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
+      return -flux_function(t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
     });
   }
 
@@ -471,48 +470,6 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                                                 std::integer_sequence<int, all_params...>)
   {
     this->template addInteriorBoundaryIntegral<all_params...>(DependsOn<all_params...>{}, interior_name, integrand);
-  }
-
-  template <typename IntegrandType, typename XType, typename... InputTypes>
-  /// @brief Calls integrand with `TimeInfo` when available, else with scalar time.
-  static auto invokeTimeAwareIntegrand(const IntegrandType& integrand, double time, double dt, size_t cycle, XType&& X,
-                                       InputTypes&&... inputs)
-  {
-    if constexpr (requires {
-                    integrand(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
-                  }) {
-      return integrand(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
-    } else {
-      return integrand(time, std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
-    }
-  }
-
-  template <typename LoadFunctionType, typename XType, typename... InputTypes>
-  /// @brief Calls source with `TimeInfo` when available, else with scalar time.
-  static auto invokeTimeAwareSource(const LoadFunctionType& load_function, const TimeInfo& t_info, XType&& X,
-                                    InputTypes&&... inputs)
-  {
-    if constexpr (requires { load_function(t_info, std::forward<XType>(X), std::forward<InputTypes>(inputs)...); }) {
-      return load_function(t_info, std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
-    } else {
-      return load_function(t_info.time(), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
-    }
-  }
-
-  template <typename FluxFunctionType, typename XType, typename NType, typename... InputTypes>
-  /// @brief Calls flux with `TimeInfo` when available, else with scalar time.
-  static auto invokeTimeAwareFlux(const FluxFunctionType& flux_function, const TimeInfo& t_info, XType&& X, NType&& n,
-                                  InputTypes&&... inputs)
-  {
-    if constexpr (requires {
-                    flux_function(t_info, std::forward<XType>(X), std::forward<NType>(n),
-                                  std::forward<InputTypes>(inputs)...);
-                  }) {
-      return flux_function(t_info, std::forward<XType>(X), std::forward<NType>(n), std::forward<InputTypes>(inputs)...);
-    } else {
-      return flux_function(t_info.time(), std::forward<XType>(X), std::forward<NType>(n),
-                           std::forward<InputTypes>(inputs)...);
-    }
   }
 
   /// @brief Helper to validate input spaces recursively (for constructor)
