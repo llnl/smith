@@ -8,6 +8,7 @@ add_subdirectory(functional)
 
 set(numerics_headers
     equation_solver.hpp
+    steihaug_toint_cg.hpp
     odes.hpp
     solver_config.hpp
     stdfunction_operator.hpp
@@ -19,6 +20,7 @@ set(numerics_headers
 
 set(numerics_sources
     equation_solver.cpp
+    steihaug_toint_cg.cpp
     petsc_trust_region_subspace.cpp
     mfem_trust_region_subspace.cpp
     odes.cpp

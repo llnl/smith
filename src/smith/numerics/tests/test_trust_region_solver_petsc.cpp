@@ -153,7 +153,8 @@ TEST_F(MeshFixture, PetscSubspaceSolveHitsTrustRegionBoundary)
   }
 
   double delta = 0.001;
-  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblemPetsc(states, AstatePtrs, b, delta, 1);
+  mfem::Vector workspace(2000);
+  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblemPetsc(states, AstatePtrs, b, delta, 1, workspace);
 
   EXPECT_NEAR(sol.Norml2(), delta, 1e-12);
   EXPECT_FALSE(leftvecs.empty());
@@ -190,10 +191,11 @@ TEST_F(MeshFixture, MfemSubspaceSolveMatchesPetsc)
     AstatePtrs.push_back(&Astates[i]);
   }
 
+  mfem::Vector workspace(2000);
   auto [petsc_sol, petsc_leftvecs, petsc_leftvals, petsc_energy] =
-      smith::solveSubspaceProblemPetsc(states, AstatePtrs, b, 0.001, 2);
+      smith::solveSubspaceProblemPetsc(states, AstatePtrs, b, 0.001, 2, workspace);
   auto [mfem_sol, mfem_leftvecs, mfem_leftvals, mfem_energy] =
-      smith::solveSubspaceProblemMfem(states, AstatePtrs, b, 0.001, 2);
+      smith::solveSubspaceProblemMfem(states, AstatePtrs, b, 0.001, 2, workspace);
 
   expectNearVector(mfem_sol, petsc_sol, 1e-10);
   ASSERT_EQ(mfem_leftvecs.size(), petsc_leftvecs.size());

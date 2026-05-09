@@ -290,7 +290,7 @@ std::vector<const mfem::Vector*> remove_at(const std::vector<const mfem::Vector*
 
 TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem::Vector*>& states,
                                                     const std::vector<const mfem::Vector*>& Astates,
-                                                    const mfem::Vector& b, double delta, int num_leftmost)
+                                                    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace)
 {
   SMITH_MARK_FUNCTION;
   DenseMat sAs1 = dot(states, Astates);
@@ -318,7 +318,7 @@ TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem
     if (R(i, i) < 1e-9 * trace_mag) {
       auto statesNew = remove_at(states, size_t(i));
       auto AstatesNew = remove_at(Astates, size_t(i));
-      return solveSubspaceProblemPetsc(statesNew, AstatesNew, b, delta, num_leftmost);
+      return solveSubspaceProblemPetsc(statesNew, AstatesNew, b, delta, num_leftmost, workspace);
     }
   }
 

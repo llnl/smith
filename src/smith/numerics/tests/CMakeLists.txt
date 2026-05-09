@@ -10,6 +10,7 @@ set(numerics_serial_test_sources
     test_equationsolver.cpp
     test_operator.cpp
     test_odes.cpp
+    test_steihaug_toint_cg.cpp
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
     test_block_preconditioner_custom_operators.cpp

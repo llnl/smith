@@ -55,19 +55,16 @@ double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm
 /// and their eigenvalues, and the predicted model energy change
 TrustRegionSubspaceResult solveSubspaceProblem(
     const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const mfem::Vector& b, double delta, int num_leftmost);
+    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace);
 
 #if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
 TrustRegionSubspaceResult solveSubspaceProblemPetsc(
     const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const mfem::Vector& b, double delta, int num_leftmost);
+    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace);
 #endif
 
 TrustRegionSubspaceResult solveSubspaceProblemMfem(
     const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const mfem::Vector& b, double delta, int num_leftmost);
-
-std::pair<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>> removeDependentDirections(
-    std::vector<const mfem::Vector*> directions, std::vector<const mfem::Vector*> A_directions);
+    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace);
 
 }  // namespace smith

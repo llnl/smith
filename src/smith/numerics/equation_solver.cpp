@@ -5,8 +5,11 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "smith/numerics/equation_solver.hpp"
+#include "smith/numerics/steihaug_toint_cg.hpp"
 
+#include <array>
 #include <cstdlib>
+#include <deque>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -243,102 +246,7 @@ class NewtonSolver : public mfem::NewtonSolver {
   }
 };
 
-/// Internal structure for storing trust region settings
-struct TrustRegionSettings {
-  /// cg tol
-  double cg_tol = 1e-8;
-  /// min cg iters
-  size_t min_cg_iterations = 0;  //
-  /// max cg iters should be around # of system dofs
-  size_t max_cg_iterations = 10000;  //
-  /// max cumulative iterations
-  size_t max_cumulative_iteration = 1;
-  /// minimum trust region size
-  double min_tr_size = 1e-13;
-  /// trust region decrease factor
-  double t1 = 0.25;
-  /// trust region increase factor
-  double t2 = 1.75;
-  /// worse case energy drop ratio.  trust region accepted if energy drop is better than this.
-  double eta1 = 1e-9;
-  /// non-ideal energy drop ratio.  trust region decreases if energy drop is worse than this.
-  double eta2 = 0.1;
-  /// ideal energy drop ratio.  trust region increases if energy drop is better than this.
-  double eta3 = 0.6;
-  /// parameter limiting how fast the energy can drop relative to the prediction (in case the energy surrogate is poor)
-  double eta4 = 4.2;
-};
 
-/// Internal structure for storing trust region stateful data
-struct TrustRegionResults {
-  /// Constructor takes the size of the solution vector
-  TrustRegionResults(int size)
-  {
-    z.SetSize(size);
-    H_z.SetSize(size);
-    d_old.SetSize(size);
-    H_d_old.SetSize(size);
-    H_d_old_at_accept.SetSize(size);
-    d.SetSize(size);
-    H_d.SetSize(size);
-    Pr.SetSize(size);
-    cauchy_point.SetSize(size);
-    H_cauchy_point.SetSize(size);
-    z = 0.0;
-    H_z = 0.0;
-    d_old = 0.0;
-    H_d_old = 0.0;
-    H_d_old_at_accept = 0.0;
-    d = 0.0;
-    H_d = 0.0;
-    Pr = 0.0;
-    cauchy_point = 0.0;
-    H_cauchy_point = 0.0;
-  }
-
-  /// resets trust region results for a new outer iteration
-  void reset()
-  {
-    z = 0.0;
-    cauchy_point = 0.0;
-  }
-
-  /// enumerates the possible final status of the trust region steps
-  enum class Status
-  {
-    Interior,
-    NegativeCurvature,
-    OnBoundary,
-    NonDescentDirection
-  };
-
-  /// step direction
-  mfem::Vector z;
-  /// action of hessian on current step z
-  mfem::Vector H_z;
-  /// old step direction
-  mfem::Vector d_old;
-  /// action of hessian on previous step z_old
-  mfem::Vector H_d_old;
-  /// action of previous accepted hessian on previous step z_old
-  mfem::Vector H_d_old_at_accept;
-  /// true after at least one accepted line-search step has populated d_old
-  bool has_d_old = false;
-  /// incrementalCG direction
-  mfem::Vector d;
-  /// action of hessian on direction d
-  mfem::Vector H_d;
-  /// preconditioned residual
-  mfem::Vector Pr;
-  /// cauchy point
-  mfem::Vector cauchy_point;
-  /// action of hessian on direction of cauchy point
-  mfem::Vector H_cauchy_point;
-  /// specifies if step is interior, exterior, negative curvature, etc.
-  Status interior_status = Status::Interior;
-  /// iteration counter
-  size_t cg_iterations_count = 0;
-};
 
 /// trust region printing utility function
 void printTrustRegionInfo(double realWork, double modelObjective, size_t cgIters, double trSize, bool willAccept)
@@ -357,7 +265,7 @@ void printTrustRegionInfo(double realWork, double modelObjective, size_t cgIters
  * rely on an incremental work approximation: 0.5 (f^n + f^{n+1}) dot (u^{n+1} - u^n).  While less theoretically sound,
  * it appears to be very effective in practice.
  */
-class TrustRegion : public mfem::NewtonSolver {
+class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
  protected:
   /// predicted solution
   mutable mfem::Vector x_pred;
@@ -372,11 +280,14 @@ class TrustRegion : public mfem::NewtonSolver {
   /// previous accepted-iteration Hessian actions on the retained left most eigenvectors
   mutable std::vector<std::shared_ptr<mfem::Vector>> previous_H_left_mosts;
   /// accepted TrustRegion steps, newest first
-  mutable std::vector<std::shared_ptr<mfem::Vector>> accepted_step_history;
+  mutable std::deque<std::shared_ptr<mfem::Vector>> accepted_step_history;
   /// initial state for this nonlinear solve, used as an optional history direction
   mutable mfem::Vector solve_start_x;
   mutable mfem::Vector min_residual_x;
   mutable double min_residual_norm = -1.0;
+  
+  /// Workspace vector for exact subspace solver to avoid small allocations
+  mutable mfem::Vector exact_solver_workspace;
 
   /// nonlinear solution options
   NonlinearSolverOptions nonlinear_options;
@@ -400,87 +311,72 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 #endif
 
-  /// Pair of dot products with one local vector pass and one MPI reduction when possible.
-  std::pair<double, double> dot2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
-                                 const mfem::Vector& b1) const
+  template <typename... Args>
+  std::array<double, sizeof...(Args) / 2> dot_many(const Args&... args) const
   {
+    static_assert(sizeof...(Args) % 2 == 0, "dot_many requires an even number of arguments");
+    constexpr size_t num_pairs = sizeof...(Args) / 2;
+    std::array<double, num_pairs> products;
+    products.fill(0.0);
+
     if (dot_oper) {
-      return {Dot(a0, b0), Dot(a1, b1)};
+      auto tuple_args = std::tie(args...);
+      auto do_dots = [&]<std::size_t... I>(std::index_sequence<I...>) {
+        ((products[I] = Dot(std::get<2 * I>(tuple_args), std::get<2 * I + 1>(tuple_args))), ...);
+      };
+      do_dots(std::make_index_sequence<num_pairs>{});
+      return products;
     }
 
-    MFEM_ASSERT(a0.Size() == b0.Size(), "Incompatible vector sizes.");
-    MFEM_ASSERT(a1.Size() == b1.Size(), "Incompatible vector sizes.");
+    auto tuple_args = std::tie(args...);
+    std::array<int, num_pairs> sizes;
+    std::array<const double*, num_pairs> ptr_a;
+    std::array<const double*, num_pairs> ptr_b;
+    
+    auto populate_arrays = [&]<std::size_t... I>(std::index_sequence<I...>) {
+      ((
+        sizes[I] = std::get<2 * I>(tuple_args).Size(),
+        [&](){ MFEM_ASSERT(sizes[I] == std::get<2 * I + 1>(tuple_args).Size(), "Incompatible vector sizes."); }(),
+        ptr_a[I] = std::get<2 * I>(tuple_args).GetData(),
+        ptr_b[I] = std::get<2 * I + 1>(tuple_args).GetData()
+      ), ...);
+    };
+    populate_arrays(std::make_index_sequence<num_pairs>{});
 
-    mfem::real_t products[2] = {0.0, 0.0};
-    if (a0.Size() == a1.Size()) {
-      for (int i = 0; i < a0.Size(); ++i) {
-        products[0] += a0[i] * b0[i];
-        products[1] += a1[i] * b1[i];
+    bool all_same_size = true;
+    for (size_t i = 1; i < num_pairs; ++i) {
+      if (sizes[i] != sizes[0]) {
+        all_same_size = false;
+        break;
+      }
+    }
+
+    if (all_same_size && num_pairs > 0) {
+      for (int j = 0; j < sizes[0]; ++j) {
+        for (size_t i = 0; i < num_pairs; ++i) {
+          products[i] += ptr_a[i][j] * ptr_b[i][j];
+        }
       }
     } else {
-      for (int i = 0; i < a0.Size(); ++i) {
-        products[0] += a0[i] * b0[i];
-      }
-      for (int i = 0; i < a1.Size(); ++i) {
-        products[1] += a1[i] * b1[i];
+      for (size_t i = 0; i < num_pairs; ++i) {
+        for (int j = 0; j < sizes[i]; ++j) {
+          products[i] += ptr_a[i][j] * ptr_b[i][j];
+        }
       }
     }
 
 #ifdef MFEM_USE_MPI
     const MPI_Comm dot_comm = GetComm();
     if (dot_comm != MPI_COMM_NULL) {
-      mfem::real_t global_products[2] = {0.0, 0.0};
-      MPI_Allreduce(products, global_products, 2, MFEM_MPI_REAL_T, MPI_SUM, dot_comm);
-      products[0] = global_products[0];
-      products[1] = global_products[1];
-    }
-#endif
-
-    return {products[0], products[1]};
-  }
-
-  struct Dot4Result {
-    double v0 = 0.0;
-    double v1 = 0.0;
-    double v2 = 0.0;
-    double v3 = 0.0;
-  };
-
-  /// Four-dot batch with one local vector pass and one MPI reduction when possible.
-  Dot4Result dot4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1, const mfem::Vector& b1,
-                  const mfem::Vector& a2, const mfem::Vector& b2, const mfem::Vector& a3, const mfem::Vector& b3) const
-  {
-    if (dot_oper) {
-      return {.v0 = Dot(a0, b0), .v1 = Dot(a1, b1), .v2 = Dot(a2, b2), .v3 = Dot(a3, b3)};
-    }
-
-    MFEM_ASSERT(a0.Size() == b0.Size(), "Incompatible vector sizes.");
-    MFEM_ASSERT(a1.Size() == b1.Size(), "Incompatible vector sizes.");
-    MFEM_ASSERT(a2.Size() == b2.Size(), "Incompatible vector sizes.");
-    MFEM_ASSERT(a3.Size() == b3.Size(), "Incompatible vector sizes.");
-    MFEM_ASSERT(a0.Size() == a1.Size() && a0.Size() == a2.Size() && a0.Size() == a3.Size(),
-                "timedDot4 currently requires equal vector sizes.");
-
-    mfem::real_t products[4] = {0.0, 0.0, 0.0, 0.0};
-    for (int i = 0; i < a0.Size(); ++i) {
-      products[0] += a0[i] * b0[i];
-      products[1] += a1[i] * b1[i];
-      products[2] += a2[i] * b2[i];
-      products[3] += a3[i] * b3[i];
-    }
-
-#ifdef MFEM_USE_MPI
-    const MPI_Comm dot_comm = GetComm();
-    if (dot_comm != MPI_COMM_NULL) {
-      mfem::real_t global_products[4] = {0.0, 0.0, 0.0, 0.0};
-      MPI_Allreduce(products, global_products, 4, MFEM_MPI_REAL_T, MPI_SUM, dot_comm);
-      for (int i = 0; i < 4; ++i) {
+      std::array<mfem::real_t, num_pairs> global_products;
+      MPI_Allreduce(products.data(), global_products.data(), num_pairs, MFEM_MPI_REAL_T, MPI_SUM, dot_comm);
+      for (size_t i = 0; i < num_pairs; ++i) {
         products[i] = global_products[i];
       }
     }
 #endif
 
-    return {.v0 = products[0], .v1 = products[1], .v2 = products[2], .v3 = products[3]};
+    return products;
   }
 
   template <typename HessVecFunc>
@@ -504,20 +400,32 @@ class TrustRegion : public mfem::NewtonSolver {
       return;
     }
 
-    accepted_step_history.insert(accepted_step_history.begin(), std::make_shared<mfem::Vector>(step));
+    accepted_step_history.push_front(std::make_shared<mfem::Vector>(step));
     const size_t max_size = static_cast<size_t>(nonlinear_options.trust_num_past_steps) + 1;
     while (accepted_step_history.size() > max_size) {
       accepted_step_history.pop_back();
     }
   }
 
-  /// finds tau s.t. (z + tau*d)^2 = trSize^2
-  void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
-                                  double dd) const
+  std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0,
+                                   const mfem::Vector& a1, const mfem::Vector& b1,
+                                   const mfem::Vector& a2, const mfem::Vector& b2,
+                                   const mfem::Vector& a3, const mfem::Vector& b3) const override
   {
-    // find z + tau d
+    return dot_many(a0, b0, a1, b1, a2, b2, a3, b3);
+  }
+
+  std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0,
+                                   const mfem::Vector& a1, const mfem::Vector& b1) const override
+  {
+    return dot_many(a0, b0, a1, b1);
+  }
+
+  void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
+                                  double dd) const override
+  {
     double deltadelta_m_zz = delta * delta - zz;
-    if (deltadelta_m_zz == 0) return;  // already on boundary
+    if (deltadelta_m_zz == 0) return;
     double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
     z.Add(tau, d);
   }
@@ -557,8 +465,11 @@ class TrustRegion : public mfem::NewtonSolver {
     double energy_change;
 
     try {
+      if (exact_solver_workspace.Size() < 2000) {
+        exact_solver_workspace.SetSize(2000);
+      }
       std::tie(sol, leftvecs, leftvals, energy_change) =
-          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
+          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost, exact_solver_workspace);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
         mfem::out << "subspace solve failed with " << e.what() << std::endl;
@@ -600,7 +511,7 @@ class TrustRegion : public mfem::NewtonSolver {
   void doglegStep(const mfem::Vector& cp, const mfem::Vector& newtonP, double trSize, mfem::Vector& s) const
   {
     SMITH_MARK_FUNCTION;
-    auto [cc, nn] = dot2(cp, cp, newtonP, newtonP);
+    auto [cc, nn] = dot_many(cp, cp, newtonP, newtonP);
     double tt = trSize * trSize;
 
     s = 0.0;
@@ -633,104 +544,11 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 
   /// Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
-  template <typename HessVecFunc, typename PrecondFunc>
-  void solveTrustRegionModelProblem(const mfem::Vector& r0, mfem::Vector& rCurrent, HessVecFunc hess_vec_func,
-                                    PrecondFunc precond, const TrustRegionSettings& settings, double& trSize,
-                                    TrustRegionResults& results, double r0_norm_squared) const
+  void solveModelProblem(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H,
+                         const mfem::Solver* P, const TrustRegionSettings& settings, double& trSize,
+                         TrustRegionResults& results, double r0_norm_squared) const
   {
-    SMITH_MARK_FUNCTION;
-    // minimize r0@z + 0.5*z@J@z
-    results.interior_status = TrustRegionResults::Status::Interior;
-    results.cg_iterations_count = 0;
-
-    auto& z = results.z;
-    auto& cgIter = results.cg_iterations_count;
-    auto& d = results.d;
-    auto& Pr = results.Pr;
-    auto& Hd = results.H_d;
-
-    const double cg_tol_squared = settings.cg_tol * settings.cg_tol;
-
-    if (r0_norm_squared <= cg_tol_squared && settings.min_cg_iterations == 0) {
-      if (print_level >= 2) {
-        mfem::out << "Trust region solution state within tolerance on first iteration."
-                  << "\n";
-      }
-      return;
-    }
-
-    rCurrent = r0;
-    precond(rCurrent, Pr);
-
-    // d = -Pr
-    d = Pr;
-    d *= -1.0;
-
-    z = 0.0;
-    double zz = 0.;
-    double rPr = Dot(rCurrent, Pr);
-
-    // std::cout << "initial energy = " << computeEnergy(r0, hess_vec_func, z) << std::endl;
-
-    for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
-      hess_vec_func(d, Hd);
-      const auto dots = dot4(d, rCurrent, d, Hd, z, d, d, d);
-      double descent_check = dots.v0;
-      double curvature = dots.v1;
-      double zd = dots.v2;
-      double dd = dots.v3;
-      if (descent_check > 0) {
-        d *= -1;
-        Hd *= -1;
-        results.interior_status = TrustRegionResults::Status::NonDescentDirection;
-        descent_check *= -1.0;
-        curvature *= -1.0;
-        zd *= -1.0;
-      }
-
-      const double alphaCg = curvature != 0.0 ? rPr / curvature : 0.0;
-      const double zzNp1 = zz + 2.0 * alphaCg * zd + alphaCg * alphaCg * dd;
-
-      const bool go_to_boundary = curvature <= 0 || zzNp1 >= trSize * trSize;
-      if (go_to_boundary) {
-        projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
-        if (curvature <= 0) {
-          results.interior_status = TrustRegionResults::Status::NegativeCurvature;
-        } else {
-          results.interior_status = TrustRegionResults::Status::OnBoundary;
-        }
-        return;
-      }
-
-      auto& zPred = Pr;  // re-use Pr memory.
-                         // This predicted step will no longer be used by the time Pr is, so we can avoid an extra
-                         // vector floating around
-      add(z, alphaCg, d, zPred);
-
-      z = zPred;
-
-      if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
-        if (print_level >= 2) {
-          mfem::out << "Found a non descent direction\n";
-        }
-        return;
-      }
-
-      add(rCurrent, alphaCg, Hd, rCurrent);
-
-      precond(rCurrent, Pr);
-      auto [rPrNp1, r_current_norm_squared] = dot2(rCurrent, Pr, rCurrent, rCurrent);
-      if (r_current_norm_squared <= cg_tol_squared && cgIter >= settings.min_cg_iterations) {
-        return;
-      }
-
-      double beta = rPrNp1 / rPr;
-      rPr = rPrNp1;
-      add(-1.0, Pr, beta, d, d);
-
-      zz = zzNp1;
-    }
-    cgIter--;  // if all cg iterations are taken, correct for output
+    steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, *this);
   }
 
   std::unique_ptr<mfem::Operator> cloneAssembledOperator(const mfem::Operator& op) const
@@ -781,7 +599,7 @@ class TrustRegion : public mfem::NewtonSolver {
   };
 
   /// @overload
-  void Mult(const mfem::Vector&, mfem::Vector& X) const
+  void Mult(const mfem::Vector&, mfem::Vector& X) const override
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
@@ -875,7 +693,6 @@ class TrustRegion : public mfem::NewtonSolver {
       }
 
       auto hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { hessVec(x_, v_); };
-      auto precond_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { precond(x_, v_); };
 
       double cauchyPointNormSquared = tr_size * tr_size;
       trResults.reset();
@@ -910,7 +727,7 @@ class TrustRegion : public mfem::NewtonSolver {
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
         settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
-        solveTrustRegionModelProblem(r, scratch, hess_vec_func, precond_func, settings, tr_size, trResults,
+        solveModelProblem(r, scratch, *this->oper, &this->tr_precond, settings, tr_size, trResults,
                                      norm * norm);
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
@@ -1027,7 +844,7 @@ class TrustRegion : public mfem::NewtonSolver {
         static constexpr double roundOffTol = 0.0;  // 1e-14;
 
         hess_vec_func(trResults.d, trResults.H_d);
-        const auto [dHd, rd] = dot2(trResults.d, trResults.H_d, r, trResults.d);
+        const auto [dHd, rd] = dot_many(trResults.d, trResults.H_d, r, trResults.d);
         double modelObjective = rd + 0.5 * dHd - roundOffTol;
 
         add(X, trResults.d, x_pred);

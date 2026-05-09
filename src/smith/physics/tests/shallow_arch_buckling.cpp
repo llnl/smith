@@ -47,8 +47,7 @@ NonlinearSolver selectedNonlinearSolver()
     return NonlinearSolver::TrustRegion;
   }
 
-  throw std::runtime_error("Unknown --solver value '" + solver_name +
-                           "'. Use NewtonLineSearch or TrustRegion.");
+  throw std::runtime_error("Unknown --solver value '" + solver_name + "'. Use NewtonLineSearch or TrustRegion.");
 }
 
 void parseCommandLine(int& argc, char** argv)
@@ -121,7 +120,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
                                             .preconditioner = Preconditioner::HypreJacobi,
                                             .relative_tol = 1.0e-8,
                                             .absolute_tol = 1.0e-14,
-                                            .max_iterations = 10000,
+                                            .max_iterations = 100000,
                                             .print_level = 0};
 
   smith::NonlinearSolverOptions nonlinear_options{
@@ -165,8 +164,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   if (rank == 0) {
     mfem::out << "Compressed thin beam snap-through run: solver = " << solver_name
               << ", trust_subspace_option = " << trust_subspace_option
-              << ", trust_num_leftmost = " << trust_num_leftmost
-              << ", trust_num_past_steps = " << trust_num_past_steps << '\n';
+              << ", trust_num_leftmost = " << trust_num_leftmost << ", trust_num_past_steps = " << trust_num_past_steps
+              << '\n';
   }
 
   constexpr int num_steps = 5;
@@ -177,7 +176,6 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     }
     solid.outputStateToDisk("shallow_arch_buckling");
   }
-
 }
 
 }  // namespace smith
