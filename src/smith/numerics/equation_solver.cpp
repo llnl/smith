@@ -25,6 +25,26 @@
 
 namespace smith {
 
+namespace {
+
+#ifdef MFEM_USE_MPI
+size_t rootOnlyPrintLevel(size_t level, MPI_Comm comm)
+{
+  if (level > 0 && comm != MPI_COMM_NULL) {
+    int rank = 0;
+    MPI_Comm_rank(comm, &rank);
+    if (rank != 0) {
+      return 0;
+    }
+  }
+  return level;
+}
+#else
+size_t rootOnlyPrintLevel(size_t level) { return level; }
+#endif
+
+}  // namespace
+
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
  protected:
@@ -97,6 +117,12 @@ class NewtonSolver : public mfem::NewtonSolver {
     print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
     print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
     print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
+    print_level = rootOnlyPrintLevel(print_level
+#ifdef MFEM_USE_MPI
+                                     ,
+                                     GetComm()
+#endif
+    );
 
     using real_t = mfem::real_t;
 
@@ -553,9 +579,15 @@ class TrustRegion : public mfem::NewtonSolver {
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_level >= 2) {
-      double leftval = leftvals.size() ? leftvals[0] : 1.0;
-      mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
-                << energy_change << ".  Min eig: " << leftval << std::endl;
+      int rank = 0;
+#ifdef MFEM_USE_MPI
+      MPI_Comm_rank(GetComm(), &rank);
+#endif
+      if (rank == 0) {
+        double leftval = leftvals.size() ? leftvals[0] : 1.0;
+        mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
+                  << energy_change << ".  Min eig: " << leftval << std::endl;
+      }
     }
 
     if (subspace_energy < base_energy) {
@@ -767,6 +799,12 @@ class TrustRegion : public mfem::NewtonSolver {
     print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
     print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
     print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
+    print_level = rootOnlyPrintLevel(print_level
+#ifdef MFEM_USE_MPI
+                                     ,
+                                     GetComm()
+#endif
+    );
 
     using real_t = mfem::real_t;
 
