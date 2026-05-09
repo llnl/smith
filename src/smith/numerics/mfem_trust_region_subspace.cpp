@@ -14,10 +14,6 @@
 
 namespace smith {
 
-namespace {
-
-}  // namespace
-
 int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm)
 {
   int local_size = parallel_v.Size();
@@ -153,8 +149,8 @@ struct SubspaceProjections {
   mfem::Vector sb;
 };
 
-SubspaceProjections denseSubspaceProjections(const std::vector<const mfem::Vector*>& states,
-                                             const std::vector<const mfem::Vector*>& Astates, const mfem::Vector& b)
+void checkProjectionInputs(const std::vector<const mfem::Vector*>& states,
+                           const std::vector<const mfem::Vector*>& Astates, const mfem::Vector& b)
 {
   MFEM_VERIFY(states.size() == Astates.size(),
               "Search directions and their linear operator result must have same number of columns");
@@ -167,7 +163,13 @@ SubspaceProjections denseSubspaceProjections(const std::vector<const mfem::Vecto
     MFEM_VERIFY(Astates[size_t(j)]->Size() == vector_size, "Subspace Hessian-vector sizes differ.");
   }
   MFEM_VERIFY(b.Size() == vector_size, "Subspace right-hand-side size differs.");
+}
 
+SubspaceProjections globalSubspaceProjectionFromLocalInnerProducts(const std::vector<const mfem::Vector*>& states,
+                                                                   const std::vector<const mfem::Vector*>& Astates,
+                                                                   const mfem::Vector& b)
+{
+  const int n = static_cast<int>(states.size());
   const int triangular_size = n * (n + 1) / 2;
   const auto triangular_index = [n](int i, int j) {
     return i * n - (i * (i - 1)) / 2 + (j - i);
@@ -176,37 +178,42 @@ SubspaceProjections denseSubspaceProjections(const std::vector<const mfem::Vecto
   const int ss_offset = triangular_size;
   const int sb_offset = 2 * triangular_size;
   const int buffer_size = 2 * triangular_size + n;
-  std::vector<mfem::real_t> local(size_t(buffer_size), 0.0);
-  std::vector<mfem::real_t> global(size_t(buffer_size), 0.0);
+  std::vector<mfem::real_t> local_projection_entries(size_t(buffer_size), 0.0);
+  std::vector<mfem::real_t> global_projection_entries(size_t(buffer_size), 0.0);
 
-  for (int k = 0; k < vector_size; ++k) {
-    const double b_k = b[k];
-    for (int i = 0; i < n; ++i) {
-      const double s_i = (*states[size_t(i)])[k];
-      local[size_t(sb_offset + i)] += s_i * b_k;
-      for (int j = i; j < n; ++j) {
-        const size_t ij = size_t(triangular_index(i, j));
-        local[size_t(sAs_offset) + ij] += s_i * (*Astates[size_t(j)])[k];
-        local[size_t(ss_offset) + ij] += s_i * (*states[size_t(j)])[k];
-      }
+  for (int i = 0; i < n; ++i) {
+    local_projection_entries[size_t(sb_offset + i)] = mfem::InnerProduct(*states[size_t(i)], b);
+    for (int j = i; j < n; ++j) {
+      const size_t ij = size_t(triangular_index(i, j));
+      local_projection_entries[size_t(sAs_offset) + ij] =
+          mfem::InnerProduct(*states[size_t(i)], *Astates[size_t(j)]);
+      local_projection_entries[size_t(ss_offset) + ij] = mfem::InnerProduct(*states[size_t(i)], *states[size_t(j)]);
     }
   }
 
-  MPI_Allreduce(local.data(), global.data(), buffer_size, MFEM_MPI_REAL_T, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(local_projection_entries.data(), global_projection_entries.data(), buffer_size, MFEM_MPI_REAL_T,
+                MPI_SUM, MPI_COMM_WORLD);
 
   SubspaceProjections projections{mfem::DenseMatrix(n), mfem::DenseMatrix(n), mfem::Vector(n)};
   for (int i = 0; i < n; ++i) {
-    projections.sb[i] = global[size_t(sb_offset + i)];
+    projections.sb[i] = global_projection_entries[size_t(sb_offset + i)];
     for (int j = i; j < n; ++j) {
       const size_t ij = size_t(triangular_index(i, j));
-      projections.sAs(i, j) = global[size_t(sAs_offset) + ij];
+      projections.sAs(i, j) = global_projection_entries[size_t(sAs_offset) + ij];
       projections.sAs(j, i) = projections.sAs(i, j);
-      projections.ss(i, j) = global[size_t(ss_offset) + ij];
+      projections.ss(i, j) = global_projection_entries[size_t(ss_offset) + ij];
       projections.ss(j, i) = projections.ss(i, j);
     }
   }
 
   return projections;
+}
+
+SubspaceProjections projectSubspaceGlobally(const std::vector<const mfem::Vector*>& states,
+                                            const std::vector<const mfem::Vector*>& Astates, const mfem::Vector& b)
+{
+  checkProjectionInputs(states, Astates, b);
+  return globalSubspaceProjectionFromLocalInnerProducts(states, Astates, b);
 }
 
 mfem::Vector solveDense(const mfem::DenseMatrix& A, const mfem::Vector& b)
@@ -421,7 +428,7 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
                                                    const mfem::Vector& b, double delta, int num_leftmost)
 {
   SMITH_MARK_FUNCTION;
-  SubspaceProjections projections = denseSubspaceProjections(states, Astates, b);
+  SubspaceProjections projections = projectSubspaceGlobally(states, Astates, b);
   mfem::DenseMatrix& sAs = projections.sAs;
   symmetrize(sAs);
 

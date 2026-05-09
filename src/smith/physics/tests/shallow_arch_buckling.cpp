@@ -177,6 +177,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     }
     solid.outputStateToDisk("shallow_arch_buckling");
   }
+
 }
 
 }  // namespace smith
