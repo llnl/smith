@@ -46,7 +46,6 @@ struct TrustRegionResults {
     H_z.SetSize(size);
     d_old.SetSize(size);
     H_d_old.SetSize(size);
-    H_d_old_at_accept.SetSize(size);
     d.SetSize(size);
     H_d.SetSize(size);
     Pr.SetSize(size);
@@ -56,7 +55,6 @@ struct TrustRegionResults {
     H_z = 0.0;
     d_old = 0.0;
     H_d_old = 0.0;
-    H_d_old_at_accept = 0.0;
     d = 0.0;
     H_d = 0.0;
     Pr = 0.0;
@@ -88,8 +86,6 @@ struct TrustRegionResults {
   mfem::Vector d_old;
   /// action of hessian on previous step z_old
   mfem::Vector H_d_old;
-  /// action of previous accepted hessian on previous step z_old
-  mfem::Vector H_d_old_at_accept;
   /// true after at least one accepted line-search step has populated d_old
   bool has_d_old = false;
   /// incrementalCG direction

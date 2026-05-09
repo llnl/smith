@@ -79,9 +79,8 @@ TEST(TrustRegionSubspaceMfem, SolveHitsTrustRegionBoundary)
   const auto astates = applyDiagonalOperator(fixture.diag, states);
   const auto astate_ptrs = toPointers(astates);
 
-  mfem::Vector workspace(2000);
   auto [sol, leftvecs, leftvals, energy] =
-      smith::solveSubspaceProblemMfem(states, astate_ptrs, fixture.b, test_delta, 1, workspace);
+      smith::solveSubspaceProblemMfem(states, astate_ptrs, fixture.b, test_delta, 1);
 
   EXPECT_NEAR(sol.Norml2(), test_delta, 1.0e-12);
   EXPECT_FALSE(leftvecs.empty());
@@ -97,11 +96,10 @@ TEST(TrustRegionSubspaceMfem, GenericSolveUsesMfemBackend)
   const auto astates = applyDiagonalOperator(fixture.diag, states);
   const auto astate_ptrs = toPointers(astates);
 
-  mfem::Vector workspace(2000);
   auto [generic_sol, generic_leftvecs, generic_leftvals, generic_energy] =
-      smith::solveSubspaceProblem(states, astate_ptrs, fixture.b, test_delta, 2, workspace);
+      smith::solveSubspaceProblem(states, astate_ptrs, fixture.b, test_delta, 2);
   auto [mfem_sol, mfem_leftvecs, mfem_leftvals, mfem_energy] =
-      smith::solveSubspaceProblemMfem(states, astate_ptrs, fixture.b, test_delta, 2, workspace);
+      smith::solveSubspaceProblemMfem(states, astate_ptrs, fixture.b, test_delta, 2);
 
   expectNearVector(generic_sol, mfem_sol, 1.0e-12);
   ASSERT_EQ(generic_leftvecs.size(), mfem_leftvecs.size());
@@ -141,8 +139,7 @@ TEST(TrustRegionSubspaceMfem, SolveHandlesZeroDirection)
   const auto astates = applyDiagonalOperator(diag, states);
   const auto astate_ptrs = toPointers(astates);
 
-  mfem::Vector workspace(2000);
-  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblemMfem(states, astate_ptrs, b, 0.25, 1, workspace);
+  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblemMfem(states, astate_ptrs, b, 0.25, 1);
 
   EXPECT_LE(sol.Norml2(), 0.25 + 1.0e-12);
   EXPECT_FALSE(leftvecs.empty());

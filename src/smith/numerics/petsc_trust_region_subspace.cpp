@@ -141,7 +141,7 @@ auto qr(const std::vector<const mfem::Vector*>& states)
   MatCreateSeqDense(PETSC_COMM_SELF, num_cols, num_cols, NULL, &R);
   auto error = BVOrthogonalize(Q, R);
 
-  if (error) throw PetscException("BVOrthogonalize failed.");
+  if (error) throw TrustRegionException("BVOrthogonalize failed.");
 
   return std::make_pair(Q, DenseMat(R));
 }
@@ -290,21 +290,20 @@ std::vector<const mfem::Vector*> remove_at(const std::vector<const mfem::Vector*
 
 TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem::Vector*>& states,
                                                     const std::vector<const mfem::Vector*>& Astates,
-                                                    const mfem::Vector& b, double delta, int num_leftmost,
-                                                    mfem::Vector& workspace)
+                                                    const mfem::Vector& b, double delta, int num_leftmost)
 {
   SMITH_MARK_FUNCTION;
   DenseMat sAs1 = dot(states, Astates);
   DenseMat sAs = sym(sAs1);
 
   if (sAs.hasNan()) {
-    throw PetscException("States in subspace solve contain NaNs.");
+    throw TrustRegionException("States in subspace solve contain NaNs.");
   }
 
   auto [Q_parallel, R] = qr(states);
 
   if (R.hasNan()) {
-    throw PetscException("R from qr returning with a NaN.");
+    throw TrustRegionException("R from qr returning with a NaN.");
   }
 
   auto [rows, cols] = R.size();
@@ -319,7 +318,7 @@ TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem
     if (R(i, i) < 1e-9 * trace_mag) {
       auto statesNew = remove_at(states, size_t(i));
       auto AstatesNew = remove_at(Astates, size_t(i));
-      return solveSubspaceProblemPetsc(statesNew, AstatesNew, b, delta, num_leftmost, workspace);
+      return solveSubspaceProblemPetsc(statesNew, AstatesNew, b, delta, num_leftmost);
     }
   }
 

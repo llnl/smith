@@ -14,6 +14,7 @@
 
 #include "smith/smith_config.hpp"
 
+#include <exception>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -24,10 +25,10 @@
 
 namespace smith {
 
-class PetscException : public std::exception {
+class TrustRegionException : public std::exception {
  public:
   /// constructor
-  PetscException(const std::string& message) : msg(message) {}
+  TrustRegionException(const std::string& message) : msg(message) {}
 
   /// what is message
   const char* what() const noexcept override { return msg.c_str(); }
@@ -35,12 +36,6 @@ class PetscException : public std::exception {
  private:
   /// message string
   std::string msg;
-};
-
-enum class TrustRegionSubspaceBackend
-{
-  Petsc,
-  Mfem
 };
 
 using TrustRegionSubspaceResult =
@@ -56,19 +51,16 @@ double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm
 /// and their eigenvalues, and the predicted model energy change
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
-                                               const mfem::Vector& b, double delta, int num_leftmost,
-                                               mfem::Vector& workspace);
+                                               const mfem::Vector& b, double delta, int num_leftmost);
 
 #if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
 TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem::Vector*>& directions,
                                                     const std::vector<const mfem::Vector*>& A_directions,
-                                                    const mfem::Vector& b, double delta, int num_leftmost,
-                                                    mfem::Vector& workspace);
+                                                    const mfem::Vector& b, double delta, int num_leftmost);
 #endif
 
 TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& directions,
                                                    const std::vector<const mfem::Vector*>& A_directions,
-                                                   const mfem::Vector& b, double delta, int num_leftmost,
-                                                   mfem::Vector& workspace);
+                                                   const mfem::Vector& b, double delta, int num_leftmost);
 
 }  // namespace smith

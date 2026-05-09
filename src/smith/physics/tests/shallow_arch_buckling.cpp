@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <format>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -14,6 +15,7 @@
 #include "mfem.hpp"
 
 #include "smith/infrastructure/application_manager.hpp"
+#include "smith/infrastructure/logger.hpp"
 #include "smith/numerics/functional/domain.hpp"
 #include "smith/numerics/functional/tensor.hpp"
 #include "smith/numerics/solver_config.hpp"
@@ -86,13 +88,11 @@ void parseCommandLine(int& argc, char** argv)
 TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 {
   MPI_Barrier(MPI_COMM_WORLD);
-  int rank = 0;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
   constexpr int p = 1;
   constexpr int dim = 2;
-  constexpr int nx = 150;
-  constexpr int ny = 6;
+  constexpr int nx = 120;
+  constexpr int ny = 5;
 
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, "shallow_arch_buckling");
@@ -161,19 +161,15 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   solid.completeSetup();
   solid.outputStateToDisk("shallow_arch_buckling");
 
-  if (rank == 0) {
-    mfem::out << "Compressed thin beam snap-through run: solver = " << solver_name
-              << ", trust_subspace_option = " << trust_subspace_option
-              << ", trust_num_leftmost = " << trust_num_leftmost << ", trust_num_past_steps = " << trust_num_past_steps
-              << '\n';
-  }
+  SLIC_INFO_ROOT(
+      std::format("Compressed thin beam snap-through run: solver = {}, trust_subspace_option = {}, "
+                  "trust_num_leftmost = {}, trust_num_past_steps = {}",
+                  solver_name, trust_subspace_option, trust_num_leftmost, trust_num_past_steps));
 
   constexpr int num_steps = 5;
   for (int step = 0; step < num_steps; ++step) {
     solid.advanceTimestep(1.0 / num_steps);
-    if (rank == 0) {
-      mfem::out << "Load step " << step + 1 << "/" << num_steps << '\n';
-    }
+    SLIC_INFO_ROOT(std::format("Load step {}/{}", step + 1, num_steps));
     solid.outputStateToDisk("shallow_arch_buckling");
   }
 }

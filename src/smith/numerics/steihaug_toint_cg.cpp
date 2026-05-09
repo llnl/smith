@@ -13,8 +13,6 @@ namespace {
 void smith_add(const mfem::Vector& a, double b, const mfem::Vector& c, mfem::Vector& out)
 {
   if (out.GetData() == c.GetData()) {
-    // We expect out and c are often the same vector memory (zPred = Pr, z += alpha * d)
-    // Wait, add(a, b, c, out) means out = a + b*c
     out = a;
     out.Add(b, c);
   } else {

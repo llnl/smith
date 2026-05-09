@@ -275,17 +275,12 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
   mutable std::vector<std::shared_ptr<mfem::Vector>> left_mosts;
   /// the action of the stiffness/hessian (H) on the left most eigenvectors
   mutable std::vector<std::shared_ptr<mfem::Vector>> H_left_mosts;
-  /// previous accepted-iteration Hessian actions on the retained left most eigenvectors
-  mutable std::vector<std::shared_ptr<mfem::Vector>> previous_H_left_mosts;
   /// accepted TrustRegion steps, newest first
   mutable std::deque<std::shared_ptr<mfem::Vector>> accepted_step_history;
   /// initial state for this nonlinear solve, used as an optional history direction
   mutable mfem::Vector solve_start_x;
   mutable mfem::Vector min_residual_x;
   mutable double min_residual_norm = -1.0;
-
-  /// Workspace vector for exact subspace solver to avoid small allocations
-  mutable mfem::Vector exact_solver_workspace;
 
   /// nonlinear solution options
   NonlinearSolverOptions nonlinear_options;
@@ -461,11 +456,8 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     double energy_change;
 
     try {
-      if (exact_solver_workspace.Size() < 2000) {
-        exact_solver_workspace.SetSize(2000);
-      }
       std::tie(sol, leftvecs, leftvals, energy_change) =
-          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost, exact_solver_workspace);
+          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
         mfem::out << "subspace solve failed with " << e.what() << std::endl;
@@ -547,20 +539,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, *this);
   }
 
-  std::unique_ptr<mfem::Operator> cloneAssembledOperator(const mfem::Operator& op) const
-  {
-    if (const auto* hypre_matrix = dynamic_cast<const mfem::HypreParMatrix*>(&op)) {
-      return std::make_unique<mfem::HypreParMatrix>(*hypre_matrix);
-    }
-    if (const auto* sparse_matrix = dynamic_cast<const mfem::SparseMatrix*>(&op)) {
-      return std::make_unique<mfem::SparseMatrix>(*sparse_matrix);
-    }
-    if (const auto* block_operator = dynamic_cast<const mfem::BlockOperator*>(&op)) {
-      return buildMonolithicMatrix(*block_operator);
-    }
-    return nullptr;
-  }
-
   /// assemble the jacobian
   void assembleJacobian(const mfem::Vector& x) const
   {
@@ -615,7 +593,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     solve_start_x = X;
     min_residual_x.SetSize(X.Size());
     min_residual_x = X;
-    previous_H_left_mosts.clear();
 
     real_t norm, norm_goal = 0.0;
     norm = initial_norm = computeResidual(X, r);
@@ -723,7 +700,7 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
         settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
-        solveModelProblem(r, scratch, *this->oper, &this->tr_precond, settings, tr_size, trResults, norm * norm);
+        solveModelProblem(r, scratch, *grad, &this->tr_precond, settings, tr_size, trResults, norm * norm);
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
 
@@ -761,7 +738,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
 
           if (!have_computed_H_left_mosts) {
             have_computed_H_left_mosts = true;
-            previous_H_left_mosts = H_left_mosts;
             H_left_mosts.clear();
             std::vector<const mfem::Vector*> leftmost_inputs;
             std::vector<mfem::Vector*> leftmost_outputs;
@@ -827,7 +803,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
               H_min_residual_direction.SetSize(X.Size());
               std::vector<const mfem::Vector*> min_res_inputs{&min_residual_direction};
               std::vector<mfem::Vector*> min_res_outputs{&H_min_residual_direction};
-              // Reusing solve_start counters for now
               batchedSubspaceHessVec(hess_vec_func, min_res_inputs, min_res_outputs);
               ds.push_back(&min_residual_direction);
               H_ds.push_back(&H_min_residual_direction);
@@ -861,7 +836,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
 
         if (normPred <= norm_goal) {
           trResults.d_old = trResults.d;
-          trResults.H_d_old_at_accept = trResults.H_d;
           trResults.has_d_old = true;
           pushAcceptedStepHistory(trResults.d);
           if (!candidate_left_mosts.empty()) {
@@ -918,7 +892,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
 
         if (willAccept) {
           trResults.d_old = trResults.d;
-          trResults.H_d_old_at_accept = trResults.H_d;
           trResults.has_d_old = true;
           pushAcceptedStepHistory(trResults.d);
           if (!candidate_left_mosts.empty()) {

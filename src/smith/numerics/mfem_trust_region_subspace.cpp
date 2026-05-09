@@ -31,10 +31,9 @@ double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm
 
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
-                                               const mfem::Vector& b, double delta, int num_leftmost,
-                                               mfem::Vector& workspace)
+                                               const mfem::Vector& b, double delta, int num_leftmost)
 {
-  return solveSubspaceProblemMfem(directions, A_directions, b, delta, num_leftmost, workspace);
+  return solveSubspaceProblemMfem(directions, A_directions, b, delta, num_leftmost);
 }
 
 namespace {
@@ -211,16 +210,17 @@ mfem::DenseMatrix columnsToMatrix(const std::vector<mfem::Vector>& cols)
  *         - A boolean indicating success.
  */
 std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> exactTrustRegionSolve(
-    mfem::DenseMatrix A, const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace)
+    mfem::DenseMatrix A, const mfem::Vector& b, double delta, int num_leftmost)
 {
   if (A.Height() != A.Width()) {
-    throw PetscException("Exact trust region solver requires square matrices");
+    throw TrustRegionException("Exact trust region solver requires square matrices");
   }
   if (A.Height() != b.Size()) {
-    throw PetscException(
+    throw TrustRegionException(
         "The right hand size for exact trust region solve must be consistent with the input matrix size");
   }
 
+  mfem::Vector workspace(b.Size() * b.Size() + 8 * b.Size());
   int offset = 0;
   auto alloc_vector = [&](int size) {
     mfem::Vector v(workspace.GetData() + offset, size);
@@ -387,8 +387,7 @@ mfem::Vector combineDirections(const std::vector<const mfem::Vector*>& states, c
 
 TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& states,
                                                    const std::vector<const mfem::Vector*>& Astates,
-                                                   const mfem::Vector& b, double delta, int num_leftmost,
-                                                   mfem::Vector& workspace)
+                                                   const mfem::Vector& b, double delta, int num_leftmost)
 {
   SMITH_MARK_FUNCTION;
   SubspaceProjections projections = projectSubspaceGlobally(states, Astates, b);
@@ -398,7 +397,7 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
   for (int i = 0; i < sAs.Height(); ++i) {
     for (int j = 0; j < sAs.Width(); ++j) {
       if (std::isnan(sAs(i, j))) {
-        throw PetscException("States in subspace solve contain NaNs.");
+        throw TrustRegionException("States in subspace solve contain NaNs.");
       }
     }
   }
@@ -414,7 +413,7 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
     return std::make_tuple(sol, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
   }
   if (T.Width() == 0) {
-    throw PetscException("No independent directions in MFEM subspace solve.");
+    throw TrustRegionException("No independent directions in MFEM subspace solve.");
   }
   mfem::DenseMatrix pAp = tripleProduct(T, sAs, T);
   symmetrize(pAp);
@@ -422,7 +421,7 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
   const mfem::Vector& sb = projections.sb;
   const mfem::Vector pb = projectWithTranspose(T, sb);
 
-  auto [reduced_x, leftvecs, leftvals, success] = exactTrustRegionSolve(pAp, pb, delta, num_leftmost, workspace);
+  auto [reduced_x, leftvecs, leftvals, success] = exactTrustRegionSolve(pAp, pb, delta, num_leftmost);
   (void)success;
   const double energy = quadraticEnergy(pAp, pb, reduced_x);
 
@@ -447,7 +446,7 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
 #if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
   return solveSubspaceProblemPetsc(directions, A_directions, b, delta, num_leftmost);
 #else
-  throw PetscException("MFEM trust-region subspace solve requires MFEM LAPACK support.");
+  throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
   return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
 #endif
 }
@@ -456,7 +455,7 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
                                                    const std::vector<const mfem::Vector*>&, const mfem::Vector& b,
                                                    double, int)
 {
-  throw PetscException("MFEM trust-region subspace solve requires MFEM LAPACK support.");
+  throw TrustRegionException("MFEM trust-region subspace solve requires MFEM LAPACK support.");
   return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
 }
 
