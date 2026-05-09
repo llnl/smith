@@ -343,9 +343,9 @@ struct TrustRegionResults {
 /// trust region printing utility function
 void printTrustRegionInfo(double realWork, double modelObjective, size_t cgIters, double trSize, bool willAccept)
 {
-  mfem::out << "real work = " << std::setw(13) << realWork << ", model energy = " << std::setw(13)
-            << modelObjective << ", cg iter = " << std::setw(7) << cgIters << ", next tr size = " << std::setw(8)
-            << trSize << ", accepting = " << willAccept << std::endl;
+  mfem::out << "real work = " << std::setw(13) << realWork << ", model energy = " << std::setw(13) << modelObjective
+            << ", cg iter = " << std::setw(7) << cgIters << ", next tr size = " << std::setw(8) << trSize
+            << ", accepting = " << willAccept << std::endl;
 }
 
 /**
@@ -448,14 +448,10 @@ class TrustRegion : public mfem::NewtonSolver {
 
   /// Four-dot batch with one local vector pass and one MPI reduction when possible.
   Dot4Result dot4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1, const mfem::Vector& b1,
-                  const mfem::Vector& a2, const mfem::Vector& b2, const mfem::Vector& a3,
-                  const mfem::Vector& b3) const
+                  const mfem::Vector& a2, const mfem::Vector& b2, const mfem::Vector& a3, const mfem::Vector& b3) const
   {
     if (dot_oper) {
-      return {.v0 = Dot(a0, b0),
-              .v1 = Dot(a1, b1),
-              .v2 = Dot(a2, b2),
-              .v3 = Dot(a3, b3)};
+      return {.v0 = Dot(a0, b0), .v1 = Dot(a1, b1), .v2 = Dot(a2, b2), .v3 = Dot(a3, b3)};
     }
 
     MFEM_ASSERT(a0.Size() == b0.Size(), "Incompatible vector sizes.");
@@ -579,15 +575,9 @@ class TrustRegion : public mfem::NewtonSolver {
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_level >= 2) {
-      int rank = 0;
-#ifdef MFEM_USE_MPI
-      MPI_Comm_rank(GetComm(), &rank);
-#endif
-      if (rank == 0) {
-        double leftval = leftvals.size() ? leftvals[0] : 1.0;
-        mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
-                  << energy_change << ".  Min eig: " << leftval << std::endl;
-      }
+      double leftval = leftvals.size() ? leftvals[0] : 1.0;
+      mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
+                << energy_change << ".  Min eig: " << leftval << std::endl;
     }
 
     if (subspace_energy < base_energy) {
@@ -616,18 +606,18 @@ class TrustRegion : public mfem::NewtonSolver {
     s = 0.0;
     if (cc >= tt) {
       add(s, std::sqrt(tt / cc), cp, s);
-      } else if (cc > nn) {
+    } else if (cc > nn) {
       if (print_level >= 2) {
         mfem::out << "cp outside newton, preconditioner likely inaccurate\n";
       }
       add(s, 1.0, cp, s);
-      } else if (nn > tt) {  // on the dogleg (we have nn >= cc, and tt >= cc)
+    } else if (nn > tt) {  // on the dogleg (we have nn >= cc, and tt >= cc)
       add(s, 1.0, cp, s);
-        double cn = Dot(cp, newtonP);
+      double cn = Dot(cp, newtonP);
       projectToBoundaryBetweenWithCoefs(s, newtonP, trSize, cc, cn, nn);
     } else {
       s = newtonP;
-      }
+    }
   }
 
   /// compute the energy of the linearized system for a given solution vector z
@@ -692,7 +682,7 @@ class TrustRegion : public mfem::NewtonSolver {
       if (descent_check > 0) {
         d *= -1;
         Hd *= -1;
-            results.interior_status = TrustRegionResults::Status::NonDescentDirection;
+        results.interior_status = TrustRegionResults::Status::NonDescentDirection;
         descent_check *= -1.0;
         curvature *= -1.0;
         zd *= -1.0;
@@ -715,10 +705,10 @@ class TrustRegion : public mfem::NewtonSolver {
       auto& zPred = Pr;  // re-use Pr memory.
                          // This predicted step will no longer be used by the time Pr is, so we can avoid an extra
                          // vector floating around
-        add(z, alphaCg, d, zPred);
-  
+      add(z, alphaCg, d, zPred);
+
       z = zPred;
-  
+
       if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
         if (print_level >= 2) {
           mfem::out << "Found a non descent direction\n";
@@ -727,10 +717,9 @@ class TrustRegion : public mfem::NewtonSolver {
       }
 
       add(rCurrent, alphaCg, Hd, rCurrent);
-  
+
       precond(rCurrent, Pr);
-      auto [rPrNp1, r_current_norm_squared] =
-          dot2(rCurrent, Pr, rCurrent, rCurrent);
+      auto [rPrNp1, r_current_norm_squared] = dot2(rCurrent, Pr, rCurrent, rCurrent);
       if (r_current_norm_squared <= cg_tol_squared && cgIter >= settings.min_cg_iterations) {
         return;
       }
@@ -738,7 +727,7 @@ class TrustRegion : public mfem::NewtonSolver {
       double beta = rPrNp1 / rPr;
       rPr = rPrNp1;
       add(-1.0, Pr, beta, d, d);
-  
+
       zz = zzNp1;
     }
     cgIter--;  // if all cg iterations are taken, correct for output
@@ -846,8 +835,7 @@ class TrustRegion : public mfem::NewtonSolver {
     int num_leftmost = nonlinear_options.num_leftmost;
 
     scratch = 1.0;
-    double tr_size = nonlinear_options.trust_region_scaling *
-                     std::sqrt(Dot(scratch, scratch));
+    double tr_size = nonlinear_options.trust_region_scaling * std::sqrt(Dot(scratch, scratch));
     size_t cumulative_cg_iters_from_last_precond_update = 0;
 
     int it = 0;
@@ -898,13 +886,12 @@ class TrustRegion : public mfem::NewtonSolver {
         const double residual_norm_squared = norm * norm;
         if (gKg > 0) {
           const double alphaCp = -residual_norm_squared / gKg;
-                add(trResults.cauchy_point, alphaCp, r, trResults.cauchy_point);
-                cauchyPointNormSquared =
-              Dot(trResults.cauchy_point, trResults.cauchy_point);
+          add(trResults.cauchy_point, alphaCp, r, trResults.cauchy_point);
+          cauchyPointNormSquared = Dot(trResults.cauchy_point, trResults.cauchy_point);
         } else {
           const double alphaTr = -tr_size / norm;
-                add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
-                if (print_level >= 2) {
+          add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
+          if (print_level >= 2) {
             mfem::out << "Negative curvature un-preconditioned cauchy point direction found."
                       << "\n";
           }
@@ -938,10 +925,7 @@ class TrustRegion : public mfem::NewtonSolver {
 
         doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
         const bool check_subspace_boundary = subspace_option >= 1;
-        const double d_norm =
-            check_subspace_boundary
-                ? std::sqrt(Dot(trResults.d, trResults.d))
-                : 0.0;
+        const double d_norm = check_subspace_boundary ? std::sqrt(Dot(trResults.d, trResults.d)) : 0.0;
         bool use_with_option1 =
             (subspace_option >= 1) && (trResults.interior_status == TrustRegionResults::Status::NonDescentDirection ||
                                        trResults.interior_status == TrustRegionResults::Status::NegativeCurvature ||
@@ -1046,8 +1030,8 @@ class TrustRegion : public mfem::NewtonSolver {
         const auto [dHd, rd] = dot2(trResults.d, trResults.H_d, r, trResults.d);
         double modelObjective = rd + 0.5 * dHd - roundOffTol;
 
-            add(X, trResults.d, x_pred);
-    
+        add(X, trResults.d, x_pred);
+
         double realObjective = std::numeric_limits<double>::max();
         double normPred = std::numeric_limits<double>::max();
         try {
@@ -1056,9 +1040,7 @@ class TrustRegion : public mfem::NewtonSolver {
             min_residual_norm = normPred;
             min_residual_x = x_pred;
           }
-          double obj1 =
-              0.5 * (rd + Dot(r_pred, trResults.d)) -
-              roundOffTol;
+          double obj1 = 0.5 * (rd + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();
@@ -1075,7 +1057,7 @@ class TrustRegion : public mfem::NewtonSolver {
           }
           X = x_pred;
           r = r_pred;
-                norm = normPred;
+          norm = normPred;
           if (print_level >= 2) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
             trResults.cg_iterations_count =
@@ -1132,7 +1114,7 @@ class TrustRegion : public mfem::NewtonSolver {
           }
           X = x_pred;
           r = r_pred;
-                norm = normPred;
+          norm = normPred;
           break;
         }
       }
@@ -1150,7 +1132,6 @@ class TrustRegion : public mfem::NewtonSolver {
     }
   }
 };
-
 
 EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions lin_opts, MPI_Comm comm)
 {
