@@ -6,7 +6,6 @@
 
 #include "smith/numerics/equation_solver.hpp"
 
-#include <chrono>
 #include <cstdlib>
 #include <functional>
 #include <iomanip>
@@ -25,17 +24,6 @@
 #include "smith/infrastructure/logger.hpp"
 
 namespace smith {
-
-namespace {
-
-using Clock = std::chrono::steady_clock;
-
-double secondsSince(Clock::time_point start)
-{
-  return std::chrono::duration_cast<std::chrono::duration<double>>(Clock::now() - start).count();
-}
-
-}  // namespace
 
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
@@ -377,114 +365,6 @@ class TrustRegion : public mfem::NewtonSolver {
   mutable size_t print_level = 0;
 
  public:
-  /// internal counter for hess-vecs
-  mutable size_t num_hess_vecs = 0;
-  /// internal counter for model CG hess-vecs
-  mutable size_t num_model_hess_vecs = 0;
-  /// internal counter for Cauchy-point hess-vecs
-  mutable size_t num_cauchy_hess_vecs = 0;
-  /// internal counter for line-search hess-vecs
-  mutable size_t num_line_search_hess_vecs = 0;
-  /// internal counter for preconditions
-  mutable size_t num_preconds = 0;
-  /// internal counter for residuals
-  mutable size_t num_residuals = 0;
-  /// internal counter for subspace solves
-  mutable size_t num_subspace_solves = 0;
-  /// internal counter for retained-leftmost Hessian-vector products used by subspace solves
-  mutable size_t num_subspace_leftmost_hess_vecs = 0;
-  /// internal counter for batched Hessian-vector groups used by subspace solves
-  mutable size_t num_subspace_hess_vec_batches = 0;
-  /// internal counter for Hessian-vector products inside subspace batches
-  mutable size_t num_subspace_batched_hess_vecs = 0;
-  /// internal counter for accepted-step history vectors added to subspace solves
-  mutable size_t num_subspace_past_step_vectors = 0;
-  /// internal counter for accepted-step history Hessian-vector products
-  mutable size_t num_subspace_past_step_hess_vecs = 0;
-  /// internal counter for nonlinear-solve-start directions added to subspace solves
-  mutable size_t num_subspace_solve_start_vectors = 0;
-  /// internal counter for nonlinear-solve-start Hessian-vector products
-  mutable size_t num_subspace_solve_start_hess_vecs = 0;
-  /// internal counter for quadratic subspace backend solves
-  mutable size_t num_quadratic_subspace_solves = 0;
-  /// internal counter for matrix assembles
-  mutable size_t num_jacobian_assembles = 0;
-  /// internal counter for model CG iterations
-  mutable size_t num_cg_iterations = 0;
-  /// internal counter for preconditioner operator updates
-  mutable size_t num_preconditioner_updates = 0;
-  /// time spent evaluating residuals
-  mutable double residual_seconds = 0.0;
-  /// time spent applying Hessian-vector products
-  mutable double hess_vec_seconds = 0.0;
-  /// time spent applying model CG Hessian-vector products
-  mutable double model_hess_vec_seconds = 0.0;
-  /// time spent applying Cauchy-point Hessian-vector products
-  mutable double cauchy_hess_vec_seconds = 0.0;
-  /// time spent applying line-search Hessian-vector products
-  mutable double line_search_hess_vec_seconds = 0.0;
-  /// time spent applying preconditioners
-  mutable double preconditioner_seconds = 0.0;
-  /// total time spent in the nonlinear solve
-  mutable double total_seconds = 0.0;
-  /// time spent solving trust-region model problems
-  mutable double model_solve_seconds = 0.0;
-  /// total time spent in trust-region subspace solves
-  mutable double subspace_seconds = 0.0;
-  /// time spent building retained leftmost subspace directions
-  mutable double subspace_leftmost_seconds = 0.0;
-  /// time spent in subspace Hessian-vector batches
-  mutable double subspace_hess_vec_batch_seconds = 0.0;
-  /// time spent removing dependent directions for subspace solves
-  mutable double subspace_filter_seconds = 0.0;
-  /// time spent in dense subspace backend assembly/solve work
-  mutable double subspace_backend_seconds = 0.0;
-  /// time spent in subspace postprocessing and model-energy comparison
-  mutable double subspace_finalize_seconds = 0.0;
-  /// time spent building the Cauchy point
-  mutable double cauchy_point_seconds = 0.0;
-  /// time spent constructing dogleg steps
-  mutable double dogleg_seconds = 0.0;
-  /// time spent in line-search and trust-radius acceptance logic
-  mutable double line_search_seconds = 0.0;
-  /// time spent in dot products
-  mutable double dot_seconds = 0.0;
-  /// number of dot products
-  mutable size_t num_dot_products = 0;
-  /// number of dot product batches/reductions
-  mutable size_t num_dot_reductions = 0;
-  /// number of dot products in trust-region model solves
-  mutable size_t num_model_dot_products = 0;
-  /// number of dot products in Cauchy-point construction
-  mutable size_t num_cauchy_dot_products = 0;
-  /// number of dot products in dogleg construction
-  mutable size_t num_dogleg_dot_products = 0;
-  /// number of dot products in line-search and acceptance logic
-  mutable size_t num_line_search_dot_products = 0;
-  /// number of setup dot products outside the main per-step kernels
-  mutable size_t num_setup_dot_products = 0;
-  /// time spent in trust-region model-solve dot products
-  mutable double model_dot_seconds = 0.0;
-  /// time spent in Cauchy-point dot products
-  mutable double cauchy_dot_seconds = 0.0;
-  /// time spent in dogleg dot products
-  mutable double dogleg_dot_seconds = 0.0;
-  /// time spent in line-search dot products
-  mutable double line_search_dot_seconds = 0.0;
-  /// time spent in setup dot products
-  mutable double setup_dot_seconds = 0.0;
-  /// time spent in vector add/update operations
-  mutable double vector_update_seconds = 0.0;
-  /// time spent in vector copies and scaling operations
-  mutable double vector_copy_scale_seconds = 0.0;
-  /// time spent in boundary projection operations
-  mutable double projection_seconds = 0.0;
-  /// time spent assembling Jacobians
-  mutable double jacobian_assembly_seconds = 0.0;
-  /// time spent refreshing preconditioners
-  mutable double preconditioner_update_seconds = 0.0;
-  /// time spent in preconditioner SetOperator calls
-  mutable double preconditioner_setup_seconds = 0.0;
 #ifdef MFEM_USE_MPI
   /// constructor
   TrustRegion(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts,
@@ -494,32 +374,17 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 #endif
 
-  /// Timed dot product with global and grouped accounting.
-  double timedDot(const mfem::Vector& a, const mfem::Vector& b, size_t& group_count, double& group_seconds) const
-  {
-    auto start = Clock::now();
-    const double value = Dot(a, b);
-    const double seconds = secondsSince(start);
-    ++num_dot_products;
-    ++num_dot_reductions;
-    ++group_count;
-    dot_seconds += seconds;
-    group_seconds += seconds;
-    return value;
-  }
-
-  /// Timed pair of dot products with one local vector pass and one MPI reduction when possible.
-  std::pair<double, double> timedDot2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
-                                      const mfem::Vector& b1, size_t& group_count, double& group_seconds) const
+  /// Pair of dot products with one local vector pass and one MPI reduction when possible.
+  std::pair<double, double> dot2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
+                                 const mfem::Vector& b1) const
   {
     if (dot_oper) {
-      return {timedDot(a0, b0, group_count, group_seconds), timedDot(a1, b1, group_count, group_seconds)};
+      return {Dot(a0, b0), Dot(a1, b1)};
     }
 
     MFEM_ASSERT(a0.Size() == b0.Size(), "Incompatible vector sizes.");
     MFEM_ASSERT(a1.Size() == b1.Size(), "Incompatible vector sizes.");
 
-    auto start = Clock::now();
     mfem::real_t products[2] = {0.0, 0.0};
     if (a0.Size() == a1.Size()) {
       for (int i = 0; i < a0.Size(); ++i) {
@@ -545,12 +410,6 @@ class TrustRegion : public mfem::NewtonSolver {
     }
 #endif
 
-    const double seconds = secondsSince(start);
-    num_dot_products += 2;
-    ++num_dot_reductions;
-    group_count += 2;
-    dot_seconds += seconds;
-    group_seconds += seconds;
     return {products[0], products[1]};
   }
 
@@ -561,16 +420,16 @@ class TrustRegion : public mfem::NewtonSolver {
     double v3 = 0.0;
   };
 
-  /// Timed four-dot batch with one local vector pass and one MPI reduction when possible.
-  Dot4Result timedDot4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1, const mfem::Vector& b1,
-                       const mfem::Vector& a2, const mfem::Vector& b2, const mfem::Vector& a3,
-                       const mfem::Vector& b3, size_t& group_count, double& group_seconds) const
+  /// Four-dot batch with one local vector pass and one MPI reduction when possible.
+  Dot4Result dot4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1, const mfem::Vector& b1,
+                  const mfem::Vector& a2, const mfem::Vector& b2, const mfem::Vector& a3,
+                  const mfem::Vector& b3) const
   {
     if (dot_oper) {
-      return {.v0 = timedDot(a0, b0, group_count, group_seconds),
-              .v1 = timedDot(a1, b1, group_count, group_seconds),
-              .v2 = timedDot(a2, b2, group_count, group_seconds),
-              .v3 = timedDot(a3, b3, group_count, group_seconds)};
+      return {.v0 = Dot(a0, b0),
+              .v1 = Dot(a1, b1),
+              .v2 = Dot(a2, b2),
+              .v3 = Dot(a3, b3)};
     }
 
     MFEM_ASSERT(a0.Size() == b0.Size(), "Incompatible vector sizes.");
@@ -580,7 +439,6 @@ class TrustRegion : public mfem::NewtonSolver {
     MFEM_ASSERT(a0.Size() == a1.Size() && a0.Size() == a2.Size() && a0.Size() == a3.Size(),
                 "timedDot4 currently requires equal vector sizes.");
 
-    auto start = Clock::now();
     mfem::real_t products[4] = {0.0, 0.0, 0.0, 0.0};
     for (int i = 0; i < a0.Size(); ++i) {
       products[0] += a0[i] * b0[i];
@@ -600,12 +458,6 @@ class TrustRegion : public mfem::NewtonSolver {
     }
 #endif
 
-    const double seconds = secondsSince(start);
-    num_dot_products += 4;
-    ++num_dot_reductions;
-    group_count += 4;
-    dot_seconds += seconds;
-    group_seconds += seconds;
     return {.v0 = products[0], .v1 = products[1], .v2 = products[2], .v3 = products[3]};
   }
 
@@ -618,40 +470,9 @@ class TrustRegion : public mfem::NewtonSolver {
       return;
     }
 
-    auto start = Clock::now();
-    ++num_subspace_hess_vec_batches;
-    num_subspace_batched_hess_vecs += inputs.size();
     for (size_t i = 0; i < inputs.size(); ++i) {
       hess_vec_func(*inputs[i], *outputs[i]);
     }
-    subspace_hess_vec_batch_seconds += secondsSince(start);
-  }
-
-  template <typename HessVecFunc>
-  void timedModelHessVec(HessVecFunc hess_vec_func, const mfem::Vector& input, mfem::Vector& output) const
-  {
-    auto start = Clock::now();
-    hess_vec_func(input, output);
-    model_hess_vec_seconds += secondsSince(start);
-    ++num_model_hess_vecs;
-  }
-
-  template <typename HessVecFunc>
-  void timedCauchyHessVec(HessVecFunc hess_vec_func, const mfem::Vector& input, mfem::Vector& output) const
-  {
-    auto start = Clock::now();
-    hess_vec_func(input, output);
-    cauchy_hess_vec_seconds += secondsSince(start);
-    ++num_cauchy_hess_vecs;
-  }
-
-  template <typename HessVecFunc>
-  void timedLineSearchHessVec(HessVecFunc hess_vec_func, const mfem::Vector& input, mfem::Vector& output) const
-  {
-    auto start = Clock::now();
-    hess_vec_func(input, output);
-    line_search_hess_vec_seconds += secondsSince(start);
-    ++num_line_search_hess_vecs;
   }
 
   void pushAcceptedStepHistory(const mfem::Vector& step) const
@@ -672,13 +493,11 @@ class TrustRegion : public mfem::NewtonSolver {
   void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
                                   double dd) const
   {
-    auto start = Clock::now();
     // find z + tau d
     double deltadelta_m_zz = delta * delta - zz;
     if (deltadelta_m_zz == 0) return;  // already on boundary
     double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
     z.Add(tau, d);
-    projection_seconds += secondsSince(start);
   }
 
   /// solve the exact trust-region subspace problem with directions ds, and the leftmosts
@@ -691,9 +510,6 @@ class TrustRegion : public mfem::NewtonSolver {
                                [[maybe_unused]] std::vector<std::shared_ptr<mfem::Vector>>& candidate_left_mosts) const
   {
     SMITH_MARK_FUNCTION;
-    auto subspace_start = Clock::now();
-    ++num_subspace_solves;
-
     std::vector<const mfem::Vector*> directions;
     for (auto& d : ds) {
       directions.emplace_back(d);
@@ -719,20 +535,15 @@ class TrustRegion : public mfem::NewtonSolver {
     double energy_change;
 
     try {
-      auto backend_start = Clock::now();
-      ++num_quadratic_subspace_solves;
       std::tie(sol, leftvecs, leftvals, energy_change) =
           solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
-      subspace_backend_seconds += secondsSince(backend_start);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
         mfem::out << "subspace solve failed with " << e.what() << std::endl;
       }
-      subspace_seconds += secondsSince(subspace_start);
       return;
     }
 
-    auto finalize_start = Clock::now();
     candidate_left_mosts.clear();
     for (auto& lv : leftvecs) {
       candidate_left_mosts.emplace_back(std::move(lv));
@@ -750,55 +561,41 @@ class TrustRegion : public mfem::NewtonSolver {
     if (subspace_energy < base_energy) {
       z = sol;
     }
-    subspace_finalize_seconds += secondsSince(finalize_start);
-    subspace_seconds += secondsSince(subspace_start);
   }
 
   /// finds tau s.t. (z + tau*(y-z))^2 = trSize^2
   void projectToBoundaryBetweenWithCoefs(mfem::Vector& z, const mfem::Vector& y, double trSize, double zz, double zy,
                                          double yy) const
   {
-    auto start = Clock::now();
     double dd = yy - 2 * zy + zz;
     double zd = zy - zz;
     double tau = (std::sqrt((trSize * trSize - zz) * dd + zd * zd) - zd) / dd;
     z.Add(-tau, z);
     z.Add(tau, y);
-    projection_seconds += secondsSince(start);
   }
 
   /// take a dogleg step in direction s, solution norm must be within trSize
   void doglegStep(const mfem::Vector& cp, const mfem::Vector& newtonP, double trSize, mfem::Vector& s) const
   {
     SMITH_MARK_FUNCTION;
-    auto [cc, nn] = timedDot2(cp, cp, newtonP, newtonP, num_dogleg_dot_products, dogleg_dot_seconds);
+    auto [cc, nn] = dot2(cp, cp, newtonP, newtonP);
     double tt = trSize * trSize;
 
-    auto update_start = Clock::now();
     s = 0.0;
-    vector_copy_scale_seconds += secondsSince(update_start);
     if (cc >= tt) {
-      update_start = Clock::now();
       add(s, std::sqrt(tt / cc), cp, s);
-      vector_update_seconds += secondsSince(update_start);
-    } else if (cc > nn) {
+      } else if (cc > nn) {
       if (print_level >= 2) {
         mfem::out << "cp outside newton, preconditioner likely inaccurate\n";
       }
-      update_start = Clock::now();
       add(s, 1.0, cp, s);
-      vector_update_seconds += secondsSince(update_start);
-    } else if (nn > tt) {  // on the dogleg (we have nn >= cc, and tt >= cc)
-      update_start = Clock::now();
+      } else if (nn > tt) {  // on the dogleg (we have nn >= cc, and tt >= cc)
       add(s, 1.0, cp, s);
-      vector_update_seconds += secondsSince(update_start);
-      double cn = timedDot(cp, newtonP, num_dogleg_dot_products, dogleg_dot_seconds);
+        double cn = Dot(cp, newtonP);
       projectToBoundaryBetweenWithCoefs(s, newtonP, trSize, cc, cn, nn);
     } else {
-      update_start = Clock::now();
       s = newtonP;
-      vector_copy_scale_seconds += secondsSince(update_start);
-    }
+      }
   }
 
   /// compute the energy of the linearized system for a given solution vector z
@@ -806,11 +603,11 @@ class TrustRegion : public mfem::NewtonSolver {
   double computeEnergy(const mfem::Vector& r_local, const HessVecFunc& H, const mfem::Vector& z) const
   {
     SMITH_MARK_FUNCTION;
-    double rz = timedDot(r_local, z, num_line_search_dot_products, line_search_dot_seconds);
+    double rz = Dot(r_local, z);
     mfem::Vector tmp(r_local);
     tmp = 0.0;
     H(z, tmp);
-    return rz + 0.5 * timedDot(z, tmp, num_line_search_dot_products, line_search_dot_seconds);
+    return rz + 0.5 * Dot(z, tmp);
   }
 
   /// Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
@@ -840,36 +637,30 @@ class TrustRegion : public mfem::NewtonSolver {
       return;
     }
 
-    auto copy_start = Clock::now();
     rCurrent = r0;
-    vector_copy_scale_seconds += secondsSince(copy_start);
     precond(rCurrent, Pr);
 
     // d = -Pr
-    copy_start = Clock::now();
     d = Pr;
     d *= -1.0;
 
     z = 0.0;
-    vector_copy_scale_seconds += secondsSince(copy_start);
     double zz = 0.;
-    double rPr = timedDot(rCurrent, Pr, num_model_dot_products, model_dot_seconds);
+    double rPr = Dot(rCurrent, Pr);
 
     // std::cout << "initial energy = " << computeEnergy(r0, hess_vec_func, z) << std::endl;
 
     for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
       hess_vec_func(d, Hd);
-      const auto dots = timedDot4(d, rCurrent, d, Hd, z, d, d, d, num_model_dot_products, model_dot_seconds);
+      const auto dots = dot4(d, rCurrent, d, Hd, z, d, d, d);
       double descent_check = dots.v0;
       double curvature = dots.v1;
       double zd = dots.v2;
       double dd = dots.v3;
       if (descent_check > 0) {
-        copy_start = Clock::now();
         d *= -1;
         Hd *= -1;
-        vector_copy_scale_seconds += secondsSince(copy_start);
-        results.interior_status = TrustRegionResults::Status::NonDescentDirection;
+            results.interior_status = TrustRegionResults::Status::NonDescentDirection;
         descent_check *= -1.0;
         curvature *= -1.0;
         zd *= -1.0;
@@ -892,14 +683,10 @@ class TrustRegion : public mfem::NewtonSolver {
       auto& zPred = Pr;  // re-use Pr memory.
                          // This predicted step will no longer be used by the time Pr is, so we can avoid an extra
                          // vector floating around
-      auto update_start = Clock::now();
-      add(z, alphaCg, d, zPred);
-      vector_update_seconds += secondsSince(update_start);
-
-      copy_start = Clock::now();
+        add(z, alphaCg, d, zPred);
+  
       z = zPred;
-      vector_copy_scale_seconds += secondsSince(copy_start);
-
+  
       if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
         if (print_level >= 2) {
           mfem::out << "Found a non descent direction\n";
@@ -907,23 +694,19 @@ class TrustRegion : public mfem::NewtonSolver {
         return;
       }
 
-      update_start = Clock::now();
       add(rCurrent, alphaCg, Hd, rCurrent);
-      vector_update_seconds += secondsSince(update_start);
-
+  
       precond(rCurrent, Pr);
       auto [rPrNp1, r_current_norm_squared] =
-          timedDot2(rCurrent, Pr, rCurrent, rCurrent, num_model_dot_products, model_dot_seconds);
+          dot2(rCurrent, Pr, rCurrent, rCurrent);
       if (r_current_norm_squared <= cg_tol_squared && cgIter >= settings.min_cg_iterations) {
         return;
       }
 
       double beta = rPrNp1 / rPr;
       rPr = rPrNp1;
-      update_start = Clock::now();
       add(-1.0, Pr, beta, d, d);
-      vector_update_seconds += secondsSince(update_start);
-
+  
       zz = zzNp1;
     }
     cgIter--;  // if all cg iterations are taken, correct for output
@@ -947,185 +730,46 @@ class TrustRegion : public mfem::NewtonSolver {
   void assembleJacobian(const mfem::Vector& x) const
   {
     SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_jacobian_assembles;
     grad = &oper->GetGradient(x);
     if (nonlinear_options.force_monolithic) {
       auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
       if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
     }
-    jacobian_assembly_seconds += secondsSince(start);
   }
 
   /// evaluate the nonlinear residual
   mfem::real_t computeResidual(const mfem::Vector& x_, mfem::Vector& r_) const
   {
     SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_residuals;
     oper->Mult(x_, r_);
-    const auto norm = Norm(r_);
-    residual_seconds += secondsSince(start);
-    return norm;
+    return Norm(r_);
   }
 
   /// apply the action of the current Jacobian representation to a vector
   void hessVec(const mfem::Vector& x_, mfem::Vector& v_) const
   {
     SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_hess_vecs;
     grad->Mult(x_, v_);
-    hess_vec_seconds += secondsSince(start);
   }
 
   /// apply trust region specific preconditioner
   void precond(const mfem::Vector& x_, mfem::Vector& v_) const
   {
     SMITH_MARK_FUNCTION;
-    auto start = Clock::now();
-    ++num_preconds;
     tr_precond.Mult(x_, v_);
-    preconditioner_seconds += secondsSince(start);
   };
-
-  /// Return solver diagnostic counters.
-  TrustRegionDiagnostics diagnostics() const
-  {
-    return {.num_residuals = num_residuals,
-            .num_hess_vecs = num_hess_vecs,
-            .num_model_hess_vecs = num_model_hess_vecs,
-            .num_cauchy_hess_vecs = num_cauchy_hess_vecs,
-            .num_line_search_hess_vecs = num_line_search_hess_vecs,
-            .num_preconds = num_preconds,
-            .num_jacobian_assembles = num_jacobian_assembles,
-            .num_cg_iterations = num_cg_iterations,
-            .num_subspace_solves = num_subspace_solves,
-            .num_subspace_leftmost_hess_vecs = num_subspace_leftmost_hess_vecs,
-            .num_subspace_hess_vec_batches = num_subspace_hess_vec_batches,
-            .num_subspace_batched_hess_vecs = num_subspace_batched_hess_vecs,
-            .num_subspace_past_step_vectors = num_subspace_past_step_vectors,
-            .num_subspace_past_step_hess_vecs = num_subspace_past_step_hess_vecs,
-            .num_subspace_solve_start_vectors = num_subspace_solve_start_vectors,
-            .num_subspace_solve_start_hess_vecs = num_subspace_solve_start_hess_vecs,
-            .num_quadratic_subspace_solves = num_quadratic_subspace_solves,
-            .num_preconditioner_updates = num_preconditioner_updates,
-            .residual_seconds = residual_seconds,
-            .hess_vec_seconds = hess_vec_seconds,
-            .model_hess_vec_seconds = model_hess_vec_seconds,
-            .cauchy_hess_vec_seconds = cauchy_hess_vec_seconds,
-            .line_search_hess_vec_seconds = line_search_hess_vec_seconds,
-            .preconditioner_seconds = preconditioner_seconds,
-            .total_seconds = total_seconds,
-            .model_solve_seconds = model_solve_seconds,
-            .subspace_seconds = subspace_seconds,
-            .subspace_leftmost_seconds = subspace_leftmost_seconds,
-            .subspace_hess_vec_batch_seconds = subspace_hess_vec_batch_seconds,
-            .subspace_filter_seconds = subspace_filter_seconds,
-            .subspace_backend_seconds = subspace_backend_seconds,
-            .subspace_project_A_seconds = trustRegionSubspaceTimings().project_A_seconds,
-            .subspace_project_gram_seconds = trustRegionSubspaceTimings().project_gram_seconds,
-            .subspace_project_b_seconds = trustRegionSubspaceTimings().project_b_seconds,
-            .subspace_basis_seconds = trustRegionSubspaceTimings().basis_seconds,
-            .subspace_reduced_A_seconds = trustRegionSubspaceTimings().reduced_A_seconds,
-            .subspace_dense_eigensystem_seconds = trustRegionSubspaceTimings().dense_eigensystem_seconds,
-            .subspace_dense_trust_solve_seconds = trustRegionSubspaceTimings().dense_trust_solve_seconds,
-            .subspace_reconstruct_solution_seconds = trustRegionSubspaceTimings().reconstruct_solution_seconds,
-            .subspace_reconstruct_leftmost_seconds = trustRegionSubspaceTimings().reconstruct_leftmost_seconds,
-            .subspace_finalize_seconds = subspace_finalize_seconds,
-            .cauchy_point_seconds = cauchy_point_seconds,
-            .dogleg_seconds = dogleg_seconds,
-            .line_search_seconds = line_search_seconds,
-            .dot_seconds = dot_seconds,
-            .num_dot_products = num_dot_products,
-            .num_dot_reductions = num_dot_reductions,
-            .num_model_dot_products = num_model_dot_products,
-            .num_cauchy_dot_products = num_cauchy_dot_products,
-            .num_dogleg_dot_products = num_dogleg_dot_products,
-            .num_line_search_dot_products = num_line_search_dot_products,
-            .num_setup_dot_products = num_setup_dot_products,
-            .model_dot_seconds = model_dot_seconds,
-            .cauchy_dot_seconds = cauchy_dot_seconds,
-            .dogleg_dot_seconds = dogleg_dot_seconds,
-            .line_search_dot_seconds = line_search_dot_seconds,
-            .setup_dot_seconds = setup_dot_seconds,
-            .vector_update_seconds = vector_update_seconds,
-            .vector_copy_scale_seconds = vector_copy_scale_seconds,
-            .projection_seconds = projection_seconds,
-            .jacobian_assembly_seconds = jacobian_assembly_seconds,
-            .preconditioner_update_seconds = preconditioner_update_seconds,
-            .preconditioner_setup_seconds = preconditioner_setup_seconds};
-  }
 
   /// @overload
   void Mult(const mfem::Vector&, mfem::Vector& X) const
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
-    auto total_start = Clock::now();
-
     print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
     print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
     print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
 
     using real_t = mfem::real_t;
 
-    num_hess_vecs = 0;
-    num_model_hess_vecs = 0;
-    num_cauchy_hess_vecs = 0;
-    num_line_search_hess_vecs = 0;
-    num_preconds = 0;
-    num_residuals = 0;
-    num_subspace_solves = 0;
-    num_subspace_leftmost_hess_vecs = 0;
-    num_subspace_hess_vec_batches = 0;
-    num_subspace_batched_hess_vecs = 0;
-    num_subspace_past_step_vectors = 0;
-    num_subspace_past_step_hess_vecs = 0;
-    num_subspace_solve_start_vectors = 0;
-    num_subspace_solve_start_hess_vecs = 0;
-    num_quadratic_subspace_solves = 0;
-    num_jacobian_assembles = 0;
-    num_cg_iterations = 0;
-    num_preconditioner_updates = 0;
-    residual_seconds = 0.0;
-    hess_vec_seconds = 0.0;
-    model_hess_vec_seconds = 0.0;
-    cauchy_hess_vec_seconds = 0.0;
-    line_search_hess_vec_seconds = 0.0;
-    preconditioner_seconds = 0.0;
-    total_seconds = 0.0;
-    model_solve_seconds = 0.0;
-    subspace_seconds = 0.0;
-    subspace_leftmost_seconds = 0.0;
-    subspace_hess_vec_batch_seconds = 0.0;
-    subspace_filter_seconds = 0.0;
-    subspace_backend_seconds = 0.0;
-    subspace_finalize_seconds = 0.0;
-    cauchy_point_seconds = 0.0;
-    dogleg_seconds = 0.0;
-    line_search_seconds = 0.0;
-    dot_seconds = 0.0;
-    num_dot_products = 0;
-    num_dot_reductions = 0;
-    num_model_dot_products = 0;
-    num_cauchy_dot_products = 0;
-    num_dogleg_dot_products = 0;
-    num_line_search_dot_products = 0;
-    num_setup_dot_products = 0;
-    model_dot_seconds = 0.0;
-    cauchy_dot_seconds = 0.0;
-    dogleg_dot_seconds = 0.0;
-    line_search_dot_seconds = 0.0;
-    setup_dot_seconds = 0.0;
-    vector_update_seconds = 0.0;
-    vector_copy_scale_seconds = 0.0;
-    projection_seconds = 0.0;
-    jacobian_assembly_seconds = 0.0;
-    preconditioner_update_seconds = 0.0;
-    preconditioner_setup_seconds = 0.0;
-    accepted_step_history.clear();
-    resetTrustRegionSubspaceTimings();
     solve_start_x.SetSize(X.Size());
     solve_start_x = X;
     min_residual_x.SetSize(X.Size());
@@ -1163,11 +807,9 @@ class TrustRegion : public mfem::NewtonSolver {
     int subspace_option = nonlinear_options.subspace_option;
     int num_leftmost = nonlinear_options.num_leftmost;
 
-    auto copy_start = Clock::now();
     scratch = 1.0;
-    vector_copy_scale_seconds += secondsSince(copy_start);
     double tr_size = nonlinear_options.trust_region_scaling *
-                     std::sqrt(timedDot(scratch, scratch, num_setup_dot_products, setup_dot_seconds));
+                     std::sqrt(Dot(scratch, scratch));
     size_t cumulative_cg_iters_from_last_precond_update = 0;
 
     int it = 0;
@@ -1202,12 +844,7 @@ class TrustRegion : public mfem::NewtonSolver {
 
       if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
                       cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
-        auto preconditioner_update_start = Clock::now();
-        auto preconditioner_setup_start = Clock::now();
         tr_precond.SetOperator(*grad);
-        preconditioner_setup_seconds += secondsSince(preconditioner_setup_start);
-        preconditioner_update_seconds += secondsSince(preconditioner_update_start);
-        ++num_preconditioner_updates;
         cumulative_cg_iters_from_last_precond_update = 0;
       }
 
@@ -1218,28 +855,22 @@ class TrustRegion : public mfem::NewtonSolver {
       trResults.reset();
 
       {
-        auto cauchy_start = Clock::now();
-        timedCauchyHessVec(hess_vec_func, r, trResults.H_d);
-        const double gKg = timedDot(r, trResults.H_d, num_cauchy_dot_products, cauchy_dot_seconds);
+        hess_vec_func(r, trResults.H_d);
+        const double gKg = Dot(r, trResults.H_d);
         const double residual_norm_squared = norm * norm;
         if (gKg > 0) {
           const double alphaCp = -residual_norm_squared / gKg;
-          auto update_start = Clock::now();
-          add(trResults.cauchy_point, alphaCp, r, trResults.cauchy_point);
-          vector_update_seconds += secondsSince(update_start);
-          cauchyPointNormSquared =
-              timedDot(trResults.cauchy_point, trResults.cauchy_point, num_cauchy_dot_products, cauchy_dot_seconds);
+                add(trResults.cauchy_point, alphaCp, r, trResults.cauchy_point);
+                cauchyPointNormSquared =
+              Dot(trResults.cauchy_point, trResults.cauchy_point);
         } else {
           const double alphaTr = -tr_size / norm;
-          auto update_start = Clock::now();
-          add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
-          vector_update_seconds += secondsSince(update_start);
-          if (print_level >= 2) {
+                add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
+                if (print_level >= 2) {
             mfem::out << "Negative curvature un-preconditioned cauchy point direction found."
                       << "\n";
           }
         }
-        cauchy_point_seconds += secondsSince(cauchy_start);
       }
 
       if (cauchyPointNormSquared >= tr_size * tr_size) {
@@ -1254,16 +885,10 @@ class TrustRegion : public mfem::NewtonSolver {
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
         settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
-        auto model_start = Clock::now();
-        auto model_hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) {
-          timedModelHessVec(hess_vec_func, x_, v_);
-        };
-        solveTrustRegionModelProblem(r, scratch, model_hess_vec_func, precond_func, settings, tr_size, trResults,
+        solveTrustRegionModelProblem(r, scratch, hess_vec_func, precond_func, settings, tr_size, trResults,
                                      norm * norm);
-        model_solve_seconds += secondsSince(model_start);
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
-      num_cg_iterations += trResults.cg_iterations_count;
 
       bool have_computed_Hvs = false;
       bool have_computed_H_left_mosts = false;
@@ -1271,17 +896,13 @@ class TrustRegion : public mfem::NewtonSolver {
 
       int lineSearchIter = 0;
       while (lineSearchIter <= nonlinear_options.max_line_search_iterations) {
-        auto line_search_start = Clock::now();
         ++lineSearchIter;
 
-        auto dogleg_start = Clock::now();
         doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
-        dogleg_seconds += secondsSince(dogleg_start);
-
         const bool check_subspace_boundary = subspace_option >= 1;
         const double d_norm =
             check_subspace_boundary
-                ? std::sqrt(timedDot(trResults.d, trResults.d, num_line_search_dot_products, line_search_dot_seconds))
+                ? std::sqrt(Dot(trResults.d, trResults.d))
                 : 0.0;
         bool use_with_option1 =
             (subspace_option >= 1) && (trResults.interior_status == TrustRegionResults::Status::NonDescentDirection ||
@@ -1306,7 +927,6 @@ class TrustRegion : public mfem::NewtonSolver {
 
           if (!have_computed_H_left_mosts) {
             have_computed_H_left_mosts = true;
-            auto leftmost_start = Clock::now();
             previous_H_left_mosts = H_left_mosts;
             H_left_mosts.clear();
             std::vector<const mfem::Vector*> leftmost_inputs;
@@ -1315,9 +935,7 @@ class TrustRegion : public mfem::NewtonSolver {
               H_left_mosts.emplace_back(std::make_shared<mfem::Vector>(*left));
               leftmost_inputs.push_back(left.get());
               leftmost_outputs.push_back(H_left_mosts.back().get());
-              ++num_subspace_leftmost_hess_vecs;
             }
-            subspace_leftmost_seconds += secondsSince(leftmost_start);
             batchedSubspaceHessVec(hess_vec_func, leftmost_inputs, leftmost_outputs);
           }
 
@@ -1344,8 +962,6 @@ class TrustRegion : public mfem::NewtonSolver {
             past_step_outputs.push_back(&H_past_steps.back());
           }
           if (!past_step_inputs.empty()) {
-            num_subspace_past_step_vectors += past_step_inputs.size();
-            num_subspace_past_step_hess_vecs += past_step_inputs.size();
             batchedSubspaceHessVec(hess_vec_func, past_step_inputs, past_step_outputs);
             for (size_t i = 0; i < past_step_inputs.size(); ++i) {
               ds.push_back(past_step_inputs[i]);
@@ -1362,8 +978,6 @@ class TrustRegion : public mfem::NewtonSolver {
               H_solve_start_direction.SetSize(X.Size());
               std::vector<const mfem::Vector*> solve_start_inputs{&solve_start_direction};
               std::vector<mfem::Vector*> solve_start_outputs{&H_solve_start_direction};
-              ++num_subspace_solve_start_vectors;
-              ++num_subspace_solve_start_hess_vecs;
               batchedSubspaceHessVec(hess_vec_func, solve_start_inputs, solve_start_outputs);
               ds.push_back(&solve_start_direction);
               H_ds.push_back(&H_solve_start_direction);
@@ -1380,8 +994,6 @@ class TrustRegion : public mfem::NewtonSolver {
               std::vector<const mfem::Vector*> min_res_inputs{&min_residual_direction};
               std::vector<mfem::Vector*> min_res_outputs{&H_min_residual_direction};
               // Reusing solve_start counters for now
-              ++num_subspace_solve_start_vectors;
-              ++num_subspace_solve_start_hess_vecs;
               batchedSubspaceHessVec(hess_vec_func, min_res_inputs, min_res_outputs);
               ds.push_back(&min_residual_direction);
               H_ds.push_back(&H_min_residual_direction);
@@ -1392,15 +1004,12 @@ class TrustRegion : public mfem::NewtonSolver {
 
         static constexpr double roundOffTol = 0.0;  // 1e-14;
 
-        timedLineSearchHessVec(hess_vec_func, trResults.d, trResults.H_d);
-        const auto [dHd, rd] = timedDot2(trResults.d, trResults.H_d, r, trResults.d, num_line_search_dot_products,
-                                         line_search_dot_seconds);
+        hess_vec_func(trResults.d, trResults.H_d);
+        const auto [dHd, rd] = dot2(trResults.d, trResults.H_d, r, trResults.d);
         double modelObjective = rd + 0.5 * dHd - roundOffTol;
 
-        auto update_start = Clock::now();
-        add(X, trResults.d, x_pred);
-        vector_update_seconds += secondsSince(update_start);
-
+            add(X, trResults.d, x_pred);
+    
         double realObjective = std::numeric_limits<double>::max();
         double normPred = std::numeric_limits<double>::max();
         try {
@@ -1410,7 +1019,7 @@ class TrustRegion : public mfem::NewtonSolver {
             min_residual_x = x_pred;
           }
           double obj1 =
-              0.5 * (rd + timedDot(r_pred, trResults.d, num_line_search_dot_products, line_search_dot_seconds)) -
+              0.5 * (rd + Dot(r_pred, trResults.d)) -
               roundOffTol;
           realObjective = obj1;
         } catch (const std::exception&) {
@@ -1426,12 +1035,9 @@ class TrustRegion : public mfem::NewtonSolver {
           if (!candidate_left_mosts.empty()) {
             left_mosts = std::move(candidate_left_mosts);
           }
-          copy_start = Clock::now();
           X = x_pred;
           r = r_pred;
-          vector_copy_scale_seconds += secondsSince(copy_start);
-          norm = normPred;
-          line_search_seconds += secondsSince(line_search_start);
+                norm = normPred;
           if (print_level >= 2) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
             trResults.cg_iterations_count =
@@ -1486,15 +1092,11 @@ class TrustRegion : public mfem::NewtonSolver {
           if (!candidate_left_mosts.empty()) {
             left_mosts = std::move(candidate_left_mosts);
           }
-          copy_start = Clock::now();
           X = x_pred;
           r = r_pred;
-          vector_copy_scale_seconds += secondsSince(copy_start);
-          norm = normPred;
-          line_search_seconds += secondsSince(line_search_start);
+                norm = normPred;
           break;
         }
-        line_search_seconds += secondsSince(line_search_start);
       }
     }
 
@@ -1508,15 +1110,6 @@ class TrustRegion : public mfem::NewtonSolver {
     if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
       mfem::out << "TrustRegion: No convergence!\n";
     }
-
-    if (false && print_level >= 2) {
-      mfem::out << "num hess vecs = " << num_hess_vecs << "\n";
-      mfem::out << "num preconds = " << num_preconds << "\n";
-      mfem::out << "num residuals = " << num_residuals << "\n";
-      mfem::out << "num subspace solves = " << num_subspace_solves << "\n";
-      mfem::out << "num jacobian_assembles = " << num_jacobian_assembles << "\n";
-    }
-    total_seconds = secondsSince(total_start);
   }
 };
 
@@ -1560,15 +1153,6 @@ void EquationSolver::solve(mfem::Vector& x) const
   // KINSOL does not handle non-zero RHS, so we enforce that the RHS
   // of the nonlinear system is zero
   nonlin_solver_->Mult(zero, x);
-}
-
-std::optional<TrustRegionDiagnostics> EquationSolver::trustRegionDiagnostics() const
-{
-  auto* trust_region = dynamic_cast<const TrustRegion*>(nonlin_solver_.get());
-  if (!trust_region) {
-    return std::nullopt;
-  }
-  return trust_region->diagnostics();
 }
 
 void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const

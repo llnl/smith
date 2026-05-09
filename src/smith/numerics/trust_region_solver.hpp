@@ -45,27 +45,6 @@ enum class TrustRegionSubspaceBackend {
 using TrustRegionSubspaceResult =
     std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector<double>, double>;
 
-struct TrustRegionSubspaceTimings {
-  size_t num_solves = 0;
-  size_t total_input_dim = 0;
-  size_t total_reduced_dim = 0;
-  size_t max_input_dim = 0;
-  size_t max_reduced_dim = 0;
-  double project_A_seconds = 0.0;
-  double project_gram_seconds = 0.0;
-  double project_b_seconds = 0.0;
-  double basis_seconds = 0.0;
-  double reduced_A_seconds = 0.0;
-  double dense_eigensystem_seconds = 0.0;
-  double dense_trust_solve_seconds = 0.0;
-  double reconstruct_solution_seconds = 0.0;
-  double reconstruct_leftmost_seconds = 0.0;
-};
-
-void resetTrustRegionSubspaceTimings();
-
-TrustRegionSubspaceTimings trustRegionSubspaceTimings();
-
 /// @brief computes the global size of mfem::Vector
 int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm);
 

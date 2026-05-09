@@ -7,7 +7,6 @@
 #include "smith/numerics/trust_region_solver.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <vector>
 
@@ -17,30 +16,7 @@ namespace smith {
 
 namespace {
 
-using Clock = std::chrono::steady_clock;
-
-double secondsSince(Clock::time_point start)
-{
-  return std::chrono::duration_cast<std::chrono::duration<double>>(Clock::now() - start).count();
-}
-
-TrustRegionSubspaceTimings& mutableTrustRegionSubspaceTimings()
-{
-  static TrustRegionSubspaceTimings timings;
-  return timings;
-}
-
 }  // namespace
-
-void resetTrustRegionSubspaceTimings()
-{
-  mutableTrustRegionSubspaceTimings() = TrustRegionSubspaceTimings {};
-}
-
-TrustRegionSubspaceTimings trustRegionSubspaceTimings()
-{
-  return mutableTrustRegionSubspaceTimings();
-}
 
 int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm)
 {
@@ -284,7 +260,6 @@ mfem::DenseMatrix columnsToMatrix(const std::vector<mfem::Vector>& cols)
 std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> exactTrustRegionSolve(
     mfem::DenseMatrix A, const mfem::Vector& b, double delta, int num_leftmost)
 {
-  auto dense_solve_start = Clock::now();
   if (A.Height() != A.Width()) {
     throw PetscException("Exact trust region solver requires square matrices");
   }
@@ -294,10 +269,7 @@ std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> e
 
   mfem::Vector sigs;
   mfem::DenseMatrix V;
-  auto eig_start = Clock::now();
   A.Eigensystem(sigs, V);
-  mutableTrustRegionSubspaceTimings().dense_eigensystem_seconds += secondsSince(eig_start);
-
   std::vector<mfem::Vector> leftmosts;
   std::vector<double> minsigs;
   const int num_leftmost_possible = std::min(num_leftmost, sigs.Size());
@@ -320,7 +292,6 @@ std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> e
   const double eps = 1e-12 * sigScale;
 
   if ((minSig >= eps) && (norm(bvOverSigs) <= delta)) {
-    mutableTrustRegionSubspaceTimings().dense_trust_solve_seconds += secondsSince(dense_solve_start);
     return std::make_tuple(solveDense(A, b), leftmosts, minsigs, true);
   }
 
@@ -351,7 +322,6 @@ std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> e
     const double e1 = quadraticEnergy(A, b, x1);
     const double e2 = quadraticEnergy(A, b, x2);
 
-    mutableTrustRegionSubspaceTimings().dense_trust_solve_seconds += secondsSince(dense_solve_start);
     return std::make_tuple(e1 < e2 ? x1 : x2, leftmosts, minsigs, true);
   }
 
@@ -391,7 +361,6 @@ std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> e
 
   x *= (e2 < e1 ? -delta : delta) / norm(x);
 
-  mutableTrustRegionSubspaceTimings().dense_trust_solve_seconds += secondsSince(dense_solve_start);
   return std::make_tuple(x, leftmosts, minsigs, success);
 }
 
@@ -452,15 +421,8 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
                                                    const mfem::Vector& b, double delta, int num_leftmost)
 {
   SMITH_MARK_FUNCTION;
-  auto& timings = mutableTrustRegionSubspaceTimings();
-  ++timings.num_solves;
-  timings.total_input_dim += states.size();
-  timings.max_input_dim = std::max(timings.max_input_dim, states.size());
-
-  auto project_A_start = Clock::now();
   SubspaceProjections projections = denseSubspaceProjections(states, Astates, b);
   mfem::DenseMatrix& sAs = projections.sAs;
-  timings.project_A_seconds += secondsSince(project_A_start);
   symmetrize(sAs);
 
   for (int i = 0; i < sAs.Height(); ++i) {
@@ -471,50 +433,33 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
     }
   }
 
-  auto project_gram_start = Clock::now();
   mfem::DenseMatrix& ss = projections.ss;
-  timings.project_gram_seconds += secondsSince(project_gram_start);
   symmetrize(ss);
 
   double trace_mag = 0.0;
-  auto basis_start = Clock::now();
   mfem::DenseMatrix T = orthonormalBasisTransform(ss, trace_mag);
-  timings.basis_seconds += secondsSince(basis_start);
   if (T.Width() == 0) {
     throw PetscException("No independent directions in MFEM subspace solve.");
   }
-  timings.total_reduced_dim += static_cast<size_t>(T.Width());
-  timings.max_reduced_dim = std::max(timings.max_reduced_dim, static_cast<size_t>(T.Width()));
-
-  auto reduced_A_start = Clock::now();
   mfem::DenseMatrix pAp = tripleProduct(T, sAs, T);
-  timings.reduced_A_seconds += secondsSince(reduced_A_start);
   symmetrize(pAp);
 
-  auto project_b_start = Clock::now();
   const mfem::Vector& sb = projections.sb;
-  timings.project_b_seconds += secondsSince(project_b_start);
   const mfem::Vector pb = projectWithTranspose(T, sb);
 
   auto [reduced_x, leftvecs, leftvals, success] = exactTrustRegionSolve(pAp, pb, delta, num_leftmost);
   (void)success;
   const double energy = quadraticEnergy(pAp, pb, reduced_x);
 
-  auto reconstruct_solution_start = Clock::now();
   mfem::Vector coeffs(T.Height());
   T.Mult(reduced_x, coeffs);
   mfem::Vector sol = combineDirections(states, coeffs);
-  timings.reconstruct_solution_seconds += secondsSince(reconstruct_solution_start);
-
-  auto reconstruct_leftmost_start = Clock::now();
   std::vector<std::shared_ptr<mfem::Vector>> leftmosts;
   for (const auto& leftvec : leftvecs) {
     mfem::Vector left_coeffs(T.Height());
     T.Mult(leftvec, left_coeffs);
     leftmosts.emplace_back(std::make_shared<mfem::Vector>(combineDirections(states, left_coeffs)));
   }
-  timings.reconstruct_leftmost_seconds += secondsSince(reconstruct_leftmost_start);
-
   return std::make_tuple(sol, leftmosts, leftvals, energy);
 }
 
