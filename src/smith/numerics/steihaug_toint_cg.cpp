@@ -23,13 +23,11 @@ void smith_add(const mfem::Vector& a, double b, const mfem::Vector& c, mfem::Vec
   }
 }
 
-} // namespace
+}  // namespace
 
-void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent,
-                     const mfem::Operator& H, const mfem::Solver* P,
-                     const TrustRegionSettings& settings, double& trSize,
-                     TrustRegionResults& results, double r0_norm_squared, 
-                     const SteihaugTointDelegate& delegate)
+void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
+                     const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
+                     double r0_norm_squared, const SteihaugTointDelegate& delegate)
 {
   // minimize r0@z + 0.5*z@J@z
   results.interior_status = TrustRegionResults::Status::Interior;
@@ -60,20 +58,20 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent,
 
   z = 0.0;
   double zz = 0.;
-  
+
   // rPr = dot(rCurrent, Pr)
-  auto rPr_arr = delegate.dot_many_2(rCurrent, Pr, rCurrent, Pr); // We only need the first
+  auto rPr_arr = delegate.dot_many_2(rCurrent, Pr, rCurrent, Pr);  // We only need the first
   double rPr = rPr_arr[0];
 
   for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
     H.Mult(d, Hd);
-    
+
     auto dots = delegate.dot_many_4(d, rCurrent, d, Hd, z, d, d, d);
     double descent_check = dots[0];
     double curvature = dots[1];
     double zd = dots[2];
     double dd = dots[3];
-    
+
     if (descent_check > 0) {
       d *= -1;
       Hd *= -1;
@@ -97,7 +95,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent,
       return;
     }
 
-    auto& zPred = Pr;  
+    auto& zPred = Pr;
     smith_add(z, alphaCg, d, zPred);
     z = zPred;
 
@@ -112,11 +110,11 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent,
     } else {
       Pr = rCurrent;
     }
-    
+
     auto dots2 = delegate.dot_many_2(rCurrent, Pr, rCurrent, rCurrent);
     double rPrNp1 = dots2[0];
     double r_current_norm_squared = dots2[1];
-    
+
     if (r_current_norm_squared <= cg_tol_squared && cgIter >= settings.min_cg_iterations) {
       return;
     }
@@ -128,7 +126,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent,
 
     zz = zzNp1;
   }
-  cgIter--; 
+  cgIter--;
 }
 
 }  // namespace smith

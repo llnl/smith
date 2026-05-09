@@ -290,7 +290,8 @@ std::vector<const mfem::Vector*> remove_at(const std::vector<const mfem::Vector*
 
 TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem::Vector*>& states,
                                                     const std::vector<const mfem::Vector*>& Astates,
-                                                    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace)
+                                                    const mfem::Vector& b, double delta, int num_leftmost,
+                                                    mfem::Vector& workspace)
 {
   SMITH_MARK_FUNCTION;
   DenseMat sAs1 = dot(states, Astates);

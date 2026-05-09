@@ -473,7 +473,8 @@ struct NonlinearSolverOptions {
   /// Include the displacement from current nonlinear-solve state back to the nonlinear-solve initial state.
   bool trust_use_solve_start_direction = false;
 
-  /// Include the displacement from current nonlinear-solve state to the state with the minimum residual seen so far in this nonlinear solve.
+  /// Include the displacement from current nonlinear-solve state to the state with the minimum residual seen so far in
+  /// this nonlinear solve.
   bool trust_use_min_residual_direction = false;
 
   /// Should the gradient be converted to a monolithic matrix

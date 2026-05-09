@@ -246,8 +246,6 @@ class NewtonSolver : public mfem::NewtonSolver {
   }
 };
 
-
-
 /// trust region printing utility function
 void printTrustRegionInfo(double realWork, double modelObjective, size_t cgIters, double trSize, bool willAccept)
 {
@@ -285,7 +283,7 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
   mutable mfem::Vector solve_start_x;
   mutable mfem::Vector min_residual_x;
   mutable double min_residual_norm = -1.0;
-  
+
   /// Workspace vector for exact subspace solver to avoid small allocations
   mutable mfem::Vector exact_solver_workspace;
 
@@ -332,14 +330,13 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     std::array<int, num_pairs> sizes;
     std::array<const double*, num_pairs> ptr_a;
     std::array<const double*, num_pairs> ptr_b;
-    
+
     auto populate_arrays = [&]<std::size_t... I>(std::index_sequence<I...>) {
       ((
-        sizes[I] = std::get<2 * I>(tuple_args).Size(),
-        [&](){ MFEM_ASSERT(sizes[I] == std::get<2 * I + 1>(tuple_args).Size(), "Incompatible vector sizes."); }(),
-        ptr_a[I] = std::get<2 * I>(tuple_args).GetData(),
-        ptr_b[I] = std::get<2 * I + 1>(tuple_args).GetData()
-      ), ...);
+           sizes[I] = std::get<2 * I>(tuple_args).Size(),
+           [&]() { MFEM_ASSERT(sizes[I] == std::get<2 * I + 1>(tuple_args).Size(), "Incompatible vector sizes."); }(),
+           ptr_a[I] = std::get<2 * I>(tuple_args).GetData(), ptr_b[I] = std::get<2 * I + 1>(tuple_args).GetData()),
+       ...);
     };
     populate_arrays(std::make_index_sequence<num_pairs>{});
 
@@ -407,16 +404,15 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     }
   }
 
-  std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0,
-                                   const mfem::Vector& a1, const mfem::Vector& b1,
-                                   const mfem::Vector& a2, const mfem::Vector& b2,
+  std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
+                                   const mfem::Vector& b1, const mfem::Vector& a2, const mfem::Vector& b2,
                                    const mfem::Vector& a3, const mfem::Vector& b3) const override
   {
     return dot_many(a0, b0, a1, b1, a2, b2, a3, b3);
   }
 
-  std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0,
-                                   const mfem::Vector& a1, const mfem::Vector& b1) const override
+  std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
+                                   const mfem::Vector& b1) const override
   {
     return dot_many(a0, b0, a1, b1);
   }
@@ -544,9 +540,9 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
   }
 
   /// Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
-  void solveModelProblem(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H,
-                         const mfem::Solver* P, const TrustRegionSettings& settings, double& trSize,
-                         TrustRegionResults& results, double r0_norm_squared) const
+  void solveModelProblem(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
+                         const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
+                         double r0_norm_squared) const
   {
     steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, *this);
   }
@@ -727,8 +723,7 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
         settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
-        solveModelProblem(r, scratch, *this->oper, &this->tr_precond, settings, tr_size, trResults,
-                                     norm * norm);
+        solveModelProblem(r, scratch, *this->oper, &this->tr_precond, settings, tr_size, trResults, norm * norm);
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
 

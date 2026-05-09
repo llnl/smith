@@ -18,7 +18,8 @@ namespace {
 constexpr int test_size = 5;
 constexpr double test_delta = 1.0e-3;
 
-std::vector<mfem::Vector> applyDiagonalOperator(const mfem::Vector& diag, const std::vector<const mfem::Vector*>& states)
+std::vector<mfem::Vector> applyDiagonalOperator(const mfem::Vector& diag,
+                                                const std::vector<const mfem::Vector*>& states)
 {
   std::vector<mfem::Vector> out;
   out.reserve(states.size());
@@ -50,12 +51,7 @@ std::vector<const mfem::Vector*> toPointers(const std::vector<mfem::Vector>& vec
 }
 
 struct DiagonalSubspaceFixture {
-  DiagonalSubspaceFixture(int size)
-      : u1(size),
-        u2(size),
-        u3(size),
-        diag(size),
-        b(size)
+  DiagonalSubspaceFixture(int size) : u1(size), u2(size), u3(size), diag(size), b(size)
   {
     u1 = 1.0;
     for (int i = 0; i < size; ++i) {
@@ -74,8 +70,6 @@ struct DiagonalSubspaceFixture {
 };
 
 }  // namespace
-
-
 
 TEST(TrustRegionSubspaceMfem, SolveHitsTrustRegionBoundary)
 {
@@ -155,7 +149,6 @@ TEST(TrustRegionSubspaceMfem, SolveHandlesZeroDirection)
   EXPECT_EQ(leftvals.size(), 1);
   EXPECT_LT(energy, 0.0);
 }
-
 
 int main(int argc, char* argv[])
 {

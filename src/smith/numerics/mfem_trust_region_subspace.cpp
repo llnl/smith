@@ -31,24 +31,17 @@ double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm
 
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
-                                               const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace)
+                                               const mfem::Vector& b, double delta, int num_leftmost,
+                                               mfem::Vector& workspace)
 {
   return solveSubspaceProblemMfem(directions, A_directions, b, delta, num_leftmost, workspace);
 }
 
 namespace {
 
-double dot(const mfem::Vector& a, const mfem::Vector& b)
-{
-  return a * b;
-}
+double dot(const mfem::Vector& a, const mfem::Vector& b) { return a * b; }
 
-double norm(const mfem::Vector& x)
-{
-  return x.Norml2();
-}
-
-
+double norm(const mfem::Vector& x) { return x.Norml2(); }
 
 double sumAbs(const mfem::Vector& x)
 {
@@ -99,9 +92,7 @@ SubspaceProjections globalSubspaceProjectionFromLocalInnerProducts(const std::ve
 {
   const int n = static_cast<int>(states.size());
   const int triangular_size = n * (n + 1) / 2;
-  const auto triangular_index = [n](int i, int j) {
-    return i * n - (i * (i - 1)) / 2 + (j - i);
-  };
+  const auto triangular_index = [n](int i, int j) { return i * n - (i * (i - 1)) / 2 + (j - i); };
   const int sAs_offset = 0;
   const int ss_offset = triangular_size;
   const int sb_offset = 2 * triangular_size;
@@ -113,8 +104,7 @@ SubspaceProjections globalSubspaceProjectionFromLocalInnerProducts(const std::ve
     local_projection_entries[size_t(sb_offset + i)] = mfem::InnerProduct(*states[size_t(i)], b);
     for (int j = i; j < n; ++j) {
       const size_t ij = size_t(triangular_index(i, j));
-      local_projection_entries[size_t(sAs_offset) + ij] =
-          mfem::InnerProduct(*states[size_t(i)], *Astates[size_t(j)]);
+      local_projection_entries[size_t(sAs_offset) + ij] = mfem::InnerProduct(*states[size_t(i)], *Astates[size_t(j)]);
       local_projection_entries[size_t(ss_offset) + ij] = mfem::InnerProduct(*states[size_t(i)], *states[size_t(j)]);
     }
   }
@@ -227,7 +217,8 @@ std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> e
     throw PetscException("Exact trust region solver requires square matrices");
   }
   if (A.Height() != b.Size()) {
-    throw PetscException("The right hand size for exact trust region solve must be consistent with the input matrix size");
+    throw PetscException(
+        "The right hand size for exact trust region solve must be consistent with the input matrix size");
   }
 
   int offset = 0;
@@ -288,8 +279,10 @@ std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> e
     const double tau1 = -pz + std::sqrt(pz * pz + ddmpp);
     const double tau2 = -pz - std::sqrt(pz * pz + ddmpp);
 
-    mfem::Vector x1 = alloc_vector(p.Size()); x1 = p;
-    mfem::Vector x2 = alloc_vector(p.Size()); x2 = p;
+    mfem::Vector x1 = alloc_vector(p.Size());
+    x1 = p;
+    mfem::Vector x2 = alloc_vector(p.Size());
+    x2 = p;
     x1.Add(tau1, leftMost);
     x2.Add(tau2, leftMost);
 
@@ -300,7 +293,7 @@ std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> e
   }
 
   mfem::Vector bvbv = alloc_vector(bv.Size());
-  for(int i=0; i<bv.Size(); ++i) bvbv[i] = bv[i] * bv[i];
+  for (int i = 0; i < bv.Size(); ++i) bvbv[i] = bv[i] * bv[i];
   for (int i = 0; i < sigs.Size(); ++i) sigsPlusLam[i] = sigs[i] + lam;
 
   double pNormSq = pnormSquared(bvbv, sigsPlusLam);
@@ -394,7 +387,8 @@ mfem::Vector combineDirections(const std::vector<const mfem::Vector*>& states, c
 
 TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& states,
                                                    const std::vector<const mfem::Vector*>& Astates,
-                                                   const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace)
+                                                   const mfem::Vector& b, double delta, int num_leftmost,
+                                                   mfem::Vector& workspace)
 {
   SMITH_MARK_FUNCTION;
   SubspaceProjections projections = projectSubspaceGlobally(states, Astates, b);
@@ -454,7 +448,7 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
   return solveSubspaceProblemPetsc(directions, A_directions, b, delta, num_leftmost);
 #else
   throw PetscException("MFEM trust-region subspace solve requires MFEM LAPACK support.");
-  return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>> {}, std::vector<double> {}, 0.0);
+  return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
 #endif
 }
 
@@ -463,7 +457,7 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
                                                    double, int)
 {
   throw PetscException("MFEM trust-region subspace solve requires MFEM LAPACK support.");
-  return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>> {}, std::vector<double> {}, 0.0);
+  return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
 }
 
 #endif  // MFEM_USE_LAPACK

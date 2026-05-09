@@ -37,7 +37,8 @@ class PetscException : public std::exception {
   std::string msg;
 };
 
-enum class TrustRegionSubspaceBackend {
+enum class TrustRegionSubspaceBackend
+{
   Petsc,
   Mfem
 };
@@ -53,18 +54,21 @@ double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm
 
 /// @brief returns the solution, as well as a list of the N leftmost eigenvectors
 /// and their eigenvalues, and the predicted model energy change
-TrustRegionSubspaceResult solveSubspaceProblem(
-    const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace);
+TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
+                                               const std::vector<const mfem::Vector*>& A_directions,
+                                               const mfem::Vector& b, double delta, int num_leftmost,
+                                               mfem::Vector& workspace);
 
 #if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
-TrustRegionSubspaceResult solveSubspaceProblemPetsc(
-    const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace);
+TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem::Vector*>& directions,
+                                                    const std::vector<const mfem::Vector*>& A_directions,
+                                                    const mfem::Vector& b, double delta, int num_leftmost,
+                                                    mfem::Vector& workspace);
 #endif
 
-TrustRegionSubspaceResult solveSubspaceProblemMfem(
-    const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const mfem::Vector& b, double delta, int num_leftmost, mfem::Vector& workspace);
+TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& directions,
+                                                   const std::vector<const mfem::Vector*>& A_directions,
+                                                   const mfem::Vector& b, double delta, int num_leftmost,
+                                                   mfem::Vector& workspace);
 
 }  // namespace smith

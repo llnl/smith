@@ -109,16 +109,15 @@ struct TrustRegionResults {
 };
 
 class SteihaugTointDelegate {
-public:
+ public:
   virtual ~SteihaugTointDelegate() = default;
 
-  virtual std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0,
-                                           const mfem::Vector& a1, const mfem::Vector& b1,
-                                           const mfem::Vector& a2, const mfem::Vector& b2,
+  virtual std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
+                                           const mfem::Vector& b1, const mfem::Vector& a2, const mfem::Vector& b2,
                                            const mfem::Vector& a3, const mfem::Vector& b3) const = 0;
 
-  virtual std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0,
-                                           const mfem::Vector& a1, const mfem::Vector& b1) const = 0;
+  virtual std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
+                                           const mfem::Vector& b1) const = 0;
 
   virtual void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
                                           double dd) const = 0;
@@ -126,15 +125,13 @@ public:
 
 /**
  * @brief Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
- * 
- * This is a standard implementation of 'The Conjugate Gradient Method and Trust Regions in Large Scale Optimization' 
- * by T. Steihaug. It is also called the Steihaug-Toint CG trust region algorithm (see also Trust Region Methods 
+ *
+ * This is a standard implementation of 'The Conjugate Gradient Method and Trust Regions in Large Scale Optimization'
+ * by T. Steihaug. It is also called the Steihaug-Toint CG trust region algorithm (see also Trust Region Methods
  * by Conn, Gould, and Toint).
  */
-void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent,
-                     const mfem::Operator& H, const mfem::Solver* P,
-                     const TrustRegionSettings& settings, double& trSize,
-                     TrustRegionResults& results, double r0_norm_squared, 
-                     const SteihaugTointDelegate& delegate);
+void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
+                     const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
+                     double r0_norm_squared, const SteihaugTointDelegate& delegate);
 
 }  // namespace smith
