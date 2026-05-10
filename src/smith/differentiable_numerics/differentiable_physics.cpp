@@ -320,6 +320,27 @@ std::vector<FieldState> DifferentiablePhysics::getFieldStatesAndParamStates() co
   return fields;
 }
 
+FieldState DifferentiablePhysics::getInitialFieldState(const std::string& state_name) const
+{
+  SLIC_ERROR_IF(state_name_to_field_index_.find(state_name) == state_name_to_field_index_.end(),
+                std::format("Could not find initial field named {0}", state_name));
+  return initial_field_states_[state_name_to_field_index_.at(state_name)];
+}
+
+FieldState DifferentiablePhysics::getFieldState(const std::string& state_name) const
+{
+  SLIC_ERROR_IF(state_name_to_field_index_.find(state_name) == state_name_to_field_index_.end(),
+                std::format("Could not find field named {0}", state_name));
+  return field_states_[state_name_to_field_index_.at(state_name)];
+}
+
+FieldState DifferentiablePhysics::getFieldParam(const std::string& param_name) const
+{
+  SLIC_ERROR_IF(param_name_to_field_index_.find(param_name) == param_name_to_field_index_.end(),
+                std::format("Could not find parameter named {0}", param_name));
+  return field_params_[param_name_to_field_index_.at(param_name)];
+}
+
 FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field_shape_displacement_; }
 
 void DifferentiablePhysics::initializeReactionStates()

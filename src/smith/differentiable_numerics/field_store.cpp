@@ -31,12 +31,6 @@ std::shared_ptr<DirichletBoundaryConditions> FieldStore::addBoundaryConditions(F
   return std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), field->space());
 }
 
-void FieldStore::shareBoundaryConditions(const std::string& name,
-                                         std::shared_ptr<DirichletBoundaryConditions> source_bc)
-{
-  zero_mirror_sources_[name] = std::move(source_bc);
-}
-
 void FieldStore::addWeakFormUnknownArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
 {
   FieldLabel argument_name_and_index{.field_name = argument_name, .field_index_in_residual = argument_index};
@@ -133,27 +127,50 @@ std::vector<std::vector<size_t>> FieldStore::indexMap(const std::vector<std::str
 }
 
 std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionManagers(
-    const std::vector<std::string>& weak_form_names)
+    const std::vector<std::string>& weak_form_names) const
 {
+  struct BoundaryConditionRef {
+    std::string primary_name;
+    bool use_second_derivative;
+  };
+  std::map<std::string, BoundaryConditionRef> field_to_primary;
+  for (const auto& [_rule, mapping] : time_integration_rules_) {
+    if (!mapping.primary_name.empty()) {
+      field_to_primary[mapping.primary_name] = {mapping.primary_name, false};
+    }
+    if (!mapping.history_name.empty()) {
+      field_to_primary[mapping.history_name] = {mapping.primary_name, false};
+    }
+    if (!mapping.ddot_name.empty()) {
+      field_to_primary[mapping.ddot_name] = {mapping.primary_name, true};
+    }
+  }
+
   std::vector<const BoundaryConditionManager*> bcs;
   for (const auto& wf_name : weak_form_names) {
     const std::string reaction_name = getWeakFormReaction(wf_name);
 
-    // Lazily materialize any pending zero-mirror BCs on first access.
-    auto mirror_it = zero_mirror_sources_.find(reaction_name);
-    if (mirror_it != zero_mirror_sources_.end()) {
-      auto mirrored_bc = addBoundaryConditions(getField(reaction_name).get());
-      mirrored_bc->setSecondTimeDerivativeBCsMatchingDofs(mirror_it->second->getBoundaryConditionManager());
-      boundary_conditions_[reaction_name] = std::move(mirrored_bc);
-      zero_mirror_sources_.erase(mirror_it);
+    // Direct DBC entry takes precedence (e.g. an independent unknown like stress with its own BC).
+    auto direct = boundary_conditions_.find(reaction_name);
+    if (direct != boundary_conditions_.end()) {
+      bcs.push_back(&direct->second->getBoundaryConditionManager());
+      continue;
     }
 
-    auto it = boundary_conditions_.find(reaction_name);
-    if (it != boundary_conditions_.end()) {
-      bcs.push_back(&it->second->getBoundaryConditionManager());
-    } else {
+    // Otherwise resolve via the time-integration mapping that owns this reaction field.
+    auto ref_it = field_to_primary.find(reaction_name);
+    if (ref_it == field_to_primary.end()) {
       bcs.push_back(nullptr);
+      continue;
     }
+    auto primary_it = boundary_conditions_.find(ref_it->second.primary_name);
+    if (primary_it == boundary_conditions_.end()) {
+      bcs.push_back(nullptr);
+      continue;
+    }
+    const auto& dbc = *primary_it->second;
+    bcs.push_back(ref_it->second.use_second_derivative ? &dbc.getSecondDerivativeManager()
+                                                       : &dbc.getBoundaryConditionManager());
   }
   return bcs;
 }

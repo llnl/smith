@@ -100,9 +100,9 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     for (int i = 0; i < dim; ++i) {
       auto cg_objective = std::make_shared<ObjectiveT>("translation" + std::to_string(i), mesh, param_space_ptrs);
       cg_objective->addBodyIntegral(
-          smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-          [i](auto /*t_info*/, auto X, auto U,
-              auto RHO) { return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO); });
+          smith::DependsOn<0, 1>{}, mesh->entireBodyName(), [i](auto /*t_info*/, auto X, auto U, auto RHO) {
+            return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
+          });
       initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
       constraint_evaluators.push_back(cg_objective);
     }

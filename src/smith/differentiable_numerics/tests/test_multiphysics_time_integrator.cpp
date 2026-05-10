@@ -246,6 +246,61 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   StateManager::reset();
 }
 
+TEST(MultiphysicsTimeIntegrator, CycleZeroAccelerationBcUsesDisplacementSecondTimeDerivative)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "cycle_zero_acceleration_bc_uses_displacement_second_time_derivative");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "cycle_zero_bc_mesh");
+  mesh->addDomainOfBoundaryElements("left",
+                                    [](std::vector<vec2> nodes, int) { return allNodesOnBoundary(nodes, 0.0); });
+  mesh->addDomainOfBoundaryElements("right",
+                                    [](std::vector<vec2> nodes, int) { return allNodesOnBoundary(nodes, 1.0); });
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
+
+  auto time_rule = std::make_shared<QuasiStaticSecondOrderTimeIntegrationRule>();
+  FieldType<H1<1>> displacement_type("displacement_solve_state");
+  auto displacement_bc = field_store->addIndependent(displacement_type, time_rule);
+  auto displacement_old_type =
+      field_store->addDependent(displacement_type, FieldStore::TimeDerivative::VAL, "displacement");
+  auto velocity_type = field_store->addDependent(displacement_type, FieldStore::TimeDerivative::DOT, "velocity");
+  auto acceleration_type =
+      field_store->addDependent(displacement_type, FieldStore::TimeDerivative::DDOT, "acceleration");
+
+  auto cycle_zero_wf = buildSecondOrderCycleZeroWeakForm("cycle_zero_acceleration", mesh, field_store,
+                                                         displacement_old_type, velocity_type, acceleration_type);
+
+  displacement_bc->setScalarBCs<2>(mesh->domain("right"), [](double t, tensor<double, 2>) { return t * t; });
+
+  auto bc_managers = field_store->getBoundaryConditionManagers({cycle_zero_wf->name()});
+  ASSERT_EQ(bc_managers.size(), 1);
+  ASSERT_NE(bc_managers[0], nullptr);
+  const int right_dofs = bc_managers[0]->allEssentialTrueDofs().Size();
+  ASSERT_GT(right_dofs, 0);
+
+  displacement_bc->setScalarBCs<2>(mesh->domain("left"), [](double t, tensor<double, 2>) { return t * t; });
+
+  bc_managers = field_store->getBoundaryConditionManagers({cycle_zero_wf->name()});
+  ASSERT_NE(bc_managers[0], nullptr);
+  EXPECT_GT(bc_managers[0]->allEssentialTrueDofs().Size(), right_dofs);
+
+  mfem::Vector acceleration(field_store->getField("acceleration").get()->space().GetTrueVSize());
+  acceleration = 0.0;
+  for (const auto& bc : bc_managers[0]->essentials()) {
+    bc.setDofs(acceleration, 0.0);
+  }
+
+  for (int dof : bc_managers[0]->allEssentialTrueDofs()) {
+    EXPECT_NEAR(acceleration[dof], 2.0, 1.0e-7);
+  }
+
+  StateManager::reset();
+}
+
 TEST(SystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
 {
   axom::sidre::DataStore datastore;

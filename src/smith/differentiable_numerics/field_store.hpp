@@ -337,31 +337,20 @@ struct FieldStore {
   /**
    * @brief Get the boundary condition managers for the given weak forms, one per residual row.
    *
-   * For each weak form in @p weak_form_names the reaction (test) field name is looked up, and
-   * the corresponding @c BoundaryConditionManager is returned.  If no BC was registered for
-   * that field, @c nullptr is returned for that slot (the solver skips null entries).
+   * For each weak form in @p weak_form_names the reaction (test) field name is looked up.  The
+   * returned manager is selected by consulting the registered @c TimeIntegrationMapping s:
+   *   - reaction = primary or history slot -> value-level BC manager
+   *   - reaction = second-derivative (ddot) slot -> second-derivative BC manager
+   *   - reaction has its own DBC entry not tied to a mapping -> that DBC's value manager
+   *   - otherwise -> @c nullptr (solver skips null entries)
    *
-   * Zero-mirror BCs registered via @c shareBoundaryConditions are materialized lazily on the
-   * first call to this method (so the user's @c set*BCs calls on the source BC are visible).
+   * The second-derivative manager is rebuilt on each call, so late value-BC additions are reflected.
    *
    * @param weak_form_names Ordered list of weak form names whose BCs are needed.
    * @return std::vector<const BoundaryConditionManager*> One entry per weak form, in order.
    */
   std::vector<const BoundaryConditionManager*> getBoundaryConditionManagers(
-      const std::vector<std::string>& weak_form_names);
-
-  /**
-   * @brief Register a zero-valued mirror BC for @p name, sharing the constrained DOF set of @p source_bc.
-   *
-   * Used for fields whose constrained DOFs must match a reference field (e.g. acceleration mirrors
-   * displacement), but whose prescribed BC value is always zero.  The zero BC is materialized
-   * lazily on the first call to @c getBoundaryConditionManagers so that any @c set*BCs calls the
-   * caller makes on @p source_bc after this method returns are reflected in the mirror.
-   *
-   * @param name       Field name to associate with the zero BC.
-   * @param source_bc  BC object whose constrained DOF set is mirrored (e.g. the displacement BC).
-   */
-  void shareBoundaryConditions(const std::string& name, std::shared_ptr<DirichletBoundaryConditions> source_bc);
+      const std::vector<std::string>& weak_form_names) const;
 
   /**
    * @brief Check whether a field exists.
@@ -436,11 +425,6 @@ struct FieldStore {
                                                const std::vector<FieldState>& param_fields) const;
 
   /**
-   * @brief Get the associated mesh.
-   * @return const std::shared_ptr<smith::Mesh>& The mesh.
-   */
-
-  /**
    * @brief Get the list of all parameter fields.
    */
   const std::vector<FieldState>& getParameterFields() const;
@@ -491,16 +475,8 @@ struct FieldStore {
   std::map<std::string, size_t> to_states_index_;
   std::map<std::string, size_t> to_params_index_;
 
-  /// Boundary conditions keyed by field name.  Populated by @c addIndependent (for primary
-  /// unknowns).  Zero-mirror BCs are added lazily by @c getBoundaryConditionManagers when
-  /// entries from @c zero_mirror_sources_ are materialized.
+  /// Boundary conditions keyed by primary unknown field name.
   std::map<std::string, std::shared_ptr<DirichletBoundaryConditions>> boundary_conditions_;
-
-  /// Pending zero-mirror BCs: maps a field name to the source @c DirichletBoundaryConditions
-  /// whose constrained DOF set it should copy (with zero prescribed values).  Entries are
-  /// materialized and moved to @c boundary_conditions_ on the first call to
-  /// @c getBoundaryConditionManagers.
-  std::map<std::string, std::shared_ptr<DirichletBoundaryConditions>> zero_mirror_sources_;
 
   struct FieldLabel {
     std::string field_name;

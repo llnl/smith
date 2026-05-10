@@ -89,8 +89,6 @@ int main(int argc, char* argv[])
                                                   .max_iterations = 15,
                                                   .print_level = 0};
 
-  auto field_store = std::make_shared<smith::FieldStore>(mesh, 100);
-
   smith::SolidMechanicsOptions output_options{.enable_stress_output = true, .output_cauchy_stress = true};
   auto param_fields = smith::registerParameterFields(smith::FieldType<smith::L2<0>>("youngs_modulus"));
   // _solver_end
@@ -98,30 +96,11 @@ int main(int argc, char* argv[])
   // _build_start
   auto solid_system =
       smith::buildSolidMechanicsSystem<dim, order, smith::ImplicitNewmarkSecondOrderTimeIntegrationRule>(
-          nonlinear_options, linear_options, output_options, field_store, param_fields);
+          nonlinear_options, linear_options, output_options, mesh, param_fields);
 
   constexpr double E = 100.0;
   constexpr double nu = 0.25;
   solid_system->setMaterial(YoungsModulusNeoHookeanWithTimeInfo{.density = 1.0, .nu = nu}, mesh->entireBodyName());
-  field_store->getParameterFields()[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return E; });
-
-  auto initial_displacement = [](smith::tensor<double, dim> X) {
-    auto displacement = 0.0 * X;
-    displacement[0] = 1.0e-3 * X[0];
-    return displacement;
-  };
-  auto initial_velocity = [](smith::tensor<double, dim> X) {
-    auto velocity = 0.0 * X;
-    velocity[1] = 2.0e-2 * X[0];
-    return velocity;
-  };
-
-  field_store->getField("displacement_solve_state").get()->setFromFieldFunction(initial_displacement);
-  field_store->getField("displacement").get()->setFromFieldFunction(initial_displacement);
-  field_store->getField("velocity").get()->setFromFieldFunction(initial_velocity);
-  field_store->getField("acceleration").get()->setFromFieldFunction([](smith::tensor<double, dim>) {
-    return smith::tensor<double, dim>{};
-  });
   // _build_end
 
   // _bc_start
@@ -137,23 +116,42 @@ int main(int argc, char* argv[])
     return traction;
   });
 
-  auto output_states = field_store->getOutputFieldStates();
-  auto writer = smith::createParaviewWriter(*mesh, output_states, "paraview_composable_solid_mechanics",
-                                            smith::ParaviewWriter::Options{.write_duals = false});
-  // _bc_end
-
-  // _run_start
   if (solid_system->cycle_zero_systems.empty()) {
     throw std::runtime_error("Expected cycle-zero solve for implicit dynamics.");
   }
 
   auto physics = smith::makeDifferentiablePhysics(solid_system, "composable_solid_mechanics");
-  auto initial_states = physics->getInitialFieldStates();
+  physics->getFieldParam("param_youngs_modulus").get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
+    return E;
+  });
+
+  auto initial_displacement = [](smith::tensor<double, dim> X) {
+    auto displacement = 0.0 * X;
+    displacement[0] = 1.0e-3 * X[0];
+    return displacement;
+  };
+  auto initial_velocity = [](smith::tensor<double, dim> X) {
+    auto velocity = 0.0 * X;
+    velocity[1] = 2.0e-2 * X[0];
+    return velocity;
+  };
+
+  physics->getInitialFieldState("displacement_solve_state").get()->setFromFieldFunction(initial_displacement);
+  physics->getInitialFieldState("displacement").get()->setFromFieldFunction(initial_displacement);
+  physics->getInitialFieldState("velocity").get()->setFromFieldFunction(initial_velocity);
+  physics->getInitialFieldState("acceleration").get()->setFromFieldFunction([](smith::tensor<double, dim>) {
+    return smith::tensor<double, dim>{};
+  });
+
+  auto writer =
+      smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "paraview_composable_solid_mechanics",
+                                  smith::ParaviewWriter::Options{.write_duals = false});
+  // _bc_end
+
+  // _run_start
   using DispSpace = smith::H1<order, dim>;
-  const auto displacement_index = field_store->getFieldIndex("displacement");
-  const auto velocity_index = field_store->getFieldIndex("velocity");
-  const auto qoi_fields =
-      std::vector<smith::FieldState>{initial_states[displacement_index], initial_states[velocity_index]};
+  const auto qoi_fields = std::vector<smith::FieldState>{physics->getInitialFieldState("displacement"),
+                                                         physics->getInitialFieldState("velocity")};
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, DispSpace>> qoi("solid_dynamic_energy_proxy", mesh,
                                                                                smith::spaces(qoi_fields));
   qoi.addBodyIntegral(
@@ -166,8 +164,7 @@ int main(int argc, char* argv[])
   constexpr double dt = 0.25;
   constexpr int num_steps = 3;
   auto current_qoi_fields = [&]() {
-    return std::vector<smith::FieldState>{physics->getFieldStates()[displacement_index],
-                                          physics->getFieldStates()[velocity_index]};
+    return std::vector<smith::FieldState>{physics->getFieldState("displacement"), physics->getFieldState("velocity")};
   };
   auto qoi_state =
       0.0 * smith::evaluateObjective(qoi, physics->getShapeDispFieldState(), qoi_fields,
@@ -184,9 +181,9 @@ int main(int argc, char* argv[])
   std::cout << "QoI value: " << qoi_state.get() << '\n';
   qoi_state.data_store().back_prop();
   auto shape_displacement = physics->getShapeDispFieldState();
-  auto initial_displacement_state = initial_states[displacement_index];
-  auto initial_velocity_state = initial_states[velocity_index];
-  auto youngs_modulus_state = field_store->getParameterFields()[0];
+  auto initial_displacement_state = physics->getInitialFieldState("displacement");
+  auto initial_velocity_state = physics->getInitialFieldState("velocity");
+  auto youngs_modulus_state = physics->getFieldParam("param_youngs_modulus");
   std::cout << "dQoI/d(shape) norm: " << shape_displacement.get_dual()->Norml2() << '\n';
   std::cout << "dQoI/d(youngs_modulus) norm: " << youngs_modulus_state.get_dual()->Norml2() << '\n';
   std::cout << "dQoI/d(initial displacement) norm: " << initial_displacement_state.get_dual()->Norml2() << '\n';
@@ -201,7 +198,7 @@ int main(int argc, char* argv[])
   // _run_end
 
   // _output_start
-  writer.write(physics->cycle(), physics->time(), field_store->getOutputFieldStates());
+  writer.write(physics->cycle(), physics->time(), physics->getFieldStatesAndParamStates());
   std::cout << "ParaView output: paraview_composable_solid_mechanics\n";
   // _output_end
 

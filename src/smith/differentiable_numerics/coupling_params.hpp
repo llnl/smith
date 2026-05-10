@@ -19,6 +19,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
 
@@ -135,6 +137,22 @@ inline constexpr bool has_time_rule_v = false;
 template <typename T>
 inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>>> =
     !std::is_same_v<typename std::decay_t<T>::time_rule_type, NoTimeRule>;
+
+template <typename T>
+inline constexpr bool is_field_store_ptr_v = std::is_same_v<std::decay_t<T>, std::shared_ptr<FieldStore>>;
+
+template <typename T>
+inline constexpr bool is_mesh_ptr_v = std::is_same_v<std::decay_t<T>, std::shared_ptr<Mesh>>;
+
+template <typename T>
+auto getOrCreateFieldStore(T source, std::string prefix = "", size_t storage_size = 100)
+{
+  if constexpr (is_field_store_ptr_v<T>) {
+    return source;
+  } else {
+    return std::make_shared<FieldStore>(source, storage_size, prefix);
+  }
+}
 
 // -------------------------------------------------------------------------
 // Helpers for variadic build functions
