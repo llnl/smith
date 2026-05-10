@@ -15,19 +15,19 @@ template <uint32_t i>
 struct DifferentiateWRT {};
 
 /**
- * @brief this type exists solely as a way to signal to `smith::Functional` that the function
- * smith::Functional::operator()` should differentiate w.r.t. a specific argument
+ * @brief this type exists solely as a way to signal to smith::Functional that the function
+ * smith::Functional::operator() should differentiate w.r.t. a specific argument
  */
 struct differentiate_wrt_this {
   const mfem::Vector& ref;  ///< the actual data wrapped by this type
 
-  /// @brief implicitly convert back to `mfem::Vector` to extract the actual data
+  /// @brief implicitly convert back to mfem::Vector to extract the actual data
   operator const mfem::Vector&() const { return ref; }
 };
 
 /**
  * @brief this function is intended to only be used in combination with
- *   `smith::Functional::operator()`, as a way for the user to express that
+ *   smith::Functional::operator(), as a way for the user to express that
  *   it should both evaluate and differentiate w.r.t. a specific argument (only 1 argument at a time)
  *
  * For example:

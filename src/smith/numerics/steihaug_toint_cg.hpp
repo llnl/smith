@@ -104,17 +104,22 @@ struct TrustRegionResults {
   size_t cg_iterations_count = 0;
 };
 
+/// Delegate for operations Steihaug-Toint CG needs from its caller.
 class SteihaugTointDelegate {
  public:
+  /// destructor
   virtual ~SteihaugTointDelegate() = default;
 
+  /// compute four inner products with one global reduction.
   virtual std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
                                            const mfem::Vector& b1, const mfem::Vector& a2, const mfem::Vector& b2,
                                            const mfem::Vector& a3, const mfem::Vector& b3) const = 0;
 
+  /// compute two inner products with one global reduction.
   virtual std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
                                            const mfem::Vector& b1) const = 0;
 
+  /// project z along d to the trust-region boundary using precomputed dot products.
   virtual void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
                                           double dd) const = 0;
 };

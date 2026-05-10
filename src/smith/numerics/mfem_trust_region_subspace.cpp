@@ -451,6 +451,7 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
 #endif
 }
 
+/// @brief report unavailable MFEM subspace solve when MFEM was built without LAPACK.
 TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>&,
                                                    const std::vector<const mfem::Vector*>&, const mfem::Vector& b,
                                                    double, int)

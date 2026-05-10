@@ -279,7 +279,9 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
   mutable std::deque<std::shared_ptr<mfem::Vector>> accepted_step_history;
   /// initial state for this nonlinear solve, used as an optional history direction
   mutable mfem::Vector solve_start_x;
+  /// state with the lowest residual norm seen in this nonlinear solve
   mutable mfem::Vector min_residual_x;
+  /// lowest residual norm seen in this nonlinear solve
   mutable double min_residual_norm = -1.0;
 
   /// nonlinear solution options
@@ -304,6 +306,7 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
   }
 #endif
 
+  /// compute several vector inner products with a single MPI reduction when possible
   template <typename... Args>
   std::array<double, sizeof...(Args) / 2> dot_many(const Args&... args) const
   {
@@ -371,6 +374,7 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     return products;
   }
 
+  /// apply Hessian-vector products for all supplied subspace directions
   template <typename HessVecFunc>
   void batchedSubspaceHessVec(HessVecFunc hess_vec_func, const std::vector<const mfem::Vector*>& inputs,
                               const std::vector<mfem::Vector*>& outputs) const
@@ -385,6 +389,7 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     }
   }
 
+  /// store accepted steps for optional later subspace enrichment
   void pushAcceptedStepHistory(const mfem::Vector& step) const
   {
     if (nonlinear_options.trust_num_past_steps <= 0) {
@@ -399,6 +404,7 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     }
   }
 
+  /// SteihaugTointDelegate implementation for four inner products.
   std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
                                    const mfem::Vector& b1, const mfem::Vector& a2, const mfem::Vector& b2,
                                    const mfem::Vector& a3, const mfem::Vector& b3) const override
@@ -406,12 +412,14 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
     return dot_many(a0, b0, a1, b1, a2, b2, a3, b3);
   }
 
+  /// SteihaugTointDelegate implementation for two inner products.
   std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
                                    const mfem::Vector& b1) const override
   {
     return dot_many(a0, b0, a1, b1);
   }
 
+  /// SteihaugTointDelegate implementation for projecting to the trust-region boundary.
   void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
                                   double dd) const override
   {

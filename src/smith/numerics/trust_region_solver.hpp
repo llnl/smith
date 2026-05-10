@@ -25,6 +25,7 @@
 
 namespace smith {
 
+/// Exception type for trust-region subspace solve failures.
 class TrustRegionException : public std::exception {
  public:
   /// constructor
@@ -38,6 +39,7 @@ class TrustRegionException : public std::exception {
   std::string msg;
 };
 
+/// Subspace solution, leftmost eigenvectors, leftmost eigenvalues, and predicted model energy change.
 using TrustRegionSubspaceResult =
     std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector<double>, double>;
 
