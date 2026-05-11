@@ -162,7 +162,7 @@ struct MeshFixture : public testing::Test {
           return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(), pk_stress};
         });
 
-    solid_mechanics_residual->addBodySource(smith::DependsOn<>{}, mesh_->entireBodyName(), [](auto /*t_info*/, auto X) {
+    solid_mechanics_residual->addBodySource(mesh_->entireBodyName(), [](auto /*t_info*/, auto X) {
       auto b = 0.0 * X;
       b[1] = gravity;
       return b;
@@ -190,7 +190,7 @@ struct MeshFixture : public testing::Test {
     auto ke_objective = std::make_shared<smith::FunctionalObjective<dim, smith::Parameters<VectorSpace, DensitySpace>>>(
         "integrated_squared_temperature", mesh_, smith::spaces({states[DISP], params_[DENSITY]}));
 
-    ke_objective->addBodyIntegral(smith::DependsOn<0, 1>(), mesh_->entireBodyName(),
+    ke_objective->addBodyIntegral(mesh_->entireBodyName(),
                                   [](auto /*t*/, auto /*X*/, auto U, auto Rho) {
                                     auto u = get<smith::VALUE>(U);
                                     return 0.5 * get<smith::VALUE>(Rho) * smith::inner(u, u);
@@ -390,7 +390,7 @@ TEST_F(MeshFixture, TransientConstantGravity)
 
   smith::FunctionalObjective<dim, smith::Parameters<VectorSpace>> accel_error("accel_error", mesh_,
                                                                               smith::spaces({all_fields[ACCEL]}));
-  accel_error.addBodyIntegral(smith::DependsOn<0>{}, mesh_->entireBodyName(),
+  accel_error.addBodyIntegral(mesh_->entireBodyName(),
                               [a_exact](auto /*t*/, auto /*X*/, auto A) {
                                 auto a = smith::get<smith::VALUE>(A);
                                 auto da0 = a[0];
@@ -403,7 +403,7 @@ TEST_F(MeshFixture, TransientConstantGravity)
 
   smith::FunctionalObjective<dim, smith::Parameters<VectorSpace>> velo_error("velo_error", mesh_,
                                                                              smith::spaces({all_fields[VELO]}));
-  velo_error.addBodyIntegral(smith::DependsOn<0>{}, mesh_->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
+  velo_error.addBodyIntegral(mesh_->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
     auto v = smith::get<smith::VALUE>(V);
     auto dv0 = v[0];
     auto dv1 = v[1] - v_exact;
@@ -415,7 +415,7 @@ TEST_F(MeshFixture, TransientConstantGravity)
 
   smith::FunctionalObjective<dim, smith::Parameters<VectorSpace>> disp_error("disp_error", mesh_,
                                                                              smith::spaces({all_fields[DISP]}));
-  disp_error.addBodyIntegral(smith::DependsOn<0>{}, mesh_->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
+  disp_error.addBodyIntegral(mesh_->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
     auto u = smith::get<smith::VALUE>(U);
     auto du0 = u[0];
     auto du1 = u[1] - u_exact;

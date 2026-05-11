@@ -25,24 +25,6 @@
 
 namespace smith {
 
-namespace detail {
-
-template <typename ValueType>
-/// @brief Scale a cycle-zero residual contribution by `dt*dt`.
-auto scaleCycleZeroTerm(const TimeInfo& t_info, ValueType value)
-{
-  return (t_info.dt() * t_info.dt()) * value;
-}
-
-template <typename InertiaType, typename StressType>
-/// @brief Package scaled inertia and stress terms for the cycle-zero weak form.
-auto makeScaledCycleZeroResidual(const TimeInfo& t_info, InertiaType inertia, StressType stress)
-{
-  return smith::tuple{scaleCycleZeroTerm(t_info, inertia), scaleCycleZeroTerm(t_info, stress)};
-}
-
-}  // namespace detail
-
 /**
  * @brief System struct for solid dynamics with configurable time integration.
  *
@@ -69,15 +51,6 @@ struct SolidMechanicsSystem : public SystemBase {
   using SolidWeakFormType =
       FunctionalWeakForm<dim, H1<order, dim>, detail::TimeRuleParams<DisplacementTimeRule, H1<order, dim>, Coupling>>;
 
-  /// Cycle-zero startup form reusing the main solid fields: (u, v, a, coupling_fields..., params...)
-  /// At cycle 0 the velocity field holds the initial velocity (no prior step has run), so the
-  /// second argument is `v` (initial), not `v_old`. Acceleration is the unknown for this internal solve.
-  /// No extra fields are registered for cycle zero.
-  using CycleZeroSolidWeakFormType =
-      FunctionalWeakForm<dim, H1<order, dim>,
-                         typename detail::AppendCouplingToParams<
-                             Coupling, Parameters<H1<order, dim>, H1<order, dim>, H1<order, dim>>>::type>;
-
   /// L2 projection weak form for PK1 stress output (dim*dim components).
   /// Args: (stress_unknown, u, u_old, v_old, a_old, coupling_fields..., params...).
   using StressOutputWeakFormType = FunctionalWeakForm<
@@ -86,8 +59,6 @@ struct SolidMechanicsSystem : public SystemBase {
                                                                    H1<order, dim>, H1<order, dim>>>::type>;
 
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
-  std::shared_ptr<CycleZeroSolidWeakFormType>
-      cycle_zero_solid_weak_form;                        ///< Typed cycle zero solid mechanics weak form.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
 
@@ -114,17 +85,6 @@ struct SolidMechanicsSystem : public SystemBase {
 
           return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
         });
-
-    // Add to cycle-zero weak form (at cycle 0, u and v are given, solve for a)
-    if (cycle_zero_solid_weak_form) {
-      cycle_zero_solid_weak_form->addBodyIntegral(
-          domain_name, [=](auto t_info, auto /*X*/, auto u, auto /*v_old*/, auto a, auto... params) {
-            typename MaterialType::State state;
-            auto pk_stress = material(t_info, state, get<DERIVATIVE>(u), tensor<double, dim, dim>{}, params...);
-
-            return detail::makeScaledCycleZeroResidual(t_info, get<VALUE>(a) * material.density, pk_stress);
-          });
-    }
 
     // Stress output projection: L2 projection of PK1 stress onto an L2 piecewise-constant field.
     // Residual: ∫ test · (stress_unknown - pk_stress(u)) dx = 0.
@@ -157,32 +117,6 @@ struct SolidMechanicsSystem : public SystemBase {
   }
 
   /**
-   * @brief Add a body force to the system (with DependsOn).
-   * @tparam active_parameters Indices of fields this force depends on.
-   * @tparam BodyForceType The body force function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the domain to apply the force to.
-   * @param force_function The force function (t, X, u, v, a, params...).
-   */
-  template <int... active_parameters, typename BodyForceType>
-  void addBodyForce(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
-                    BodyForceType force_function)
-  {
-    auto captured_rule = disp_time_rule;
-    solid_weak_form->template addBodySource<0, 1, 2, 3, (4 + active_parameters)...>(
-        DependsOn<0, 1, 2, 3, (4 + active_parameters)...>{}, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
-          auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
-          return force_function(t_info.time(), X, u_current, v_current, a_current, params...);
-        });
-
-    addCycleZeroBodySourceImpl(
-        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto v, auto a, auto... params) {
-          return detail::scaleCycleZeroTerm(t_info, force_function(t_info.time(), X, u, v, a, params...));
-        });
-  }
-
-  /**
    * @brief Add a body force to the system.
    * @tparam BodyForceType The body force function type.
    * @param domain_name The name of the domain to apply the force to.
@@ -191,32 +125,12 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename BodyForceType>
   void addBodyForce(const std::string& domain_name, BodyForceType force_function)
   {
-    addBodyForceAllParams(domain_name, force_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
-  }
-
-  /**
-   * @brief Add a surface traction (flux) to the system (with DependsOn).
-   * @tparam active_parameters Indices of fields this traction depends on.
-   * @tparam TractionType The traction function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the boundary domain to apply the traction to.
-   * @param traction_function The traction function (t, X, n, u, v, a, params...).
-   */
-  template <int... active_parameters, typename TractionType>
-  void addTraction(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
-                   TractionType traction_function)
-  {
     auto captured_rule = disp_time_rule;
-    solid_weak_form->template addBoundaryFlux<0, 1, 2, 3, (4 + active_parameters)...>(
-        DependsOn<0, 1, 2, 3, (4 + active_parameters)...>{}, domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+    solid_weak_form->addBodySource(
+        domain_name,
+        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
-          return traction_function(t_info.time(), X, n, u_current, v_current, a_current, params...);
-        });
-
-    addCycleZeroBoundaryFluxImpl(
-        depends_on, domain_name, [=](auto t_info, auto X, auto n, auto u, auto v, auto a, auto... params) {
-          return detail::scaleCycleZeroTerm(t_info, traction_function(t_info.time(), X, n, u, v, a, params...));
+          return force_function(t_info.time(), X, u_current, v_current, a_current, params...);
         });
   }
 
@@ -229,47 +143,12 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename TractionType>
   void addTraction(const std::string& domain_name, TractionType traction_function)
   {
-    addTractionAllParams(domain_name, traction_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
-  }
-
-  /**
-   * @brief Add a pressure boundary condition (follower force) (with DependsOn).
-   * @tparam active_parameters Indices of fields this pressure depends on.
-   * @tparam PressureType The pressure function type.
-   * @param depends_on Dependency specification for which input fields to pass.
-   * @param domain_name The name of the boundary domain.
-   * @param pressure_function The pressure function (t, X, params...).
-   */
-  template <int... active_parameters, typename PressureType>
-  void addPressure(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
-                   PressureType pressure_function)
-  {
     auto captured_rule = disp_time_rule;
-    solid_weak_form->template addBoundaryIntegral<0, 1, 2, 3, (4 + active_parameters)...>(
-        DependsOn<0, 1, 2, 3, (4 + active_parameters)...>{}, domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
-          auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
-
-          auto x_current = X + u_current;
-          auto n_deformed = cross(get<DERIVATIVE>(x_current));
-          auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
-
-          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
-
-          return pressure * n_deformed * (1.0 / n_shape_norm);
-        });
-
-    addCycleZeroBoundaryIntegralImpl(
-        depends_on, domain_name, [=](auto t_info, auto X, auto u, auto /*v_old*/, auto /*a*/, auto... params) {
-          auto u_current = u;
-
-          auto x_current = X + u_current;
-          auto n_deformed = cross(get<DERIVATIVE>(x_current));
-          auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
-
-          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
-
-          return detail::scaleCycleZeroTerm(t_info, pressure * n_deformed * (1.0 / n_shape_norm));
+    solid_weak_form->addBoundaryFlux(
+        domain_name,
+        [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+          auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
+          return traction_function(t_info.time(), X, n, u_current, v_current, a_current, params...);
         });
   }
 
@@ -282,7 +161,20 @@ struct SolidMechanicsSystem : public SystemBase {
   template <typename PressureType>
   void addPressure(const std::string& domain_name, PressureType pressure_function)
   {
-    addPressureAllParams(domain_name, pressure_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
+    auto captured_rule = disp_time_rule;
+    solid_weak_form->addBoundaryIntegral(
+        domain_name,
+        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+          auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
+
+          auto x_current = X + u_current;
+          auto n_deformed = cross(get<DERIVATIVE>(x_current));
+          auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
+
+          auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(params)...);
+
+          return pressure * n_deformed * (1.0 / n_shape_norm);
+        });
   }
 
   /// Set zero-displacement Dirichlet BC on all components.
@@ -302,51 +194,9 @@ struct SolidMechanicsSystem : public SystemBase {
   }
 
  private:
-  template <typename BodyForceType, std::size_t... Is>
-  void addBodyForceAllParams(const std::string& domain_name, BodyForceType force_function, std::index_sequence<Is...>)
-  {
-    addBodyForce(DependsOn<static_cast<int>(Is)...>{}, domain_name, force_function);
-  }
 
-  template <typename TractionType, std::size_t... Is>
-  void addTractionAllParams(const std::string& domain_name, TractionType traction_function, std::index_sequence<Is...>)
-  {
-    addTraction(DependsOn<static_cast<int>(Is)...>{}, domain_name, traction_function);
-  }
 
-  template <typename PressureType, std::size_t... Is>
-  void addPressureAllParams(const std::string& domain_name, PressureType pressure_function, std::index_sequence<Is...>)
-  {
-    addPressure(DependsOn<static_cast<int>(Is)...>{}, domain_name, pressure_function);
-  }
 
-  // Cycle-zero helpers always include the 3 cycle-zero state slots, followed by the selected tail args.
-  template <int... active_parameters, typename IntegrandType>
-  void addCycleZeroBodySourceImpl(DependsOn<active_parameters...>, const std::string& name, IntegrandType f)
-  {
-    if (cycle_zero_solid_weak_form) {
-      cycle_zero_solid_weak_form->template addBodySource<0, 1, 2, (3 + active_parameters)...>(
-          DependsOn<0, 1, 2, (3 + active_parameters)...>{}, name, f);
-    }
-  }
-
-  template <int... active_parameters, typename IntegrandType>
-  void addCycleZeroBoundaryFluxImpl(DependsOn<active_parameters...>, const std::string& name, IntegrandType f)
-  {
-    if (cycle_zero_solid_weak_form) {
-      cycle_zero_solid_weak_form->template addBoundaryFlux<0, 1, 2, (3 + active_parameters)...>(
-          DependsOn<0, 1, 2, (3 + active_parameters)...>{}, name, f);
-    }
-  }
-
-  template <int... active_parameters, typename IntegrandType>
-  void addCycleZeroBoundaryIntegralImpl(DependsOn<active_parameters...>, const std::string& name, IntegrandType f)
-  {
-    if (cycle_zero_solid_weak_form) {
-      cycle_zero_solid_weak_form->template addBoundaryIntegral<0, 1, 2, (3 + active_parameters)...>(
-          DependsOn<0, 1, 2, (3 + active_parameters)...>{}, name, f);
-    }
-  }
 };
 
 /**
@@ -467,16 +317,14 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
 
   if (disp_time_rule_ptr->requiresInitialAccelerationSolve()) {
     std::string cycle_zero_name = field_store->prefix("cycle_zero_acceleration_reaction");
-    auto accel_as_unknown = accel_old_type;
-    accel_as_unknown.is_unknown = true;
-    FieldType<H1<order, dim>> disp_cz_input(disp_type.name);
-    sys->cycle_zero_solid_weak_form =
-        detail::buildWeakFormWithCoupling<typename SystemType::CycleZeroSolidWeakFormType>(
-            field_store, cycle_zero_name, accel_old_type.name, disp_cz_input, velo_old_type, accel_as_unknown,
-            coupling.fields);
     field_store->markWeakFormInternal(cycle_zero_name);
     auto cycle_zero_solver = detail::makeCycleZeroSolver(solver, *field_store->getMesh());
-    sys->cycle_zero_systems.push_back(makeSystem(field_store, cycle_zero_solver, {sys->cycle_zero_solid_weak_form}));
+    
+    // We reuse solid_weak_form for cycle zero, but we must pass correct inputs at evaluation time.
+    // However, the SystemBase needs a cycle_zero_systems populated. We use the solid_weak_form.
+    // Note that during cycle-zero solve, we want to solve for acceleration, but solid_weak_form
+    // was built with disp_type.name as the unknown. We'll handle this in MultiphysicsTimeIntegrator.
+    sys->cycle_zero_systems.push_back(makeSystem(field_store, cycle_zero_solver, {sys->solid_weak_form}));
   }
 
   if (has_stress_output) {

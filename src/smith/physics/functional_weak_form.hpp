@@ -107,20 +107,20 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
+  template <typename BodyIntegralType, int... all_params>
+  void addBodyIntegralImpl(std::string body_name, BodyIntegralType integrand, std::integer_sequence<int, all_params...>)
   {
     const double* dt = &dt_;
     const size_t* cycle = &cycle_;
     weak_form_->AddDomainIntegral(
-        Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
+        Dimension<spatial_dim>{}, DependsOn<all_params...>{},
         [dt, cycle, integrand](double time, auto X, auto... inputs) {
           return integrand(TimeInfo(time, *dt, *cycle), X, inputs...);
         },
         mesh_->domain(body_name));
 
     v_dot_weak_form_residual_->AddDomainIntegral(
-        Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
+        Dimension<spatial_dim>{}, DependsOn<0, 1 + all_params...>{},
         [dt, cycle, integrand](double time, auto X, auto V, auto... inputs) {
           auto orig_tuple = integrand(TimeInfo(time, *dt, *cycle), X, inputs...);
           return smith::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
@@ -129,11 +129,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         mesh_->domain(body_name));
   }
 
-  /// @overload
-  template <typename BodyForceType>
-  void addBodyIntegral(std::string body_name, BodyForceType body_integral)
+  template <typename BodyIntegralType>
+  void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
   {
-    addBodyIntegralWithAllParams(body_name, body_integral, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
+    addBodyIntegralImpl(body_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -156,20 +155,12 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename BodyLoadType>
-  void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
-  {
-    addBodyIntegral(depends_on, body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
-      return smith::tuple{-load_function(t_info, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
-    });
-  }
-
-  /// @overload
-  template <int... active_parameters, typename BodyLoadType>
+  template <typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {
-    return addBodySourceWithAllParams(body_name, load_function,
-                                      std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
+    addBodyIntegral(body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      return smith::tuple{-load_function(t_info, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+    });
   }
 
   /**
@@ -195,20 +186,20 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename BoundaryIntegrandType>
-  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, BoundaryIntegrandType integrand)
+  template <typename BoundaryIntegrandType, int... all_params>
+  void addBoundaryIntegralImpl(std::string boundary_name, BoundaryIntegrandType integrand, std::integer_sequence<int, all_params...>)
   {
     const double* dt = &dt_;
     const size_t* cycle = &cycle_;
     weak_form_->AddBoundaryIntegral(
-        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
+        Dimension<spatial_dim - 1>{}, DependsOn<all_params...>{},
         [dt, cycle, integrand](double time, auto X, auto... params) {
           return integrand(TimeInfo(time, *dt, *cycle), X, params...);
         },
         mesh_->domain(boundary_name));
 
     v_dot_weak_form_residual_->AddBoundaryIntegral(
-        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
+        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + all_params...>{},
         [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
           auto orig_surface_flux = integrand(TimeInfo(time, *dt, *cycle), X, params...);
           return smith::inner(get<VALUE>(V), orig_surface_flux);
@@ -216,12 +207,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         mesh_->domain(boundary_name));
   }
 
-  /// @overload
   template <typename BoundaryIntegrandType>
   void addBoundaryIntegral(std::string boundary_name, const BoundaryIntegrandType& integrand)
   {
-    addBoundaryIntegralWithAllParams(boundary_name, integrand,
-                                     std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
+    addBoundaryIntegralImpl(boundary_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -242,21 +231,20 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename InteriorIntegrandType>
-  void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name,
-                                   InteriorIntegrandType integrand)
+  template <typename InteriorIntegrandType, int... all_params>
+  void addInteriorBoundaryIntegralImpl(std::string interior_name, InteriorIntegrandType integrand, std::integer_sequence<int, all_params...>)
   {
     const double* dt = &dt_;
     const size_t* cycle = &cycle_;
     weak_form_->AddInteriorFaceIntegral(
-        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
+        Dimension<spatial_dim - 1>{}, DependsOn<all_params...>{},
         [dt, cycle, integrand](double time, auto X, auto... params) {
           return integrand(TimeInfo(time, *dt, *cycle), X, params...);
         },
         mesh_->domain(interior_name));
 
     v_dot_weak_form_residual_->AddInteriorFaceIntegral(
-        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
+        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + all_params...>{},
         [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
           auto [V1, V2] = V;
           auto orig_surface_flux = integrand(TimeInfo(time, *dt, *cycle), X, params...);
@@ -266,12 +254,10 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         mesh_->domain(interior_name));
   }
 
-  /// @overload
   template <typename InteriorIntegrandType>
   void addInteriorBoundaryIntegral(std::string interior_name, const InteriorIntegrandType& integrand)
   {
-    addInteriorBoundaryIntegralWithAllParams(interior_name, integrand,
-                                             std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
+    addInteriorBoundaryIntegralImpl(interior_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -295,21 +281,13 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename BoundaryFluxType>
-  void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
-                       BoundaryFluxType flux_function)
+  template <typename BoundaryFluxType>
+  void addBoundaryFlux(std::string boundary_name, BoundaryFluxType flux_function)
   {
-    addBoundaryIntegral(depends_on, boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
+    addBoundaryIntegral(boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
       auto n = cross(get<DERIVATIVE>(X));
       return -flux_function(t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
     });
-  }
-
-  /// @overload
-  template <typename BoundaryFluxType>
-  void addBoundaryFlux(std::string boundary_name, const BoundaryFluxType& integrand)
-  {
-    addBoundaryFluxWithAllParams(boundary_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /// @overload

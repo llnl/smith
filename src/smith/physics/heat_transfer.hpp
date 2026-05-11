@@ -460,7 +460,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, Domain& domain)
   {
-    setMaterial(DependsOn<>{}, material, domain);
+    setMaterial(material, domain);
   }
 
   /**

@@ -155,7 +155,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
       "entire_body");
 
   // DependsOn now indexes only trailing coupling/parameter args, so empty means "state-only".
-  thermal_system->addHeatSource(DependsOn<>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
+  thermal_system->addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
     auto x = X[0];
     auto y = X[1];
     return 2.0 * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);

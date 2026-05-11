@@ -88,7 +88,7 @@ auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh>
   using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>>>;
   auto weak_form = std::make_shared<WeakFormType>(name, mesh, fs->getField(field_type.name).get()->space(),
                                                   fs->createSpaces(name, field_type.name, field_type));
-  weak_form->addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(),
+  weak_form->addBodyIntegral(mesh->entireBodyName(),
                              [](auto, auto, auto u) { return smith::tuple{0.0 * get<VALUE>(u), get<DERIVATIVE>(u)}; });
   return weak_form;
 }

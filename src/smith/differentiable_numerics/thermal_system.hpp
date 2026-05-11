@@ -136,7 +136,13 @@ struct ThermalSystem : public SystemBase {
   template <typename HeatSourceType>
   void addHeatSource(const std::string& domain_name, HeatSourceType source_function)
   {
-    addHeatSourceAllParams(domain_name, source_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
+    auto captured_rule = temperature_time_rule;
+    thermal_weak_form->addBodySource(
+        domain_name,
+        [=](auto t_info, auto X, auto T, auto T_old, auto... params) {
+          auto T_current = captured_rule->value(t_info, T, T_old);
+          return source_function(t_info.time(), X, T_current, params...);
+        });
   }
 
   /**
@@ -168,7 +174,13 @@ struct ThermalSystem : public SystemBase {
   template <typename HeatFluxType>
   void addHeatFlux(const std::string& boundary_name, HeatFluxType flux_function)
   {
-    addHeatFluxAllParams(boundary_name, flux_function, std::make_index_sequence<Coupling::num_coupling_fields>{});
+    auto captured_rule = temperature_time_rule;
+    thermal_weak_form->addBoundaryFlux(
+        boundary_name,
+        [=](auto t_info, auto X, auto n, auto T, auto T_old, auto... params) {
+          auto T_current = captured_rule->value(t_info, T, T_old);
+          return flux_function(t_info.time(), X, n, T_current, params...);
+        });
   }
 
   /// Set zero-temperature Dirichlet BC.
@@ -182,17 +194,7 @@ struct ThermalSystem : public SystemBase {
   }
 
  private:
-  template <typename HeatSourceType, std::size_t... Is>
-  void addHeatSourceAllParams(const std::string& domain_name, HeatSourceType f, std::index_sequence<Is...>)
-  {
-    addHeatSource(DependsOn<static_cast<int>(Is)...>{}, domain_name, f);
-  }
 
-  template <typename HeatFluxType, std::size_t... Is>
-  void addHeatFluxAllParams(const std::string& boundary_name, HeatFluxType f, std::index_sequence<Is...>)
-  {
-    addHeatFlux(DependsOn<static_cast<int>(Is)...>{}, boundary_name, f);
-  }
 };
 
 struct ThermalOptions {};

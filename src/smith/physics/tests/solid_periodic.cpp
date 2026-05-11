@@ -81,7 +81,7 @@ void periodic_test(mfem::Element::Type element_type)
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, mesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   mesh->addDomainOfBoundaryElements("support", by_attr<dim>(2));
   solid_solver.setFixedBCs(mesh->domain("support"));

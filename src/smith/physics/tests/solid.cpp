@@ -185,7 +185,7 @@ void functional_parameterized_solid_test(double expected_disp_norm)
   solid_solver.setParameter(1, user_defined_shear_modulus);
 
   solid_mechanics::ParameterizedLinearIsotropicSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, mesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   // Specify initial / boundary conditions
   mesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(1));
@@ -206,9 +206,8 @@ void functional_parameterized_solid_test(double expected_disp_norm)
 
   // add some nonexistent body forces / tractions to check that
   // these parameterized versions compile and run without error
-  solid_solver.addBodyForce(
-      DependsOn<0>{}, [](const auto& x, double /*t*/, auto /* bulk */) { return x * 0.0; }, mesh->entireBody());
-  solid_solver.addBodyForce(DependsOn<1>{}, ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }},
+  solid_solver.addBodyForce([](const auto& x, double /*t*/, auto /* bulk */) { return x * 0.0; }, mesh->entireBody());
+  solid_solver.addBodyForce(ParameterizedBodyForce{[](const auto& x) { return 0.0 * x; }},
                             mesh->entireBody());
   solid_solver.setTraction(DependsOn<1>{}, [](const auto& x, auto...) { return 0 * x; }, mesh->entireBoundary());
 

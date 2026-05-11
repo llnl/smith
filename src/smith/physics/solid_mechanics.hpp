@@ -526,7 +526,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * boundary is used.
    * ~~~ {.cpp}
    *
-   *  solid_mechanics.addCustomBoundaryIntegral(DependsOn<>{}, [](double t, auto position, auto displacement, auto
+   *  solid_mechanics.addCustomBoundaryIntegral([](double t, auto position, auto displacement, auto
    * acceleration, auto shape){ auto [X, dX_dxi] = position;
    *
    *     auto [u, du_dxi] = displacement;
@@ -628,7 +628,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    *
    *  double lambda = 500.0;
    *  double mu = 500.0;
-   *  solid_mechanics.addCustomDomainIntegral(DependsOn<>{}, [=](auto x, auto displacement, auto acceleration, auto
+   *  solid_mechanics.addCustomDomainIntegral([=](auto x, auto displacement, auto acceleration, auto
    * shape_displacement){ auto du_dx = smith::get<1>(displacement);
    *
    *    auto I       = Identity<dim>();
@@ -740,7 +740,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void setMaterial(const MaterialType& material, Domain& domain,
                    std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setMaterial(DependsOn<>{}, material, domain, qdata);
+    setMaterial(material, domain, qdata);
   }
 
   /**
@@ -923,7 +923,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   template <typename BodyForceType>
   void addBodyForce(BodyForceType body_force, Domain& domain)
   {
-    addBodyForce(DependsOn<>{}, body_force, domain);
+    addBodyForce(body_force, domain);
   }
 
   /**

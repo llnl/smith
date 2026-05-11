@@ -167,7 +167,10 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   solid_system->setDisplacementBC(mesh_->domain("left"));
   thermal_system->setTemperatureBC(mesh_->domain("left"), [](auto, auto) { return 1.0; });
 
-  solid_system->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
+  solid_system->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto... /*params*/) {
+    // If X is a dual number, we need to create a dual number for traction with zero derivative wrt all active parameters.
+    // For now, returning a value works perfectly fine with smith AD system!
+    // But since X might be a dual number, we must strip its dual part if we just want a value.
     auto traction = 0.0 * X;
     traction[0] = -0.015;
     return traction;
@@ -234,7 +237,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
   thermal_system->setTemperatureBC(mesh_->domain("left"), [](auto, auto) { return 1.0; });
   thermal_system->setTemperatureBC(mesh_->domain("right"), [](auto, auto) { return 0.0; });
 
-  solid_system->addTraction(DependsOn<>{}, "right", [=](double, auto X, auto, auto, auto, auto) {
+  solid_system->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto... /*params*/) {
     auto traction = 0.0 * X;
     traction[0] = -0.005;
     return traction;
@@ -247,7 +250,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
       "staggered_qoi", mesh_,
       spaces({coupled_system->field_store->getField("displacement"),
               coupled_system->field_store->getField("temperature")}));
-  qoi.addBodyIntegral(DependsOn<0, 1>{}, mesh_->entireBodyName(), [](auto, auto, auto U, auto Theta) {
+  qoi.addBodyIntegral(mesh_->entireBodyName(), [](auto, auto, auto U, auto Theta) {
     auto u = get<VALUE>(U);
     auto theta = get<VALUE>(Theta);
     return 0.5 * u[0] * u[0] + 0.05 * theta * theta;
@@ -360,7 +363,7 @@ TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
                             mesh_->entireBodyName());
 
   solid_system->setDisplacementBC(mesh_->domain("left"));
-  solid_system->addTraction("right", [](double, auto X, auto, auto, auto, auto) {
+  solid_system->addTraction("right", [](double, auto X, auto, auto, auto, auto, auto... /*params*/) {
     auto t = 0.0 * X;
     t[0] = -0.01;
     return t;

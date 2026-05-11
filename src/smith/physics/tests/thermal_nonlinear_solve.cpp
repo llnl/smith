@@ -65,7 +65,7 @@ void functional_thermal_test_nonlinear()
   thermal_solver.setSource([](auto, auto, auto, auto) { return 2.0; }, mesh->entireBody());
 
   // clang-format off
-  thermal_solver.addCustomBoundaryIntegral(smith::DependsOn<>{}, [&](auto, auto, auto temperature, auto) {
+  thermal_solver.addCustomBoundaryIntegral([&](auto, auto, auto temperature, auto) {
     static constexpr double radiateConstant = 5.0-7;
     static constexpr double T0              = 21.0;
     using std::pow;

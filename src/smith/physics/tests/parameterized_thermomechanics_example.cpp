@@ -117,7 +117,7 @@ TEST(Thermomechanics, ParameterizedMaterial)
   double theta_ref = 0.0;  ///< datum temperature for thermal expansion
 
   ParameterizedThermoelasticMaterial material{density, E, nu, theta_ref};
-  simulation.setMaterial(DependsOn<0, 1>{}, material, mesh->entireBody());
+  simulation.setMaterial(material, mesh->entireBody());
 
   double deltaT = 1.0;
   FiniteElementState temperature(mesh->mfemParMesh(), H1<p>{}, "theta");

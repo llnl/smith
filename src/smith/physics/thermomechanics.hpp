@@ -379,9 +379,9 @@ class Thermomechanics : public BasePhysics {
     // note: these parameter indices are offset by 1 since, internally, this module uses the first parameter
     // to communicate the temperature and displacement field information to the other physics module
     //
-    thermal_.setMaterial(DependsOn<0, active_parameters + 1 ...>{}, ThermalMaterialInterface<MaterialType>{material},
+    thermal_.setMaterial(ThermalMaterialInterface<MaterialType>{material},
                          domain);
-    solid_.setMaterial(DependsOn<0, active_parameters + 1 ...>{}, MechanicalMaterialInterface<MaterialType>{material},
+    solid_.setMaterial(MechanicalMaterialInterface<MaterialType>{material},
                        domain, qdata);
   }
 
@@ -390,7 +390,7 @@ class Thermomechanics : public BasePhysics {
   void setMaterial(const MaterialType& material, Domain& domain,
                    std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
-    setMaterial(DependsOn<>{}, material, domain, qdata);
+    setMaterial(material, domain, qdata);
   }
 
   /**

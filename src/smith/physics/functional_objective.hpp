@@ -67,18 +67,23 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
    * @param body_name string specifying the domain to integrate over
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
-  template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
-  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name,
-                       const FuncOfTimeSpaceAndParams& qfunction)
+  template <typename FuncOfTimeSpaceAndParams, int... all_params>
+  void addBodyIntegralImpl(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction, std::integer_sequence<int, all_params...>)
   {
     const double* dt = &dt_;
     const size_t* cycle = &cycle_;
     objective_->AddDomainIntegral(
-        smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{},
+        smith::Dimension<spatial_dim>{}, smith::DependsOn<all_params...>{},
         [dt, cycle, qfunction](double time, auto X, auto... params) {
           return qfunction(TimeInfo(time, *dt, *cycle), X, params...);
         },
         mesh_->domain(body_name));
+  }
+
+  template <typename FuncOfTimeSpaceAndParams>
+  void addBodyIntegral(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    addBodyIntegralImpl(body_name, qfunction, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -88,18 +93,23 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
    * @param boundary_name string specifying the boundary to integrate over
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
-  template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
-  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name,
-                           const FuncOfTimeSpaceAndParams& qfunction)
+  template <typename FuncOfTimeSpaceAndParams, int... all_params>
+  void addBoundaryIntegralImpl(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction, std::integer_sequence<int, all_params...>)
   {
     const double* dt = &dt_;
     const size_t* cycle = &cycle_;
     objective_->AddBoundaryIntegral(
-        smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{},
+        smith::Dimension<spatial_dim>{}, smith::DependsOn<all_params...>{},
         [dt, cycle, qfunction](double time, auto X, auto... params) {
           return qfunction(TimeInfo(time, *dt, *cycle), X, params...);
         },
         mesh_->domain(boundary_name));
+  }
+
+  template <typename FuncOfTimeSpaceAndParams>
+  void addBoundaryIntegral(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    addBoundaryIntegralImpl(boundary_name, qfunction, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /// @overload

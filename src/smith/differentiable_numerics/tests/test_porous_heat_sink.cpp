@@ -184,14 +184,14 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   auto gamma_coef = std::make_shared<mfem::FunctionCoefficient>(gamma_fun);
   gamma.get()->project(gamma_coef);
 
-  T1_form.addBodyIntegral(DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
+  T1_form.addBodyIntegral(mesh->entireBodyName(),
                           [sigma, a, q_n](auto /* t_info */, auto /* x */, auto T_1, auto T_2, auto gamma_) {
                             auto [T_1_val, dT_1_dX] = T_1;
                             auto [T_2_val, dT_2_dX] = T_2;
                             auto [gamma_val, dgamma_dX] = gamma_;
                             return smith::tuple{a(gamma_val) * q_n(T_1_val, T_2_val), sigma(gamma_val) * dT_1_dX};
                           });
-  T2_form.addBodyIntegral(DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
+  T2_form.addBodyIntegral(mesh->entireBodyName(),
                           [kappa, a, q_n](auto /* t_info */, auto /* x */, auto T_1, auto T_2, auto gamma_) {
                             auto [T_1_val, dT_1_dX] = T_1;
                             auto [T_2_val, dT_2_dX] = T_2;
@@ -207,7 +207,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   T2_bc_manager->addEssential(std::set<int>{1}, zero_bcs, space(T2), 0);
 
   mesh->addDomainOfBoundaryElements("heat_spreader", by_attr<2>(2));
-  T1_form.addBoundaryIntegral(DependsOn<>{}, "heat_spreader",
+  T1_form.addBoundaryIntegral("heat_spreader",
                               [heatsink_options = heatsink_options](auto, auto) { return heatsink_options.q_app; });
 
   // Block Preconditioner Options

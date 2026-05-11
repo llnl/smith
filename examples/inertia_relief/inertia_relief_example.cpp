@@ -212,7 +212,7 @@ int main(int argc, char* argv[])
 
   ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
-  mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
+  mass_objective.addBodyIntegral(mesh->entireBodyName(),
                                  [](auto /*t_info*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
   double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
@@ -220,7 +220,7 @@ int main(int argc, char* argv[])
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
-    cg_objective->addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
+    cg_objective->addBodyIntegral(mesh->entireBodyName(),
                                   [i](auto /*t_info*/, auto X, auto U, auto RHO) {
                                     return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
                                   });
@@ -232,7 +232,7 @@ int main(int argc, char* argv[])
   for (int i = 0; i < dim; ++i) {
     auto center_rotation_objective =
         std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh, param_space_ptrs);
-    center_rotation_objective->addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
+    center_rotation_objective->addBodyIntegral(mesh->entireBodyName(),
                                                [i, initial_cg](auto /*t_info*/, auto X, auto U, auto RHO) {
                                                  auto u = get<smith::VALUE>(U);
                                                  auto x = get<smith::VALUE>(X) + u;

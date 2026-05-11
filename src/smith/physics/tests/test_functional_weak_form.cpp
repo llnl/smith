@@ -98,11 +98,11 @@ struct WeakFormFixture : public testing::Test {
     std::string surface_name = "side";
     mesh->addDomainOfBoundaryElements(surface_name, smith::by_attr<dim>(1));
 
-    f_weak_form->addBoundaryFlux(smith::DependsOn<>{}, surface_name,
+    f_weak_form->addBoundaryFlux(surface_name,
                                  [](auto /*t_info*/, auto /*x*/, auto n) { return 1.0 * n; });
-    f_weak_form->addBodySource(smith::DependsOn<0>{}, mesh->entireBodyName(),
+    f_weak_form->addBodySource(mesh->entireBodyName(),
                                [](auto /*t_info*/, auto /*x*/, auto u) { return u; });
-    f_weak_form->addBodySource(smith::DependsOn<>{}, mesh->entireBodyName(),
+    f_weak_form->addBodySource(mesh->entireBodyName(),
                                [](auto /*t_info*/, auto x) { return 0.5 * x; });
 
     // initialize fields for testing

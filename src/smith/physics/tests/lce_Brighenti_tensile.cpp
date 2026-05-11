@@ -133,7 +133,7 @@ TEST(LiquidCrystalElastomer, Brighenti)
 
   LiquidCrystElastomerBrighenti::State initial_state{};
   auto qdata = solid_solver.createQuadratureDataBuffer(initial_state);
-  solid_solver.setMaterial(DependsOn<TEMPERATURE_INDEX, GAMMA_INDEX>{}, mat, mesh->entireBody(), qdata);
+  solid_solver.setMaterial(mat, mesh->entireBody(), qdata);
 
   // prescribe symmetry conditions
   solid_solver.setFixedBCs(mesh->domain("xmin_face"), Component::X);

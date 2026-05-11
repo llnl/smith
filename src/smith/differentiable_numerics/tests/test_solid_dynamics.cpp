@@ -212,7 +212,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   // Test acceleration (states[3] is acceleration)
   FunctionalObjective<dim, Parameters<VectorSpace>> accel_error("accel_error", mesh, spaces({states[3]}));
-  accel_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
+  accel_error.addBodyIntegral(mesh->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
     auto a = get<VALUE>(A);
     auto da0 = a[0];
     auto da1 = a[1] - a_exact;
@@ -223,7 +223,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   // Test velocity (states[2] is velocity)
   FunctionalObjective<dim, Parameters<VectorSpace>> velo_error("velo_error", mesh, spaces({states[2]}));
-  velo_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
+  velo_error.addBodyIntegral(mesh->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
     auto v = get<VALUE>(V);
     auto dv0 = v[0];
     auto dv1 = v[1] - v_exact;
@@ -234,7 +234,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 
   // Test displacement (states[1] is displacement)
   FunctionalObjective<dim, Parameters<VectorSpace>> disp_error("disp_error", mesh, spaces({states[1]}));
-  disp_error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
+  disp_error.addBodyIntegral(mesh->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
     auto u = get<VALUE>(U);
     auto du0 = u[0];
     auto du1 = u[1] - u_exact;
@@ -287,7 +287,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
   auto vector_error = [&](const std::string& name, const FieldState& state, double y_exact) {
     auto state_vec = std::vector<FieldState>{state};
     FunctionalObjective<dim, Parameters<VectorSpace>> error(name, mesh, spaces(state_vec));
-    error.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [y_exact](auto /*t*/, auto /*X*/, auto U) {
+    error.addBodyIntegral(mesh->entireBodyName(), [y_exact](auto /*t*/, auto /*X*/, auto U) {
       auto u = get<VALUE>(U);
       return u[0] * u[0] + (u[1] - y_exact) * (u[1] - y_exact) + u[2] * u[2];
     });

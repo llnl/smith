@@ -505,7 +505,7 @@ struct BucklingSensitivityFixture : public ::testing::Test {
         nonlinear_opts, linear_opts, dyn_opts, physics_prefix + std::to_string(iter++), mesh,
         std::vector<std::string>{kname, gname}, 0, 0.0, checkpoint_to_disk, false);
 
-    solid->setMaterial(smith::DependsOn<0, 1>{}, mat, mesh->entireBody());
+    solid->setMaterial(mat, mesh->entireBody());
     return solid;
   }
 };

@@ -64,8 +64,7 @@ void functional_thermal_test_robin_condition()
   thermal_solver.setSource([](auto, auto, auto, auto) { return 2.0; }, mesh->entireBody());
 
   // clang-format off
-  thermal_solver.addCustomBoundaryIntegral(DependsOn<>{}, 
-    [](double /* t */, auto /*position*/, auto temperature, auto /*temperature_rate*/) {
+  thermal_solver.addCustomBoundaryIntegral([](double /* t */, auto /*position*/, auto temperature, auto /*temperature_rate*/) {
       auto [T, dT_dxi] = temperature;
       auto q           = 5.0*(T-25.0);
       return q;  // define a convective (temperature-proportional) heat flux

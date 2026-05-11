@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
   thermal_system->setTemperatureBC(mesh->domain("left"), [](auto, auto) { return 1.0; });
   thermal_system->setTemperatureBC(mesh->domain("right"), [](auto, auto) { return 0.0; });
 
-  solid_system->addTraction(smith::DependsOn<>{}, "right",
+  solid_system->addTraction("right",
                             [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/) {
                               auto traction = 0.0 * X;
                               traction[0] = -0.005;
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
   };
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, TempSpace>> qoi("thermo_mechanical_energy_proxy", mesh,
                                                                                smith::spaces(fetch_qoi_fields()));
-  qoi.addBodyIntegral(smith::DependsOn<0, 1>(), mesh->entireBodyName(), [](auto, auto /*X*/, auto U, auto Theta) {
+  qoi.addBodyIntegral(mesh->entireBodyName(), [](auto, auto /*X*/, auto U, auto Theta) {
     auto u = smith::get<smith::VALUE>(U);
     auto theta = smith::get<smith::VALUE>(Theta);
     return 0.5 * u[0] * u[0] + 0.05 * theta * theta;

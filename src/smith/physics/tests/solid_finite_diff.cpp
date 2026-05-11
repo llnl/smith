@@ -83,7 +83,7 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
   constexpr int bulk_parameter_index = 0;
 
   solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(DependsOn<0, 1>{}, mat, mesh->entireBody());
+  solid_solver.setMaterial(mat, mesh->entireBody());
 
   // Define a boundary attribute set and specify initial / boundary conditions
   mesh->addDomainOfBoundaryElements("essential_boundary", by_attr<dim>(1));

@@ -567,7 +567,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   template <typename MaterialType>
   void setMaterial(const MaterialType& material, Domain& domain)
   {
-    setMaterial(DependsOn<>{}, material, domain);
+    setMaterial(material, domain);
   }
 
   /**
@@ -651,7 +651,7 @@ class ThermomechanicsMonolithic<order, dim, Parameters<parameter_space...>,
   template <typename BodyForceType>
   void addBodyForce(BodyForceType body_force, Domain& domain)
   {
-    addBodyForce(DependsOn<>{}, body_force, domain);
+    addBodyForce(body_force, domain);
   }
 
   /// @overload

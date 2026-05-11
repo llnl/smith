@@ -27,7 +27,7 @@ auto createSolidMassWeakForm(const std::string& physics_name, std::shared_ptr<sm
   using WeakFormT = smith::FunctionalWeakForm<spatial_dim, LumpedFieldSpace, Parameters<DensitySpace>>;
   auto weak_form = std::make_shared<WeakFormT>(physics_name, mesh, lumped_field.space(),
                                                typename WeakFormT::SpacesT{&density.space()});
-  weak_form->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto Rho) {
+  weak_form->addBodyIntegral(mesh->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto Rho) {
     if constexpr (lumped_dim == 1) {
       return smith::tuple{get<VALUE>(Rho), tensor<double, spatial_dim>{}};
     } else {
