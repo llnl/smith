@@ -277,13 +277,13 @@ template <int dim, int temp_order, typename TemperatureTimeRule, typename SelfFi
   requires(detail::is_physics_fields_v<SelfFields> &&
            std::is_same_v<typename std::decay_t<SelfFields>::time_rule_type, TemperatureTimeRule> &&
            (detail::is_coupling_params_v<OtherPacks> && ...))
-auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
-                        const SelfFields& self_fields, const OtherPacks&... other_packs)
+auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                        const OtherPacks&... other_packs)
 {
   auto field_store = self_fields.field_store;
   (detail::registerParamsIfNeeded(field_store, other_packs), ...);
-  auto coupling = detail::collectCouplingFields<TemperatureTimeRule>(field_store, self_fields, other_packs...);
-  return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
+  auto coupling = detail::collectCouplingFields<TemperatureTimeRule>(field_store, other_packs...);
+  return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver);
 }
 
 /**

@@ -152,21 +152,23 @@ namespace detail {
 /**
  * @brief Internal builder for an internal-variable system after public registration and coupling collection.
  */
-template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling>
+template <int dim, typename StateSpace, typename SelfFields, typename Coupling>
   requires detail::is_coupling_params_v<Coupling>
-auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
+auto buildInternalVariableSystemImpl(const SelfFields& self_fields, const Coupling& coupling,
                                      std::shared_ptr<SystemSolver> solver)
 {
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
   auto internal_variable_time_rule = std::make_shared<InternalVarTimeRule>();
 
-  FieldType<StateSpace> state_type(field_store->prefix("state_solve_state"), true);
-  FieldType<StateSpace> state_old_type(field_store->prefix("state"));
+  auto state_type = std::get<0>(self_fields.fields);
+  auto state_old_type = std::get<1>(self_fields.fields);
 
   auto internal_variable_bc = field_store->getBoundaryConditions(state_type.name);
 
   using SystemType = InternalVariableSystem<dim, StateSpace, InternalVarTimeRule, Coupling>;
 
-  std::string internal_variable_residual_name = field_store->prefix("state_residual");
+  std::string internal_variable_residual_name = state_type.name + "_residual";
   auto internal_variable_weak_form =
       detail::buildWeakFormWithCoupling<typename SystemType::InternalVariableWeakFormType>(
           field_store, internal_variable_residual_name, state_type.name, state_type, state_old_type, coupling.fields);
@@ -195,8 +197,8 @@ auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const Sel
   using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
   (detail::registerParamsIfNeeded(field_store, other_packs), ...);
-  auto coupling = detail::collectCouplingFields<InternalVarTimeRule>(field_store, self_fields, other_packs...);
-  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
+  auto coupling = detail::collectCouplingFields<InternalVarTimeRule>(field_store, other_packs...);
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, SelfFields>(self_fields, coupling, solver);
 }
 
 }  // namespace smith

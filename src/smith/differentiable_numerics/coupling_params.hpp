@@ -141,17 +141,13 @@ inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>
 // -------------------------------------------------------------------------
 
 /**
- * @brief selects foreign `PhysicsFields` (skip self by rule match); keeps field names.
+ * @brief selects `PhysicsFields` and returns its fields for coupling.
  */
 template <typename TargetRule, typename Pack>
 auto collectPhysicsFromPack(const Pack& pack)
 {
   if constexpr (is_physics_fields_v<Pack>) {
-    if constexpr (std::is_same_v<typename std::decay_t<Pack>::time_rule_type, TargetRule>) {
-      return std::tuple{};  // skip self
-    } else {
-      return pack.fields;  // include coupling fields
-    }
+    return pack.fields;
   } else {
     return std::tuple{};  // skip non-physics packs
   }

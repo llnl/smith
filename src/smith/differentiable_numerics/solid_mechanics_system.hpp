@@ -532,7 +532,7 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
 {
   auto field_store = self_fields.field_store;
   (detail::registerParamsIfNeeded(field_store, other_packs), ...);
-  auto coupling = detail::collectCouplingFields<DisplacementTimeRule>(field_store, self_fields, other_packs...);
+  auto coupling = detail::collectCouplingFields<DisplacementTimeRule>(field_store, other_packs...);
   bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
   return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
                                                                                  has_stress_output);

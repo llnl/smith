@@ -293,6 +293,58 @@ TEST(SystemSolver, SingleBlockSolverFromMonolithicStageNarrowsToRequestedBlock)
   StateManager::reset();
 }
 
+TEST(SystemSolver, CallsIterationCallbackAfterEachPerformedSweep)
+{
+  auto first_solver = std::make_shared<NoOpNonlinearBlockSolver>();
+  auto second_solver = std::make_shared<NoOpNonlinearBlockSolver>();
+
+  constexpr bool exact_staggered_steps = true;
+  SystemSolver solver(3, exact_staggered_steps);
+  solver.addSubsystemSolver({0}, first_solver);
+  solver.addSubsystemSolver({1}, second_solver);
+
+  std::vector<int> callback_iterations;
+  std::vector<size_t> callback_num_states;
+  solver.setIterationCallback([&](int iter, const std::vector<FieldState>& current_unknowns) {
+    callback_iterations.push_back(iter);
+    callback_num_states.push_back(current_unknowns.size());
+  });
+
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "iteration_callback");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "iteration_callback_mesh");
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
+
+  auto static_rule = std::make_shared<StaticTimeIntegrationRule>();
+  FieldType<H1<1>> field0_type("field0");
+  FieldType<H1<1>> field1_type("field1");
+  field_store->addIndependent(field0_type, static_rule);
+  field_store->addIndependent(field1_type, static_rule);
+
+  auto wf0 = buildScalarDiffusionWeakForm("wf0", mesh, field_store, field0_type);
+  auto wf1 = buildScalarDiffusionWeakForm("wf1", mesh, field_store, field1_type);
+
+  const std::vector<WeakForm*> residuals = {wf0.get(), wf1.get()};
+  const std::vector<std::string> residual_names = {"wf0", "wf1"};
+  const auto block_indices = field_store->indexMap(residual_names);
+  const std::vector<std::vector<FieldState>> states = {field_store->getStates("wf0"), field_store->getStates("wf1")};
+  const std::vector<std::vector<FieldState>> params(residuals.size());
+  const auto bc_managers = field_store->getBoundaryConditionManagers(residual_names);
+
+  solver.solve(residuals, block_indices, field_store->getShapeDisp(), states, params, TimeInfo(0.0, 1.0, 0),
+               bc_managers);
+
+  EXPECT_EQ(callback_iterations, (std::vector<int>{1, 2, 3}));
+  EXPECT_EQ(callback_num_states, (std::vector<size_t>{2, 2, 2}));
+
+  StateManager::reset();
+}
+
 TEST(SystemSolver, AppendsStagesWithBlockMappingForCombinedSubsystems)
 {
   auto first_solver = std::make_shared<NoOpNonlinearBlockSolver>();

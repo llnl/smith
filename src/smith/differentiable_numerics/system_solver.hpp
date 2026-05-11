@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <memory>
+#include <functional>
 #include <mpi.h>
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/numerics/solver_config.hpp"
@@ -22,6 +23,8 @@ class BoundaryConditionManager;
 /// @brief Orchestrates staggered solution for multiphysics systems.
 class SystemSolver {
  public:
+  using IterationCallback = std::function<void(int, const std::vector<FieldState>&)>;
+
   /// @brief Represents a single stage in a staggered iteration.
   struct Stage {
     std::vector<size_t> block_indices;                 ///< Which blocks (residuals) to solve in this stage.
@@ -57,6 +60,9 @@ class SystemSolver {
   void appendStagesWithBlockMapping(const SystemSolver& subsystem_solver,
                                     const std::vector<size_t>& global_block_indices);
 
+  /// @brief Register a callback called after each staggered sweep with the current diagonal unknown states.
+  void setIterationCallback(IterationCallback callback);
+
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.
   /// @param block_indices Block indices for each residual evaluation.
@@ -86,6 +92,7 @@ class SystemSolver {
   int max_staggered_iterations_;  ///< Maximum number of staggered iterations.
   bool exact_staggered_steps_;    ///< If true, no early-exit convergence check.
   std::vector<Stage> stages_;     ///< Solver stages for the staggered iterations.
+  IterationCallback iteration_callback_;
 };
 
 }  // namespace smith

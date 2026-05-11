@@ -64,6 +64,8 @@ void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_so
   }
 }
 
+void SystemSolver::setIterationCallback(IterationCallback callback) { iteration_callback_ = std::move(callback); }
+
 std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
                                             const std::vector<std::vector<size_t>>& block_indices,
                                             const FieldState& shape_disp,
@@ -168,6 +170,19 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         stage_block_indices.push_back(row_indices);
       }
 
+      std::vector<FieldState> pre_solve_states;
+      if (stage.relaxation_factor != 1.0) {
+        pre_solve_states.reserve(num_stage_blocks);
+        for (size_t i = 0; i < num_stage_blocks; ++i) {
+          size_t global_col = stage.block_indices[i];
+          FieldState current = current_states[global_col][block_indices[global_col][global_col]];
+          // Create a deep copy of the current state values before the block solve modifies them in-place.
+          FieldState copy = zeroCopy(current);
+          copy.get()->Set(1.0, *current.get());
+          pre_solve_states.push_back(copy);
+        }
+      }
+
       std::vector<FieldState> stage_solutions =
           block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
                       stage.solver.get(), stage_bc_managers);
@@ -177,21 +192,33 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
       // as fixed inputs in other rows and therefore do not have a valid unknown-block entry there.
       // Apply relaxation: x_new = omega * x_solved + (1 - omega) * x_k.
       for (size_t i = 0; i < num_stage_blocks; ++i) {
-        size_t global_col = stage.block_indices[i];
-        FieldState new_state = stage_solutions[i];
-
+        FieldState solved_state = stage_solutions[i];
         if (stage.relaxation_factor != 1.0) {
-          FieldState old_state = current_states[global_col][block_indices[global_col][global_col]];
-          new_state = weighted_average(new_state, old_state, stage.relaxation_factor);
+          // Perform in-place relaxation: x_new = omega * x_solved + (1 - omega) * x_old.
+          // Note: solved_state already contains the x_solved values from the block solve.
+          solved_state.get()->Set(stage.relaxation_factor, *solved_state.get());
+          solved_state.get()->Add(1.0 - stage.relaxation_factor, *pre_solve_states[i].get());
         }
 
-        auto it = field_routing.find(new_state.get()->name());
+        // The in-place update above is reflected in all FieldStates that share the same underlying
+        // FiniteElementState. However, we still propagate the solved_state pointer to all routing slots
+        // to ensure any lazy evaluation states (if present) are replaced by this concrete state.
+        auto it = field_routing.find(solved_state.get()->name());
         if (it != field_routing.end()) {
           for (const auto& [r, slot] : it->second) {
-            current_states[r][slot] = new_state;
+            current_states[r][slot] = solved_state;
           }
         }
       }
+    }
+
+    if (iteration_callback_) {
+      std::vector<FieldState> current_unknowns;
+      current_unknowns.reserve(num_residuals);
+      for (size_t r = 0; r < num_residuals; ++r) {
+        current_unknowns.push_back(current_states[r][block_indices[r][r]]);
+      }
+      iteration_callback_(iter + 1, current_unknowns);
     }
 
     // --- Convergence check (skipped in exact-steps mode, single-iteration mode,
