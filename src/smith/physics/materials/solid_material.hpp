@@ -109,6 +109,23 @@ struct NeoHookean {
   template <typename T, int dim>
   SMITH_HOST_DEVICE auto operator()(State& /* state */, const tensor<T, dim, dim>& du_dX) const
   {
+    ////DEBUG PRINT *****
+    //     int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    // const double J = 1.0 + serac::get_value(detApIm1(du_dX));
+    // if (rank == 0) {
+    //   std::cerr << "[NeoHookean] J=" << std::scientific << J << '\n';
+    // }
+    // auto& D = du_dX; // tensor<dual,...,2,2>
+    // double v00 = serac::get_value(D(0,0));
+    // double v01 = serac::get_value(D(0,1));
+    // double v10 = serac::get_value(D(1,0));
+    // double v11 = serac::get_value(D(1,1));
+    // if (rank == 0) {
+    //   std::cerr << "du=[[" << v00 << ' ' << v01 << "],[" << v10 << ' ' << v11 << "]]\n";
+    // }
+    // //END DEBUG PRINT******
+
     using std::log1p;
     constexpr auto I = Identity<dim>();
     auto lambda = K - (2.0 / 3.0) * G;

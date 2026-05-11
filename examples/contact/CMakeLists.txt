@@ -10,6 +10,11 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         ironing.cpp
         sphere.cpp
         twist.cpp
+        ironing_2D.cpp
+        ironing_2D_circle.cpp
+        twisted_ironing_2D.cpp
+        energy_mortar_hertzian_disp.cpp
+        energy_mortar_hertzian_traction.cpp
     )
 
     foreach(filename ${CONTACT_EXAMPLES_SOURCES})

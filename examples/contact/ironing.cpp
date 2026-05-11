@@ -95,8 +95,8 @@ int main(int argc, char* argv[])
 
   // Add the contact interaction
   auto contact_interaction_id = 0;
-  std::set<int> surface_1_boundary_attributes({6});
-  std::set<int> surface_2_boundary_attributes({11});
+  std::set<int> surface_1_boundary_attributes({11});
+  std::set<int> surface_2_boundary_attributes({6});
   solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
                                      surface_2_boundary_attributes, contact_options);
 

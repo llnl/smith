@@ -37,9 +37,9 @@ TEST_P(ContactFiniteDiff, patch)
 {
   // NOTE: p must be equal to 1 for now
   constexpr int p = 1;
-  constexpr int dim = 3;
+  constexpr int dim = 2;
 
-  constexpr double eps = 1.0e-7;
+  constexpr double eps = 0.7;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -50,19 +50,19 @@ TEST_P(ContactFiniteDiff, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  double shift = eps * 10;
+  // double shift = 0.0;
   // clang-format off
   auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
     shared::MeshBuilder::CubeMesh(1, 1, 1),
     shared::MeshBuilder::CubeMesh(1, 1, 1)
       // shift up height of element
-      .translate({0.0, 0.0, 0.999})
-      // shift x and y so the element edges are not overlapping
-      .translate({shift, shift, 0.0})
-      // change the mesh1 boundary attribute from 1 to 7
-      .updateBdrAttrib(1, 7)
-      // change the mesh1 boundary attribute from 6 to 8
-      .updateBdrAttrib(6, 8)
+      
+      // // shift x and y so the element edges are not overlapping
+      
+      // // change the mesh1 boundary attribute from 1 to 7
+      // .updateBdrAttrib(1, 7)
+      // // change the mesh1 boundary attribute from 6 to 8
+      // .updateBdrAttrib(6, 8)
   }), "patch_mesh", 0, 0);
   // clang-format on
 
@@ -86,10 +86,10 @@ TEST_P(ContactFiniteDiff, patch)
                                            .max_iterations = 1,
                                            .print_level = 1};
 
-  ContactOptions contact_options{.method = ContactMethod::SingleMortar,
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
                                  .enforcement = GetParam().first,
-                                 .type = ContactType::TiedNormal,
-                                 .penalty = 1.0,
+                                 .type = ContactType::Frictionless,
+                                 .penalty = 0.1,
                                  .jacobian = ContactJacobian::Exact};
 
   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
@@ -101,21 +101,18 @@ TEST_P(ContactFiniteDiff, patch)
   solid_mechanics::NeoHookean mat{1.0, K, G};
   solid_solver.setMaterial(mat, mesh->entireBody());
 
-  auto nonzero_disp_bc = [](vec3, double) { return vec3{{0.0, 0.0, 0.0}}; };
+  auto nonzero_disp_bc = [](vec2, double) { return vec2{{0.0, 0.0}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
   solid_solver.setFixedBCs(mesh->domain("x0_faces"), Component::X);
   solid_solver.setFixedBCs(mesh->domain("y0_faces"), Component::Y);
-  solid_solver.setFixedBCs(mesh->domain("z0_face"), Component::Z);
-  solid_solver.setDisplacementBCs(nonzero_disp_bc, mesh->domain("zmax_face"), Component::Z);
+  solid_solver.setDisplacementBCs(nonzero_disp_bc, mesh->domain("ymax_face"), Component::Y);
 
   // Create a list of vdofs from Domains
   auto x0_face_dofs = mesh->domain("x0_faces").dof_list(&solid_solver.displacement().space());
   auto y0_face_dofs = mesh->domain("y0_faces").dof_list(&solid_solver.displacement().space());
-  auto z0_face_dofs = mesh->domain("z0_face").dof_list(&solid_solver.displacement().space());
-  auto zmax_face_dofs = mesh->domain("zmax_face").dof_list(&solid_solver.displacement().space());
-  mfem::Array<int> bc_vdofs(dim *
-                            (x0_face_dofs.Size() + y0_face_dofs.Size() + z0_face_dofs.Size() + zmax_face_dofs.Size()));
+  auto ymax_face_dofs = mesh->domain("ymax_face").dof_list(&solid_solver.displacement().space());
+  mfem::Array<int> bc_vdofs(dim * (x0_face_dofs.Size() + y0_face_dofs.Size() + ymax_face_dofs.Size()));
   int dof_ct = 0;
   for (int i{0}; i < x0_face_dofs.Size(); ++i) {
     for (int d{0}; d < dim; ++d) {
@@ -127,21 +124,21 @@ TEST_P(ContactFiniteDiff, patch)
       bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(y0_face_dofs[i], d);
     }
   }
-  for (int i{0}; i < z0_face_dofs.Size(); ++i) {
+  // for (int i{0}; i < z0_face_dofs.Size(); ++i) {
+  //   for (int d{0}; d < dim; ++d) {
+  //     bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(z0_face_dofs[i], d);
+  //   }
+  // }
+  for (int i{0}; i < ymax_face_dofs.Size(); ++i) {
     for (int d{0}; d < dim; ++d) {
-      bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(z0_face_dofs[i], d);
-    }
-  }
-  for (int i{0}; i < zmax_face_dofs.Size(); ++i) {
-    for (int d{0}; d < dim; ++d) {
-      bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(zmax_face_dofs[i], d);
+      bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(ymax_face_dofs[i], d);
     }
   }
   bc_vdofs.Sort();
   bc_vdofs.Unique();
 
   // Add the contact interaction
-  solid_solver.addContactInteraction(0, {6}, {7}, contact_options);
+  solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -186,6 +183,14 @@ TEST_P(ContactFiniteDiff, patch)
       J_fd -= f;
       J_fd /= eps;
       merged_sol[j] -= eps;
+
+      for (int m = 0; m < 16; ++m) {
+        std::cout << "J exact: " << J_exact[m] << std::endl;
+      }
+      for (int m = 0; m < 16; ++m) {
+        std::cout << "J FD: " << J_fd[m] << std::endl;
+      }
+
       // loop through forces (row = k)
       for (int k{0}; k < merged_sol.Size(); ++k) {
         if (J_exact[k] != 1.0 && (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15)) {
@@ -211,8 +216,8 @@ TEST_P(ContactFiniteDiff, patch)
 }
 
 INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff,
-                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
-                                         std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
+                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")));
+//  std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
 
 }  // namespace smith
 

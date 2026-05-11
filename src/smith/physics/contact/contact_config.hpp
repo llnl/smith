@@ -19,7 +19,8 @@ namespace smith {
  */
 enum class ContactMethod
 {
-  SingleMortar /**< Puso and Laursen 2004 */
+  SingleMortar, /**< Puso and Laursen 2004 */
+  EnergyMortar
 };
 
 /**
@@ -27,8 +28,9 @@ enum class ContactMethod
  */
 enum class ContactEnforcement
 {
-  Penalty,           /**< Equal penalty applied to all constrained dofs */
-  LagrangeMultiplier /**< Solve for exact pressures to satisfy constraints */
+  Penalty,            /**< Equal penalty applied to all constrained dofs */
+  LagrangeMultiplier, /**< Solve for exact pressures to satisfy constraints */
+  NotRequired
 };
 
 /**
@@ -64,6 +66,8 @@ struct ContactOptions {
 
   /// Penalty parameter (only used when enforcement == ContactEnforcement::Penalty)
   double penalty = 1.0e3;
+  /// Secondary penalty parameter (reserved for future use).
+  double penalty2 = 0.0;
 
   /// The method to use for Jacobian calculations
   ContactJacobian jacobian = ContactJacobian::Approximate;

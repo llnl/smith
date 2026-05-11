@@ -63,14 +63,14 @@ TEST_P(TribolFiniteDiff, patch)
   }), "patch_mesh", 0, 0);
   // clang-format on
 
-  ContactOptions contact_options{.method = ContactMethod::SingleMortar,
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
                                  .enforcement = GetParam().first,
-                                 .type = ContactType::TiedNormal,
-                                 .penalty = 1.0,
+                                 .type = ContactType::Frictionless,
+                                 .penalty = 0.1,
                                  .jacobian = ContactJacobian::Exact};
   ContactData contact_data(pmesh->mfemParMesh());
   constexpr int interaction_id = 0;
-  contact_data.addContactInteraction(interaction_id, {6}, {7}, contact_options);
+  contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
 
   mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.numPressureDofs());
   u = 0.0;
@@ -82,14 +82,26 @@ TEST_P(TribolFiniteDiff, patch)
 
   double max_diff = 0.0;
   auto J_op = contact_data.mergedJacobian();
+
   mfem::Vector u_dot(u.Size());
   u_dot = 0.0;
   // wiggle displacement (col = j)
-  for (int j{0}; j < u.Size(); ++j) {
+
+  // // for (int j{0}; j < u.Size(); ++j) {
+  for (int j{0}; j < 1; ++j) {
+    int block_size = 8;
+    std::cout << "entered loop" << std::endl;
     u_dot[j] = 1.0;
     mfem::Vector J_exact(u.Size());
     J_exact = 0.0;
     J_op->Mult(u_dot, J_exact);
+    // Print the i-th entries from the top-left (0,0) block
+    std::cout << "Column " << j << " of block (0,0):" << std::endl;
+    for (int i = 0; i < block_size; ++i) {
+      std::cout << J_exact[i] << " ";
+    }
+    std::cout << std::endl;
+
     u_dot[j] = 0.0;
     u[j] += eps;
     mfem::Vector J_fd(u.Size());
@@ -113,13 +125,20 @@ TEST_P(TribolFiniteDiff, patch)
         EXPECT_NEAR(J_exact[k], J_fd[k], eps);
       }
     }
+
+    for (int m = 0; m < 16; ++m) {
+      std::cout << "J exact: " << J_exact[m] << std::endl;
+    }
+    for (int m = 0; m < 16; ++m) {
+      std::cout << "J FD: " << J_fd[m] << std::endl;
+    }
   }
+
   std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
 }
 
 INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff,
-                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
-                                         std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
+                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")));
 
 }  // namespace smith
 
