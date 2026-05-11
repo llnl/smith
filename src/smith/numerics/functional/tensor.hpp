@@ -259,6 +259,13 @@ SMITH_HOST_DEVICE constexpr zero dot(zero, const T&)
   return zero{};
 }
 
+/** @brief return the size of the leftmost tensor dimension */
+template <typename T, int m, int... n>
+SMITH_HOST_DEVICE consteval int first_dim(const tensor<T, m, n...>&)
+{
+  return m;
+}
+
 /**
  * @brief Removes 1s from tensor dimensions
  * For example, a tensor<T, 1, 10> is equivalent to a tensor<T, 10>
