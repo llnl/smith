@@ -212,9 +212,8 @@ int main(int argc, char* argv[])
 
   ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
-  mass_objective.addBodyIntegral(mesh->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto /*U*/, auto RHO) {
-    return get<smith::VALUE>(RHO);
-  });
+  mass_objective.addBodyIntegral(
+      mesh->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto /*U*/, auto RHO) { return get<smith::VALUE>(RHO); });
   double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
   smith::tensor<double, dim> initial_cg;  // center of gravity

@@ -81,12 +81,12 @@ int main(int argc, char* argv[])
   thermal_system->setTemperatureBC(mesh->domain("left"), [](auto, auto) { return 1.0; });
   thermal_system->setTemperatureBC(mesh->domain("right"), [](auto, auto) { return 0.0; });
 
-  solid_system->addTraction("right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/,
-                                        auto... /*args*/) {
-    auto traction = 0.0 * X;
-    traction[0] = -0.005;
-    return traction;
-  });
+  solid_system->addTraction("right",
+                            [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto... /*args*/) {
+                              auto traction = 0.0 * X;
+                              traction[0] = -0.005;
+                              return traction;
+                            });
 
   thermal_system->addHeatSource(mesh->entireBodyName(), [](auto, auto... /*unused*/) { return 0.1; });
   // _bc_end

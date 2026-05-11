@@ -16,7 +16,11 @@ namespace smith {
 
 /// @brief struct storing time and timestep information
 struct TimeInfo {
-  enum class EvaluationMode { Regular, CycleZero };
+  enum class EvaluationMode
+  {
+    Regular,
+    CycleZero
+  };
 
   /// @brief constructor
   TimeInfo(double t, double t_step, size_t c = 0, EvaluationMode mode = EvaluationMode::Regular)
