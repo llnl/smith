@@ -20,11 +20,10 @@
  * (e.g. SolidMechanicsSystem) as coupling input.
  *
  * addEvolution registers an ODE residual of the form:
- *   evolution_law(t_info, alpha_val, alpha_dot, coupling_fields..., params...) == 0
+ *   evolution_law(t_info, alpha_val, alpha_dot, interpolated_coupling_fields..., params...) == 0
  *
- * With Coupling = CouplingParams<H1<order,dim>, H1<order,dim>, H1<order,dim>, H1<order,dim>>
- * (the solid displacement coupling fields), the user accesses the displacement gradient via
- * get<DERIVATIVE>(u_solve_state_arg) as the first coupling field argument.
+ * With solid displacement coupling, the callback receives `(u, v, a)` rather than raw
+ * `(u_solve_state, u_old, v_old, a_old)`.
  */
 
 #pragma once
@@ -70,6 +69,7 @@ struct InternalVariableSystem : public SystemBase {
   std::shared_ptr<InternalVariableWeakFormType> internal_variable_weak_form;  ///< Internal variable weak form.
   std::shared_ptr<DirichletBoundaryConditions> internal_variable_bc;          ///< Internal variable BCs.
   std::shared_ptr<InternalVarTimeRule> internal_variable_time_rule;           ///< Time integration rule.
+  std::shared_ptr<const Coupling> coupling;                                   ///< Coupling metadata.
 
   /**
    * @brief Register an ODE evolution law for the internal variable.
@@ -78,9 +78,6 @@ struct InternalVariableSystem : public SystemBase {
    *   evolution_law(t_info, alpha_val, alpha_dot, coupling_fields..., params...)
    * and must return a scalar residual (zero when the ODE is satisfied).
    *
-   * When Coupling carries solid displacement fields (u_ss, u, v, a), access the
-   * displacement gradient via get<DERIVATIVE>(u_ss_arg) on the first coupling field.
-   *
    * @param domain_name Domain to apply the evolution on.
    * @param evolution_law Callable returning the ODE residual.
    */
@@ -88,14 +85,23 @@ struct InternalVariableSystem : public SystemBase {
   void addEvolution(const std::string& domain_name, EvolutionType evolution_law)
   {
     auto captured_time_rule = internal_variable_time_rule;
-    internal_variable_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto... coupling_and_params) {
-          auto [alpha_current, alpha_dot] = captured_time_rule->interpolate(t_info, alpha, alpha_old);
-          auto residual_val =
-              evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot), coupling_and_params...);
-          tensor<double, dim> flux{};
-          return smith::tuple{residual_val, flux};
-        });
+    auto captured_coupling = coupling;
+    internal_variable_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto... raw_args) {
+      return detail::applyTimeRuleToPrefix(
+          *captured_time_rule, t_info,
+          [&](auto alpha_current, auto alpha_dot, auto... coupling_and_params) {
+            return detail::applyCouplingTimeRules(
+                *captured_coupling, t_info,
+                [&](auto... interpolated_params) {
+                  auto residual_val =
+                      evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot), interpolated_params...);
+                  tensor<double, dim> flux{};
+                  return smith::tuple{residual_val, flux};
+                },
+                coupling_and_params...);
+          },
+          raw_args...);
+    });
   }
 };
 
@@ -175,6 +181,7 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
                                           std::vector<std::shared_ptr<WeakForm>>{internal_variable_weak_form});
   sys->internal_variable_bc = internal_variable_bc;
   sys->internal_variable_time_rule = internal_variable_time_rule;
+  sys->coupling = std::make_shared<Coupling>(coupling);
   sys->internal_variable_weak_form = internal_variable_weak_form;
 
   return sys;

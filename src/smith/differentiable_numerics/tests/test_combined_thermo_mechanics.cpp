@@ -39,6 +39,41 @@ static constexpr int temperature_order = 1;
 using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
 using TempRule = BackwardEulerFirstOrderTimeIntegrationRule;
 
+TEST(CouplingTimeRuleInterpolation, AppliesEachForeignPhysicsRuleBeforeCallback)
+{
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, "dcoupling_interpolation");
+  auto mesh =
+      std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON), "mesh", 0, 0);
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
+  auto scale_params = registerParameterFields(FieldType<L2<0>>("scale"));
+
+  auto solid_coupling = detail::collectCouplingFields<DispRule>(field_store, thermal_fields, scale_params);
+  auto saw_thermal_values = detail::applyCouplingTimeRules(
+      solid_coupling, TimeInfo(0.0, 2.0, 0),
+      [](auto temperature, auto temperature_dot, auto scale) {
+        EXPECT_DOUBLE_EQ(temperature, 7.0);
+        EXPECT_DOUBLE_EQ(temperature_dot, 3.0);
+        EXPECT_DOUBLE_EQ(scale, 11.0);
+        return true;
+      },
+      7.0, 1.0, 11.0);
+  EXPECT_TRUE(saw_thermal_values);
+
+  auto thermal_coupling = detail::collectCouplingFields<TempRule>(field_store, solid_fields);
+  auto saw_solid_values = detail::applyCouplingTimeRules(
+      thermal_coupling, TimeInfo(0.0, 2.0, 0),
+      [](auto displacement, auto velocity, auto /*acceleration*/) {
+        EXPECT_DOUBLE_EQ(displacement, 10.0);
+        EXPECT_DOUBLE_EQ(velocity, 3.0);
+        return true;
+      },
+      10.0, 4.0, 0.0, 0.0);
+  EXPECT_TRUE(saw_solid_values);
+}
+
 struct ThermoMechanicsMeshFixture : public testing::Test {
   void SetUp()
   {
@@ -414,9 +449,8 @@ TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesCycleZeroSystems)
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DynamicDispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(makeSolver(newtonNonlinOpts, directLinOpts),
-                                                                         SolidMechanicsOptions{}, solid_fields,
-                                                                         thermal_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(
+      makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{}, solid_fields, thermal_fields);
   auto thermal_system = buildThermalSystem<dim, temperature_order>(makeSolver(newtonNonlinOpts, directLinOpts),
                                                                    ThermalOptions{}, thermal_fields, solid_fields);
 

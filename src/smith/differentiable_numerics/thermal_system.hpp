@@ -52,6 +52,7 @@ struct ThermalSystem : public SystemBase {
   std::shared_ptr<ThermalWeakFormType> thermal_weak_form;       ///< Thermal weak form.
   std::shared_ptr<DirichletBoundaryConditions> temperature_bc;  ///< Temperature boundary conditions.
   std::shared_ptr<TemperatureTimeRule> temperature_time_rule;   ///< Time integration for temperature.
+  std::shared_ptr<const Coupling> coupling;                     ///< Coupling metadata for callback interpolation.
 
   /**
    * @brief Set the thermal material model for a domain.
@@ -70,12 +71,22 @@ struct ThermalSystem : public SystemBase {
   void setMaterial(const MaterialType& material, const std::string& domain_name)
   {
     auto captured_temp_rule = temperature_time_rule;
+    auto captured_coupling = coupling;
 
-    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old,
-                                                        auto... params) {
-      auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
-      auto [heat_capacity, heat_flux] = material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
-      return smith::tuple{heat_capacity * get<VALUE>(T_dot), -heat_flux};
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto... raw_args) {
+      return detail::applyTimeRuleToPrefix(
+          *captured_temp_rule, t_info,
+          [&](auto T_current, auto T_dot, auto... params) {
+            return detail::applyCouplingTimeRules(
+                *captured_coupling, t_info,
+                [&](auto... interpolated_params) {
+                  auto [heat_capacity, heat_flux] =
+                      material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), interpolated_params...);
+                  return smith::tuple{heat_capacity * get<VALUE>(T_dot), -heat_flux};
+                },
+                params...);
+          },
+          raw_args...);
     });
   }
 
@@ -97,14 +108,23 @@ struct ThermalSystem : public SystemBase {
   void setMaterialAndHeatSource(const MaterialType& material, const std::string& domain_name)
   {
     auto captured_temp_rule = temperature_time_rule;
+    auto captured_coupling = coupling;
 
-    thermal_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto temperature, auto temperature_old, auto... params) {
-          auto [T_current, T_dot] = captured_temp_rule->interpolate(t_info, temperature, temperature_old);
-          auto [heat_capacity, heat_flux, heat_source] =
-              material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), params...);
-          return smith::tuple{heat_capacity * get<VALUE>(T_dot) - heat_source, -heat_flux};
-        });
+    thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto... raw_args) {
+      return detail::applyTimeRuleToPrefix(
+          *captured_temp_rule, t_info,
+          [&](auto T_current, auto T_dot, auto... params) {
+            return detail::applyCouplingTimeRules(
+                *captured_coupling, t_info,
+                [&](auto... interpolated_params) {
+                  auto [heat_capacity, heat_flux, heat_source] =
+                      material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), interpolated_params...);
+                  return smith::tuple{heat_capacity * get<VALUE>(T_dot) - heat_source, -heat_flux};
+                },
+                params...);
+          },
+          raw_args...);
+    });
   }
 
   /**
@@ -116,9 +136,19 @@ struct ThermalSystem : public SystemBase {
   void addHeatSource(const std::string& domain_name, HeatSourceType source_function)
   {
     auto captured_rule = temperature_time_rule;
-    thermal_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto T, auto T_old, auto... params) {
-      auto T_current = captured_rule->value(t_info, T, T_old);
-      return source_function(t_info.time(), X, T_current, params...);
+    auto captured_coupling = coupling;
+    thermal_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto... raw_args) {
+      return detail::applyTimeRuleToPrefix(
+          *captured_rule, t_info,
+          [&](auto T_current, auto /*T_dot*/, auto... params) {
+            return detail::applyCouplingTimeRules(
+                *captured_coupling, t_info,
+                [&](auto... interpolated_params) {
+                  return source_function(t_info.time(), X, T_current, interpolated_params...);
+                },
+                params...);
+          },
+          raw_args...);
     });
   }
 
@@ -131,11 +161,20 @@ struct ThermalSystem : public SystemBase {
   void addHeatFlux(const std::string& boundary_name, HeatFluxType flux_function)
   {
     auto captured_rule = temperature_time_rule;
-    thermal_weak_form->addBoundaryFlux(boundary_name,
-                                       [=](auto t_info, auto X, auto n, auto T, auto T_old, auto... params) {
-                                         auto T_current = captured_rule->value(t_info, T, T_old);
-                                         return flux_function(t_info.time(), X, n, T_current, params...);
-                                       });
+    auto captured_coupling = coupling;
+    thermal_weak_form->addBoundaryFlux(boundary_name, [=](auto t_info, auto X, auto n, auto... raw_args) {
+      return detail::applyTimeRuleToPrefix(
+          *captured_rule, t_info,
+          [&](auto T_current, auto /*T_dot*/, auto... params) {
+            return detail::applyCouplingTimeRules(
+                *captured_coupling, t_info,
+                [&](auto... interpolated_params) {
+                  return flux_function(t_info.time(), X, n, T_current, interpolated_params...);
+                },
+                params...);
+          },
+          raw_args...);
+    });
   }
 
   /// Set zero-temperature Dirichlet BC.
@@ -209,6 +248,7 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
       std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{thermal_weak_form});
   sys->temperature_bc = temperature_bc;
   sys->temperature_time_rule = temperature_time_rule_ptr;
+  sys->coupling = std::make_shared<Coupling>(coupling);
   sys->thermal_weak_form = thermal_weak_form;
 
   return sys;

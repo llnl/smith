@@ -45,6 +45,8 @@ struct ReactionInfo {
  */
 template <typename Space, typename Time = void*>
 struct FieldType {
+  using space_type = Space;
+
   /**
    * @brief Construct a new FieldType object.
    * @param n Name of the field.

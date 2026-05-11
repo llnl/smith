@@ -19,7 +19,9 @@
 
 #pragma once
 
+#include <tuple>
 #include <type_traits>
+#include <utility>
 
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
@@ -90,6 +92,29 @@ struct PhysicsFields {
   }
 };
 
+template <typename TimeRule, typename... Spaces>
+struct PhysicsCouplingSegment {
+  using time_rule_type = TimeRule;
+  static constexpr std::size_t num_fields = sizeof...(Spaces);
+  std::tuple<FieldType<Spaces>...> fields;
+};
+
+template <typename... Spaces>
+struct ParameterCouplingSegment {
+  static constexpr std::size_t num_fields = sizeof...(Spaces);
+  std::tuple<FieldType<Spaces>...> fields;
+};
+
+template <typename FlatParams, typename... Segments>
+struct CouplingDescriptor;
+
+template <typename... FlatSpaces, typename... Segments>
+struct CouplingDescriptor<Parameters<FlatSpaces...>, Segments...> {
+  static constexpr std::size_t num_coupling_fields = sizeof...(FlatSpaces);
+  std::tuple<FieldType<FlatSpaces>...> fields;
+  std::tuple<Segments...> segments;
+};
+
 /**
  * @brief Register parameter fields as type-level tokens.
  *
@@ -114,6 +139,9 @@ struct is_coupling_params_impl<CouplingParams<Spaces...>> : std::true_type {};
 
 template <typename R, typename... Spaces>
 struct is_coupling_params_impl<PhysicsFields<R, Spaces...>> : std::true_type {};
+
+template <typename FlatParams, typename... Segments>
+struct is_coupling_params_impl<CouplingDescriptor<FlatParams, Segments...>> : std::true_type {};
 
 template <typename T>
 inline constexpr bool is_coupling_params_v =
@@ -158,28 +186,28 @@ auto getOrCreateFieldStore(T source, std::string prefix = "", size_t storage_siz
 // Helpers for variadic build functions
 // -------------------------------------------------------------------------
 
-/**
- * @brief selects foreign `PhysicsFields` (skip self by rule match); keeps field names.
- */
 template <typename TargetRule, typename Pack>
-auto collectPhysicsFromPack(const Pack& pack)
+auto collectPhysicsSegmentFromPack(const Pack& pack)
 {
   if constexpr (is_physics_fields_v<Pack>) {
     if constexpr (std::is_same_v<typename std::decay_t<Pack>::time_rule_type, TargetRule>) {
       return std::tuple{};  // skip self
     } else {
-      return pack.fields;  // include coupling fields
+      using Rule = typename std::decay_t<Pack>::time_rule_type;
+      return std::apply(
+          [](auto... fields) {
+            return std::make_tuple(
+                PhysicsCouplingSegment<Rule, typename decltype(fields)::space_type...>{std::make_tuple(fields...)});
+          },
+          pack.fields);
     }
   } else {
     return std::tuple{};  // skip non-physics packs
   }
 }
 
-/**
- * @brief selects pure `CouplingParams` (not `PhysicsFields`); rewrites names to `{prefix}param_{name}`.
- */
 template <typename Pack>
-auto collectParamsFromPack(const std::shared_ptr<FieldStore>& fs, const Pack& pack)
+auto collectParamSegmentFromPack(const std::shared_ptr<FieldStore>& fs, const Pack& pack)
 {
   if constexpr (is_coupling_params_v<std::decay_t<Pack>> && !is_physics_fields_v<Pack>) {
     return std::apply(
@@ -188,7 +216,8 @@ auto collectParamsFromPack(const std::shared_ptr<FieldStore>& fs, const Pack& pa
             pt.name = fs->prefix("param_" + pt.name);
             return pt;
           };
-          return std::make_tuple(qualify(pts)...);
+          return std::make_tuple(
+              ParameterCouplingSegment<typename decltype(pts)::space_type...>{std::make_tuple(qualify(pts)...)});
         },
         pack.fields);
   } else {
@@ -196,16 +225,23 @@ auto collectParamsFromPack(const std::shared_ptr<FieldStore>& fs, const Pack& pa
   }
 }
 
-/**
- * @brief concatenates physics then params into a single `CouplingParams`.
- */
+template <typename... Segments>
+auto makeCouplingDescriptor(std::tuple<Segments...> segments)
+{
+  auto fields = std::apply([](const auto&... segment) { return std::tuple_cat(segment.fields...); }, segments);
+  return std::apply(
+      [&](auto... field) {
+        return CouplingDescriptor<Parameters<typename decltype(field)::space_type...>, Segments...>{fields, segments};
+      },
+      fields);
+}
+
 template <typename TargetRule, typename... Packs>
 auto collectCouplingFields(const std::shared_ptr<FieldStore>& fs, const Packs&... packs)
 {
-  auto physics = std::tuple_cat(collectPhysicsFromPack<TargetRule>(packs)...);
-  auto params = std::tuple_cat(collectParamsFromPack(fs, packs)...);
-  auto combined = std::tuple_cat(physics, params);
-  return std::apply([](auto&... all) { return CouplingParams{all...}; }, combined);
+  auto physics_segments = std::tuple_cat(collectPhysicsSegmentFromPack<TargetRule>(packs)...);
+  auto param_segments = std::tuple_cat(collectParamSegmentFromPack(fs, packs)...);
+  return makeCouplingDescriptor(std::tuple_cat(physics_segments, param_segments));
 }
 
 /// Register parameter fields from a CouplingParams pack (not PhysicsFields) into a FieldStore.
@@ -225,50 +261,117 @@ void registerParamsIfNeeded(std::shared_ptr<FieldStore> fs, const Pack& pack)
   }
 }
 
-/// @brief Build the weak-form parameter list for a time rule and coupling pack.
-///
-/// Unpacks Coupling (either CouplingParams<CS...> or PhysicsFields<R, CS...>) and produces
-/// TimeRuleParams<Rule, Space, CS...>, i.e. num_states copies of Space followed by the coupling field types.
-template <typename Rule, typename Space, typename Coupling>
-struct TimeRuleParamsHelper;
+template <typename Rule, typename TimeInfoT, typename ArgsTuple, typename Callback, std::size_t... StateIs,
+          std::size_t... TailIs>
+decltype(auto) applyTimeRuleToPrefixImpl(const Rule& rule, const TimeInfoT& t_info, const ArgsTuple& raw_args,
+                                         Callback&& callback, std::index_sequence<StateIs...>,
+                                         std::index_sequence<TailIs...>)
+{
+  auto interpolated = rule.interpolate(t_info, std::get<StateIs>(raw_args)...);
+  return std::apply(
+      [&](auto&&... values) -> decltype(auto) {
+        return std::forward<Callback>(callback)(std::forward<decltype(values)>(values)...,
+                                                std::get<Rule::num_states + TailIs>(raw_args)...);
+      },
+      interpolated);
+}
 
-/// @brief Maps `CouplingParams` packs to weak-form time-rule parameters.
-template <typename Rule, typename Space, typename... CS>
-struct TimeRuleParamsHelper<Rule, Space, CouplingParams<CS...>> {
-  using type = smith::TimeRuleParams<Rule, Space, CS...>;  ///< Resolved weak-form time-rule parameter list.
+/// @brief Interpolate the leading Rule::num_states arguments, then pass interpolated values and the raw tail to
+/// callback.
+template <typename Rule, typename TimeInfoT, typename Callback, typename... RawArgs>
+decltype(auto) applyTimeRuleToPrefix(const Rule& rule, const TimeInfoT& t_info, Callback&& callback,
+                                     const RawArgs&... raw_args)
+{
+  static_assert(sizeof...(RawArgs) >= Rule::num_states, "Not enough raw arguments for time-rule interpolation");
+  auto raw_tuple = std::forward_as_tuple(raw_args...);
+  constexpr std::size_t tail_count = sizeof...(RawArgs) - Rule::num_states;
+  return applyTimeRuleToPrefixImpl(rule, t_info, raw_tuple, std::forward<Callback>(callback),
+                                   std::make_index_sequence<Rule::num_states>{},
+                                   std::make_index_sequence<tail_count>{});
+}
+
+template <std::size_t Offset, typename Rule, typename TimeInfoT, typename RawTuple, typename... Spaces,
+          std::size_t... Is>
+auto evaluateCouplingSegment(const PhysicsCouplingSegment<Rule, Spaces...>& /*segment*/, const TimeInfoT& t_info,
+                             const RawTuple& raw_args, std::index_sequence<Is...>)
+{
+  Rule rule;
+  return rule.interpolate(t_info, std::get<Offset + Is>(raw_args)...);
+}
+
+template <std::size_t Offset, typename TimeInfoT, typename RawTuple, typename... Spaces, std::size_t... Is>
+auto evaluateCouplingSegment(const ParameterCouplingSegment<Spaces...>& /*segment*/, const TimeInfoT& /*t_info*/,
+                             const RawTuple& raw_args, std::index_sequence<Is...>)
+{
+  return std::forward_as_tuple(std::get<Offset + Is>(raw_args)...);
+}
+
+template <std::size_t I, std::size_t Offset, typename SegmentsTuple, typename TimeInfoT, typename RawTuple>
+auto evaluateCouplingSegments(const SegmentsTuple& segments, const TimeInfoT& t_info, const RawTuple& raw_args)
+{
+  if constexpr (I == std::tuple_size_v<std::decay_t<SegmentsTuple>>) {
+    return std::tuple{};
+  } else {
+    const auto& segment = std::get<I>(segments);
+    using Segment = std::decay_t<decltype(segment)>;
+    auto head =
+        evaluateCouplingSegment<Offset>(segment, t_info, raw_args, std::make_index_sequence<Segment::num_fields>{});
+    auto tail = evaluateCouplingSegments<I + 1, Offset + Segment::num_fields>(segments, t_info, raw_args);
+    return std::tuple_cat(head, tail);
+  }
+}
+
+template <typename Coupling, typename TimeInfoT, typename Callback, typename... RawArgs>
+decltype(auto) applyCouplingTimeRules(const Coupling& coupling, const TimeInfoT& t_info, Callback&& callback,
+                                      const RawArgs&... raw_args)
+{
+  auto raw_tuple = std::forward_as_tuple(raw_args...);
+  auto interpolated_tail = evaluateCouplingSegments<0, 0>(coupling.segments, t_info, raw_tuple);
+  return std::apply(std::forward<Callback>(callback), interpolated_tail);
+}
+
+/// @brief Centralized type access for field-pack spaces.
+template <typename Pack>
+struct CouplingSpaces;
+
+template <typename... CS>
+struct CouplingSpaces<CouplingParams<CS...>> {
+  template <typename Rule, typename Space>
+  using time_rule_params = smith::TimeRuleParams<Rule, Space, CS...>;
+
+  template <typename... Fixed>
+  using append_to_parameters = Parameters<Fixed..., CS...>;
 };
 
-/// @brief Maps `PhysicsFields` packs to weak-form time-rule parameters.
-template <typename Rule, typename Space, typename R, typename... CS>
-struct TimeRuleParamsHelper<Rule, Space, PhysicsFields<R, CS...>> {
-  using type = smith::TimeRuleParams<Rule, Space, CS...>;  ///< Resolved weak-form time-rule parameter list.
+template <typename R, typename... CS>
+struct CouplingSpaces<PhysicsFields<R, CS...>> {
+  template <typename Rule, typename Space>
+  using time_rule_params = smith::TimeRuleParams<Rule, Space, CS...>;
+
+  template <typename... Fixed>
+  using append_to_parameters = Parameters<Fixed..., CS...>;
 };
 
-/// @brief Convenience alias selecting time-rule parameters for coupling pack type.
-template <typename Rule, typename Space, typename Coupling>
-using TimeRuleParams = typename TimeRuleParamsHelper<Rule, Space, Coupling>::type;
+template <typename... CS, typename... Segments>
+struct CouplingSpaces<CouplingDescriptor<Parameters<CS...>, Segments...>> {
+  template <typename Rule, typename Space>
+  using time_rule_params = smith::TimeRuleParams<Rule, Space, CS...>;
 
-/**
- * @brief Append coupling spaces (CS...) and Tail... onto a base Parameters<Fixed...> type.
- *
- * Produces Parameters<Fixed..., CS..., Tail...>.
- * Used for weak form types whose leading fields are hardcoded (cycle-zero, stress output).
- */
-template <typename Coupling, typename FixedParams, typename... Tail>
+  template <typename... Fixed>
+  using append_to_parameters = Parameters<Fixed..., CS...>;
+};
+
+/// @brief Weak-form parameters for a self time rule followed by the coupling field spaces.
+template <typename Rule, typename Space, typename Coupling>
+using TimeRuleParams = typename CouplingSpaces<std::decay_t<Coupling>>::template time_rule_params<Rule, Space>;
+
+/// @brief Append coupling spaces onto a base Parameters<Fixed...> type.
+template <typename Coupling, typename FixedParams>
 struct AppendCouplingToParams;
 
-template <typename... CS, typename... Fixed, typename... Tail>
-/// @brief Specialization appending `CouplingParams` field spaces after fixed weak-form parameters.
-struct AppendCouplingToParams<CouplingParams<CS...>, Parameters<Fixed...>, Tail...> {
-  using type =
-      Parameters<Fixed..., CS..., Tail...>;  ///< Base parameter list extended with coupling and trailing parameters.
-};
-
-template <typename R, typename... CS, typename... Fixed, typename... Tail>
-/// @brief Specialization appending `PhysicsFields` field spaces after fixed weak-form parameters.
-struct AppendCouplingToParams<PhysicsFields<R, CS...>, Parameters<Fixed...>, Tail...> {
-  using type =
-      Parameters<Fixed..., CS..., Tail...>;  ///< Base parameter list extended with coupling and trailing parameters.
+template <typename Coupling, typename... Fixed>
+struct AppendCouplingToParams<Coupling, Parameters<Fixed...>> {
+  using type = typename CouplingSpaces<std::decay_t<Coupling>>::template append_to_parameters<Fixed...>;
 };
 
 }  // namespace detail
