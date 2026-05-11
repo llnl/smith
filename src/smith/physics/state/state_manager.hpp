@@ -367,6 +367,14 @@ class StateManager {
   static mfem::ParMesh& setMesh(std::shared_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag);
 
   /**
+   * @brief Transfers mesh ownership to StateManager
+   * @param[in] pmesh The mesh to register
+   * @param[in] mesh_tag A string that uniquely identifies the mesh
+   * @return A reference to the stored mesh
+   */
+  static mfem::ParMesh& setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag);
+
+  /**
    * @brief Returns a non-owning reference to mesh held by StateManager
    * @param[in] mesh_tag A string that uniquely identifies the mesh
    * @pre A mesh identified by @a mesh_tag must be registered - either via @p load() or @p setMesh()

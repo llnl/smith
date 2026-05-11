@@ -24,7 +24,7 @@ Mesh::Mesh(const std::string& meshfile, const std::string& meshtag, int refine_s
     : mesh_tag_(meshtag)
 {
   auto meshtmp = mesh::refineAndDistribute(buildMeshFromFile(meshfile), refine_serial, refine_parallel, comm);
-  mfem_mesh_ = &smith::StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(meshtmp)), mesh_tag_);
+  mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
   notifyIfRankHasNoElements();
   createDomains();
 }
@@ -33,7 +33,7 @@ Mesh::Mesh(mfem::Mesh&& mesh, const std::string& meshtag, int refine_serial, int
     : mesh_tag_(meshtag)
 {
   auto meshtmp = smith::mesh::refineAndDistribute(std::move(mesh), refine_serial, refine_parallel, comm);
-  mfem_mesh_ = &smith::StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(meshtmp)), mesh_tag_);
+  mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
   notifyIfRankHasNoElements();
   createDomains();
 }
@@ -43,7 +43,7 @@ Mesh::Mesh(mfem::ParMesh&& mesh, const std::string& meshtag) : mesh_tag_(meshtag
   auto meshtmp = std::make_unique<mfem::ParMesh>(std::move(mesh));
   meshtmp->EnsureNodes();
   meshtmp->ExchangeFaceNbrData();
-  mfem_mesh_ = &smith::StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(meshtmp)), mesh_tag_);
+  mfem_mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), mesh_tag_);
   notifyIfRankHasNoElements();
   createDomains();
 }

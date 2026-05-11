@@ -115,7 +115,7 @@ TEST(state_manager, QuadratureData_Restart)
   std::string filename = SMITH_REPO_DIR "/data/meshes/ball.mesh";
   std::string mesh_tag = "ball_mesh";
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
-  StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(mesh)), mesh_tag);
+  StateManager::setMesh(std::move(mesh), mesh_tag);
 
   // Create and store the initial state of the QuadratureData in Sidre
   SLIC_INFO("Creating Quadrature Data with initial state");
@@ -188,7 +188,7 @@ TEST(StateManager, StoresHighOrderMeshes)
   int serial_refinement = 0;
   int parallel_refinement = 0;
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-  auto& pmesh = smith::StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(mesh)), "mesh");
+  auto& pmesh = smith::StateManager::setMesh(std::move(mesh), "mesh");
 
   ASSERT_EQ(dim, pmesh.SpaceDimension());
 

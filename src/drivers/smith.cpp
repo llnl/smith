@@ -276,7 +276,7 @@ int main(int argc, char* argv[])
           smith::input::findMeshFilePath(file_opts->relative_mesh_file_name, input_file_path);
     }
     auto mesh = smith::mesh::buildParallelMesh(mesh_options);
-    smith::StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(mesh)), mesh_tag);
+    smith::StateManager::setMesh(std::move(mesh), mesh_tag);
   } else {
     // If restart_cycle is non-empty, then this is a restart run and the data will be loaded here
     t = smith::StateManager::load(*restart_cycle, mesh_tag);

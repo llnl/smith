@@ -253,6 +253,11 @@ mfem::ParMesh& StateManager::setMesh(std::shared_ptr<mfem::ParMesh> pmesh, const
   return new_pmesh;
 }
 
+mfem::ParMesh& StateManager::setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag)
+{
+  return setMesh(std::shared_ptr<mfem::ParMesh>(std::move(pmesh)), mesh_tag);
+}
+
 void StateManager::constructShapeFields(const std::string& mesh_tag)
 {
   // Construct the shape displacement field associated with this mesh
