@@ -168,9 +168,9 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   thermal_system->setTemperatureBC(mesh_->domain("left"), [](auto, auto) { return 1.0; });
 
   solid_system->addTraction("right", [=](double, auto X, auto, auto, auto, auto, auto... /*params*/) {
-    // If X is a dual number, we need to create a dual number for traction with zero derivative wrt all active parameters.
-    // For now, returning a value works perfectly fine with smith AD system!
-    // But since X might be a dual number, we must strip its dual part if we just want a value.
+    // If X is a dual number, we need to create a dual number for traction with zero derivative wrt all active
+    // parameters. For now, returning a value works perfectly fine with smith AD system! But since X might be a dual
+    // number, we must strip its dual part if we just want a value.
     auto traction = 0.0 * X;
     traction[0] = -0.015;
     return traction;
@@ -405,6 +405,26 @@ TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesPostSolveSystems)
 
   ASSERT_EQ(combined_system->post_solve_systems.size(), solid_system->post_solve_systems.size());
   EXPECT_FALSE(combined_system->post_solve_systems.empty());
+}
+
+TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesCycleZeroSystems)
+{
+  using DynamicDispRule = ImplicitNewmarkSecondOrderTimeIntegrationRule;
+
+  auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DynamicDispRule>(field_store_);
+  auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
+
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(makeSolver(newtonNonlinOpts, directLinOpts),
+                                                                         SolidMechanicsOptions{}, solid_fields,
+                                                                         thermal_fields);
+  auto thermal_system = buildThermalSystem<dim, temperature_order>(makeSolver(newtonNonlinOpts, directLinOpts),
+                                                                   ThermalOptions{}, thermal_fields, solid_fields);
+
+  auto combined_system = combineSystems(solid_system, thermal_system);
+
+  ASSERT_EQ(solid_system->cycle_zero_systems.size(), 1u);
+  EXPECT_EQ(combined_system->cycle_zero_systems.size(), solid_system->cycle_zero_systems.size());
+  EXPECT_EQ(combined_system->cycle_zero_systems[0]->solve_result_field_names, std::vector<std::string>{"acceleration"});
 }
 
 }  // namespace smith

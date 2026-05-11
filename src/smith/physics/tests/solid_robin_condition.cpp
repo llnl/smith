@@ -76,7 +76,9 @@ void functional_solid_test_robin_condition()
   mesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
   solid_solver.setDisplacementBCs(translated_in_x, mesh->domain("tip"), Component::X);
 
-  solid_solver.addCustomBoundaryIntegral([](double /* t */, auto /*position*/, auto displacement, auto /*acceleration*/) {
+  solid_solver.addCustomBoundaryIntegral(
+      DependsOn<>{},
+      [](double /* t */, auto /*position*/, auto displacement, auto /*acceleration*/) {
         auto [u, du_dxi] = displacement;
         auto f = u * 3.0;
         return f;  // define a displacement-proportional traction at the support

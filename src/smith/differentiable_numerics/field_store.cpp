@@ -129,6 +129,17 @@ std::vector<std::vector<size_t>> FieldStore::indexMap(const std::vector<std::str
 std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionManagers(
     const std::vector<std::string>& weak_form_names) const
 {
+  std::vector<std::string> field_names;
+  field_names.reserve(weak_form_names.size());
+  for (const auto& wf_name : weak_form_names) {
+    field_names.push_back(getWeakFormReaction(wf_name));
+  }
+  return getBoundaryConditionManagersForFields(field_names);
+}
+
+std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionManagersForFields(
+    const std::vector<std::string>& field_names) const
+{
   struct BoundaryConditionRef {
     std::string primary_name;
     bool use_second_derivative;
@@ -147,18 +158,16 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
   }
 
   std::vector<const BoundaryConditionManager*> bcs;
-  for (const auto& wf_name : weak_form_names) {
-    const std::string reaction_name = getWeakFormReaction(wf_name);
-
+  for (const auto& field_name : field_names) {
     // Direct DBC entry takes precedence (e.g. an independent unknown like stress with its own BC).
-    auto direct = boundary_conditions_.find(reaction_name);
+    auto direct = boundary_conditions_.find(field_name);
     if (direct != boundary_conditions_.end()) {
       bcs.push_back(&direct->second->getBoundaryConditionManager());
       continue;
     }
 
     // Otherwise resolve via the time-integration mapping that owns this reaction field.
-    auto ref_it = field_to_primary.find(reaction_name);
+    auto ref_it = field_to_primary.find(field_name);
     if (ref_it == field_to_primary.end()) {
       bcs.push_back(nullptr);
       continue;

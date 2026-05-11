@@ -141,6 +141,30 @@ TEST_F(SolidMechanicsMeshFixture, CycleZeroSolverFallbackBuildsWithoutMainSolver
   EXPECT_FALSE(cz->solver->exactStaggeredSteps());
 }
 
+TEST(ImplicitNewmarkSecondOrderRule, CycleZeroModeUsesFourthArgumentAsCurrentAcceleration)
+{
+  ImplicitNewmarkSecondOrderTimeIntegrationRule rule;
+  TimeInfo regular_time(0.0, 2.0, 0);
+  TimeInfo cycle_zero_time(0.0, 2.0, 0, TimeInfo::EvaluationMode::CycleZero);
+
+  const double u_new = 10.0;
+  const double u_old = 4.0;
+  const double v_old = 3.0;
+  const double a_arg = 7.0;
+
+  EXPECT_DOUBLE_EQ(rule.value(regular_time, u_new, u_old, v_old, a_arg), u_new);
+  EXPECT_DOUBLE_EQ(rule.dot(regular_time, u_new, u_old, v_old, a_arg), 3.0);
+  EXPECT_DOUBLE_EQ(rule.ddot(regular_time, u_new, u_old, v_old, a_arg), -7.0);
+
+  EXPECT_DOUBLE_EQ(rule.value(cycle_zero_time, u_new, u_old, v_old, a_arg), u_old);
+  EXPECT_DOUBLE_EQ(rule.dot(cycle_zero_time, u_new, u_old, v_old, a_arg), v_old);
+  EXPECT_DOUBLE_EQ(rule.ddot(cycle_zero_time, u_new, u_old, v_old, a_arg), a_arg);
+
+  EXPECT_DOUBLE_EQ(rule.value(regular_time, u_old, u_old, v_old, a_arg), u_old);
+  EXPECT_DOUBLE_EQ(rule.dot(regular_time, u_old, u_old, v_old, a_arg), -v_old);
+  EXPECT_DOUBLE_EQ(rule.ddot(regular_time, u_old, u_old, v_old, a_arg), -6.0 - a_arg);
+}
+
 TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;

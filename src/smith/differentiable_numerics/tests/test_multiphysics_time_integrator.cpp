@@ -76,6 +76,51 @@ class CountingNoOpNonlinearBlockSolver : public NoOpNonlinearBlockSolver {
   }
 };
 
+class ConstantNonlinearBlockSolver : public NonlinearBlockSolverBase {
+ public:
+  explicit ConstantNonlinearBlockSolver(double value) : value_(value) {}
+
+  std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
+  {
+    ++solve_calls_;
+    std::vector<FieldPtr> solved;
+    solved.reserve(u_guesses.size());
+    for (const auto& guess : u_guesses) {
+      auto state = std::make_shared<FiniteElementState>(*guess);
+      *state = value_;
+      solved.push_back(state);
+    }
+    return solved;
+  }
+
+  std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>&, std::vector<std::vector<MatrixPtr>>&) const override
+  {
+    return {};
+  }
+
+  ConvergenceStatus convergenceStatus(double, const std::vector<mfem::Vector>& residuals,
+                                      NonlinearConvergenceContext&) const override
+  {
+    ConvergenceStatus status;
+    status.global_converged = true;
+    status.converged = true;
+    status.block_norms.resize(residuals.size(), 0.0);
+    return status;
+  }
+
+  void primeConvergenceContext(const std::vector<mfem::Vector>&, NonlinearConvergenceContext&) const override {}
+
+  int solveCalls() const { return solve_calls_; }
+
+  void setInnerToleranceMultiplier(double) override {}
+
+ private:
+  double value_;
+  mutable int solve_calls_ = 0;
+};
+
 class NeedsInitialSolveRule : public QuasiStaticRule {
  public:
   bool requiresInitialAccelerationSolve() const override { return true; }
@@ -246,6 +291,68 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSkippedForQuasiStaticSecondOrderRule)
   StateManager::reset();
 }
 
+TEST(MultiphysicsTimeIntegrator, CycleZeroSolveResultUpdatesAccelerationField)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "cycle_zero_solve_result_updates_acceleration");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(4, 4, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "cycle_zero_update_mesh");
+
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
+
+  auto time_rule = std::make_shared<NeedsInitialSolveRule>();
+  auto static_rule = std::make_shared<StaticTimeIntegrationRule>();
+  FieldType<H1<1>> displacement_type("displacement_solve_state");
+  field_store->addIndependent(displacement_type, time_rule);
+  FieldType<H1<1>> displacement_old_type("displacement");
+  FieldType<H1<1>> velocity_type("velocity");
+  FieldType<H1<1>> acceleration_type("acceleration");
+  field_store->addIndependent(displacement_old_type, static_rule);
+  field_store->addIndependent(velocity_type, static_rule);
+  field_store->addIndependent(acceleration_type, static_rule);
+
+  *field_store->getField(displacement_type.name).get() = 3.0;
+  *field_store->getField(acceleration_type.name).get() = -2.0;
+
+  auto main_wf = buildScalarDiffusionWeakForm("displacement_main", mesh, field_store, displacement_type);
+  auto cycle_zero_wf = buildSecondOrderMainWeakForm("cycle_zero_acceleration", mesh, field_store, displacement_type,
+                                                    displacement_old_type, velocity_type, acceleration_type);
+
+  auto main_block_solver = std::make_shared<NoOpNonlinearBlockSolver>();
+  auto main_solver = std::make_shared<SystemSolver>(main_block_solver);
+  auto cycle_zero_block_solver = std::make_shared<ConstantNonlinearBlockSolver>(9.0);
+  auto cycle_zero_solver = std::make_shared<SystemSolver>(cycle_zero_block_solver);
+
+  auto main_system = std::make_shared<SystemBase>();
+  main_system->field_store = field_store;
+  main_system->weak_forms = {main_wf};
+  main_system->solver = main_solver;
+
+  auto cycle_zero_system = std::make_shared<SystemBase>();
+  cycle_zero_system->field_store = field_store;
+  cycle_zero_system->weak_forms = {cycle_zero_wf};
+  cycle_zero_system->solver = cycle_zero_solver;
+  cycle_zero_system->solve_result_field_names = {acceleration_type.name};
+  cycle_zero_system->solve_input_field_names = {
+      {displacement_old_type.name, displacement_old_type.name, velocity_type.name, acceleration_type.name}};
+
+  MultiphysicsTimeIntegrator advancer(main_system, {cycle_zero_system});
+
+  auto [new_states, reactions] =
+      advancer.advanceState(TimeInfo(0.0, 1.0, 0), field_store->getShapeDisp(), field_store->getAllFields(), {});
+  static_cast<void>(reactions);
+
+  EXPECT_EQ(cycle_zero_block_solver->solveCalls(), 1);
+  EXPECT_EQ(main_block_solver->solveCalls(), 1);
+  EXPECT_NEAR((*new_states[field_store->getFieldIndex(acceleration_type.name)].get())(0), 9.0, 1.0e-12);
+  EXPECT_NEAR((*new_states[field_store->getFieldIndex(displacement_type.name)].get())(0), 3.0, 1.0e-12);
+
+  StateManager::reset();
+}
+
 TEST(MultiphysicsTimeIntegrator, CycleZeroAccelerationBcUsesDisplacementSecondTimeDerivative)
 {
   axom::sidre::DataStore datastore;
@@ -277,8 +384,12 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroAccelerationBcUsesDisplacementSecondTi
   displacement_bc->setScalarBCs<2>(mesh->domain("right"), [](double t, tensor<double, 2>) { return t * t; });
 
   auto bc_managers = field_store->getBoundaryConditionManagers({cycle_zero_wf->name()});
+  auto acceleration_bc_managers = field_store->getBoundaryConditionManagersForFields({acceleration_type.name});
+  ASSERT_EQ(acceleration_bc_managers.size(), 1);
+  ASSERT_NE(acceleration_bc_managers[0], nullptr);
   ASSERT_EQ(bc_managers.size(), 1);
   ASSERT_NE(bc_managers[0], nullptr);
+  EXPECT_EQ(acceleration_bc_managers[0]->allEssentialTrueDofs().Size(), bc_managers[0]->allEssentialTrueDofs().Size());
   const int right_dofs = bc_managers[0]->allEssentialTrueDofs().Size();
   ASSERT_GT(right_dofs, 0);
 

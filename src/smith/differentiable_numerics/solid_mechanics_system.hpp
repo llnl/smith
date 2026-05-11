@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "smith/differentiable_numerics/field_store.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
@@ -58,7 +60,7 @@ struct SolidMechanicsSystem : public SystemBase {
       typename detail::AppendCouplingToParams<Coupling, Parameters<L2<0, dim * dim>, H1<order, dim>, H1<order, dim>,
                                                                    H1<order, dim>, H1<order, dim>>>::type>;
 
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;    ///< Solid mechanics weak form.
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
   std::shared_ptr<DisplacementTimeRule> disp_time_rule;  ///< Time integration rule.
 
@@ -127,8 +129,7 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     auto captured_rule = disp_time_rule;
     solid_weak_form->addBodySource(
-        domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+        domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
           return force_function(t_info.time(), X, u_current, v_current, a_current, params...);
         });
@@ -145,8 +146,7 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     auto captured_rule = disp_time_rule;
     solid_weak_form->addBoundaryFlux(
-        domain_name,
-        [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+        domain_name, [=](auto t_info, auto X, auto n, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto [u_current, v_current, a_current] = captured_rule->interpolate(t_info, u, u_old, v_old, a_old);
           return traction_function(t_info.time(), X, n, u_current, v_current, a_current, params...);
         });
@@ -163,8 +163,7 @@ struct SolidMechanicsSystem : public SystemBase {
   {
     auto captured_rule = disp_time_rule;
     solid_weak_form->addBoundaryIntegral(
-        domain_name,
-        [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
+        domain_name, [=](auto t_info, auto X, auto u, auto u_old, auto v_old, auto a_old, auto... params) {
           auto u_current = captured_rule->value(t_info, u, u_old, v_old, a_old);
 
           auto x_current = X + u_current;
@@ -194,9 +193,6 @@ struct SolidMechanicsSystem : public SystemBase {
   }
 
  private:
-
-
-
 };
 
 /**
@@ -319,12 +315,20 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
     std::string cycle_zero_name = field_store->prefix("cycle_zero_acceleration_reaction");
     field_store->markWeakFormInternal(cycle_zero_name);
     auto cycle_zero_solver = detail::makeCycleZeroSolver(solver, *field_store->getMesh());
-    
-    // We reuse solid_weak_form for cycle zero, but we must pass correct inputs at evaluation time.
-    // However, the SystemBase needs a cycle_zero_systems populated. We use the solid_weak_form.
-    // Note that during cycle-zero solve, we want to solve for acceleration, but solid_weak_form
-    // was built with disp_type.name as the unknown. We'll handle this in MultiphysicsTimeIntegrator.
-    sys->cycle_zero_systems.push_back(makeSystem(field_store, cycle_zero_solver, {sys->solid_weak_form}));
+
+    auto cycle_zero_system = makeSystem(field_store, cycle_zero_solver, {sys->solid_weak_form});
+    cycle_zero_system->solve_result_field_names = {accel_old_type.name};
+    auto cycle_zero_inputs = std::vector<std::string>{disp_old_type.name, disp_old_type.name, velo_old_type.name,
+                                                      accel_old_type.name};
+    auto append_if_state = [&](const auto& field) {
+      const auto& states = field_store->getStateFields();
+      if (std::any_of(states.begin(), states.end(), [&](const auto& state) { return state.get()->name() == field.name; })) {
+        cycle_zero_inputs.push_back(field.name);
+      }
+    };
+    std::apply([&](const auto&... coupling_fields) { (append_if_state(coupling_fields), ...); }, coupling.fields);
+    cycle_zero_system->solve_input_field_names = {cycle_zero_inputs};
+    sys->cycle_zero_systems.push_back(cycle_zero_system);
   }
 
   if (has_stress_output) {

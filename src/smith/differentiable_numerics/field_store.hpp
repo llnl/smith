@@ -352,6 +352,9 @@ struct FieldStore {
   std::vector<const BoundaryConditionManager*> getBoundaryConditionManagers(
       const std::vector<std::string>& weak_form_names) const;
 
+  std::vector<const BoundaryConditionManager*> getBoundaryConditionManagersForFields(
+      const std::vector<std::string>& field_names) const;
+
   /**
    * @brief Check whether a field exists.
    *

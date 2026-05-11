@@ -68,7 +68,8 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
   template <typename FuncOfTimeSpaceAndParams, int... all_params>
-  void addBodyIntegralImpl(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction, std::integer_sequence<int, all_params...>)
+  void addBodyIntegralImpl(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction,
+                           std::integer_sequence<int, all_params...>)
   {
     const double* dt = &dt_;
     const size_t* cycle = &cycle_;
@@ -94,7 +95,8 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
   template <typename FuncOfTimeSpaceAndParams, int... all_params>
-  void addBoundaryIntegralImpl(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction, std::integer_sequence<int, all_params...>)
+  void addBoundaryIntegralImpl(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction,
+                               std::integer_sequence<int, all_params...>)
   {
     const double* dt = &dt_;
     const size_t* cycle = &cycle_;

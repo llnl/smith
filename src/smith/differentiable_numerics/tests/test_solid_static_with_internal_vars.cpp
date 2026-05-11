@@ -222,7 +222,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a gravity-like body force in the -z direction
   double body_force_mag = -0.01;
-  solid_system->addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto) {
+  solid_system->addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto, auto... /*args*/) {
     tensor<double, dim> f{};
     f[2] = body_force_mag;
     return f;
@@ -230,7 +230,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a traction on the top face in the +z direction
   double traction_mag = 0.005;
-  solid_system->addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto) {
+  solid_system->addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto, auto... /*args*/) {
     tensor<double, dim> t{};
     t[2] = traction_mag;
     return t;

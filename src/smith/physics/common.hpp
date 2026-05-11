@@ -16,9 +16,11 @@ namespace smith {
 
 /// @brief struct storing time and timestep information
 struct TimeInfo {
+  enum class EvaluationMode { Regular, CycleZero };
+
   /// @brief constructor
-  TimeInfo(double t, double t_step, size_t c = 0)
-      : time_(std::make_pair(t, 0.0)), dt_(std::make_pair(t_step, 0.0)), cycle_(c)
+  TimeInfo(double t, double t_step, size_t c = 0, EvaluationMode mode = EvaluationMode::Regular)
+      : time_(std::make_pair(t, 0.0)), dt_(std::make_pair(t_step, 0.0)), cycle_(c), mode_(mode)
   {
   }
 
@@ -31,10 +33,17 @@ struct TimeInfo {
   /// @brief accessor for cycle
   size_t cycle() const { return cycle_; }
 
+  /// @brief true when evaluating the startup acceleration solve.
+  bool isCycleZeroEvaluation() const { return mode_ == EvaluationMode::CycleZero; }
+
+  /// @brief accessor for residual evaluation mode.
+  EvaluationMode mode() const { return mode_; }
+
  private:
   std::pair<double, double> time_;  ///< time and its dual
   std::pair<double, double> dt_;    ///< timestep and its dual
   size_t cycle_;                    ///< cycle, step, iteration count
+  EvaluationMode mode_;             ///< residual evaluation mode
 };
 
 /**

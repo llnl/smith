@@ -58,8 +58,8 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     SolidMaterial mat;
     mat.K = 1.0;
     mat.G = 0.5;
-    solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(),
-        [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
+    solid_mechanics_weak_form->addBodyIntegral(
+        mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
           typename SolidMaterial::State state;
           auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);
           return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density), pk_stress};
@@ -99,8 +99,8 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     for (int i = 0; i < dim; ++i) {
       auto cg_objective = std::make_shared<ObjectiveT>("translation" + std::to_string(i), mesh, param_space_ptrs);
       cg_objective->addBodyIntegral(mesh->entireBodyName(), [i](auto /*t_info*/, auto X, auto U, auto RHO) {
-            return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
-          });
+        return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
+      });
       initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
       constraint_evaluators.push_back(cg_objective);
     }

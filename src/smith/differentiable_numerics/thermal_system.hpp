@@ -108,27 +108,6 @@ struct ThermalSystem : public SystemBase {
   }
 
   /**
-   * @brief Add a body heat source to the thermal system (with DependsOn).
-   * @param depends_on Selects which primal and parameter fields the contribution depends on.
-   * @param domain_name The name of the domain where the heat source is applied.
-   * @param source_function (t_info, X, T, params...) -> heat_source.
-   */
-  template <int... active_parameters, typename HeatSourceType>
-  void addHeatSource(DependsOn<active_parameters...> depends_on, const std::string& domain_name,
-                     HeatSourceType source_function)
-  {
-    (void)depends_on;
-    auto captured_temp_rule = temperature_time_rule;
-
-    thermal_weak_form->template addBodySource<0, 1, (2 + active_parameters)...>(
-        DependsOn<0, 1, (2 + active_parameters)...>{}, domain_name,
-        [=](auto t_info, auto X, auto temperature, auto temperature_old, auto... params) {
-          auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          return source_function(t_info, X, T, params...);
-        });
-  }
-
-  /**
    * @brief Add a body heat source that depends on all state and parameter fields.
    * @param domain_name The name of the domain where the heat source is applied.
    * @param source_function (t_info, X, T, params...) -> heat_source.
@@ -137,33 +116,10 @@ struct ThermalSystem : public SystemBase {
   void addHeatSource(const std::string& domain_name, HeatSourceType source_function)
   {
     auto captured_rule = temperature_time_rule;
-    thermal_weak_form->addBodySource(
-        domain_name,
-        [=](auto t_info, auto X, auto T, auto T_old, auto... params) {
-          auto T_current = captured_rule->value(t_info, T, T_old);
-          return source_function(t_info.time(), X, T_current, params...);
-        });
-  }
-
-  /**
-   * @brief Add a boundary heat flux to the thermal system (with DependsOn).
-   * @param depends_on Selects which primal and parameter fields the contribution depends on.
-   * @param boundary_name The name of the boundary where the heat flux is applied.
-   * @param flux_function (t_info, X, n, T, params...) -> heat_flux.
-   */
-  template <int... active_parameters, typename HeatFluxType>
-  void addHeatFlux(DependsOn<active_parameters...> depends_on, const std::string& boundary_name,
-                   HeatFluxType flux_function)
-  {
-    (void)depends_on;
-    auto captured_temp_rule = temperature_time_rule;
-
-    thermal_weak_form->template addBoundaryFlux<0, 1, (2 + active_parameters)...>(
-        DependsOn<0, 1, (2 + active_parameters)...>{}, boundary_name,
-        [=](auto t_info, auto X, auto n, auto temperature, auto temperature_old, auto... params) {
-          auto T = captured_temp_rule->value(t_info, temperature, temperature_old);
-          return -flux_function(t_info, X, n, T, params...);
-        });
+    thermal_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto T, auto T_old, auto... params) {
+      auto T_current = captured_rule->value(t_info, T, T_old);
+      return source_function(t_info.time(), X, T_current, params...);
+    });
   }
 
   /**
@@ -175,12 +131,11 @@ struct ThermalSystem : public SystemBase {
   void addHeatFlux(const std::string& boundary_name, HeatFluxType flux_function)
   {
     auto captured_rule = temperature_time_rule;
-    thermal_weak_form->addBoundaryFlux(
-        boundary_name,
-        [=](auto t_info, auto X, auto n, auto T, auto T_old, auto... params) {
-          auto T_current = captured_rule->value(t_info, T, T_old);
-          return flux_function(t_info.time(), X, n, T_current, params...);
-        });
+    thermal_weak_form->addBoundaryFlux(boundary_name,
+                                       [=](auto t_info, auto X, auto n, auto T, auto T_old, auto... params) {
+                                         auto T_current = captured_rule->value(t_info, T, T_old);
+                                         return flux_function(t_info.time(), X, n, T_current, params...);
+                                       });
   }
 
   /// Set zero-temperature Dirichlet BC.
@@ -194,7 +149,6 @@ struct ThermalSystem : public SystemBase {
   }
 
  private:
-
 };
 
 struct ThermalOptions {};
