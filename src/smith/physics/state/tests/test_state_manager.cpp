@@ -115,7 +115,7 @@ TEST(state_manager, QuadratureData_Restart)
   std::string filename = SMITH_REPO_DIR "/data/meshes/ball.mesh";
   std::string mesh_tag = "ball_mesh";
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
-  StateManager::setMesh(std::move(mesh), mesh_tag);
+  StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(mesh)), mesh_tag);
 
   // Create and store the initial state of the QuadratureData in Sidre
   SLIC_INFO("Creating Quadrature Data with initial state");
@@ -188,7 +188,7 @@ TEST(StateManager, StoresHighOrderMeshes)
   int serial_refinement = 0;
   int parallel_refinement = 0;
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement);
-  auto& pmesh = smith::StateManager::setMesh(std::move(mesh), "mesh");
+  auto& pmesh = smith::StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(mesh)), "mesh");
 
   ASSERT_EQ(dim, pmesh.SpaceDimension());
 
@@ -222,6 +222,25 @@ TEST(StateManager, StoresHighOrderMeshes)
   auto v2 = edge_coords[0] - edge_coords[2];
   double area = std::abs(v1[0] * v2[1] - v1[1] * v2[0]);
   EXPECT_GT(area, 1e-6);
+}
+
+TEST(StateManager, ResetDoesNotDeleteExternallySharedMesh)
+{
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, "shared_mesh_output_test");
+
+  const std::string filename = SMITH_REPO_DIR "/data/meshes/single_curved_quad.g";
+  auto mesh = std::shared_ptr<mfem::ParMesh>(mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0));
+  auto* raw_mesh = mesh.get();
+
+  auto& stored_mesh = smith::StateManager::setMesh(mesh, "shared_mesh");
+  EXPECT_EQ(raw_mesh, &stored_mesh);
+
+  smith::StateManager::reset();
+
+  ASSERT_NE(nullptr, mesh);
+  EXPECT_EQ(raw_mesh, mesh.get());
+  EXPECT_EQ(2, mesh->Dimension());
 }
 
 }  // namespace smith

@@ -20,6 +20,7 @@ namespace smith {
 
 // Initialize StateManager's static members - these will be fully initialized in StateManager::initialize
 std::unordered_map<std::string, axom::sidre::MFEMSidreDataCollection> StateManager::datacolls_;
+std::unordered_map<std::string, std::shared_ptr<mfem::ParMesh>> StateManager::meshes_;
 std::unordered_map<std::string, std::unique_ptr<FiniteElementState>> StateManager::shape_displacements_;
 std::unordered_map<std::string, std::unique_ptr<FiniteElementDual>> StateManager::shape_displacement_duals_;
 bool StateManager::is_restart_ = false;
@@ -27,6 +28,8 @@ axom::sidre::DataStore* StateManager::ds_ = nullptr;
 std::string StateManager::output_dir_ = "";
 std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_states_;
 std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_duals_;
+std::vector<std::unique_ptr<mfem::ParGridFunction>> StateManager::owned_states_;
+std::vector<std::unique_ptr<mfem::ParGridFunction>> StateManager::owned_duals_;
 
 double StateManager::newDataCollection(const std::string& mesh_tag, const std::optional<int> cycle_to_load)
 {
@@ -144,10 +147,12 @@ void StateManager::storeState(FiniteElementState& state)
   } else {
     SLIC_ERROR_ROOT_IF(datacoll.HasField(name), std::format("StateManager already given a field named '{0}'", name));
 
-    // Create a new grid function with unallocated data. This will be managed by sidre.
-    grid_function = new mfem::ParGridFunction(&state.space(), static_cast<double*>(nullptr));
+    // Create a new grid function with unallocated data. Sidre manages its data buffer.
+    auto owned_grid_function = std::make_unique<mfem::ParGridFunction>(&state.space(), static_cast<double*>(nullptr));
+    grid_function = owned_grid_function.get();
     datacoll.RegisterField(name, grid_function);
     state.fillGridFunction(*grid_function);
+    owned_states_.push_back(std::move(owned_grid_function));
   }
   named_states_[name] = grid_function;
 }
@@ -180,10 +185,12 @@ void StateManager::storeDual(FiniteElementDual& dual)
   } else {
     SLIC_ERROR_ROOT_IF(datacoll.HasField(name), std::format("StateManager already given a field named '{0}'", name));
 
-    // Create a new grid function with unallocated data. This will be managed by sidre.
-    grid_function = new mfem::ParGridFunction(&dual.space(), static_cast<double*>(nullptr));
+    // Create a new grid function with unallocated data. Sidre manages its data buffer.
+    auto owned_grid_function = std::make_unique<mfem::ParGridFunction>(&dual.space(), static_cast<double*>(nullptr));
+    grid_function = owned_grid_function.get();
     datacoll.RegisterField(name, grid_function);
     grid_function->SetFromTrueDofs(dual);
+    owned_duals_.push_back(std::move(owned_grid_function));
   }
   named_duals_[name] = grid_function;
 }
@@ -224,17 +231,16 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
   datacoll.Save();
 }
 
-mfem::ParMesh& StateManager::setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag)
+mfem::ParMesh& StateManager::setMesh(std::shared_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag)
 {
+  SLIC_ERROR_ROOT_IF(!pmesh, "Cannot register a null mesh with StateManager");
   checkMesh(*pmesh);
-
-  // Sidre will destruct the nodal grid function instead of the mesh
-  pmesh->SetNodesOwner(false);
 
   newDataCollection(mesh_tag);
   auto& datacoll = datacolls_.at(mesh_tag);
-  datacoll.SetMesh(pmesh.release());
-  datacoll.SetOwnData(true);
+  datacoll.SetMesh(pmesh.get());
+  datacoll.SetOwnData(false);
+  meshes_[mesh_tag] = std::move(pmesh);
 
   auto& new_pmesh = mesh(mesh_tag);
 

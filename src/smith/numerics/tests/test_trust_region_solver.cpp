@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -37,7 +38,7 @@ struct MeshFixture : public testing::Test {
     double width = 2.0;
     auto meshtmp =
         smith::mesh::refineAndDistribute(mfem::Mesh::MakeCartesian2D(2, 1, mfem_shape, true, length, width), 0, 0);
-    mesh_ = &smith::StateManager::setMesh(std::move(meshtmp), MESHTAG);
+    mesh_ = &smith::StateManager::setMesh(std::shared_ptr<mfem::ParMesh>(std::move(meshtmp)), MESHTAG);
   }
 
   axom::sidre::DataStore datastore_;
