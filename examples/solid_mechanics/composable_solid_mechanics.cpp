@@ -105,12 +105,12 @@ int main(int argc, char* argv[])
 
   // _bc_start
   solid_system->setDisplacementBC(mesh->domain("left"), std::vector<int>{0, 2});
-  solid_system->addBodyForce(mesh->entireBodyName(), [](double, auto X, auto, auto, auto) {
+  solid_system->addBodyForce(mesh->entireBodyName(), [](double, auto X, auto, auto, auto, auto... /*args*/) {
     auto body_force = 0.0 * X;
     body_force[1] = -0.02;
     return body_force;
   });
-  solid_system->addTraction("right", [](double, auto X, auto, auto, auto, auto) {
+  solid_system->addTraction("right", [](double, auto X, auto, auto, auto, auto, auto... /*args*/) {
     auto traction = 0.0 * X;
     traction[0] = -0.01;
     return traction;
@@ -155,10 +155,10 @@ int main(int argc, char* argv[])
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, DispSpace>> qoi("solid_dynamic_energy_proxy", mesh,
                                                                                smith::spaces(qoi_fields));
   qoi.addBodyIntegral(mesh->entireBodyName(), [](const smith::TimeInfo&, auto, auto U, auto V) {
-        auto u = smith::get<smith::VALUE>(U);
-        auto v = smith::get<smith::VALUE>(V);
-        return 0.5 * (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]) + 0.05 * (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-      });
+    auto u = smith::get<smith::VALUE>(U);
+    auto v = smith::get<smith::VALUE>(V);
+    return 0.5 * (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]) + 0.05 * (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  });
 
   constexpr double dt = 0.25;
   constexpr int num_steps = 3;

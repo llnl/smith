@@ -212,18 +212,18 @@ int main(int argc, char* argv[])
 
   ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
-  mass_objective.addBodyIntegral(mesh->entireBodyName(),
-                                 [](auto /*t_info*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
+  mass_objective.addBodyIntegral(mesh->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto /*U*/, auto RHO) {
+    return get<smith::VALUE>(RHO);
+  });
   double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
   smith::tensor<double, dim> initial_cg;  // center of gravity
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
-    cg_objective->addBodyIntegral(mesh->entireBodyName(),
-                                  [i](auto /*t_info*/, auto X, auto U, auto RHO) {
-                                    return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
-                                  });
+    cg_objective->addBodyIntegral(mesh->entireBodyName(), [i](auto /*t_info*/, auto X, auto U, auto RHO) {
+      return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
+    });
     initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
