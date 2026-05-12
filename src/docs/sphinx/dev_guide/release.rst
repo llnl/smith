@@ -79,9 +79,6 @@ Typical changes include:
 #. Update the mail map in ``smith/.mailmap``, if needed, by adding names and 
    emails of new contributors since the last release.
 
-#. Update the citations in ``smith/CITATION.cff`` by adding the names
-   of new LLNL contributors since the last release.
-
 #. Test the code by running it through all continuous integration tests
    and builds. This will be done automatically when the release pull request is
    made. All build configurations must compile properly and all tests must pass
