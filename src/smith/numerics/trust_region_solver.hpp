@@ -55,12 +55,6 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
                                                const std::vector<const mfem::Vector*>& A_directions,
                                                const mfem::Vector& b, double delta, int num_leftmost);
 
-#if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
-TrustRegionSubspaceResult solveSubspaceProblemPetsc(const std::vector<const mfem::Vector*>& directions,
-                                                    const std::vector<const mfem::Vector*>& A_directions,
-                                                    const mfem::Vector& b, double delta, int num_leftmost);
-#endif
-
 TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& directions,
                                                    const std::vector<const mfem::Vector*>& A_directions,
                                                    const mfem::Vector& b, double delta, int num_leftmost);

@@ -10,22 +10,19 @@ namespace smith {
 
 namespace {
 
-void smith_add(const mfem::Vector& a, double b, const mfem::Vector& c, mfem::Vector& out)
+void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd, double dd)
 {
-  if (out.GetData() == c.GetData()) {
-    out = a;
-    out.Add(b, c);
-  } else {
-    out = a;
-    out.Add(b, c);
-  }
+  const double deltadelta_m_zz = delta * delta - zz;
+  if (deltadelta_m_zz <= 0.0) return;
+  const double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
+  z.Add(tau, d);
 }
 
 }  // namespace
 
 void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
                      const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
-                     double r0_norm_squared, const SteihaugTointDelegate& delegate)
+                     double r0_norm_squared, const DotManyFunction& dot_many)
 {
   // minimize r0@z + 0.5*z@J@z
   results.interior_status = TrustRegionResults::Status::Interior;
@@ -58,13 +55,12 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   double zz = 0.;
 
   // rPr = dot(rCurrent, Pr)
-  auto rPr_arr = delegate.dot_many_2(rCurrent, Pr, rCurrent, Pr);  // We only need the first
-  double rPr = rPr_arr[0];
+  double rPr = dot_many({{&rCurrent, &Pr}, {&rCurrent, &Pr}})[0];
 
   for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
     H.Mult(d, Hd);
 
-    auto dots = delegate.dot_many_4(d, rCurrent, d, Hd, z, d, d, d);
+    auto dots = dot_many({{&d, &rCurrent}, {&d, &Hd}, {&z, &d}, {&d, &d}});
     double descent_check = dots[0];
     double curvature = dots[1];
     double zd = dots[2];
@@ -84,7 +80,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
 
     const bool go_to_boundary = curvature <= 0 || zzNp1 >= trSize * trSize;
     if (go_to_boundary) {
-      delegate.projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
+      projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
       if (curvature <= 0) {
         results.interior_status = TrustRegionResults::Status::NegativeCurvature;
       } else {
@@ -94,14 +90,15 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
     }
 
     auto& zPred = Pr;
-    smith_add(z, alphaCg, d, zPred);
+    zPred = z;
+    zPred.Add(alphaCg, d);
     z = zPred;
 
     if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
       return;
     }
 
-    smith_add(rCurrent, alphaCg, Hd, rCurrent);
+    rCurrent.Add(alphaCg, Hd);
 
     if (P) {
       P->Mult(rCurrent, Pr);
@@ -109,7 +106,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
       Pr = rCurrent;
     }
 
-    auto dots2 = delegate.dot_many_2(rCurrent, Pr, rCurrent, rCurrent);
+    auto dots2 = dot_many({{&rCurrent, &Pr}, {&rCurrent, &rCurrent}});
     double rPrNp1 = dots2[0];
     double r_current_norm_squared = dots2[1];
 

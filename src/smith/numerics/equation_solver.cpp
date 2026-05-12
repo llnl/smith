@@ -9,7 +9,6 @@
 
 #include <array>
 #include <cstdlib>
-#include <deque>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -263,7 +262,7 @@ void printTrustRegionInfo(double realWork, double modelObjective, size_t cgIters
  * rely on an incremental work approximation: 0.5 (f^n + f^{n+1}) dot (u^{n+1} - u^n).  While less theoretically sound,
  * it appears to be very effective in practice.
  */
-class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
+class TrustRegion : public mfem::NewtonSolver {
  protected:
   /// predicted solution
   mutable mfem::Vector x_pred;
@@ -275,14 +274,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
   mutable std::vector<std::shared_ptr<mfem::Vector>> left_mosts;
   /// the action of the stiffness/hessian (H) on the left most eigenvectors
   mutable std::vector<std::shared_ptr<mfem::Vector>> H_left_mosts;
-  /// accepted TrustRegion steps, newest first
-  mutable std::deque<std::shared_ptr<mfem::Vector>> accepted_step_history;
-  /// initial state for this nonlinear solve, used as an optional history direction
-  mutable mfem::Vector solve_start_x;
-  /// state with the lowest residual norm seen in this nonlinear solve
-  mutable mfem::Vector min_residual_x;
-  /// lowest residual norm seen in this nonlinear solve
-  mutable double min_residual_norm = -1.0;
 
   /// nonlinear solution options
   NonlinearSolverOptions nonlinear_options;
@@ -307,53 +298,43 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
 #endif
 
   /// compute several vector inner products with a single MPI reduction when possible
-  template <typename... Args>
-  std::array<double, sizeof...(Args) / 2> dot_many(const Args&... args) const
+  std::vector<double> dot_many(const std::vector<DotPair>& pairs) const
   {
-    static_assert(sizeof...(Args) % 2 == 0, "dot_many requires an even number of arguments");
-    constexpr size_t num_pairs = sizeof...(Args) / 2;
-    std::array<double, num_pairs> products;
-    products.fill(0.0);
+    std::vector<double> products(pairs.size(), 0.0);
 
     if (dot_oper) {
-      auto tuple_args = std::tie(args...);
-      auto do_dots = [&]<std::size_t... I>(std::index_sequence<I...>) {
-        ((products[I] = Dot(std::get<2 * I>(tuple_args), std::get<2 * I + 1>(tuple_args))), ...);
-      };
-      do_dots(std::make_index_sequence<num_pairs>{});
+      for (size_t i = 0; i < pairs.size(); ++i) {
+        products[i] = Dot(*pairs[i].first, *pairs[i].second);
+      }
       return products;
     }
 
-    auto tuple_args = std::tie(args...);
-    std::array<int, num_pairs> sizes;
-    std::array<const double*, num_pairs> ptr_a;
-    std::array<const double*, num_pairs> ptr_b;
-
-    auto populate_arrays = [&]<std::size_t... I>(std::index_sequence<I...>) {
-      ((
-           sizes[I] = std::get<2 * I>(tuple_args).Size(),
-           [&]() { MFEM_ASSERT(sizes[I] == std::get<2 * I + 1>(tuple_args).Size(), "Incompatible vector sizes."); }(),
-           ptr_a[I] = std::get<2 * I>(tuple_args).GetData(), ptr_b[I] = std::get<2 * I + 1>(tuple_args).GetData()),
-       ...);
-    };
-    populate_arrays(std::make_index_sequence<num_pairs>{});
+    std::vector<int> sizes(pairs.size());
+    std::vector<const double*> ptr_a(pairs.size());
+    std::vector<const double*> ptr_b(pairs.size());
+    for (size_t i = 0; i < pairs.size(); ++i) {
+      sizes[i] = pairs[i].first->Size();
+      MFEM_ASSERT(sizes[i] == pairs[i].second->Size(), "Incompatible vector sizes.");
+      ptr_a[i] = pairs[i].first->GetData();
+      ptr_b[i] = pairs[i].second->GetData();
+    }
 
     bool all_same_size = true;
-    for (size_t i = 1; i < num_pairs; ++i) {
+    for (size_t i = 1; i < pairs.size(); ++i) {
       if (sizes[i] != sizes[0]) {
         all_same_size = false;
         break;
       }
     }
 
-    if (all_same_size && num_pairs > 0) {
+    if (all_same_size && !pairs.empty()) {
       for (int j = 0; j < sizes[0]; ++j) {
-        for (size_t i = 0; i < num_pairs; ++i) {
+        for (size_t i = 0; i < pairs.size(); ++i) {
           products[i] += ptr_a[i][j] * ptr_b[i][j];
         }
       }
     } else {
-      for (size_t i = 0; i < num_pairs; ++i) {
+      for (size_t i = 0; i < pairs.size(); ++i) {
         for (int j = 0; j < sizes[i]; ++j) {
           products[i] += ptr_a[i][j] * ptr_b[i][j];
         }
@@ -363,70 +344,14 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
 #ifdef MFEM_USE_MPI
     const MPI_Comm dot_comm = GetComm();
     if (dot_comm != MPI_COMM_NULL) {
-      std::array<mfem::real_t, num_pairs> global_products;
-      MPI_Allreduce(products.data(), global_products.data(), num_pairs, MFEM_MPI_REAL_T, MPI_SUM, dot_comm);
-      for (size_t i = 0; i < num_pairs; ++i) {
-        products[i] = global_products[i];
-      }
+      std::vector<mfem::real_t> global_products(pairs.size());
+      MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T, MPI_SUM,
+                    dot_comm);
+      products.assign(global_products.begin(), global_products.end());
     }
 #endif
 
     return products;
-  }
-
-  /// apply Hessian-vector products for all supplied subspace directions
-  template <typename HessVecFunc>
-  void batchedSubspaceHessVec(HessVecFunc hess_vec_func, const std::vector<const mfem::Vector*>& inputs,
-                              const std::vector<mfem::Vector*>& outputs) const
-  {
-    MFEM_VERIFY(inputs.size() == outputs.size(), "Subspace Hessian-vector batch input/output size mismatch");
-    if (inputs.empty()) {
-      return;
-    }
-
-    for (size_t i = 0; i < inputs.size(); ++i) {
-      hess_vec_func(*inputs[i], *outputs[i]);
-    }
-  }
-
-  /// store accepted steps for optional later subspace enrichment
-  void pushAcceptedStepHistory(const mfem::Vector& step) const
-  {
-    if (nonlinear_options.trust_num_past_steps <= 0) {
-      accepted_step_history.clear();
-      return;
-    }
-
-    accepted_step_history.push_front(std::make_shared<mfem::Vector>(step));
-    const size_t max_size = static_cast<size_t>(nonlinear_options.trust_num_past_steps) + 1;
-    while (accepted_step_history.size() > max_size) {
-      accepted_step_history.pop_back();
-    }
-  }
-
-  /// SteihaugTointDelegate implementation for four inner products.
-  std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
-                                   const mfem::Vector& b1, const mfem::Vector& a2, const mfem::Vector& b2,
-                                   const mfem::Vector& a3, const mfem::Vector& b3) const override
-  {
-    return dot_many(a0, b0, a1, b1, a2, b2, a3, b3);
-  }
-
-  /// SteihaugTointDelegate implementation for two inner products.
-  std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
-                                   const mfem::Vector& b1) const override
-  {
-    return dot_many(a0, b0, a1, b1);
-  }
-
-  /// SteihaugTointDelegate implementation for projecting to the trust-region boundary.
-  void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
-                                  double dd) const override
-  {
-    double deltadelta_m_zz = delta * delta - zz;
-    if (deltadelta_m_zz == 0) return;
-    double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
-    z.Add(tau, d);
   }
 
   /// solve the exact trust-region subspace problem with directions ds, and the leftmosts
@@ -507,7 +432,9 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
   void doglegStep(const mfem::Vector& cp, const mfem::Vector& newtonP, double trSize, mfem::Vector& s) const
   {
     SMITH_MARK_FUNCTION;
-    auto [cc, nn] = dot_many(cp, cp, newtonP, newtonP);
+    const auto dots = dot_many({{&cp, &cp}, {&newtonP, &newtonP}});
+    const double cc = dots[0];
+    const double nn = dots[1];
     double tt = trSize * trSize;
 
     s = 0.0;
@@ -544,7 +471,8 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
                          const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
                          double r0_norm_squared) const
   {
-    steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, *this);
+    auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
+    steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda);
   }
 
   /// assemble the jacobian
@@ -597,14 +525,8 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
 
     using real_t = mfem::real_t;
 
-    solve_start_x.SetSize(X.Size());
-    solve_start_x = X;
-    min_residual_x.SetSize(X.Size());
-    min_residual_x = X;
-
     real_t norm, norm_goal = 0.0;
     norm = initial_norm = computeResidual(X, r);
-    min_residual_norm = initial_norm;
     if (norm == 0.0) return;
 
     norm_goal = std::max(rel_tol * initial_norm, abs_tol);
@@ -741,7 +663,11 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
               subspace_hess_outputs.push_back(&trResults.H_d_old);
             }
 
-            batchedSubspaceHessVec(hess_vec_func, subspace_hess_inputs, subspace_hess_outputs);
+            MFEM_VERIFY(subspace_hess_inputs.size() == subspace_hess_outputs.size(),
+                        "Subspace Hessian-vector batch input/output size mismatch");
+            for (size_t i = 0; i < subspace_hess_inputs.size(); ++i) {
+              hess_vec_func(*subspace_hess_inputs[i], *subspace_hess_outputs[i]);
+            }
           }
 
           if (!have_computed_H_left_mosts) {
@@ -754,7 +680,11 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
               leftmost_inputs.push_back(left.get());
               leftmost_outputs.push_back(H_left_mosts.back().get());
             }
-            batchedSubspaceHessVec(hess_vec_func, leftmost_inputs, leftmost_outputs);
+            MFEM_VERIFY(leftmost_inputs.size() == leftmost_outputs.size(),
+                        "Subspace Hessian-vector batch input/output size mismatch");
+            for (size_t i = 0; i < leftmost_inputs.size(); ++i) {
+              hess_vec_func(*leftmost_inputs[i], *leftmost_outputs[i]);
+            }
           }
 
           std::vector<const mfem::Vector*> ds{&trResults.z, &trResults.cauchy_point};
@@ -764,65 +694,15 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
             H_ds.push_back(&trResults.H_d_old);
           }
 
-          std::vector<mfem::Vector> H_past_steps;
-          std::vector<const mfem::Vector*> past_step_inputs;
-          std::vector<mfem::Vector*> past_step_outputs;
-          const size_t max_past_steps = static_cast<size_t>(std::max(nonlinear_options.trust_num_past_steps, 0));
-          const size_t num_past_steps =
-              accepted_step_history.size() > 1 ? std::min(max_past_steps, accepted_step_history.size() - 1) : 0;
-          H_past_steps.reserve(num_past_steps);
-          past_step_inputs.reserve(num_past_steps);
-          past_step_outputs.reserve(num_past_steps);
-          for (size_t i = 0; i < num_past_steps; ++i) {
-            const auto& past_step = accepted_step_history[i + 1];
-            H_past_steps.emplace_back(past_step->Size());
-            past_step_inputs.push_back(past_step.get());
-            past_step_outputs.push_back(&H_past_steps.back());
-          }
-          if (!past_step_inputs.empty()) {
-            batchedSubspaceHessVec(hess_vec_func, past_step_inputs, past_step_outputs);
-            for (size_t i = 0; i < past_step_inputs.size(); ++i) {
-              ds.push_back(past_step_inputs[i]);
-              H_ds.push_back(past_step_outputs[i]);
-            }
-          }
-
-          mfem::Vector solve_start_direction;
-          mfem::Vector H_solve_start_direction;
-          if (nonlinear_options.trust_use_solve_start_direction && solve_start_x.Size() == X.Size()) {
-            solve_start_direction.SetSize(X.Size());
-            subtract(solve_start_x, X, solve_start_direction);
-            if (solve_start_direction.Norml2() > 0.0) {
-              H_solve_start_direction.SetSize(X.Size());
-              std::vector<const mfem::Vector*> solve_start_inputs{&solve_start_direction};
-              std::vector<mfem::Vector*> solve_start_outputs{&H_solve_start_direction};
-              batchedSubspaceHessVec(hess_vec_func, solve_start_inputs, solve_start_outputs);
-              ds.push_back(&solve_start_direction);
-              H_ds.push_back(&H_solve_start_direction);
-            }
-          }
-
-          mfem::Vector min_residual_direction;
-          mfem::Vector H_min_residual_direction;
-          if (nonlinear_options.trust_use_min_residual_direction && min_residual_x.Size() == X.Size()) {
-            min_residual_direction.SetSize(X.Size());
-            subtract(min_residual_x, X, min_residual_direction);
-            if (min_residual_direction.Norml2() > 0.0) {
-              H_min_residual_direction.SetSize(X.Size());
-              std::vector<const mfem::Vector*> min_res_inputs{&min_residual_direction};
-              std::vector<mfem::Vector*> min_res_outputs{&H_min_residual_direction};
-              batchedSubspaceHessVec(hess_vec_func, min_res_inputs, min_res_outputs);
-              ds.push_back(&min_residual_direction);
-              H_ds.push_back(&H_min_residual_direction);
-            }
-          }
           solveTheSubspaceProblem(trResults.d, hess_vec_func, ds, H_ds, r, tr_size, num_leftmost, candidate_left_mosts);
         }
 
         static constexpr double roundOffTol = 0.0;  // 1e-14;
 
         hess_vec_func(trResults.d, trResults.H_d);
-        const auto [dHd, rd] = dot_many(trResults.d, trResults.H_d, r, trResults.d);
+        const auto dots = dot_many({{&trResults.d, &trResults.H_d}, {&r, &trResults.d}});
+        const double dHd = dots[0];
+        const double rd = dots[1];
         double modelObjective = rd + 0.5 * dHd - roundOffTol;
 
         add(X, trResults.d, x_pred);
@@ -831,10 +711,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
         double normPred = std::numeric_limits<double>::max();
         try {
           normPred = computeResidual(x_pred, r_pred);
-          if (normPred < min_residual_norm) {
-            min_residual_norm = normPred;
-            min_residual_x = x_pred;
-          }
           double obj1 = 0.5 * (rd + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
         } catch (const std::exception&) {
@@ -845,7 +721,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
         if (normPred <= norm_goal) {
           trResults.d_old = trResults.d;
           trResults.has_d_old = true;
-          pushAcceptedStepHistory(trResults.d);
           if (!candidate_left_mosts.empty()) {
             left_mosts = std::move(candidate_left_mosts);
           }
@@ -901,7 +776,6 @@ class TrustRegion : public mfem::NewtonSolver, public SteihaugTointDelegate {
         if (willAccept) {
           trResults.d_old = trResults.d;
           trResults.has_d_old = true;
-          pushAcceptedStepHistory(trResults.d);
           if (!candidate_left_mosts.empty()) {
             left_mosts = std::move(candidate_left_mosts);
           }

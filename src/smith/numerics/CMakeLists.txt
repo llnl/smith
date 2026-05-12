@@ -14,14 +14,12 @@ set(numerics_headers
     stdfunction_operator.hpp
     petsc_solvers.hpp
     trust_region_solver.hpp
-    dense_petsc.hpp
     block_preconditioner.hpp
     )
 
 set(numerics_sources
     equation_solver.cpp
     steihaug_toint_cg.cpp
-    petsc_trust_region_subspace.cpp
     mfem_trust_region_subspace.cpp
     odes.cpp
     petsc_solvers.cpp

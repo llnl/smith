@@ -467,16 +467,6 @@ struct NonlinearSolverOptions {
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
 
-  /// Number of additional older accepted TrustRegion steps to include in subspace solves.
-  int trust_num_past_steps = 0;
-
-  /// Include the displacement from current nonlinear-solve state back to the nonlinear-solve initial state.
-  bool trust_use_solve_start_direction = false;
-
-  /// Include the displacement from current nonlinear-solve state to the state with the minimum residual seen so far in
-  /// this nonlinear solve.
-  bool trust_use_min_residual_direction = false;
-
   /// Should the gradient be converted to a monolithic matrix
   bool force_monolithic = false;
 };

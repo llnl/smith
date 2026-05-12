@@ -107,17 +107,6 @@ else()
         # filter out items containing "Xlinker"
         set(_mfem_tpl_list ${mfem_tpl_lnk_flags})
         separate_arguments(_mfem_tpl_list)
-        foreach(_link_flag ${_mfem_tpl_list})
-            if(_link_flag MATCHES "^-L(.+)")
-                set(_link_dir "${CMAKE_MATCH_1}")
-                if(EXISTS "${_link_dir}/liblapack.dylib" OR EXISTS "${_link_dir}/libblas.dylib")
-                    list(APPEND _mfem_tpl_link_dirs "${_link_dir}")
-                endif()
-            endif()
-        endforeach()
-        if(_mfem_tpl_link_dirs)
-            list(REMOVE_DUPLICATES _mfem_tpl_link_dirs)
-        endif()
         list(FILTER _mfem_tpl_list EXCLUDE REGEX Xlinker)
         # On Apple, -Wl,-rpath,... entries duplicate CMake's own rpath management
         # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings
@@ -148,12 +137,6 @@ else()
         LIBRARIES     ${MFEM_LIBRARIES}
         TREAT_INCLUDES_AS_SYSTEM ON
         EXPORTABLE    ON)
-
-    if(APPLE AND _mfem_tpl_link_dirs)
-        foreach(_link_dir ${_mfem_tpl_link_dirs})
-            target_link_options(mfem INTERFACE "LINKER:-rpath,${_link_dir}")
-        endforeach()
-    endif()
 
     install(TARGETS          mfem
         EXPORT               smith-targets

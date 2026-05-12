@@ -9,44 +9,15 @@
 
 namespace {
 
-class TestDelegate : public smith::SteihaugTointDelegate {
- public:
-  std::array<double, 4> dot_many_4(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
-                                   const mfem::Vector& b1, const mfem::Vector& a2, const mfem::Vector& b2,
-                                   const mfem::Vector& a3, const mfem::Vector& b3) const override
-  {
-    return {a0 * b0, a1 * b1, a2 * b2, a3 * b3};
+std::vector<double> dot_many(const std::vector<smith::DotPair>& pairs)
+{
+  std::vector<double> out;
+  out.reserve(pairs.size());
+  for (const auto& [a, b] : pairs) {
+    out.push_back((*a) * (*b));
   }
-
-  std::array<double, 2> dot_many_2(const mfem::Vector& a0, const mfem::Vector& b0, const mfem::Vector& a1,
-                                   const mfem::Vector& b1) const override
-  {
-    return {a0 * b0, a1 * b1};
-  }
-
-  void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
-                                  double dd) const override
-  {
-    double deltadelta_m_zz = delta * delta - zz;
-    if (deltadelta_m_zz <= 0) return;
-    double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
-    z.Add(tau, d);
-  }
-};
-
-class DiagonalOperator : public mfem::Operator {
- public:
-  DiagonalOperator(const mfem::Vector& diag) : mfem::Operator(diag.Size()), diag_(diag) {}
-  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
-  {
-    for (int i = 0; i < height; ++i) {
-      y[i] = diag_[i] * x[i];
-    }
-  }
-
- private:
-  const mfem::Vector& diag_;
-};
+  return out;
+}
 
 }  // namespace
 
@@ -56,7 +27,7 @@ TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
   mfem::Vector diag(size);
   diag[0] = 2.0;
   diag[1] = 4.0;
-  DiagonalOperator H(diag);
+  mfem::SparseMatrix H(diag);
 
   mfem::Vector r0(size);
   r0[0] = 1.0;
@@ -70,9 +41,8 @@ TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
   smith::TrustRegionResults results(size);
 
   mfem::Vector rCurrent(size);
-  TestDelegate delegate;
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), delegate);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), dot_many);
 
   // Solution should be H^{-1} (-r0)
   // x = -0.5, y = -0.25
@@ -86,7 +56,7 @@ TEST(SteihaugTointCG, HitsBoundary)
   int size = 1;
   mfem::Vector diag(size);
   diag[0] = 1.0;
-  DiagonalOperator H(diag);
+  mfem::SparseMatrix H(diag);
 
   mfem::Vector r0(size);
   r0[0] = 1.0;
@@ -98,9 +68,8 @@ TEST(SteihaugTointCG, HitsBoundary)
   smith::TrustRegionResults results(size);
 
   mfem::Vector rCurrent(size);
-  TestDelegate delegate;
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), delegate);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), dot_many);
 
   EXPECT_NEAR(results.z.Norml2(), 0.5, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::OnBoundary);
@@ -111,7 +80,7 @@ TEST(SteihaugTointCG, DetectsNegativeCurvature)
   int size = 1;
   mfem::Vector diag(size);
   diag[0] = -1.0;  // Negative curvature
-  DiagonalOperator H(diag);
+  mfem::SparseMatrix H(diag);
 
   mfem::Vector r0(size);
   r0[0] = 1.0;
@@ -123,9 +92,8 @@ TEST(SteihaugTointCG, DetectsNegativeCurvature)
   smith::TrustRegionResults results(size);
 
   mfem::Vector rCurrent(size);
-  TestDelegate delegate;
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), delegate);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), dot_many);
 
   // For negative curvature, it should go to boundary
   EXPECT_NEAR(results.z.Norml2(), 2.0, 1e-9);

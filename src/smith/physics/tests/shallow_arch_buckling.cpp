@@ -36,9 +36,6 @@ int print_level = 2;
 int nonlinear_max_iterations = 300000;
 int trust_subspace_option = static_cast<int>(SubSpaceOptions::NEVER);
 int trust_num_leftmost = 1;
-int trust_num_past_steps = 0;
-bool trust_use_solve_start_direction = false;
-bool trust_use_min_residual_direction = false;
 
 NonlinearSolver selectedNonlinearSolver()
 {
@@ -67,14 +64,6 @@ void parseCommandLine(int& argc, char** argv)
       trust_subspace_option = std::stoi(arg.substr(std::string("--trust-subspace-option=").size()));
     } else if (arg.rfind("--trust-num-leftmost=", 0) == 0) {
       trust_num_leftmost = std::stoi(arg.substr(std::string("--trust-num-leftmost=").size()));
-    } else if (arg.rfind("--trust-num-past-steps=", 0) == 0) {
-      trust_num_past_steps = std::stoi(arg.substr(std::string("--trust-num-past-steps=").size()));
-    } else if (arg.rfind("--trust-use-solve-start-direction=", 0) == 0) {
-      const std::string value = arg.substr(std::string("--trust-use-solve-start-direction=").size());
-      trust_use_solve_start_direction = (value == "1" || value == "true" || value == "on");
-    } else if (arg.rfind("--trust-use-min-residual-direction=", 0) == 0) {
-      const std::string value = arg.substr(std::string("--trust-use-min-residual-direction=").size());
-      trust_use_min_residual_direction = (value == "1" || value == "true" || value == "on");
     } else {
       argv[write_arg] = argv[read_arg];
       ++write_arg;
@@ -130,10 +119,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
       .max_iterations = nonlinear_max_iterations,
       .print_level = print_level,
       .subspace_option = static_cast<SubSpaceOptions>(trust_subspace_option),
-      .num_leftmost = trust_num_leftmost,
-      .trust_num_past_steps = trust_num_past_steps,
-      .trust_use_solve_start_direction = trust_use_solve_start_direction,
-      .trust_use_min_residual_direction = trust_use_min_residual_direction};
+      .num_leftmost = trust_num_leftmost};
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "compressed_beam", mesh);
@@ -163,8 +149,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 
   SLIC_INFO_ROOT(
       std::format("Compressed thin beam snap-through run: solver = {}, trust_subspace_option = {}, "
-                  "trust_num_leftmost = {}, trust_num_past_steps = {}",
-                  solver_name, trust_subspace_option, trust_num_leftmost, trust_num_past_steps));
+                  "trust_num_leftmost = {}",
+                  solver_name, trust_subspace_option, trust_num_leftmost));
 
   constexpr int num_steps = 5;
   for (int step = 0; step < num_steps; ++step) {

@@ -32,7 +32,6 @@ if(PETSC_FOUND)
     if(SLEPC_FOUND)
         set(slepc_solver_tests
             test_eigensolver.cpp
-            test_trust_region_solver_petsc.cpp
             )
         smith_add_tests(SOURCES       ${slepc_solver_tests}
                         DEPENDS_ON    ${numerics_test_dependencies}

@@ -15,7 +15,6 @@
 
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
-#include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/functional/shape_aware_functional.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"

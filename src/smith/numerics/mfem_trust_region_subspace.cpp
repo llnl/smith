@@ -443,12 +443,8 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
                                                const std::vector<const mfem::Vector*>& A_directions,
                                                const mfem::Vector& b, double delta, int num_leftmost)
 {
-#if defined(SMITH_USE_SLEPC) && defined(SMITH_TRUST_REGION_USE_PETSC_SUBSPACE)
-  return solveSubspaceProblemPetsc(directions, A_directions, b, delta, num_leftmost);
-#else
   throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
   return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
-#endif
 }
 
 /// @brief report unavailable MFEM subspace solve when MFEM was built without LAPACK.
