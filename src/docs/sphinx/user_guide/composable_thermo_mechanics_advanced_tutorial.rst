@@ -34,16 +34,19 @@ Mesh and Field Setup
    :end-before: _mesh_end
    :language: C++
 
+Solver Config and Field Registration
+------------------------------------
+
+This example uses a single block solver combining Newton line search for the non-linear
+solve and SuperLU for the linear solve.
+
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _solver_start
    :end-before: _solver_end
    :language: C++
 
-Staged Solver and Coupled Build
--------------------------------
-
-This example uses a custom staggered ``SystemSolver``. The solid subsystem uses
-trust-region iterations, while the thermal subsystem uses Newton line search.
+System Build and Coupling
+-------------------------
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _build_start

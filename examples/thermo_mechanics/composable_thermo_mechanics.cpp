@@ -72,10 +72,10 @@ int main(int argc, char* argv[])
   auto thermal_solver =
       std::make_shared<smith::SystemSolver>(smith::buildNonlinearBlockSolver(nonlinear_options, linear_options, *mesh));
 
-  auto solid_system = smith::buildSolidMechanicsSystem(solid_solver, smith::SolidMechanicsOptions{},
-                                                                   solid_fields, smith::couplingFields(thermal_fields));
+  auto solid_system = smith::buildSolidMechanicsSystem(solid_solver, smith::SolidMechanicsOptions{}, solid_fields,
+                                                       smith::couplingFields(thermal_fields));
   auto thermal_system = smith::buildThermalSystem(thermal_solver, smith::ThermalOptions{}, thermal_fields,
-                                                              smith::couplingFields(solid_fields));
+                                                  smith::couplingFields(solid_fields));
 
   auto coupled_system = smith::combineSystems(solid_system, thermal_system);
 

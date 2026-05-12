@@ -56,6 +56,18 @@ int main(int argc, char* argv[])
   // _mesh_end
 
   // _solver_start
+  smith::LinearSolverOptions coupled_linear{.linear_solver = smith::LinearSolver::SuperLU,
+                                            .relative_tol = 1e-8,
+                                            .absolute_tol = 1e-10,
+                                            .max_iterations = 200,
+                                            .print_level = 0};
+  smith::NonlinearSolverOptions coupled_nonlin{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
+                                               .relative_tol = 1e-8,
+                                               .absolute_tol = 1e-8,
+                                               .max_iterations = 12,
+                                               .max_line_search_iterations = 6,
+                                               .print_level = 0};
+
   auto field_store = std::make_shared<smith::FieldStore>(mesh, 200);
 
   smith::SolidMechanicsOptions solid_options{.enable_stress_output = true, .output_cauchy_stress = true};
@@ -64,19 +76,34 @@ int main(int argc, char* argv[])
   auto thermal_fields =
       smith::registerThermalFields<dim, order, smith::BackwardEulerFirstOrderTimeIntegrationRule>(field_store);
   auto param_fields = smith::registerParameterFields(smith::FieldType<smith::L2<0>>("thermal_expansion_scaling"));
+  // _solver_end
 
+  // _build_start
   auto solid_system = smith::buildSolidMechanicsSystem(nullptr, solid_options, solid_fields,
-                                                                   smith::couplingFields(thermal_fields), param_fields);
+                                                       smith::couplingFields(thermal_fields), param_fields);
   auto thermal_system = smith::buildThermalSystem(nullptr, smith::ThermalOptions{}, thermal_fields,
-                                                              smith::couplingFields(solid_fields), param_fields);
+                                                  smith::couplingFields(solid_fields), param_fields);
 
   smith::thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{
       1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
   smith::setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh->entireBodyName());
 
-  field_store->getParameterFields()[0].get()->setFromFieldFunction([](smith::tensor<double, dim>) { return 1.0; });
+  auto coupled_solver = std::make_shared<smith::SystemSolver>(10);
+  coupled_solver->addSubsystemSolver({0, 1}, smith::buildNonlinearBlockSolver(coupled_nonlin, coupled_linear, *mesh),
+                                     1.0);
+
+  auto coupled_system = smith::combineSystems(coupled_solver, solid_system, thermal_system);
+  std::string physics_name = "composable_thermo_mechanics_advanced";
+  auto physics = smith::makeDifferentiablePhysics(coupled_system, physics_name);
+  auto output_states = field_store->getOutputFieldStates();
+  auto output_writer =
+      smith::createParaviewWriter(*mesh, output_states, "paraview_composable_thermo_mechanics_advanced",
+                                  smith::ParaviewWriter::Options{.write_duals = false});
+  // _build_end
 
   // _bc_start
+  field_store->getParameterFields()[0].get()->setFromFieldFunction([](smith::tensor<double, dim>) { return 1.0; });
+
   solid_system->setDisplacementBC(mesh->domain("left"));
   thermal_system->setTemperatureBC(mesh->domain("left"), [](auto, auto) { return 1.0; });
   thermal_system->setTemperatureBC(mesh->domain("right"), [](auto, auto) { return 0.0; });
@@ -90,33 +117,6 @@ int main(int argc, char* argv[])
 
   thermal_system->addHeatSource(mesh->entireBodyName(), [](auto, auto... /*unused*/) { return 0.1; });
   // _bc_end
-
-  smith::LinearSolverOptions coupled_linear{.linear_solver = smith::LinearSolver::SuperLU,
-                                            .relative_tol = 1e-8,
-                                            .absolute_tol = 1e-10,
-                                            .max_iterations = 200,
-                                            .print_level = 0};
-  smith::NonlinearSolverOptions coupled_nonlin{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
-                                               .relative_tol = 1e-8,
-                                               .absolute_tol = 1e-8,
-                                               .max_iterations = 12,
-                                               .max_line_search_iterations = 6,
-                                               .print_level = 0};
-  // _solver_end
-
-  // _build_start
-  auto coupled_solver = std::make_shared<smith::SystemSolver>(10);
-  coupled_solver->addSubsystemSolver({0, 1}, smith::buildNonlinearBlockSolver(coupled_nonlin, coupled_linear, *mesh),
-                                     1.0);
-
-  auto coupled_system = smith::combineSystems(coupled_solver, solid_system, thermal_system);
-  std::string physics_name = "composable_thermo_mechanics_advanced";
-  auto physics = smith::makeDifferentiablePhysics(coupled_system, physics_name);
-  auto output_states = field_store->getOutputFieldStates();
-  auto output_writer =
-      smith::createParaviewWriter(*mesh, output_states, "paraview_composable_thermo_mechanics_advanced",
-                                  smith::ParaviewWriter::Options{.write_duals = false});
-  // _build_end
 
   // _qoi_start
   auto fetch_qoi_fields = [&]() {

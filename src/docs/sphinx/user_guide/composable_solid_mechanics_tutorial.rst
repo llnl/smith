@@ -54,8 +54,7 @@ System Build and Material Setup
 
 The solid system is built from the registered field pack. The material wrapper
 adapts the standard Neo-Hookean material to the ``TimeInfo``-based interface,
-pulling bulk and shear response from the Young's modulus parameter field. The
-example also seeds non-zero initial displacement and velocity fields.
+pulling bulk and shear response from the Young's modulus parameter field.
 
 .. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
    :start-after: _build_start
@@ -71,6 +70,17 @@ The left boundary uses a component-wise Dirichlet condition, fixing only the
 .. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
    :start-after: _bc_start
    :end-before: _bc_end
+   :language: C++
+
+Physics Creation and Initial Conditions
+---------------------------------------
+
+The differentiable physics object is constructed from the system. Then the example
+seeds non-zero initial displacement and velocity fields and sets the parameter field.
+
+.. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
+   :start-after: _ic_start
+   :end-before: _ic_end
    :language: C++
 
 Advance, Sensitivities, and Reactions

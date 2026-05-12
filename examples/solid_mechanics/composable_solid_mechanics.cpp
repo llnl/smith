@@ -90,16 +90,17 @@ int main(int argc, char* argv[])
                                                   .print_level = 0};
 
   smith::SolidMechanicsOptions output_options{.enable_stress_output = true, .output_cauchy_stress = true};
+
+  auto field_store = std::make_shared<smith::FieldStore>(mesh, 100);
+  auto solid_fields =
+      smith::registerSolidMechanicsFields<dim, order, smith::ImplicitNewmarkSecondOrderTimeIntegrationRule>(
+          field_store, output_options);
   auto param_fields = smith::registerParameterFields(smith::FieldType<smith::L2<0>>("youngs_modulus"));
   // _solver_end
 
   // _build_start
-  auto field_store = smith::fieldStore(mesh);
-  auto solid_fields =
-      smith::registerSolidMechanicsFields<dim, order, smith::ImplicitNewmarkSecondOrderTimeIntegrationRule>(
-          field_store, output_options);
-  auto solver = std::make_shared<smith::SystemSolver>(
-      smith::buildNonlinearBlockSolver(nonlinear_options, linear_options, *mesh));
+  auto solver =
+      std::make_shared<smith::SystemSolver>(smith::buildNonlinearBlockSolver(nonlinear_options, linear_options, *mesh));
   auto solid_system = smith::buildSolidMechanicsSystem(solver, output_options, solid_fields, param_fields);
 
   constexpr double E = 100.0;
@@ -119,12 +120,15 @@ int main(int argc, char* argv[])
     traction[0] = -0.01;
     return traction;
   });
+  // _bc_end
+
+  // _ic_start
+  auto physics = smith::makeDifferentiablePhysics(solid_system, "composable_solid_mechanics");
 
   if (solid_system->cycle_zero_systems.empty()) {
     throw std::runtime_error("Expected cycle-zero solve for implicit dynamics.");
   }
 
-  auto physics = smith::makeDifferentiablePhysics(solid_system, "composable_solid_mechanics");
   physics->getFieldParam("param_youngs_modulus").get()->setFromFieldFunction([=](smith::tensor<double, dim>) {
     return E;
   });
@@ -146,11 +150,7 @@ int main(int argc, char* argv[])
   physics->getInitialFieldState("acceleration").get()->setFromFieldFunction([](smith::tensor<double, dim>) {
     return smith::tensor<double, dim>{};
   });
-
-  auto writer =
-      smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "paraview_composable_solid_mechanics",
-                                  smith::ParaviewWriter::Options{.write_duals = false});
-  // _bc_end
+  // _ic_end
 
   // _run_start
   using DispSpace = smith::H1<order, dim>;
@@ -201,6 +201,9 @@ int main(int argc, char* argv[])
   // _run_end
 
   // _output_start
+  auto writer =
+      smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "paraview_composable_solid_mechanics",
+                                  smith::ParaviewWriter::Options{.write_duals = false});
   writer.write(physics->cycle(), physics->time(), physics->getFieldStatesAndParamStates());
   std::cout << "ParaView output: paraview_composable_solid_mechanics\n";
   // _output_end
