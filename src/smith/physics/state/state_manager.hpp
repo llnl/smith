@@ -377,9 +377,11 @@ class StateManager {
   /**
    * @brief Returns a non-owning reference to the registered mesh
    *
-   * Meshes registered through setMesh() are owned by StateManager. Meshes
-   * reconstructed during restart/load() are owned by the underlying MFEMSidreDataCollection.
-   * In both cases, this accessor only borrows the mesh.
+   * Meshes registered through setMesh() are held by StateManager, with either
+   * unique or shared ownership depending on the overload used. Meshes
+   * reconstructed during restart/load() are owned by the underlying
+   * MFEMSidreDataCollection. In all cases, this accessor returns only a
+   * borrowed reference to the mesh.
    *
    * @param[in] mesh_tag A string that uniquely identifies the mesh
    * @pre A mesh identified by @a mesh_tag must be registered - either via @p load() or @p setMesh()
