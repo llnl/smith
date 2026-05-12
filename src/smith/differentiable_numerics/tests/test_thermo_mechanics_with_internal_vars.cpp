@@ -152,20 +152,20 @@ TEST_F(ThreeSystemMeshFixture, StronglyCoupledThreeSystems)
   // the displacement field tokens available for thermal coupling.
   auto solid_fields = registerSolidMechanicsFields<dim, disp_ord, DispRule>(field_store);
   auto thermal_fields = registerThermalFields<dim, temp_ord, TempRule>(field_store);
-  auto internal_variable_fields = registerInternalVariableFields<StateSpace, InternalVariableRule>(field_store);
+  auto internal_variable_fields = registerInternalVariableFields<dim, StateSpace, InternalVariableRule>(field_store);
 
   // Phase 2: build each system.
   // Solid receives thermal and alpha coupling.
-  auto solid_system = buildSolidMechanicsSystem<dim, disp_ord>(
+  auto solid_system = buildSolidMechanicsSystem(
       std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{}, solid_fields,
       couplingFields(thermal_fields, internal_variable_fields));
 
   auto thermal_system =
-      buildThermalSystem<dim, temp_ord>(std::make_shared<SystemSolver>(thermal_block_solver), ThermalOptions{},
+      buildThermalSystem(std::make_shared<SystemSolver>(thermal_block_solver), ThermalOptions{},
                                         thermal_fields, couplingFields(solid_fields));
 
   auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(std::make_shared<SystemSolver>(internal_variable_block_solver),
+      buildInternalVariableSystem(std::make_shared<SystemSolver>(internal_variable_block_solver),
                                                    internal_variable_fields, couplingFields(solid_fields));
 
   // Phase 3: register material integrands.

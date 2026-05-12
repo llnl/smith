@@ -49,8 +49,10 @@ struct ThermalStaticFixture : public testing::Test {
     solver_options.relative_tol = 1e-12;
     auto linear_options = LinearSolverOptions();
 
-    auto thermal_system = buildThermalSystem<2, temp_order, QuasiStaticFirstOrderTimeIntegrationRule>(
-        solver_options, linear_options, ThermalOptions{}, mesh);
+    auto field_store = fieldStore(mesh);
+    auto thermal_fields = registerThermalFields<2, temp_order, QuasiStaticFirstOrderTimeIntegrationRule>(field_store);
+    auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solver_options, linear_options, *mesh));
+    auto thermal_system = buildThermalSystem(solver, ThermalOptions{}, thermal_fields);
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
@@ -139,8 +141,10 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   FieldType<L2<0>> conductivity_param("conductivity");
 
   auto param_fields = registerParameterFields(conductivity_param);
-  auto thermal_system = buildThermalSystem<2, 1, QuasiStaticFirstOrderTimeIntegrationRule>(
-      solver_options, linear_options, ThermalOptions{}, mesh, param_fields);
+  auto field_store = fieldStore(mesh);
+  auto thermal_fields = registerThermalFields<2, 1, QuasiStaticFirstOrderTimeIntegrationRule>(field_store);
+  auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solver_options, linear_options, *mesh));
+  auto thermal_system = buildThermalSystem(solver, ThermalOptions{}, thermal_fields, param_fields);
 
   // Set the conductivity parameter field to k=1.0
   thermal_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(

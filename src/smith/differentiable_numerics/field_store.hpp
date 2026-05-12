@@ -517,4 +517,14 @@ auto createWeakForm(std::string name, FieldType<TestSpaceType> test_type, FieldS
       field_store.createSpaces(name, test_type.name, field_types...));
 }
 
+/**
+ * @brief Construct a `shared_ptr<FieldStore>` over a mesh. Inline call-site helper for
+ * standalone-physics setup; equivalent to `std::make_shared<FieldStore>(mesh, ...)`.
+ */
+inline std::shared_ptr<FieldStore> fieldStore(std::shared_ptr<Mesh> mesh, std::size_t storage_size = 200,
+                                              std::string prefix = "")
+{
+  return std::make_shared<FieldStore>(std::move(mesh), storage_size, std::move(prefix));
+}
+
 }  // namespace smith

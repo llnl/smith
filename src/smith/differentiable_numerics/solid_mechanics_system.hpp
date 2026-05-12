@@ -43,7 +43,7 @@ namespace smith {
  * @tparam parameter_space Parameter spaces for material properties.
  */
 template <int dim, int order, typename DisplacementTimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule,
-          typename Coupling = CouplingDescriptor<Parameters<>>>
+          typename Coupling = std::tuple<>>
 struct SolidMechanicsSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -81,19 +81,13 @@ struct SolidMechanicsSystem : public SystemBase {
     auto captured_rule = disp_time_rule;
     auto captured_coupling = coupling;
     solid_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_rule, t_info,
-          [&](auto u_current, auto v_current, auto a_current, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  typename MaterialType::State state;
-                  auto pk_stress = material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
-                                            interpolated_params...);
-
-                  return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
-                },
-                params...);
+      return detail::applyTimeRuleAndCoupling(
+          *captured_rule, *captured_coupling, t_info,
+          [&](auto u_current, auto v_current, auto a_current, auto... interpolated_params) {
+            typename MaterialType::State state;
+            auto pk_stress =
+                material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current), interpolated_params...);
+            return smith::tuple{get<VALUE>(a_current) * material.density, pk_stress};
           },
           raw_args...);
     });
@@ -106,29 +100,24 @@ struct SolidMechanicsSystem : public SystemBase {
     if (stress_weak_form) {
       bool do_cauchy = this->output_cauchy_stress;
       stress_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto stress, auto... raw_args) {
-        return detail::applyTimeRuleToPrefix(
-            *captured_rule, t_info,
-            [&](auto u_current, auto v_current, auto /*a_current*/, auto... params) {
-              return detail::applyCouplingTimeRules(
-                  *captured_coupling, t_info,
-                  [&](auto... interpolated_params) {
-                    typename MaterialType::State state;
-                    auto pk_stress = material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
-                                              interpolated_params...);
+        return detail::applyTimeRuleAndCoupling(
+            *captured_rule, *captured_coupling, t_info,
+            [&](auto u_current, auto v_current, auto /*a_current*/, auto... interpolated_params) {
+              typename MaterialType::State state;
+              auto pk_stress = material(t_info, state, get<DERIVATIVE>(u_current), get<DERIVATIVE>(v_current),
+                                        interpolated_params...);
 
-                    auto flat_stress = [&]() {
-                      if (do_cauchy) {
-                        static constexpr auto I_ = Identity<dim>();
-                        auto F = get<DERIVATIVE>(u_current) + I_;
-                        auto J = det(F);
-                        auto sigma = (1.0 / J) * dot(pk_stress, transpose(F));
-                        return make_tensor<dim * dim>([&](int i) { return sigma[i / dim][i % dim]; });
-                      }
-                      return make_tensor<dim * dim>([&](int i) { return pk_stress[i / dim][i % dim]; });
-                    }();
-                    return smith::tuple{get<VALUE>(stress) - flat_stress, tensor<double, dim * dim, dim>{}};
-                  },
-                  params...);
+              auto flat_stress = [&]() {
+                if (do_cauchy) {
+                  static constexpr auto I_ = Identity<dim>();
+                  auto F = get<DERIVATIVE>(u_current) + I_;
+                  auto J = det(F);
+                  auto sigma = (1.0 / J) * dot(pk_stress, transpose(F));
+                  return make_tensor<dim * dim>([&](int i) { return sigma[i / dim][i % dim]; });
+                }
+                return make_tensor<dim * dim>([&](int i) { return pk_stress[i / dim][i % dim]; });
+              }();
+              return smith::tuple{get<VALUE>(stress) - flat_stress, tensor<double, dim * dim, dim>{}};
             },
             raw_args...);
       });
@@ -147,15 +136,10 @@ struct SolidMechanicsSystem : public SystemBase {
     auto captured_rule = disp_time_rule;
     auto captured_coupling = coupling;
     solid_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_rule, t_info,
-          [&](auto u_current, auto v_current, auto a_current, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  return force_function(t_info.time(), X, u_current, v_current, a_current, interpolated_params...);
-                },
-                params...);
+      return detail::applyTimeRuleAndCoupling(
+          *captured_rule, *captured_coupling, t_info,
+          [&](auto u_current, auto v_current, auto a_current, auto... interpolated_params) {
+            return force_function(t_info.time(), X, u_current, v_current, a_current, interpolated_params...);
           },
           raw_args...);
     });
@@ -173,16 +157,10 @@ struct SolidMechanicsSystem : public SystemBase {
     auto captured_rule = disp_time_rule;
     auto captured_coupling = coupling;
     solid_weak_form->addBoundaryFlux(domain_name, [=](auto t_info, auto X, auto n, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_rule, t_info,
-          [&](auto u_current, auto v_current, auto a_current, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  return traction_function(t_info.time(), X, n, u_current, v_current, a_current,
-                                           interpolated_params...);
-                },
-                params...);
+      return detail::applyTimeRuleAndCoupling(
+          *captured_rule, *captured_coupling, t_info,
+          [&](auto u_current, auto v_current, auto a_current, auto... interpolated_params) {
+            return traction_function(t_info.time(), X, n, u_current, v_current, a_current, interpolated_params...);
           },
           raw_args...);
     });
@@ -200,21 +178,16 @@ struct SolidMechanicsSystem : public SystemBase {
     auto captured_rule = disp_time_rule;
     auto captured_coupling = coupling;
     solid_weak_form->addBoundaryIntegral(domain_name, [=](auto t_info, auto X, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_rule, t_info,
-          [&](auto u_current, auto /*v_current*/, auto /*a_current*/, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  auto x_current = X + u_current;
-                  auto n_deformed = cross(get<DERIVATIVE>(x_current));
-                  auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
+      return detail::applyTimeRuleAndCoupling(
+          *captured_rule, *captured_coupling, t_info,
+          [&](auto u_current, auto /*v_current*/, auto /*a_current*/, auto... interpolated_params) {
+            auto x_current = X + u_current;
+            auto n_deformed = cross(get<DERIVATIVE>(x_current));
+            auto n_shape_norm = norm(cross(get<DERIVATIVE>(X)));
 
-                  auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(interpolated_params)...);
+            auto pressure = pressure_function(t_info.time(), get<VALUE>(X), get<VALUE>(interpolated_params)...);
 
-                  return pressure * n_deformed * (1.0 / n_shape_norm);
-                },
-                params...);
+            return pressure * n_deformed * (1.0 / n_shape_norm);
           },
           raw_args...);
     });
@@ -245,7 +218,6 @@ struct SolidMechanicsSystem : public SystemBase {
 struct SolidMechanicsOptions {
   bool enable_stress_output = false;  ///< Register stress output fields during phase 1.
   bool output_cauchy_stress = false;  ///< When true, project Cauchy stress (sigma) instead of PK1 (P).
-  std::string prefix;                 ///< Prefix used only by standalone Mesh-based builders.
 };
 
 /**
@@ -273,7 +245,7 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
   field_store->addDependent(disp_type, FieldStore::TimeDerivative::DDOT, "acceleration");
 
   auto physics_fields =
-      PhysicsFields<DisplacementTimeRule, H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>>{
+      PhysicsFields<dim, order, DisplacementTimeRule, H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>>{
           field_store, FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
           FieldType<H1<order, dim>>(field_store->prefix("displacement")),
           FieldType<H1<order, dim>>(field_store->prefix("velocity")),
@@ -327,7 +299,7 @@ inline std::shared_ptr<SystemSolver> makeCycleZeroSolver(std::shared_ptr<SystemS
  * @brief Internal solid builder after public registration and coupling collection.
  */
 template <int dim, int order, typename DisplacementTimeRule, typename Coupling>
-  requires detail::is_coupling_params_v<Coupling>
+  requires detail::is_coupling_packs_v<Coupling>
 auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
                                    std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
                                    bool has_stress_output)
@@ -344,10 +316,11 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
 
   using SystemType = SolidMechanicsSystem<dim, order, DisplacementTimeRule, Coupling>;
 
+  auto coupling_fields_flat = detail::flattenCouplingFields(coupling);
   std::string force_name = field_store->prefix("reactions");
   auto solid_weak_form = detail::buildWeakFormWithCoupling<typename SystemType::SolidWeakFormType>(
       field_store, force_name, disp_type.name, disp_type, disp_old_type, velo_old_type, accel_old_type,
-      coupling.fields);
+      coupling_fields_flat);
 
   auto sys = std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{solid_weak_form});
   sys->disp_bc = disp_bc;
@@ -372,7 +345,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
         cycle_zero_inputs.push_back(field.name);
       }
     };
-    std::apply([&](const auto&... coupling_fields) { (append_if_state(coupling_fields), ...); }, coupling.fields);
+    std::apply([&](const auto&... coupling_fields) { (append_if_state(coupling_fields), ...); }, coupling_fields_flat);
     cycle_zero_system->solve_input_field_names = {cycle_zero_inputs};
     sys->cycle_zero_systems.push_back(cycle_zero_system);
   }
@@ -383,7 +356,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
     std::string stress_name = field_store->prefix("stress_projection");
     sys->stress_weak_form = detail::buildWeakFormWithCoupling<typename SystemType::StressOutputWeakFormType>(
         field_store, stress_name, stress_type.name, stress_type, disp_as_input, disp_old_type, velo_old_type,
-        accel_old_type, coupling.fields);
+        accel_old_type, coupling_fields_flat);
 
     NonlinearSolverOptions stress_nonlin{.nonlin_solver = NonlinearSolver::Newton,
                                          .relative_tol = 1e-14,
@@ -419,11 +392,13 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
  *       solver, opts, solid_fields, couplingFields(thermal_fields), param_fields);
  * @endcode
  */
-template <int dim, int order, typename SelfFields, typename... Trailing>
+template <typename SelfFields, typename... Trailing>
   requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
 auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
                                const SelfFields& self_fields, const Trailing&... trailing)
 {
+  constexpr int dim = SelfFields::dim;
+  constexpr int order = SelfFields::order;
   using DisplacementTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
   detail::registerParamsIfNeeded(field_store, trailing...);
@@ -431,37 +406,6 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
   bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
   return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
                                                                                  has_stress_output);
-}
-
-/**
- * @brief Build a SolidMechanicsSystem from solver options and either a FieldStore or Mesh.
- *
- * Pass a FieldStore for coupled/composed systems. Pass a Mesh for a standalone solid system.
- *
- * Usage:
- * @code
- *   auto solid_system = buildSolidMechanicsSystem<dim, order, DispRule>(
- *       nonlin_opts, lin_opts, opts, field_store, couplingFields(thermal_fields), param_fields);
- *   auto standalone_solid = buildSolidMechanicsSystem<dim, order, DispRule>(
- *       nonlin_opts, lin_opts, opts, mesh, param_fields);
- * @endcode
- */
-template <int dim, int order, typename DisplacementTimeRule, typename FieldStoreOrMesh, typename... Trailing>
-  requires((detail::is_field_store_ptr_v<FieldStoreOrMesh> || detail::is_mesh_ptr_v<FieldStoreOrMesh>) &&
-           detail::trailing_coupling_args_valid_v<Trailing...>)
-auto buildSolidMechanicsSystem(const NonlinearSolverOptions& nonlinear_options,
-                               const LinearSolverOptions& linear_options, const SolidMechanicsOptions& options,
-                               FieldStoreOrMesh field_store_or_mesh, const Trailing&... trailing)
-{
-  if constexpr (detail::is_mesh_ptr_v<FieldStoreOrMesh>) {
-    static_assert((!detail::is_coupling_fields_v<Trailing> && ...),
-                  "Pass a FieldStore when building a system coupled to couplingFields(...).");
-  }
-  auto field_store = detail::getOrCreateFieldStore(field_store_or_mesh, options.prefix);
-  auto self_fields = registerSolidMechanicsFields<dim, order, DisplacementTimeRule>(field_store, options);
-  auto solver = std::make_shared<SystemSolver>(
-      buildNonlinearBlockSolver(nonlinear_options, linear_options, *field_store->getMesh()));
-  return buildSolidMechanicsSystem<dim, order>(solver, options, self_fields, trailing...);
 }
 
 }  // namespace smith

@@ -94,9 +94,13 @@ int main(int argc, char* argv[])
   // _solver_end
 
   // _build_start
-  auto solid_system =
-      smith::buildSolidMechanicsSystem<dim, order, smith::ImplicitNewmarkSecondOrderTimeIntegrationRule>(
-          nonlinear_options, linear_options, output_options, mesh, param_fields);
+  auto field_store = smith::fieldStore(mesh);
+  auto solid_fields =
+      smith::registerSolidMechanicsFields<dim, order, smith::ImplicitNewmarkSecondOrderTimeIntegrationRule>(
+          field_store, output_options);
+  auto solver = std::make_shared<smith::SystemSolver>(
+      smith::buildNonlinearBlockSolver(nonlinear_options, linear_options, *mesh));
+  auto solid_system = smith::buildSolidMechanicsSystem(solver, output_options, solid_fields, param_fields);
 
   constexpr double E = 100.0;
   constexpr double nu = 0.25;

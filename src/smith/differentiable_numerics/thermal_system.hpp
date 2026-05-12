@@ -39,7 +39,7 @@ namespace smith {
  *         before user parameter_space fields.
  */
 template <int dim, int temp_order, typename TemperatureTimeRule = QuasiStaticFirstOrderTimeIntegrationRule,
-          typename Coupling = CouplingDescriptor<Parameters<>>>
+          typename Coupling = std::tuple<>>
 struct ThermalSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -74,17 +74,12 @@ struct ThermalSystem : public SystemBase {
     auto captured_coupling = coupling;
 
     thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_temp_rule, t_info,
-          [&](auto T_current, auto T_dot, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  auto [heat_capacity, heat_flux] =
-                      material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), interpolated_params...);
-                  return smith::tuple{heat_capacity * get<VALUE>(T_dot), -heat_flux};
-                },
-                params...);
+      return detail::applyTimeRuleAndCoupling(
+          *captured_temp_rule, *captured_coupling, t_info,
+          [&](auto T_current, auto T_dot, auto... interpolated_params) {
+            auto [heat_capacity, heat_flux] =
+                material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), interpolated_params...);
+            return smith::tuple{heat_capacity * get<VALUE>(T_dot), -heat_flux};
           },
           raw_args...);
     });
@@ -111,17 +106,12 @@ struct ThermalSystem : public SystemBase {
     auto captured_coupling = coupling;
 
     thermal_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_temp_rule, t_info,
-          [&](auto T_current, auto T_dot, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  auto [heat_capacity, heat_flux, heat_source] =
-                      material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), interpolated_params...);
-                  return smith::tuple{heat_capacity * get<VALUE>(T_dot) - heat_source, -heat_flux};
-                },
-                params...);
+      return detail::applyTimeRuleAndCoupling(
+          *captured_temp_rule, *captured_coupling, t_info,
+          [&](auto T_current, auto T_dot, auto... interpolated_params) {
+            auto [heat_capacity, heat_flux, heat_source] =
+                material(t_info, get<VALUE>(T_current), get<DERIVATIVE>(T_current), interpolated_params...);
+            return smith::tuple{heat_capacity * get<VALUE>(T_dot) - heat_source, -heat_flux};
           },
           raw_args...);
     });
@@ -138,15 +128,10 @@ struct ThermalSystem : public SystemBase {
     auto captured_rule = temperature_time_rule;
     auto captured_coupling = coupling;
     thermal_weak_form->addBodySource(domain_name, [=](auto t_info, auto X, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_rule, t_info,
-          [&](auto T_current, auto /*T_dot*/, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  return source_function(t_info.time(), X, T_current, interpolated_params...);
-                },
-                params...);
+      return detail::applyTimeRuleAndCoupling(
+          *captured_rule, *captured_coupling, t_info,
+          [&](auto T_current, auto /*T_dot*/, auto... interpolated_params) {
+            return source_function(t_info.time(), X, T_current, interpolated_params...);
           },
           raw_args...);
     });
@@ -163,15 +148,10 @@ struct ThermalSystem : public SystemBase {
     auto captured_rule = temperature_time_rule;
     auto captured_coupling = coupling;
     thermal_weak_form->addBoundaryFlux(boundary_name, [=](auto t_info, auto X, auto n, auto... raw_args) {
-      return detail::applyTimeRuleToPrefix(
-          *captured_rule, t_info,
-          [&](auto T_current, auto /*T_dot*/, auto... params) {
-            return detail::applyCouplingTimeRules(
-                *captured_coupling, t_info,
-                [&](auto... interpolated_params) {
-                  return flux_function(t_info.time(), X, n, T_current, interpolated_params...);
-                },
-                params...);
+      return detail::applyTimeRuleAndCoupling(
+          *captured_rule, *captured_coupling, t_info,
+          [&](auto T_current, auto /*T_dot*/, auto... interpolated_params) {
+            return flux_function(t_info.time(), X, n, T_current, interpolated_params...);
           },
           raw_args...);
     });
@@ -213,7 +193,7 @@ auto registerThermalFields(std::shared_ptr<FieldStore> field_store,
   field_store->addIndependent(temperature_type, temperature_time_rule_ptr);
   field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, "temperature");
 
-  return PhysicsFields<TemperatureTimeRule, H1<temp_order>, H1<temp_order>>{
+  return PhysicsFields<dim, temp_order, TemperatureTimeRule, H1<temp_order>, H1<temp_order>>{
       field_store, FieldType<H1<temp_order>>(field_store->prefix("temperature_solve_state")),
       FieldType<H1<temp_order>>(field_store->prefix("temperature"))};
 }
@@ -226,7 +206,7 @@ auto registerThermalFields(std::shared_ptr<FieldStore> field_store,
 namespace detail {
 
 template <int dim, int temp_order, typename TemperatureTimeRule, typename Coupling>
-  requires detail::is_coupling_params_v<Coupling>
+  requires detail::is_coupling_packs_v<Coupling>
 auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
                             std::shared_ptr<SystemSolver> solver, const ThermalOptions& /*options*/)
 {
@@ -242,7 +222,8 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
 
   std::string thermal_flux_name = field_store->prefix("thermal_flux");
   auto thermal_weak_form = detail::buildWeakFormWithCoupling<typename SystemType::ThermalWeakFormType>(
-      field_store, thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type, coupling.fields);
+      field_store, thermal_flux_name, temperature_type.name, temperature_type, temperature_old_type,
+      detail::flattenCouplingFields(coupling));
 
   auto sys =
       std::make_shared<SystemType>(field_store, solver, std::vector<std::shared_ptr<WeakForm>>{thermal_weak_form});
@@ -263,51 +244,22 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
  *
  * Usage:
  * @code
- *   auto thermal_system = buildThermalSystem<dim, order>(
+ *   auto thermal_system = buildThermalSystem(
  *       solver, opts, thermal_fields, couplingFields(solid_fields));
  * @endcode
  */
-template <int dim, int temp_order, typename SelfFields, typename... Trailing>
+template <typename SelfFields, typename... Trailing>
   requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
 auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
                         const SelfFields& self_fields, const Trailing&... trailing)
 {
+  constexpr int dim = SelfFields::dim;
+  constexpr int temp_order = SelfFields::order;
   using TemperatureTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
   detail::registerParamsIfNeeded(field_store, trailing...);
   auto coupling = detail::collectCouplingFields(field_store, trailing...);
   return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
-}
-
-/**
- * @brief Build a ThermalSystem from solver options and either a FieldStore or Mesh.
- *
- * Pass a FieldStore for coupled/composed systems. Pass a Mesh for a standalone thermal system.
- *
- * Usage:
- * @code
- *   auto thermal_system = buildThermalSystem<dim, order, TempRule>(
- *       nonlin_opts, lin_opts, opts, field_store, couplingFields(solid_fields), param_fields);
- *   auto standalone_thermal = buildThermalSystem<dim, order, TempRule>(
- *       nonlin_opts, lin_opts, opts, mesh, param_fields);
- * @endcode
- */
-template <int dim, int temp_order, typename TemperatureTimeRule, typename FieldStoreOrMesh, typename... Trailing>
-  requires((detail::is_field_store_ptr_v<FieldStoreOrMesh> || detail::is_mesh_ptr_v<FieldStoreOrMesh>) &&
-           detail::trailing_coupling_args_valid_v<Trailing...>)
-auto buildThermalSystem(const NonlinearSolverOptions& nonlinear_options, const LinearSolverOptions& linear_options,
-                        const ThermalOptions& options, FieldStoreOrMesh field_store_or_mesh,
-                        const Trailing&... trailing)
-{
-  if constexpr (detail::is_mesh_ptr_v<FieldStoreOrMesh>) {
-    static_assert((!detail::is_coupling_fields_v<Trailing> && ...),
-                  "Pass a FieldStore when building a system coupled to couplingFields(...).");
-  }
-  auto field_store = detail::getOrCreateFieldStore(field_store_or_mesh);
-  auto self_fields = registerThermalFields<dim, temp_order, TemperatureTimeRule>(field_store, options);
-  auto solver = std::make_shared<SystemSolver>(
-      buildNonlinearBlockSolver(nonlinear_options, linear_options, *field_store->getMesh()));
-  return buildThermalSystem<dim, temp_order>(solver, options, self_fields, trailing...);
 }
 
 }  // namespace smith
