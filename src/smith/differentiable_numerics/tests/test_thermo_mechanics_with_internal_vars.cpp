@@ -156,15 +156,16 @@ TEST_F(ThreeSystemMeshFixture, StronglyCoupledThreeSystems)
 
   // Phase 2: build each system.
   // Solid receives thermal and alpha coupling.
-  auto solid_system = buildSolidMechanicsSystem<dim, disp_ord>(std::make_shared<SystemSolver>(solid_block_solver),
-                                                               SolidMechanicsOptions{}, solid_fields, thermal_fields,
-                                                               internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, disp_ord>(
+      std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{}, solid_fields,
+      couplingFields(thermal_fields, internal_variable_fields));
 
   auto thermal_system = buildThermalSystem<dim, temp_ord>(std::make_shared<SystemSolver>(thermal_block_solver),
-                                                          ThermalOptions{}, thermal_fields, solid_fields);
+                                                          ThermalOptions{}, thermal_fields, couplingFields(solid_fields));
 
   auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace>(
-      std::make_shared<SystemSolver>(internal_variable_block_solver), internal_variable_fields, solid_fields);
+      std::make_shared<SystemSolver>(internal_variable_block_solver), internal_variable_fields,
+      couplingFields(solid_fields));
 
   // Phase 3: register material integrands.
   auto material = SimpleThermoelasticMaterial{};

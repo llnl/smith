@@ -13,7 +13,7 @@
  *       field_store, params...);
  *
  *   auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace, StateRule>(
- *       solver, opts, internal_variable_fields, params..., solid_fields);
+ *       solver, internal_variable_fields, couplingFields(solid_fields), param_fields);
  *
  * The returned PhysicsFields from registerInternalVariableFields carries field tokens
  * (state_solve_state, state) that can be injected into another physics system
@@ -55,7 +55,7 @@ namespace smith {
  * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: none).
  */
 template <int dim, typename StateSpace, typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
-          typename Coupling = CouplingParams<>>
+          typename Coupling = CouplingDescriptor<Parameters<>>>
 struct InternalVariableSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -194,15 +194,15 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
  *
  * The time rule is deduced from SelfFields::time_rule_type.
  */
-template <int dim, typename StateSpace, typename SelfFields, typename... OtherPacks>
-  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+template <int dim, typename StateSpace, typename SelfFields, typename... Trailing>
+  requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
 auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
-                                 const OtherPacks&... other_packs)
+                                 const Trailing&... trailing)
 {
   using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
-  (detail::registerParamsIfNeeded(field_store, other_packs), ...);
-  auto coupling = detail::collectCouplingFields<InternalVarTimeRule>(field_store, self_fields, other_packs...);
+  detail::registerParamsIfNeeded(field_store, trailing...);
+  auto coupling = detail::collectCouplingFields(field_store, trailing...);
   return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
 }
 

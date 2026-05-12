@@ -39,7 +39,7 @@ namespace smith {
  *         before user parameter_space fields.
  */
 template <int dim, int temp_order, typename TemperatureTimeRule = QuasiStaticFirstOrderTimeIntegrationRule,
-          typename Coupling = CouplingParams<>>
+          typename Coupling = CouplingDescriptor<Parameters<>>>
 struct ThermalSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -264,18 +264,18 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
  * Usage:
  * @code
  *   auto thermal_system = buildThermalSystem<dim, order>(
- *       solver, opts, thermal_fields, solid_fields);
+ *       solver, opts, thermal_fields, couplingFields(solid_fields));
  * @endcode
  */
-template <int dim, int temp_order, typename SelfFields, typename... OtherPacks>
-  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+template <int dim, int temp_order, typename SelfFields, typename... Trailing>
+  requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
 auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
-                        const SelfFields& self_fields, const OtherPacks&... other_packs)
+                        const SelfFields& self_fields, const Trailing&... trailing)
 {
   using TemperatureTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
-  (detail::registerParamsIfNeeded(field_store, other_packs), ...);
-  auto coupling = detail::collectCouplingFields<TemperatureTimeRule>(field_store, self_fields, other_packs...);
+  detail::registerParamsIfNeeded(field_store, trailing...);
+  auto coupling = detail::collectCouplingFields(field_store, trailing...);
   return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
 }
 
@@ -287,27 +287,27 @@ auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptio
  * Usage:
  * @code
  *   auto thermal_system = buildThermalSystem<dim, order, TempRule>(
- *       nonlin_opts, lin_opts, opts, field_store, param_fields, solid_fields);
+ *       nonlin_opts, lin_opts, opts, field_store, couplingFields(solid_fields), param_fields);
  *   auto standalone_thermal = buildThermalSystem<dim, order, TempRule>(
  *       nonlin_opts, lin_opts, opts, mesh, param_fields);
  * @endcode
  */
-template <int dim, int temp_order, typename TemperatureTimeRule, typename FieldStoreOrMesh, typename... OtherPacks>
+template <int dim, int temp_order, typename TemperatureTimeRule, typename FieldStoreOrMesh, typename... Trailing>
   requires((detail::is_field_store_ptr_v<FieldStoreOrMesh> || detail::is_mesh_ptr_v<FieldStoreOrMesh>) &&
-           (detail::is_coupling_params_v<OtherPacks> && ...))
+           detail::trailing_coupling_args_valid_v<Trailing...>)
 auto buildThermalSystem(const NonlinearSolverOptions& nonlinear_options, const LinearSolverOptions& linear_options,
                         const ThermalOptions& options, FieldStoreOrMesh field_store_or_mesh,
-                        const OtherPacks&... other_packs)
+                        const Trailing&... trailing)
 {
   if constexpr (detail::is_mesh_ptr_v<FieldStoreOrMesh>) {
-    static_assert((!detail::is_physics_fields_v<OtherPacks> && ...),
-                  "Pass a FieldStore when building a system coupled to registered physics fields.");
+    static_assert((!detail::is_coupling_fields_v<Trailing> && ...),
+                  "Pass a FieldStore when building a system coupled to couplingFields(...).");
   }
   auto field_store = detail::getOrCreateFieldStore(field_store_or_mesh);
   auto self_fields = registerThermalFields<dim, temp_order, TemperatureTimeRule>(field_store, options);
   auto solver = std::make_shared<SystemSolver>(
       buildNonlinearBlockSolver(nonlinear_options, linear_options, *field_store->getMesh()));
-  return buildThermalSystem<dim, temp_order>(solver, options, self_fields, other_packs...);
+  return buildThermalSystem<dim, temp_order>(solver, options, self_fields, trailing...);
 }
 
 }  // namespace smith

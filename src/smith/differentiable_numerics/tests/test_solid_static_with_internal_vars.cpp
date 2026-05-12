@@ -146,9 +146,10 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_static_with_internal_vars_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
-                                                                 internal_variable_fields);
+                                                                 couplingFields(internal_variable_fields));
   auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
+      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields,
+                                                   couplingFields(solid_fields));
 
   auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 
@@ -184,9 +185,10 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_staggered_relaxation_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
-                                                                 internal_variable_fields);
+                                                                 couplingFields(internal_variable_fields));
   auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
+      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields,
+                                                   couplingFields(solid_fields));
 
   auto system = combineSystems(staggered_solver, solid_system, internal_variable_system);
 
@@ -209,9 +211,10 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "body_force_test_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
-                                                                 internal_variable_fields);
+                                                                 couplingFields(internal_variable_fields));
   auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
+      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields,
+                                                   couplingFields(solid_fields));
 
   auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 

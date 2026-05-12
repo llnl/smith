@@ -65,10 +65,10 @@ int main(int argc, char* argv[])
       smith::registerThermalFields<dim, order, smith::BackwardEulerFirstOrderTimeIntegrationRule>(field_store);
   auto param_fields = smith::registerParameterFields(smith::FieldType<smith::L2<0>>("thermal_expansion_scaling"));
 
-  auto solid_system =
-      smith::buildSolidMechanicsSystem<dim, order>(nullptr, solid_options, solid_fields, param_fields, thermal_fields);
-  auto thermal_system = smith::buildThermalSystem<dim, order>(nullptr, smith::ThermalOptions{}, thermal_fields,
-                                                              param_fields, solid_fields);
+  auto solid_system = smith::buildSolidMechanicsSystem<dim, order>(
+      nullptr, solid_options, solid_fields, smith::couplingFields(thermal_fields), param_fields);
+  auto thermal_system = smith::buildThermalSystem<dim, order>(
+      nullptr, smith::ThermalOptions{}, thermal_fields, smith::couplingFields(solid_fields), param_fields);
 
   smith::thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{
       1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};

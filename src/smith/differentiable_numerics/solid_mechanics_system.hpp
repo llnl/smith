@@ -43,7 +43,7 @@ namespace smith {
  * @tparam parameter_space Parameter spaces for material properties.
  */
 template <int dim, int order, typename DisplacementTimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule,
-          typename Coupling = CouplingParams<>>
+          typename Coupling = CouplingDescriptor<Parameters<>>>
 struct SolidMechanicsSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -416,18 +416,18 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
  * Usage:
  * @code
  *   auto solid_system = buildSolidMechanicsSystem<dim, order>(
- *       solver, opts, solid_fields, youngs_modulus, thermal_fields);
+ *       solver, opts, solid_fields, couplingFields(thermal_fields), param_fields);
  * @endcode
  */
-template <int dim, int order, typename SelfFields, typename... OtherPacks>
-  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
+template <int dim, int order, typename SelfFields, typename... Trailing>
+  requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
 auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
-                               const SelfFields& self_fields, const OtherPacks&... other_packs)
+                               const SelfFields& self_fields, const Trailing&... trailing)
 {
   using DisplacementTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
-  (detail::registerParamsIfNeeded(field_store, other_packs), ...);
-  auto coupling = detail::collectCouplingFields<DisplacementTimeRule>(field_store, self_fields, other_packs...);
+  detail::registerParamsIfNeeded(field_store, trailing...);
+  auto coupling = detail::collectCouplingFields(field_store, trailing...);
   bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
   return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
                                                                                  has_stress_output);
@@ -441,27 +441,27 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
  * Usage:
  * @code
  *   auto solid_system = buildSolidMechanicsSystem<dim, order, DispRule>(
- *       nonlin_opts, lin_opts, opts, field_store, param_fields, thermal_fields);
+ *       nonlin_opts, lin_opts, opts, field_store, couplingFields(thermal_fields), param_fields);
  *   auto standalone_solid = buildSolidMechanicsSystem<dim, order, DispRule>(
  *       nonlin_opts, lin_opts, opts, mesh, param_fields);
  * @endcode
  */
-template <int dim, int order, typename DisplacementTimeRule, typename FieldStoreOrMesh, typename... OtherPacks>
+template <int dim, int order, typename DisplacementTimeRule, typename FieldStoreOrMesh, typename... Trailing>
   requires((detail::is_field_store_ptr_v<FieldStoreOrMesh> || detail::is_mesh_ptr_v<FieldStoreOrMesh>) &&
-           (detail::is_coupling_params_v<OtherPacks> && ...))
+           detail::trailing_coupling_args_valid_v<Trailing...>)
 auto buildSolidMechanicsSystem(const NonlinearSolverOptions& nonlinear_options,
                                const LinearSolverOptions& linear_options, const SolidMechanicsOptions& options,
-                               FieldStoreOrMesh field_store_or_mesh, const OtherPacks&... other_packs)
+                               FieldStoreOrMesh field_store_or_mesh, const Trailing&... trailing)
 {
   if constexpr (detail::is_mesh_ptr_v<FieldStoreOrMesh>) {
-    static_assert((!detail::is_physics_fields_v<OtherPacks> && ...),
-                  "Pass a FieldStore when building a system coupled to registered physics fields.");
+    static_assert((!detail::is_coupling_fields_v<Trailing> && ...),
+                  "Pass a FieldStore when building a system coupled to couplingFields(...).");
   }
   auto field_store = detail::getOrCreateFieldStore(field_store_or_mesh, options.prefix);
   auto self_fields = registerSolidMechanicsFields<dim, order, DisplacementTimeRule>(field_store, options);
   auto solver = std::make_shared<SystemSolver>(
       buildNonlinearBlockSolver(nonlinear_options, linear_options, *field_store->getMesh()));
-  return buildSolidMechanicsSystem<dim, order>(solver, options, self_fields, other_packs...);
+  return buildSolidMechanicsSystem<dim, order>(solver, options, self_fields, trailing...);
 }
 
 }  // namespace smith
