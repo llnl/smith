@@ -93,7 +93,7 @@ std::unique_ptr<ParametrizedHeatTransferT> createParameterizedHeatTransfer(
   FiniteElementState user_defined_conductivity(mesh->mfemParMesh(), H1<p>{}, "user_defined_conductivity");
   user_defined_conductivity = 1.1;
   thermal->setParameter(0, user_defined_conductivity);
-  thermal->setMaterial(mat, mesh->entireBody());
+  thermal->setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
   thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
                      mesh->entireBody());
   thermal->setTemperature([](const mfem::Vector&, double) { return 0.0; });
@@ -117,7 +117,7 @@ std::unique_ptr<ParametrizedHeatTransferT> createParameterizedNonlinearHeatTrans
   user_defined_conductivity = 1.1;
   thermal->setParameter(0, user_defined_conductivity);
 
-  thermal->setMaterial(mat, mesh->entireBody());
+  thermal->setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
   thermal->setSource([](auto /* X */, auto /* time */, auto /* u */, auto /* du_dx */) { return 1.0; },
                      mesh->entireBody());
 

@@ -64,7 +64,7 @@ std::unique_ptr<SolidMechanicsType> createNonlinearSolidMechanicsSolver(std::sha
   solid->setParameter(0, user_defined_bulk_modulus);
   solid->setParameter(1, user_defined_shear_modulus);
 
-  solid->setMaterial(mat, mesh->entireBody());
+  solid->setMaterial(DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   solid->addBodyForce(
       [](auto X, auto /* t */) {

@@ -74,7 +74,7 @@ TEST(Thermal, ParameterizedMaterial)
 
   // Construct a potentially user-defined parameterized material and send it to the thermal module
   heat_transfer::ParameterizedLinearIsotropicConductor mat;
-  thermal_solver.setMaterial(mat, mesh->entireBody());
+  thermal_solver.setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
 
   // Define the function for the initial temperature and boundary condition
   auto bdr_temp = [](const mfem::Vector& x, double) -> double {

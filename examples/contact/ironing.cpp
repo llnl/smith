@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
   solid_solver.setParameter(1, G_field);
 
   smith::solid_mechanics::ParameterizedNeoHookeanSolid mat{1.0, 0.0, 0.0};
-  solid_solver.setMaterial(mat, mesh->entireBody());
+  solid_solver.setMaterial(smith::DependsOn<0, 1>{}, mat, mesh->entireBody());
 
   // Pass the BC information to the solver object
   mesh->addDomainOfBoundaryElements("bottom_of_subtrate", smith::by_attr<dim>(5));

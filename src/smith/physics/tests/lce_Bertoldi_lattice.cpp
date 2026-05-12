@@ -120,7 +120,7 @@ TEST(LiquidCrystalElastomer, Bertoldi)
   // Set material
   LiquidCrystalElastomerBertoldi lceMat(density, young_modulus, possion_ratio, max_order_param, beta_param);
 
-  solid_solver.setMaterial(lceMat, mesh->entireBody());
+  solid_solver.setMaterial(DependsOn<ORDER_INDEX, GAMMA_INDEX, ETA_INDEX>{}, lceMat, mesh->entireBody());
 
   // Boundary conditions:
   // Prescribe zero displacement at the supported end of the beam

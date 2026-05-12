@@ -77,7 +77,7 @@ TEST(Thermal, FiniteDifference)
 
   // Construct a potentially user-defined parameterized material and send it to the thermal module
   heat_transfer::ParameterizedLinearIsotropicConductor mat;
-  thermal_solver.setMaterial(mat, mesh->entireBody());
+  thermal_solver.setMaterial(DependsOn<0>{}, mat, mesh->entireBody());
 
   // Define a constant source term
   heat_transfer::ConstantSource source{1.0};
