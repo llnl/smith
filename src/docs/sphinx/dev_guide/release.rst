@@ -198,6 +198,21 @@ the history. After merging, the release candidate branch can be deleted.
 
 #. Click the ``Update release`` button.
 
+7: Add Version to ReadTheDocs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A new version our ReadTheDocs should be created so that users can refer to older snapshots of Smith's documentation.
+
+#. Go to this page `https://app.readthedocs.org/projects/llnlsmith/_`.
+
+#. Click "Add version".
+
+#. Find the version tag that was just created in the previous steps. (It might take a couple minutes to show up.)
+
+#. Toggle the "Activate" to be on.
+
+#. Select "Update version".
+
 8: Merge Main to Develop
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
