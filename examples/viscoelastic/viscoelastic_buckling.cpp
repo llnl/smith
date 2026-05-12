@@ -176,11 +176,16 @@ int main(int argc, char* argv[])
   double area = area_computer(0.0, solid_solver.displacement());
   SLIC_INFO_ROOT(axom::fmt::format("Load patch area = {}", area));
 
-  solid_solver.setTraction(
-    [&](auto, auto, double t) {
-      return smith::vec3{0, -load/area*std::sin(M_PI*t/max_time), 0};
-    },
-     mesh->domain("top"));
+  // auto sinusoid_wave = [&](auto, auto, double t) { 
+  //   return smith::vec3{0, -load/area*std::sin(M_PI*t/max_time), 0};
+  // };
+  auto sawtooth_wave = [&](auto, auto, double t) {
+    double rise_time = 0.25*max_time;
+    double Fy = t < rise_time? t/rise_time*load : 0.0;
+    return smith::vec3{0, -Fy/area, 0};
+  };
+
+  solid_solver.setTraction(sawtooth_wave, mesh->domain("top"));
 
   double rho = 1.0;
   double G_inf = 1e3;
@@ -200,13 +205,6 @@ int main(int argc, char* argv[])
   solid_mechanics::ViscoelasticOldInterface mat(rho, K, G_inf, alpha_inf, theta_sf, G_0, eta_0, theta_r, C_1, C_2);
   auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::Viscoelastic::State{}, mesh->entireBody());
   solid_solver.setRateDependentMaterial(smith::DependsOn<0>{}, mat, mesh->entireBody(), internal_states);
-
-  // NOTE: somehow J2 material works fine
-  // using Hardening = solid_mechanics::LinearHardening;
-  // Hardening hardening{.sigma_y = 10.0,  .Hi= G_inf/100.0, .eta = 0.0};
-  // solid_mechanics::J2SmallStrain<Hardening> mat2{.E = G_inf, .nu = 0.25, .hardening = hardening, .Hk = 0.0, .density = 1.0};
-  // auto internal_states = solid_solver.createQuadratureDataBuffer(smith::solid_mechanics::J2SmallStrain<Hardening>::State{}, mesh->entireBody());
-  // solid_solver.setRateDependentMaterial(mat2, mesh->entireBody(), internal_states);
 
   // NEOHOOKEAN
   // solid_mechanics::NeoHookean mat{.density = 1.0, .K = K, .G = G_inf};
@@ -256,7 +254,13 @@ int main(int argc, char* argv[])
                                            mesh->domain("top"));
   
   std::ofstream file("force_displacement.csv");
-  if (rank == 0) file << "# time displacement force\n";
+  if (rank == 0)  {
+    file << "# time displacement force\n";
+    double u = applied_displacement(solid_solver.time(), solid_solver.displacement());
+    double f = compute_net_force(solid_solver.dual("reactions"));
+    file << solid_solver.time() << " " << u << " " << f << std::endl;
+  }
+
 
   // Save initial state
   std::string paraview_name = name + "_paraview";
