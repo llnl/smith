@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
-#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
