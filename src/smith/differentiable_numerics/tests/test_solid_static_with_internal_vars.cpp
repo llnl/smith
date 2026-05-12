@@ -147,9 +147,8 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
                                                                  couplingFields(internal_variable_fields));
-  auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields,
-                                                   couplingFields(solid_fields));
+  auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace>(
+      internal_variable_solver, internal_variable_fields, couplingFields(solid_fields));
 
   auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 
@@ -186,9 +185,8 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
                                                                  couplingFields(internal_variable_fields));
-  auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields,
-                                                   couplingFields(solid_fields));
+  auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace>(
+      internal_variable_solver, internal_variable_fields, couplingFields(solid_fields));
 
   auto system = combineSystems(staggered_solver, solid_system, internal_variable_system);
 
@@ -212,9 +210,8 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
   auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
                                                                  couplingFields(internal_variable_fields));
-  auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields,
-                                                   couplingFields(solid_fields));
+  auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace>(
+      internal_variable_solver, internal_variable_fields, couplingFields(solid_fields));
 
   auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 

@@ -178,13 +178,13 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(
-      makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{}, solid_fields, couplingFields(thermal_fields),
-      param_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(makeSolver(newtonNonlinOpts, directLinOpts),
+                                                                         SolidMechanicsOptions{}, solid_fields,
+                                                                         couplingFields(thermal_fields), param_fields);
 
-  auto thermal_system = buildThermalSystem<dim, temperature_order>(
-      makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, thermal_fields, couplingFields(solid_fields),
-      param_fields);
+  auto thermal_system =
+      buildThermalSystem<dim, temperature_order>(makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{},
+                                                 thermal_fields, couplingFields(solid_fields), param_fields);
 
   auto coupled_system = combineSystems(solid_system, thermal_system);
   auto physics = makeDifferentiablePhysics(coupled_system, "coupled_physics");
@@ -215,13 +215,13 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(
-      makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{}, solid_fields, couplingFields(thermal_fields),
-      param_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(makeSolver(newtonNonlinOpts, directLinOpts),
+                                                                         SolidMechanicsOptions{}, solid_fields,
+                                                                         couplingFields(thermal_fields), param_fields);
 
-  auto thermal_system = buildThermalSystem<dim, temperature_order>(
-      makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, thermal_fields, couplingFields(solid_fields),
-      param_fields);
+  auto thermal_system =
+      buildThermalSystem<dim, temperature_order>(makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{},
+                                                 thermal_fields, couplingFields(solid_fields), param_fields);
 
   auto coupled_system = combineSystems(solid_system, thermal_system);
   thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
@@ -283,10 +283,10 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
                                              .max_iterations = 12,
                                              .max_line_search_iterations = 6};
 
-  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(
-      nullptr, SolidMechanicsOptions{}, solid_fields, couplingFields(thermal_fields), param_fields);
-  auto thermal_system = buildThermalSystem<dim, temperature_order>(
-      nullptr, ThermalOptions{}, thermal_fields, couplingFields(solid_fields), param_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(nullptr, SolidMechanicsOptions{}, solid_fields,
+                                                                         couplingFields(thermal_fields), param_fields);
+  auto thermal_system = buildThermalSystem<dim, temperature_order>(nullptr, ThermalOptions{}, thermal_fields,
+                                                                   couplingFields(solid_fields), param_fields);
 
   auto coupled_solver = std::make_shared<SystemSolver>(10);
   coupled_solver->addSubsystemSolver({0}, buildNonlinearBlockSolver(solid_nonlin_opts, solid_lin_opts, *mesh_));
@@ -365,9 +365,9 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(
-      makeSolver(mech_nonlin_opts, mech_lin_opts), SolidMechanicsOptions{}, solid_fields,
-      couplingFields(thermal_fields));
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(makeSolver(mech_nonlin_opts, mech_lin_opts),
+                                                                         SolidMechanicsOptions{}, solid_fields,
+                                                                         couplingFields(thermal_fields));
   auto thermal_system = buildThermalSystem<dim, temperature_order>(
       makeSolver(therm_nonlin_opts, therm_lin_opts), ThermalOptions{}, thermal_fields, couplingFields(solid_fields));
 
@@ -395,10 +395,10 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(
-      nullptr, SolidMechanicsOptions{}, solid_fields, couplingFields(thermal_fields));
-  auto thermal_system =
-      buildThermalSystem<dim, temperature_order>(nullptr, ThermalOptions{}, thermal_fields, couplingFields(solid_fields));
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(nullptr, SolidMechanicsOptions{}, solid_fields,
+                                                                         couplingFields(thermal_fields));
+  auto thermal_system = buildThermalSystem<dim, temperature_order>(nullptr, ThermalOptions{}, thermal_fields,
+                                                                   couplingFields(solid_fields));
 
   auto coupled_system = combineSystems(solver_ptr, solid_system, thermal_system);
   thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
@@ -482,9 +482,9 @@ TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesCycleZeroSystems)
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DynamicDispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
 
-  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(
-      makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{}, solid_fields,
-      couplingFields(thermal_fields));
+  auto solid_system = buildSolidMechanicsSystem<dim, displacement_order>(makeSolver(newtonNonlinOpts, directLinOpts),
+                                                                         SolidMechanicsOptions{}, solid_fields,
+                                                                         couplingFields(thermal_fields));
   auto thermal_system = buildThermalSystem<dim, temperature_order>(
       makeSolver(newtonNonlinOpts, directLinOpts), ThermalOptions{}, thermal_fields, couplingFields(solid_fields));
 
