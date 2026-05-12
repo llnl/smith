@@ -61,6 +61,9 @@ double StateManager::newDataCollection(const std::string& mesh_tag, const std::o
     datacoll.UpdateStateFromDS();
     datacoll.UpdateMeshAndFieldsFromDS();
 
+    // On restart, the data collection reconstructs and owns the mesh object.
+    // StateManager::mesh() returns a non-owning reference to that mesh.
+
     // TODO: This should not be necessary, figure out why on restart this information is not being restored
     // Generate the face neighbor information in the mesh. This is needed by the face restriction
     // operators used by Functional
@@ -294,6 +297,10 @@ void StateManager::constructShapeFields(const std::string& mesh_tag)
 mfem::ParMesh& StateManager::mesh(const std::string& mesh_tag)
 {
   SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
+
+  // This intentionally queries the data collection rather than meshes_. Meshes
+  // from setMesh() are owned by meshes_ and borrowed by the data collection;
+  // meshes from load() are reconstructed and owned by the data collection.
   auto mesh = datacolls_.at(mesh_tag).GetMesh();
   SLIC_ERROR_ROOT_IF(!mesh, "The datacollection does not contain a mesh object");
   return static_cast<mfem::ParMesh&>(*mesh);

@@ -375,7 +375,12 @@ class StateManager {
   static mfem::ParMesh& setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag);
 
   /**
-   * @brief Returns a non-owning reference to mesh held by StateManager
+   * @brief Returns a non-owning reference to the registered mesh
+   *
+   * Meshes registered through setMesh() are owned by StateManager. Meshes
+   * reconstructed during restart/load() are owned by the underlying MFEMSidreDataCollection.
+   * In both cases, this accessor only borrows the mesh.
+   *
    * @param[in] mesh_tag A string that uniquely identifies the mesh
    * @pre A mesh identified by @a mesh_tag must be registered - either via @p load() or @p setMesh()
    */
@@ -501,6 +506,9 @@ class StateManager {
    */
   static std::unordered_map<std::string, axom::sidre::MFEMSidreDataCollection> datacolls_;
   /// @brief Shared ownership of meshes registered through setMesh()
+  ///
+  /// Restart meshes are reconstructed and owned by the MFEMSidreDataCollection,
+  /// not by this map.
   static std::unordered_map<std::string, std::shared_ptr<mfem::ParMesh>> meshes_;
 
   /// @brief A map of the shape displacement fields for each stored mesh ID
