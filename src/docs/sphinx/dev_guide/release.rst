@@ -203,7 +203,7 @@ the history. After merging, the release candidate branch can be deleted.
 
 A new version our ReadTheDocs should be created so that users can refer to older snapshots of Smith's documentation.
 
-#. Go to this page `https://app.readthedocs.org/projects/llnlsmith/`_.
+#. Go to `our ReadTheDocs app page <https://app.readthedocs.org/projects/llnlsmith/>`_.
 
 #. Click "Add version".
 
