@@ -7,18 +7,12 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include "smith/differentiable_numerics/thermal_system.hpp"
-#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/common.hpp"
 #include "smith/physics/state/state_manager.hpp"
-#include "smith/numerics/functional/functional.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include "axom/slic.hpp"
-#include "axom/fmt.hpp"
-#include "axom/sidre.hpp"
 
 using namespace smith;
 
@@ -49,10 +43,7 @@ struct ThermalStaticFixture : public testing::Test {
     solver_options.relative_tol = 1e-12;
     auto linear_options = LinearSolverOptions();
 
-    auto field_store = fieldStore(mesh);
-    auto thermal_fields = registerThermalFields<2, temp_order, QuasiStaticFirstOrderTimeIntegrationRule>(field_store);
-    auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solver_options, linear_options, *mesh));
-    auto thermal_system = buildThermalSystem(solver, ThermalOptions{}, thermal_fields);
+    auto thermal_system = buildThermalSystem<2, temp_order>(solver_options, linear_options, ThermalOptions{}, mesh);
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
@@ -138,13 +129,8 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   solver_options.relative_tol = 1e-12;
   auto linear_options = LinearSolverOptions();
 
-  FieldType<L2<0>> conductivity_param("conductivity");
-
-  auto field_store = fieldStore(mesh);
-  auto param_fields = registerParameterFields(field_store, conductivity_param);
-  auto thermal_fields = registerThermalFields<2, 1, QuasiStaticFirstOrderTimeIntegrationRule>(field_store);
-  auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solver_options, linear_options, *mesh));
-  auto thermal_system = buildThermalSystem(solver, ThermalOptions{}, thermal_fields, param_fields);
+  auto thermal_system = buildThermalSystem<2, 1>(solver_options, linear_options, ThermalOptions{}, mesh,
+                                                 FieldType<L2<0>>("conductivity"));
 
   // Set the conductivity parameter field to k=1.0
   thermal_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(

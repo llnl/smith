@@ -176,15 +176,10 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 
-  auto field_store = fieldStore(mesh);
-  auto param_fields = registerParameterFields(field_store, FieldType<ScalarParameterSpace>("bulk"),
-                                              FieldType<ScalarParameterSpace>("shear"));
   SolidMechanicsOptions solid_opts{.enable_stress_output = true};
-  auto solid_fields =
-      registerSolidMechanicsFields<dim, order, ImplicitNewmarkSecondOrderTimeIntegrationRule>(field_store, solid_opts);
-  auto solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
-  auto solid_system = buildSolidMechanicsSystem(solver, solid_opts, solid_fields, param_fields);
+  auto solid_system = buildSolidMechanicsSystem<dim, order>(solid_nonlinear_opts, solid_linear_options, solid_opts,
+                                                            mesh, FieldType<ScalarParameterSpace>("bulk"),
+                                                            FieldType<ScalarParameterSpace>("shear"));
 
   static constexpr double gravity = -9.0;
 
@@ -282,12 +277,8 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditions)
 {
   SolidMechanicsOptions solid_options{.enable_stress_output = true};
-  auto field_store = fieldStore(mesh);
-  auto solid_fields = registerSolidMechanicsFields<dim, order, ImplicitNewmarkSecondOrderTimeIntegrationRule>(
-      field_store, solid_options);
-  auto solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
-  auto solid_system = buildSolidMechanicsSystem(solver, solid_options, solid_fields);
+  auto solid_system =
+      buildSolidMechanicsSystem<dim, order>(solid_nonlinear_opts, solid_linear_options, solid_options, mesh);
 
   static constexpr double gravity = -9.0;
   double E = 100.0;

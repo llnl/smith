@@ -90,18 +90,11 @@ int main(int argc, char* argv[])
                                                   .print_level = 0};
 
   smith::SolidMechanicsOptions output_options{.enable_stress_output = true, .output_cauchy_stress = true};
-
-  auto field_store = std::make_shared<smith::FieldStore>(mesh, 100);
-  auto solid_fields =
-      smith::registerSolidMechanicsFields<dim, order, smith::ImplicitNewmarkSecondOrderTimeIntegrationRule>(
-          field_store, output_options);
-  auto param_fields = smith::registerParameterFields(field_store, smith::FieldType<smith::L2<0>>("youngs_modulus"));
   // _solver_end
 
   // _build_start
-  auto solver =
-      std::make_shared<smith::SystemSolver>(smith::buildNonlinearBlockSolver(nonlinear_options, linear_options, *mesh));
-  auto solid_system = smith::buildSolidMechanicsSystem(solver, output_options, solid_fields, param_fields);
+  auto solid_system = smith::buildSolidMechanicsSystem<dim, order>(
+      nonlinear_options, linear_options, output_options, mesh, smith::FieldType<smith::L2<0>>("youngs_modulus"));
 
   constexpr double E = 100.0;
   constexpr double nu = 0.25;

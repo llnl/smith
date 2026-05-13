@@ -9,7 +9,7 @@
  * @brief Coupling pack types and helpers for injecting explicit coupled-physics fields into weak form parameter packs.
  *
  * Builders accept at most two optional trailing arguments after `self_fields`:
- *   1. `couplingFields(foreign_physics_fields...)` — foreign physics contributions
+ *   1. `couplingFields(coupled_physics_fields...)` — coupled physics contributions
  *   2. `param_fields` (a `ParamFields<...>`) — registered user parameter fields (must be last)
  *
  * Tail of each material/source closure: `(coupling_fields..., parameter_fields...)`.
@@ -71,7 +71,7 @@ template <typename... Spaces>
 ParamFields(FieldType<Spaces>...) -> ParamFields<Spaces...>;
 
 /**
- * @brief Bundle of foreign `PhysicsFields` packs supplied to a builder as a single coupling arg.
+ * @brief Bundle of coupled `PhysicsFields` packs supplied to a builder as a single coupling arg.
  *
  * Order is preserved. Each entry contributes its fields and an interpolation segment governed
  * by its own `time_rule_type`.

@@ -311,4 +311,32 @@ auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptio
   return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
 }
 
+/**
+ * @brief Build a ThermalSystem from solver options and a mesh, registering parameter fields inline.
+ *
+ * Constructs the FieldStore, nonlinear block solver, system solver, and registers thermal
+ * and parameter fields, then delegates to the existing field-pack overload.
+ *
+ * @tparam dim Spatial dimension.
+ * @tparam temp_order Polynomial order for temperature.
+ * @tparam TemperatureTimeRule Time integration rule (defaults to QuasiStaticFirstOrderTimeIntegrationRule).
+ * @tparam ParamSpaces Parameter function-space tags deduced from FieldType arguments.
+ */
+template <int dim, int temp_order, typename TemperatureTimeRule = QuasiStaticFirstOrderTimeIntegrationRule,
+          typename... ParamSpaces>
+auto buildThermalSystem(const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts,
+                        const ThermalOptions& options, std::shared_ptr<smith::Mesh> mesh,
+                        FieldType<ParamSpaces>... params)
+{
+  auto field_store = std::make_shared<FieldStore>(mesh);
+  auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(nonlinear_opts, linear_opts, *mesh));
+  auto thermal_fields = registerThermalFields<dim, temp_order, TemperatureTimeRule>(field_store, options);
+  if constexpr (sizeof...(ParamSpaces) > 0) {
+    auto param_fields = registerParameterFields(field_store, std::move(params)...);
+    return buildThermalSystem(solver, options, thermal_fields, param_fields);
+  } else {
+    return buildThermalSystem(solver, options, thermal_fields);
+  }
+}
+
 }  // namespace smith

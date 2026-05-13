@@ -462,4 +462,32 @@ auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const Solid
                                                                                  has_stress_output);
 }
 
+/**
+ * @brief Build a SolidMechanicsSystem from solver options and a mesh, registering parameter fields inline.
+ *
+ * Constructs the FieldStore, nonlinear block solver, system solver, and registers solid mechanics
+ * and parameter fields, then delegates to the existing field-pack overload.
+ *
+ * @tparam dim Spatial dimension.
+ * @tparam order Polynomial order for displacement.
+ * @tparam DisplacementTimeRule Time integration rule (defaults to ImplicitNewmarkSecondOrderTimeIntegrationRule).
+ * @tparam ParamSpaces Parameter function-space tags deduced from FieldType arguments.
+ */
+template <int dim, int order, typename DisplacementTimeRule = ImplicitNewmarkSecondOrderTimeIntegrationRule,
+          typename... ParamSpaces>
+auto buildSolidMechanicsSystem(const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts,
+                               const SolidMechanicsOptions& options, std::shared_ptr<smith::Mesh> mesh,
+                               FieldType<ParamSpaces>... params)
+{
+  auto field_store = std::make_shared<FieldStore>(mesh);
+  auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(nonlinear_opts, linear_opts, *mesh));
+  auto solid_fields = registerSolidMechanicsFields<dim, order, DisplacementTimeRule>(field_store, options);
+  if constexpr (sizeof...(ParamSpaces) > 0) {
+    auto param_fields = registerParameterFields(field_store, std::move(params)...);
+    return buildSolidMechanicsSystem(solver, options, solid_fields, param_fields);
+  } else {
+    return buildSolidMechanicsSystem(solver, options, solid_fields);
+  }
+}
+
 }  // namespace smith
