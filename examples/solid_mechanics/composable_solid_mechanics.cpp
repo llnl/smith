@@ -95,7 +95,7 @@ int main(int argc, char* argv[])
   auto solid_fields =
       smith::registerSolidMechanicsFields<dim, order, smith::ImplicitNewmarkSecondOrderTimeIntegrationRule>(
           field_store, output_options);
-  auto param_fields = smith::registerParameterFields(smith::FieldType<smith::L2<0>>("youngs_modulus"));
+  auto param_fields = smith::registerParameterFields(field_store, smith::FieldType<smith::L2<0>>("youngs_modulus"));
   // _solver_end
 
   // _build_start

@@ -176,9 +176,9 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 
-  auto param_fields =
-      registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
   auto field_store = fieldStore(mesh);
+  auto param_fields = registerParameterFields(field_store, FieldType<ScalarParameterSpace>("bulk"),
+                                              FieldType<ScalarParameterSpace>("shear"));
   SolidMechanicsOptions solid_opts{.enable_stress_output = true};
   auto solid_fields =
       registerSolidMechanicsFields<dim, order, ImplicitNewmarkSecondOrderTimeIntegrationRule>(field_store, solid_opts);
@@ -344,8 +344,8 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100, physics_name);
 
-  auto param_fields =
-      registerParameterFields(FieldType<ScalarParameterSpace>("bulk"), FieldType<ScalarParameterSpace>("shear"));
+  auto param_fields = registerParameterFields(field_store, FieldType<ScalarParameterSpace>("bulk"),
+                                              FieldType<ScalarParameterSpace>("shear"));
   auto solid_fields =
       registerSolidMechanicsFields<dim, order, ImplicitNewmarkSecondOrderTimeIntegrationRule>(field_store);
   auto solver =

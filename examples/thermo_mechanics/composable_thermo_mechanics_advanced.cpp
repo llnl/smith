@@ -75,7 +75,8 @@ int main(int argc, char* argv[])
       field_store, solid_options);
   auto thermal_fields =
       smith::registerThermalFields<dim, order, smith::BackwardEulerFirstOrderTimeIntegrationRule>(field_store);
-  auto param_fields = smith::registerParameterFields(smith::FieldType<smith::L2<0>>("thermal_expansion_scaling"));
+  auto param_fields =
+      smith::registerParameterFields(field_store, smith::FieldType<smith::L2<0>>("thermal_expansion_scaling"));
   // _solver_end
 
   // _build_start

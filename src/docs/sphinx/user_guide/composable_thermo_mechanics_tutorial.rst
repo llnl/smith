@@ -38,7 +38,9 @@ Field Registration
 ------------------
 
 Registration is phase 1. It declares the solid and thermal fields up front in a
-shared ``FieldStore``.
+shared ``FieldStore``. When user parameters are needed, register them in this
+same phase with ``registerParameterFields(field_store, ...)`` and carry the
+returned ``ParamFields`` into the build step.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics.cpp
    :start-after: _solver_start

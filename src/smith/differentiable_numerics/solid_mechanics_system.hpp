@@ -37,7 +37,7 @@ namespace smith {
  * @tparam dim Spatial dimension.
  * @tparam order Polynomial order for displacement field.
  * @tparam DisplacementTimeRule Time integration rule type (must have num_states == 4).
- * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: none).
+ * @tparam Coupling Tuple of coupling and parameter packs (default: none).
  *         Coupling fields occupy leading positions in the tail after the 4 time-rule state fields,
  *         before user parameter_space fields.
  * @tparam parameter_space Parameter spaces for material properties.
@@ -392,17 +392,71 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
  *       solver, opts, solid_fields, couplingFields(thermal_fields), param_fields);
  * @endcode
  */
-template <typename SelfFields, typename... Trailing>
-  requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
+template <typename SelfFields>
+  requires(detail::has_time_rule_v<SelfFields>)
 auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
-                               const SelfFields& self_fields, const Trailing&... trailing)
+                               const SelfFields& self_fields)
 {
   constexpr int dim = SelfFields::dim;
   constexpr int order = SelfFields::order;
   using DisplacementTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
-  detail::registerParamsIfNeeded(field_store, trailing...);
-  auto coupling = detail::collectCouplingFields(field_store, trailing...);
+  auto coupling = detail::collectCouplingFields();
+  bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
+  return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
+                                                                                 has_stress_output);
+}
+
+/**
+ * @brief Build a SolidMechanicsSystem from registered self fields plus coupled physics fields.
+ */
+template <typename SelfFields, typename... PFs>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
+                               const SelfFields& self_fields, const CouplingFields<PFs...>& coupled)
+{
+  constexpr int dim = SelfFields::dim;
+  constexpr int order = SelfFields::order;
+  using DisplacementTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled);
+  bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
+  return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
+                                                                                 has_stress_output);
+}
+
+/**
+ * @brief Build a SolidMechanicsSystem from registered self fields plus registered parameter fields.
+ */
+template <typename SelfFields, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
+                               const SelfFields& self_fields, const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  constexpr int order = SelfFields::order;
+  using DisplacementTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(params);
+  bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
+  return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
+                                                                                 has_stress_output);
+}
+
+/**
+ * @brief Build a SolidMechanicsSystem from registered self fields, coupled physics fields, and parameter fields.
+ */
+template <typename SelfFields, typename... PFs, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildSolidMechanicsSystem(std::shared_ptr<SystemSolver> solver, const SolidMechanicsOptions& options,
+                               const SelfFields& self_fields, const CouplingFields<PFs...>& coupled,
+                               const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  constexpr int order = SelfFields::order;
+  using DisplacementTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled, params);
   bool has_stress_output = detail::hasRegisteredStressOutput(field_store);
   return detail::buildSolidMechanicsSystemImpl<dim, order, DisplacementTimeRule>(field_store, coupling, solver, options,
                                                                                  has_stress_output);

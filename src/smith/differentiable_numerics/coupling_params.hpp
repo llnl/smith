@@ -10,7 +10,7 @@
  *
  * Builders accept at most two optional trailing arguments after `self_fields`:
  *   1. `couplingFields(foreign_physics_fields...)` — foreign physics contributions
- *   2. `param_fields` (a `CouplingParams<...>`) — user parameter fields (must be last)
+ *   2. `param_fields` (a `ParamFields<...>`) — registered user parameter fields (must be last)
  *
  * Tail of each material/source closure: `(coupling_fields..., parameter_fields...)`.
  */
@@ -26,17 +26,12 @@
 
 namespace smith {
 
-/// Sentinel: no time integration rule (used for parameter-only packs).
-struct NoTimeRule {
-  static constexpr int num_states = 0;  ///< Number of states.
-};
-
 /**
  * @brief Fields returned by a physics register function, carrying time rule type information.
  *
  * Doubles as a per-physics coupling segment: when supplied via `couplingFields(...)`, the
  * builder interpolates `TimeRule::num_states` raw arguments before passing the values to
- * the user callback. Parameter packs use `TimeRule = NoTimeRule`.
+ * the user callback.
  */
 template <int Dim, int Order, typename TimeRule, typename... Spaces>
 struct PhysicsFields {
@@ -54,24 +49,26 @@ struct PhysicsFields {
   }
 };
 
+template <typename T>
+struct is_physics_fields_arg : std::false_type {};
+
+template <int D, int O, typename R, typename... S>
+struct is_physics_fields_arg<PhysicsFields<D, O, R, S...>> : std::true_type {};
+
 /**
- * @brief Parameter-only field bundle (no time rule, no field store reference).
- *
- * Distinct type so callers can plain-pass it after `couplingFields(...)`. Otherwise has the
- * same shape as a `PhysicsFields` with `NoTimeRule`.
+ * @brief Registered parameter-only field bundle.
  */
 template <typename... Spaces>
-struct CouplingParams {
-  using time_rule_type = NoTimeRule;                            ///< Time rule type (none).
+struct ParamFields {
   static constexpr std::size_t num_fields = sizeof...(Spaces);  ///< Number of fields.
   std::tuple<FieldType<Spaces>...> fields;                      ///< The fields.
   /// Constructor
-  CouplingParams(FieldType<Spaces>... fs) : fields(std::move(fs)...) {}
+  ParamFields(FieldType<Spaces>... fs) : fields(std::move(fs)...) {}
 };
 
-/// Deduction guide for CouplingParams
+/// Deduction guide for ParamFields
 template <typename... Spaces>
-CouplingParams(FieldType<Spaces>...) -> CouplingParams<Spaces...>;
+ParamFields(FieldType<Spaces>...) -> ParamFields<Spaces...>;
 
 /**
  * @brief Bundle of foreign `PhysicsFields` packs supplied to a builder as a single coupling arg.
@@ -88,6 +85,8 @@ struct CouplingFields {
 template <typename... PFs>
 auto couplingFields(const PFs&... pfs)
 {
+  static_assert((is_physics_fields_arg<std::decay_t<PFs>>::value && ...),
+                "couplingFields(...) only accepts PhysicsFields packs");
   return CouplingFields<PFs...>{std::make_tuple(pfs...)};
 }
 
@@ -95,9 +94,14 @@ auto couplingFields(const PFs&... pfs)
  * @brief Register parameter fields as type-level tokens.
  */
 template <typename... ParamSpaces>
-auto registerParameterFields(FieldType<ParamSpaces>... param_types)
+auto registerParameterFields(const std::shared_ptr<FieldStore>& field_store, FieldType<ParamSpaces>... param_types)
 {
-  return CouplingParams{std::move(param_types)...};
+  auto register_one = [&](auto param_type) {
+    param_type.name = "param_" + param_type.name;
+    field_store->addParameter(param_type);
+    return param_type;
+  };
+  return ParamFields<ParamSpaces...>{register_one(std::move(param_types))...};
 }
 
 namespace detail {
@@ -116,9 +120,9 @@ template <typename T>
 struct is_parameter_pack_impl : std::false_type {};
 
 template <typename... S>
-struct is_parameter_pack_impl<CouplingParams<S...>> : std::true_type {};
+struct is_parameter_pack_impl<ParamFields<S...>> : std::true_type {};
 
-/// @brief True if T is a CouplingParams type.
+/// @brief True if T is a ParamFields type.
 template <typename T>
 inline constexpr bool is_parameter_pack_v = is_parameter_pack_impl<std::decay_t<T>>::value;
 
@@ -147,109 +151,13 @@ inline constexpr bool is_coupling_packs_v = is_coupling_packs_impl<std::decay_t<
 template <typename T, typename = void>
 inline constexpr bool has_time_rule_v = false;
 
-/// @brief True if T is a PhysicsFields with a time rule other than NoTimeRule.
+/// @brief True if T is a PhysicsFields type.
 template <typename T>
-inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>>> =
-    !std::is_same_v<typename std::decay_t<T>::time_rule_type, NoTimeRule>;
-
-/// Trailing args must be one of: {}, {CouplingFields}, {CouplingParams}, {CouplingFields, CouplingParams}.
-template <typename... Trailing>
-inline constexpr bool trailing_coupling_args_valid_v = [] {
-  if constexpr (sizeof...(Trailing) == 0) {
-    return true;
-  } else if constexpr (sizeof...(Trailing) == 1) {
-    using T0 = std::tuple_element_t<0, std::tuple<Trailing...>>;
-    return is_coupling_fields_v<T0> || is_parameter_pack_v<T0>;
-  } else if constexpr (sizeof...(Trailing) == 2) {
-    using T0 = std::tuple_element_t<0, std::tuple<Trailing...>>;
-    using T1 = std::tuple_element_t<1, std::tuple<Trailing...>>;
-    return is_coupling_fields_v<T0> && is_parameter_pack_v<T1>;
-  } else {
-    return false;
-  }
-}();
+inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>>> = true;
 
 // -------------------------------------------------------------------------
 // Trailing-arg extraction
 // -------------------------------------------------------------------------
-
-/// @brief Check if Trailing arguments contain CouplingFields.
-template <typename... Trailing>
-constexpr bool hasCouplingFields()
-{
-  return ((is_coupling_fields_v<Trailing>) || ...);
-}
-
-/// @brief Check if Trailing arguments contain CouplingParams.
-template <typename... Trailing>
-constexpr bool hasParamPack()
-{
-  return ((is_parameter_pack_v<Trailing>) || ...);
-}
-
-/// @brief Base case for extracting coupling packs (empty).
-inline auto extractCouplingPacks() { return std::tuple<>{}; }
-
-/// @brief Extract the tuple of coupling packs from Trailing arguments.
-template <typename First, typename... Rest>
-auto extractCouplingPacks(const First& first, const Rest&... rest)
-{
-  if constexpr (is_coupling_fields_v<First>) {
-    return first.packs;
-  } else {
-    return extractCouplingPacks(rest...);
-  }
-}
-
-/// @brief Qualify parameters by prefixing their names.
-template <typename... Spaces>
-auto qualifyParams(const std::shared_ptr<FieldStore>& fs, const CouplingParams<Spaces...>& pack)
-{
-  return std::apply(
-      [&](auto... pts) {
-        auto qualify = [&](auto pt) {
-          pt.name = fs->prefix("param_" + pt.name);
-          return pt;
-        };
-        return CouplingParams<Spaces...>{qualify(pts)...};
-      },
-      pack.fields);
-}
-
-/// Register parameter fields from any trailing CouplingParams into the FieldStore.
-template <typename... Trailing>
-void registerParamsIfNeeded(std::shared_ptr<FieldStore> fs, const Trailing&... trailing)
-{
-  auto register_one = [&](const auto& pack) {
-    using P = std::decay_t<decltype(pack)>;
-    if constexpr (is_parameter_pack_v<P>) {
-      std::apply(
-          [&](auto... pts) {
-            auto prefix_and_add = [&](auto pt) {
-              pt.name = "param_" + pt.name;
-              fs->addParameter(pt);
-            };
-            (prefix_and_add(pts), ...);
-          },
-          pack.fields);
-    }
-  };
-  (register_one(trailing), ...);
-}
-
-/// @brief Base case for extracting qualified parameter pack (empty).
-inline auto extractParamPackQualified(const std::shared_ptr<FieldStore>& /*fs*/) { return std::tuple<>{}; }
-
-/// @brief Extract qualified parameter pack.
-template <typename First, typename... Rest>
-auto extractParamPackQualified(const std::shared_ptr<FieldStore>& fs, const First& first, const Rest&... rest)
-{
-  if constexpr (is_parameter_pack_v<First>) {
-    return std::make_tuple(qualifyParams(fs, first));
-  } else {
-    return extractParamPackQualified(fs, rest...);
-  }
-}
 
 /// Concatenate each pack's `.fields` tuple — used to derive trailing weak-form parameter spaces.
 template <typename PacksTuple>
@@ -258,13 +166,28 @@ auto flattenCouplingFields(const PacksTuple& packs)
   return std::apply([](const auto&... pack) { return std::tuple_cat(pack.fields...); }, packs);
 }
 
-/// @brief Collect all coupling fields and parameter packs.
-template <typename... Trailing>
-auto collectCouplingFields(const std::shared_ptr<FieldStore>& fs, const Trailing&... trailing)
+/// @brief Collect no coupling or parameter packs.
+inline auto collectCouplingFields() { return std::tuple<>{}; }
+
+template <typename... PFs>
+/// @brief Collect only coupled physics packs.
+auto collectCouplingFields(const CouplingFields<PFs...>& coupled)
 {
-  auto physics_packs = extractCouplingPacks(trailing...);
-  auto param_pack = extractParamPackQualified(fs, trailing...);
-  return std::tuple_cat(physics_packs, param_pack);
+  return coupled.packs;
+}
+
+template <typename... Spaces>
+/// @brief Collect only registered parameter fields.
+auto collectCouplingFields(const ParamFields<Spaces...>& params)
+{
+  return std::make_tuple(params);
+}
+
+template <typename... PFs, typename... Spaces>
+/// @brief Collect coupled physics packs followed by registered parameter fields.
+auto collectCouplingFields(const CouplingFields<PFs...>& coupled, const ParamFields<Spaces...>& params)
+{
+  return std::tuple_cat(coupled.packs, std::make_tuple(params));
 }
 
 // -------------------------------------------------------------------------
@@ -305,12 +228,12 @@ template <std::size_t Offset, typename Pack, typename TimeInfoT, typename RawTup
 auto evaluateCouplingPack(const Pack& /*pack*/, const TimeInfoT& t_info, const RawTuple& raw_args,
                           std::index_sequence<Is...>)
 {
-  using Rule = typename Pack::time_rule_type;
-  if constexpr (std::is_same_v<Rule, NoTimeRule>) {
-    return std::forward_as_tuple(std::get<Offset + Is>(raw_args)...);
-  } else {
+  if constexpr (is_physics_fields_v<Pack>) {
+    using Rule = typename Pack::time_rule_type;
     Rule rule;
     return rule.interpolate(t_info, std::get<Offset + Is>(raw_args)...);
+  } else {
+    return std::forward_as_tuple(std::get<Offset + Is>(raw_args)...);
   }
 }
 
@@ -388,7 +311,7 @@ struct FlattenCoupling<std::tuple<Packs...>> {
     using type = Parameters<S...>;
   };
   template <typename... S>
-  struct pack_spaces<CouplingParams<S...>> {
+  struct pack_spaces<ParamFields<S...>> {
     using type = Parameters<S...>;
   };
 

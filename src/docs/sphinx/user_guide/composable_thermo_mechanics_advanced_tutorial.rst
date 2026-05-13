@@ -38,7 +38,9 @@ Solver Config and Field Registration
 ------------------------------------
 
 This example uses a single block solver combining Newton line search for the non-linear
-solve and SuperLU for the linear solve.
+solve and SuperLU for the linear solve. It also registers the thermal-expansion
+scaling parameter directly on the shared ``FieldStore`` with
+``registerParameterFields(field_store, ...)`` before either system is built.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _solver_start
@@ -58,7 +60,9 @@ Boundary Conditions and Loads
 
 The traction call uses ``DependsOn<>{}``, so the user callback receives only the
 state arguments it actually needs and none of the trailing coupling or parameter
-fields.
+fields. The system builders now take the registered ``ParamFields`` bundle
+explicitly, so the build order stays ``self_fields``, optional
+``couplingFields(...)``, then optional params.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _bc_start

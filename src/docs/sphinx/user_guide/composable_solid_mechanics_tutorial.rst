@@ -41,8 +41,11 @@ Solver and Field Registration
 -----------------------------
 
 The field registration phase declares the dynamic displacement state pack,
-Young's modulus parameter field, and optional stress output field on a shared
-``FieldStore``.
+registers the Young's modulus parameter field on the shared ``FieldStore``,
+and optionally enables stress output. Parameter fields now use the same
+two-phase setup as physics fields: first register with
+``registerParameterFields(field_store, ...)``, then pass the returned
+``ParamFields`` bundle into ``buildSolidMechanicsSystem(...)``.
 
 .. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
    :start-after: _solver_start

@@ -48,9 +48,9 @@ TEST(CouplingTimeRuleInterpolation, AppliesEachForeignPhysicsRuleBeforeCallback)
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store);
-  auto scale_params = registerParameterFields(FieldType<L2<0>>("scale"));
+  auto scale_params = registerParameterFields(field_store, FieldType<L2<0>>("scale"));
 
-  auto solid_coupling = detail::collectCouplingFields(field_store, couplingFields(thermal_fields), scale_params);
+  auto solid_coupling = detail::collectCouplingFields(couplingFields(thermal_fields), scale_params);
   auto saw_thermal_values = detail::applyCouplingTimeRules(
       solid_coupling, TimeInfo(0.0, 2.0, 0),
       [](auto temperature, auto temperature_dot, auto scale) {
@@ -62,7 +62,7 @@ TEST(CouplingTimeRuleInterpolation, AppliesEachForeignPhysicsRuleBeforeCallback)
       7.0, 1.0, 11.0);
   EXPECT_TRUE(saw_thermal_values);
 
-  auto thermal_coupling = detail::collectCouplingFields(field_store, couplingFields(solid_fields));
+  auto thermal_coupling = detail::collectCouplingFields(couplingFields(solid_fields));
   auto saw_solid_values = detail::applyCouplingTimeRules(
       thermal_coupling, TimeInfo(0.0, 2.0, 0),
       [](auto displacement, auto velocity, auto /*acceleration*/) {
@@ -72,6 +72,24 @@ TEST(CouplingTimeRuleInterpolation, AppliesEachForeignPhysicsRuleBeforeCallback)
       },
       10.0, 4.0, 0.0, 0.0);
   EXPECT_TRUE(saw_solid_values);
+}
+
+TEST(ParameterFieldsRegistration, RegistersImmediatelyAndReturnsPrefixedFields)
+{
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, "parameter_registration");
+  auto mesh =
+      std::make_shared<smith::Mesh>(mfem::Mesh::MakeCartesian3D(1, 1, 1, mfem::Element::HEXAHEDRON), "mesh", 0, 0);
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, "coupled");
+
+  auto param_fields = registerParameterFields(field_store, FieldType<L2<0>>("scale"), FieldType<L2<0>>("offset"));
+
+  static_assert(std::is_same_v<std::decay_t<decltype(param_fields)>, ParamFields<L2<0>, L2<0>>>);
+  EXPECT_EQ(field_store->getParameterFields().size(), 2);
+  EXPECT_EQ(std::get<0>(param_fields.fields).name, field_store->prefix("param_scale"));
+  EXPECT_EQ(std::get<1>(param_fields.fields).name, field_store->prefix("param_offset"));
+  EXPECT_EQ(field_store->getParameterFields()[0].get()->name(), field_store->prefix("param_scale"));
+  EXPECT_EQ(field_store->getParameterFields()[1].get()->name(), field_store->prefix("param_offset"));
 }
 
 TEST(CouplingTimeRuleInterpolation, PreservesForeignPacksWithSameTimeRuleType)
@@ -88,7 +106,7 @@ TEST(CouplingTimeRuleInterpolation, PreservesForeignPacksWithSameTimeRuleType)
   PhysicsFields<dim, temperature_order, TempRule, ScalarSpace, ScalarSpace> thermal_b{
       field_store, FieldType<ScalarSpace>("temperature_b_solve_state"), FieldType<ScalarSpace>("temperature_b")};
 
-  auto same_rule_coupling = detail::collectCouplingFields(field_store, couplingFields(thermal_a, thermal_b));
+  auto same_rule_coupling = detail::collectCouplingFields(couplingFields(thermal_a, thermal_b));
   auto saw_all_values = detail::applyCouplingTimeRules(
       same_rule_coupling, TimeInfo(0.0, 2.0, 0),
       [](auto temperature_a, auto temperature_a_dot, auto temperature_b, auto temperature_b_dot) {
@@ -174,9 +192,9 @@ TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionI
 {
   FieldType<L2<0>> thermal_expansion_scaling("thermal_expansion_scaling");
 
-  auto param_fields = registerParameterFields(thermal_expansion_scaling);
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
+  auto param_fields = registerParameterFields(field_store_, thermal_expansion_scaling);
 
   auto solid_system = buildSolidMechanicsSystem(makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{},
                                                 solid_fields, couplingFields(thermal_fields), param_fields);
@@ -209,9 +227,9 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
 {
   FieldType<L2<0>> youngs_modulus("youngs_modulus");
 
-  auto param_fields = registerParameterFields(youngs_modulus);
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
+  auto param_fields = registerParameterFields(field_store_, youngs_modulus);
 
   auto solid_system = buildSolidMechanicsSystem(makeSolver(newtonNonlinOpts, directLinOpts), SolidMechanicsOptions{},
                                                 solid_fields, couplingFields(thermal_fields), param_fields);
@@ -260,9 +278,9 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
 {
   FieldType<L2<0>> thermal_expansion_scaling("thermal_expansion_scaling");
 
-  auto param_fields = registerParameterFields(thermal_expansion_scaling);
   auto solid_fields = registerSolidMechanicsFields<dim, displacement_order, DispRule>(field_store_);
   auto thermal_fields = registerThermalFields<dim, temperature_order, TempRule>(field_store_);
+  auto param_fields = registerParameterFields(field_store_, thermal_expansion_scaling);
 
   LinearSolverOptions solid_lin_opts{.linear_solver = LinearSolver::CG,
                                      .preconditioner = Preconditioner::HypreAMG,

@@ -52,7 +52,7 @@ namespace smith {
  * @tparam dim Spatial dimension (needed for the weak form and zero-flux tensor).
  * @tparam StateSpace FE space for the internal variable (e.g., L2<0>).
  * @tparam InternalVarTimeRule Time integration rule (must have num_states == 2).
- * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: none).
+ * @tparam Coupling Tuple of coupling and parameter packs (default: none).
  */
 template <int dim, typename StateSpace, typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
           typename Coupling = std::tuple<>>
@@ -190,17 +190,63 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
  *
  * The time rule is deduced from SelfFields::time_rule_type.
  */
-template <typename SelfFields, typename... Trailing>
-  requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
-auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
-                                 const Trailing&... trailing)
+template <typename SelfFields>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields)
 {
   constexpr int dim = SelfFields::dim;
   using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
   using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
-  detail::registerParamsIfNeeded(field_store, trailing...);
-  auto coupling = detail::collectCouplingFields(field_store, trailing...);
+  auto coupling = detail::collectCouplingFields();
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
+}
+
+/**
+ * @brief Build an InternalVariableSystem from registered self fields plus coupled physics fields.
+ */
+template <typename SelfFields, typename... PFs>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                                 const CouplingFields<PFs...>& coupled)
+{
+  constexpr int dim = SelfFields::dim;
+  using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled);
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
+}
+
+/**
+ * @brief Build an InternalVariableSystem from registered self fields plus registered parameter fields.
+ */
+template <typename SelfFields, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                                 const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(params);
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
+}
+
+/**
+ * @brief Build an InternalVariableSystem from registered self fields, coupled physics fields, and parameter fields.
+ */
+template <typename SelfFields, typename... PFs, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                                 const CouplingFields<PFs...>& coupled, const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled, params);
   return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
 }
 

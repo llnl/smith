@@ -140,8 +140,8 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
 
   FieldType<L2<0>> conductivity_param("conductivity");
 
-  auto param_fields = registerParameterFields(conductivity_param);
   auto field_store = fieldStore(mesh);
+  auto param_fields = registerParameterFields(field_store, conductivity_param);
   auto thermal_fields = registerThermalFields<2, 1, QuasiStaticFirstOrderTimeIntegrationRule>(field_store);
   auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solver_options, linear_options, *mesh));
   auto thermal_system = buildThermalSystem(solver, ThermalOptions{}, thermal_fields, param_fields);

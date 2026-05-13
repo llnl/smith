@@ -34,7 +34,7 @@ namespace smith {
  * @tparam dim Spatial dimension.
  * @tparam temp_order Order of the temperature basis.
  * @tparam TemperatureTimeRule Time integration rule type (must have num_states == 2).
- * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: none).
+ * @tparam Coupling Tuple of coupling and parameter packs (default: none).
  *         Coupling fields occupy leading positions in the tail after the 2 time-rule state fields,
  *         before user parameter_space fields.
  */
@@ -249,17 +249,65 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
  *       solver, opts, thermal_fields, couplingFields(solid_fields));
  * @endcode
  */
-template <typename SelfFields, typename... Trailing>
-  requires(detail::has_time_rule_v<SelfFields> && detail::trailing_coupling_args_valid_v<Trailing...>)
+template <typename SelfFields>
+  requires(detail::has_time_rule_v<SelfFields>)
 auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
-                        const SelfFields& self_fields, const Trailing&... trailing)
+                        const SelfFields& self_fields)
 {
   constexpr int dim = SelfFields::dim;
   constexpr int temp_order = SelfFields::order;
   using TemperatureTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
-  detail::registerParamsIfNeeded(field_store, trailing...);
-  auto coupling = detail::collectCouplingFields(field_store, trailing...);
+  auto coupling = detail::collectCouplingFields();
+  return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
+}
+
+/**
+ * @brief Build a ThermalSystem from registered self fields plus coupled physics fields.
+ */
+template <typename SelfFields, typename... PFs>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
+                        const SelfFields& self_fields, const CouplingFields<PFs...>& coupled)
+{
+  constexpr int dim = SelfFields::dim;
+  constexpr int temp_order = SelfFields::order;
+  using TemperatureTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled);
+  return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
+}
+
+/**
+ * @brief Build a ThermalSystem from registered self fields plus registered parameter fields.
+ */
+template <typename SelfFields, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
+                        const SelfFields& self_fields, const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  constexpr int temp_order = SelfFields::order;
+  using TemperatureTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(params);
+  return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
+}
+
+/**
+ * @brief Build a ThermalSystem from registered self fields, coupled physics fields, and parameter fields.
+ */
+template <typename SelfFields, typename... PFs, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildThermalSystem(std::shared_ptr<SystemSolver> solver, const ThermalOptions& options,
+                        const SelfFields& self_fields, const CouplingFields<PFs...>& coupled,
+                        const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  constexpr int temp_order = SelfFields::order;
+  using TemperatureTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled, params);
   return detail::buildThermalSystemImpl<dim, temp_order, TemperatureTimeRule>(field_store, coupling, solver, options);
 }
 
