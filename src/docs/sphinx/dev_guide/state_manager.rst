@@ -48,11 +48,11 @@ to which data will be saved.
   store different kinds of data - that is, data unrelated to the state defined above.  In particular,
   input file data is also stored in the per-simulation ``DataStore`` instance.
 
-Before any other kinds of state can be created, a mesh must be registered via ``SetMesh()``.
-In order for a restart to work properly, all state data must be owned by the underlying
-``StateManager``, so ownership of the mesh is transferred via a ``unique_ptr``.  In the case of multi-mesh
-simulations, a name or "tag" should also be used to uniquely identify the mesh. This is done automatically via
-the ``smith::Mesh`` class.
+Before any other kinds of state can be created, a mesh must be registered via ``setMesh()``.
+For nominal runs, ``StateManager`` owns meshes registered with a ``unique_ptr`` and shares ownership of meshes
+registered with a ``shared_ptr``. The underlying ``MFEMSidreDataCollection`` only borrows those meshes.
+In the case of multi-mesh simulations, a name or "tag" should also be used to uniquely identify the mesh.
+This is done automatically via the ``smith::Mesh`` class.
 
 Individual physics modules - that are of course based on these kinds of state - can now be constructed.
 In general, this process looks something like the following:
@@ -102,9 +102,12 @@ the tag identifying the mesh.  As in the nominal case, this tag is not necessary
   in the previous simulation run.
 
 ``StateManager::load()`` will reconstruct the ``mfem::ParMesh``, ``mfem::GridFunction``, and ``mfem::QuadratureFunction``
-objects.  The ``StateManager`` factory methods can be used in the exact same way as they would in a nominal run, though
-the internal logic is of course different.  In particular, it will search through the restored data for a field with the
-requested name and use that instead of constructing a new field via the process described above.
+objects. In a restart workflow, the reconstructed mesh is owned by the underlying ``MFEMSidreDataCollection``.
+``StateManager::mesh()`` returns a non-owning reference to that mesh, matching the nominal workflow's borrowed
+access pattern even though the owner is different. The ``StateManager`` factory methods can be used in the exact
+same way as they would in a nominal run, though the internal logic is of course different. In particular, it will
+search through the restored data for a field with the requested name and use that instead of constructing a new
+field via the process described above.
 
 .. _quadraturedata-label:
 
