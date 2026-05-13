@@ -108,8 +108,8 @@ struct TrustRegionResults {
   size_t cg_iterations_count = 0;
 };
 
-using DotPair = std::pair<const mfem::Vector*, const mfem::Vector*>;
-using DotManyFunction = std::function<std::vector<double>(const std::vector<DotPair>&)>;
+using DotPair = std::pair<const mfem::Vector*, const mfem::Vector*>;                      ///< using
+using DotManyFunction = std::function<std::vector<double>(const std::vector<DotPair>&)>;  ///< using
 
 /**
  * @brief Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
