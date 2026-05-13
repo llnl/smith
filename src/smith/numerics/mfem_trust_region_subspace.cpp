@@ -29,13 +29,6 @@ double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm
 
 #ifdef MFEM_USE_LAPACK
 
-TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
-                                               const std::vector<const mfem::Vector*>& A_directions,
-                                               const mfem::Vector& b, double delta, int num_leftmost)
-{
-  return solveSubspaceProblemMfem(directions, A_directions, b, delta, num_leftmost);
-}
-
 namespace {
 
 double dot(const mfem::Vector& a, const mfem::Vector& b) { return a * b; }
@@ -133,15 +126,6 @@ SubspaceProjections projectSubspaceGlobally(const std::vector<const mfem::Vector
   return globalSubspaceProjectionFromLocalInnerProducts(states, Astates, b);
 }
 
-mfem::Vector solveDense(const mfem::DenseMatrix& A, const mfem::Vector& b)
-{
-  mfem::DenseMatrix A_copy(A);
-  mfem::DenseMatrixInverse inv(A_copy);
-  mfem::Vector x(b.Size());
-  inv.Mult(b, x);
-  return x;
-}
-
 double quadraticEnergy(const mfem::DenseMatrix& A, const mfem::Vector& b, const mfem::Vector& x)
 {
   mfem::Vector Ax(x.Size());
@@ -185,152 +169,6 @@ mfem::DenseMatrix columnsToMatrix(const std::vector<mfem::Vector>& cols)
     }
   }
   return A;
-}
-
-/**
- * @brief Solves the exact trust region subproblem:
- *        min 1/2 x^T A x - b^T x, subject to ||x|| <= delta.
- *
- * Implements a variant of the Moore-Sorensen algorithm:
- * 1. Computes the eigensystem of A.
- * 2. Checks if the unconstrained minimum lies strictly inside the trust region.
- * 3. Checks for the "hard case" where the minimum eigenvalue is near zero or negative,
- *    and the Newton step points outside the trust region, requiring a shift along the leftmost eigenvector.
- * 4. Otherwise, performs a Newton iteration on the secular equation (1/||p(\lambda)|| - 1/delta = 0)
- *    to find the optimal Lagrange multiplier \lambda.
- *
- * @param A The reduced Hessian matrix (square).
- * @param b The reduced gradient vector.
- * @param delta The trust region radius.
- * @param num_leftmost The number of leftmost eigenvectors/values to return.
- * @return A tuple containing:
- *         - The optimal solution vector.
- *         - A list of the leftmost eigenvectors.
- *         - A list of the corresponding leftmost eigenvalues.
- *         - A boolean indicating success.
- */
-std::tuple<mfem::Vector, std::vector<mfem::Vector>, std::vector<double>, bool> exactTrustRegionSolve(
-    mfem::DenseMatrix A, const mfem::Vector& b, double delta, int num_leftmost)
-{
-  if (A.Height() != A.Width()) {
-    throw TrustRegionException("Exact trust region solver requires square matrices");
-  }
-  if (A.Height() != b.Size()) {
-    throw TrustRegionException(
-        "The right hand size for exact trust region solve must be consistent with the input matrix size");
-  }
-
-  mfem::Vector workspace(b.Size() * b.Size() + 8 * b.Size());
-  int offset = 0;
-  auto alloc_vector = [&](int size) {
-    mfem::Vector v(workspace.GetData() + offset, size);
-    offset += size;
-    return v;
-  };
-
-  mfem::Vector sigs = alloc_vector(b.Size());
-  mfem::DenseMatrix V(workspace.GetData() + offset, b.Size(), b.Size());
-  offset += b.Size() * b.Size();
-
-  A.Eigensystem(sigs, V);
-  std::vector<mfem::Vector> leftmosts;
-  std::vector<double> minsigs;
-  const int num_leftmost_possible = std::min(num_leftmost, sigs.Size());
-  for (int i = 0; i < num_leftmost_possible; ++i) {
-    leftmosts.emplace_back(matrixColumn(V, i));
-    minsigs.emplace_back(sigs[i]);
-  }
-
-  const mfem::Vector leftMost = matrixColumn(V, 0);
-  const double minSig = sigs[0];
-
-  mfem::Vector bv = alloc_vector(sigs.Size());
-  for (int i = 0; i < sigs.Size(); ++i) {
-    const mfem::Vector vi = matrixColumn(V, i);
-    bv[i] = dot(vi, b);
-  }
-
-  mfem::Vector bvOverSigs = alloc_vector(sigs.Size());
-  for (int i = 0; i < sigs.Size(); ++i) bvOverSigs[i] = bv[i] / sigs[i];
-  const double sigScale = sumAbs(sigs) / sigs.Size();
-  const double eps = 1e-12 * sigScale;
-
-  if ((minSig >= eps) && (norm(bvOverSigs) <= delta)) {
-    return std::make_tuple(solveDense(A, b), leftmosts, minsigs, true);
-  }
-
-  double lam = minSig < eps ? -minSig + eps : 0.0;
-  mfem::Vector sigsPlusLam = alloc_vector(sigs.Size());
-  for (int i = 0; i < sigs.Size(); ++i) sigsPlusLam[i] = sigs[i] + lam;
-  for (int i = 0; i < sigs.Size(); ++i) bvOverSigs[i] = bv[i] / sigsPlusLam[i];
-
-  if ((minSig < eps) && (norm(bvOverSigs) < delta)) {
-    mfem::Vector p = alloc_vector(b.Size());
-    p = 0.0;
-    for (int i = 0; i < b.Size(); ++i) {
-      const mfem::Vector vi = matrixColumn(V, i);
-      p.Add(bv[i], vi);
-    }
-
-    const double pz = dot(p, leftMost);
-    const double pp = dot(p, p);
-    const double ddmpp = std::max(delta * delta - pp, 0.0);
-
-    const double tau1 = -pz + std::sqrt(pz * pz + ddmpp);
-    const double tau2 = -pz - std::sqrt(pz * pz + ddmpp);
-
-    mfem::Vector x1 = alloc_vector(p.Size());
-    x1 = p;
-    mfem::Vector x2 = alloc_vector(p.Size());
-    x2 = p;
-    x1.Add(tau1, leftMost);
-    x2.Add(tau2, leftMost);
-
-    const double e1 = quadraticEnergy(A, b, x1);
-    const double e2 = quadraticEnergy(A, b, x2);
-
-    return std::make_tuple(e1 < e2 ? x1 : x2, leftmosts, minsigs, true);
-  }
-
-  mfem::Vector bvbv = alloc_vector(bv.Size());
-  for (int i = 0; i < bv.Size(); ++i) bvbv[i] = bv[i] * bv[i];
-  for (int i = 0; i < sigs.Size(); ++i) sigsPlusLam[i] = sigs[i] + lam;
-
-  double pNormSq = pnormSquared(bvbv, sigsPlusLam);
-  double pNorm = std::sqrt(pNormSq);
-  double bError = (pNorm - delta) / delta;
-
-  size_t iters = 0;
-  constexpr size_t maxIters = 30;
-  while ((std::abs(bError) > 1e-9) && (iters++ < maxIters)) {
-    const double qNormSq = qnormSquared(bvbv, sigsPlusLam);
-    lam += (pNormSq / qNormSq) * bError;
-    for (int i = 0; i < sigs.Size(); ++i) sigsPlusLam[i] = sigs[i] + lam;
-    pNormSq = pnormSquared(bvbv, sigsPlusLam);
-    pNorm = std::sqrt(pNormSq);
-    bError = (pNorm - delta) / delta;
-  }
-
-  const bool success = iters < maxIters;
-
-  for (int i = 0; i < sigs.Size(); ++i) bvOverSigs[i] = bv[i] / sigsPlusLam[i];
-
-  mfem::Vector x = alloc_vector(b.Size());
-  x = 0.0;
-  for (int i = 0; i < b.Size(); ++i) {
-    const mfem::Vector vi = matrixColumn(V, i);
-    x.Add(bvOverSigs[i], vi);
-  }
-
-  const double e1 = quadraticEnergy(A, b, x);
-  mfem::Vector neg_x = alloc_vector(x.Size());
-  neg_x = x;
-  neg_x *= -1.0;
-  const double e2 = quadraticEnergy(A, b, neg_x);
-
-  x *= (e2 < e1 ? -delta : delta) / norm(x);
-
-  return std::make_tuple(x, leftmosts, minsigs, success);
 }
 
 mfem::DenseMatrix orthonormalBasisTransform(const mfem::DenseMatrix& gram, double& trace_mag)
@@ -383,14 +221,165 @@ mfem::Vector combineDirections(const std::vector<const mfem::Vector*>& states, c
   return out;
 }
 
+std::vector<const mfem::Vector*> toPointers(const std::vector<std::shared_ptr<mfem::Vector>>& vectors)
+{
+  std::vector<const mfem::Vector*> ptrs;
+  ptrs.reserve(vectors.size());
+  for (const auto& vector : vectors) {
+    ptrs.push_back(vector.get());
+  }
+  return ptrs;
+}
+
+std::vector<mfem::Vector> prepareExactTrustRegionLeftmosts(CachedTrustRegionSubspaceProblem& prepared, int num_leftmost)
+{
+  prepared.eigenvalues.SetSize(prepared.projected_rhs.Size());
+  prepared.eigenvectors.SetSize(prepared.projected_hessian.Height(), prepared.projected_hessian.Width());
+
+  mfem::DenseMatrix projected_hessian_copy(prepared.projected_hessian);
+  projected_hessian_copy.Eigensystem(prepared.eigenvalues, prepared.eigenvectors);
+
+  prepared.eigen_rhs.SetSize(prepared.eigenvalues.Size());
+  for (int i = 0; i < prepared.eigenvalues.Size(); ++i) {
+    const mfem::Vector vi = matrixColumn(prepared.eigenvectors, i);
+    prepared.eigen_rhs[i] = dot(vi, prepared.projected_rhs);
+  }
+
+  std::vector<mfem::Vector> reduced_leftmosts;
+  const int num_leftmost_possible = std::min(num_leftmost, prepared.eigenvalues.Size());
+  reduced_leftmosts.reserve(static_cast<size_t>(num_leftmost_possible));
+  prepared.leftvals.clear();
+  prepared.leftvals.reserve(static_cast<size_t>(num_leftmost_possible));
+  for (int i = 0; i < num_leftmost_possible; ++i) {
+    reduced_leftmosts.emplace_back(matrixColumn(prepared.eigenvectors, i));
+    prepared.leftvals.emplace_back(prepared.eigenvalues[i]);
+  }
+  return reduced_leftmosts;
+}
+
+std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const CachedTrustRegionSubspaceProblem& prepared,
+                                                                   double delta)
+{
+  const mfem::DenseMatrix& A = prepared.projected_hessian;
+  const mfem::Vector& b = prepared.projected_rhs;
+  const mfem::Vector& sigs = prepared.eigenvalues;
+  const mfem::DenseMatrix& V = prepared.eigenvectors;
+  const mfem::Vector& bv = prepared.eigen_rhs;
+
+  mfem::Vector workspace(6 * b.Size());
+  int offset = 0;
+  auto alloc_vector = [&](int size) {
+    mfem::Vector v(workspace.GetData() + offset, size);
+    offset += size;
+    return v;
+  };
+
+  mfem::Vector bvOverSigs = alloc_vector(sigs.Size());
+  for (int i = 0; i < sigs.Size(); ++i) {
+    bvOverSigs[i] = bv[i] / sigs[i];
+  }
+  const double sigScale = sumAbs(sigs) / sigs.Size();
+  const double eps = 1e-12 * sigScale;
+  const mfem::Vector leftMost = matrixColumn(V, 0);
+  const double minSig = sigs[0];
+
+  if ((minSig >= eps) && (norm(bvOverSigs) <= delta)) {
+    mfem::Vector x = alloc_vector(b.Size());
+    x = 0.0;
+    for (int i = 0; i < b.Size(); ++i) {
+      const mfem::Vector vi = matrixColumn(V, i);
+      x.Add(bvOverSigs[i], vi);
+    }
+    return std::make_pair(x, true);
+  }
+
+  double lam = minSig < eps ? -minSig + eps : 0.0;
+  mfem::Vector sigsPlusLam = alloc_vector(sigs.Size());
+  for (int i = 0; i < sigs.Size(); ++i) sigsPlusLam[i] = sigs[i] + lam;
+  for (int i = 0; i < sigs.Size(); ++i) bvOverSigs[i] = bv[i] / sigsPlusLam[i];
+
+  if ((minSig < eps) && (norm(bvOverSigs) < delta)) {
+    mfem::Vector p = alloc_vector(b.Size());
+    p = 0.0;
+    for (int i = 0; i < b.Size(); ++i) {
+      const mfem::Vector vi = matrixColumn(V, i);
+      p.Add(bv[i], vi);
+    }
+
+    const double pz = dot(p, leftMost);
+    const double pp = dot(p, p);
+    const double ddmpp = std::max(delta * delta - pp, 0.0);
+
+    const double tau1 = -pz + std::sqrt(pz * pz + ddmpp);
+    const double tau2 = -pz - std::sqrt(pz * pz + ddmpp);
+
+    mfem::Vector x1 = alloc_vector(p.Size());
+    x1 = p;
+    mfem::Vector x2 = alloc_vector(p.Size());
+    x2 = p;
+    x1.Add(tau1, leftMost);
+    x2.Add(tau2, leftMost);
+
+    const double e1 = quadraticEnergy(A, b, x1);
+    const double e2 = quadraticEnergy(A, b, x2);
+
+    return std::make_pair(e1 < e2 ? x1 : x2, true);
+  }
+
+  mfem::Vector bvbv = alloc_vector(bv.Size());
+  for (int i = 0; i < bv.Size(); ++i) bvbv[i] = bv[i] * bv[i];
+  for (int i = 0; i < sigs.Size(); ++i) sigsPlusLam[i] = sigs[i] + lam;
+
+  double pNormSq = pnormSquared(bvbv, sigsPlusLam);
+  double pNorm = std::sqrt(pNormSq);
+  double bError = (pNorm - delta) / delta;
+
+  size_t iters = 0;
+  constexpr size_t maxIters = 30;
+  while ((std::abs(bError) > 1e-9) && (iters++ < maxIters)) {
+    const double qNormSq = qnormSquared(bvbv, sigsPlusLam);
+    lam += (pNormSq / qNormSq) * bError;
+    for (int i = 0; i < sigs.Size(); ++i) sigsPlusLam[i] = sigs[i] + lam;
+    pNormSq = pnormSquared(bvbv, sigsPlusLam);
+    pNorm = std::sqrt(pNormSq);
+    bError = (pNorm - delta) / delta;
+  }
+
+  const bool success = iters < maxIters;
+
+  for (int i = 0; i < sigs.Size(); ++i) bvOverSigs[i] = bv[i] / sigsPlusLam[i];
+
+  mfem::Vector x = alloc_vector(b.Size());
+  x = 0.0;
+  for (int i = 0; i < b.Size(); ++i) {
+    const mfem::Vector vi = matrixColumn(V, i);
+    x.Add(bvOverSigs[i], vi);
+  }
+
+  const double e1 = quadraticEnergy(A, b, x);
+  mfem::Vector neg_x = alloc_vector(x.Size());
+  neg_x = x;
+  neg_x *= -1.0;
+  const double e2 = quadraticEnergy(A, b, neg_x);
+
+  x *= (e2 < e1 ? -delta : delta) / norm(x);
+
+  return std::make_pair(x, success);
+}
+
 }  // namespace
 
-TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& states,
-                                                   const std::vector<const mfem::Vector*>& Astates,
-                                                   const mfem::Vector& b, double delta, int num_leftmost)
+/// @brief prepares reduced trust-region subspace data reusable across trust-region radius updates
+CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
+                                                        const std::vector<const mfem::Vector*>& A_directions,
+                                                        const mfem::Vector& b, int num_leftmost)
 {
   SMITH_MARK_FUNCTION;
-  SubspaceProjections projections = projectSubspaceGlobally(states, Astates, b);
+  CachedTrustRegionSubspaceProblem prepared;
+  prepared.zero_solution = b;
+  prepared.zero_solution = 0.0;
+
+  SubspaceProjections projections = projectSubspaceGlobally(directions, A_directions, b);
   mfem::DenseMatrix& sAs = projections.sAs;
   symmetrize(sAs);
 
@@ -408,33 +397,61 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
   double trace_mag = 0.0;
   mfem::DenseMatrix T = orthonormalBasisTransform(ss, trace_mag);
   if (trace_mag == 0.0) {
-    mfem::Vector sol(*states[0]);
-    sol = 0.0;
-    return std::make_tuple(sol, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
+    return prepared;
   }
   if (T.Width() == 0) {
     throw TrustRegionException("No independent directions in MFEM subspace solve.");
   }
-  mfem::DenseMatrix pAp = tripleProduct(T, sAs, T);
-  symmetrize(pAp);
+  prepared.projected_hessian = tripleProduct(T, sAs, T);
+  symmetrize(prepared.projected_hessian);
 
   const mfem::Vector& sb = projections.sb;
-  const mfem::Vector pb = projectWithTranspose(T, sb);
+  prepared.projected_rhs = projectWithTranspose(T, sb);
 
-  auto [reduced_x, leftvecs, leftvals, success] = exactTrustRegionSolve(pAp, pb, delta, num_leftmost);
-  (void)success;
-  const double energy = quadraticEnergy(pAp, pb, reduced_x);
-
-  mfem::Vector coeffs(T.Height());
-  T.Mult(reduced_x, coeffs);
-  mfem::Vector sol = combineDirections(states, coeffs);
-  std::vector<std::shared_ptr<mfem::Vector>> leftmosts;
-  for (const auto& leftvec : leftvecs) {
-    mfem::Vector left_coeffs(T.Height());
-    T.Mult(leftvec, left_coeffs);
-    leftmosts.emplace_back(std::make_shared<mfem::Vector>(combineDirections(states, left_coeffs)));
+  for (int j = 0; j < T.Width(); ++j) {
+    prepared.basis.emplace_back(std::make_shared<mfem::Vector>(combineDirections(directions, matrixColumn(T, j))));
   }
-  return std::make_tuple(sol, leftmosts, leftvals, energy);
+  const auto reduced_leftmosts = prepareExactTrustRegionLeftmosts(prepared, num_leftmost);
+  const auto basis_ptrs = toPointers(prepared.basis);
+  prepared.leftmosts.clear();
+  prepared.leftmosts.reserve(reduced_leftmosts.size());
+  for (const auto& leftvec : reduced_leftmosts) {
+    prepared.leftmosts.emplace_back(std::make_shared<mfem::Vector>(combineDirections(basis_ptrs, leftvec)));
+  }
+
+  return prepared;
+}
+
+/// @brief solves cached reduced trust-region problem for given trust-region radius
+TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSubspaceProblem& prepared, double delta)
+{
+  SMITH_MARK_FUNCTION;
+  if (prepared.basis.empty()) {
+    mfem::Vector sol(prepared.zero_solution);
+    sol = 0.0;
+    return std::make_tuple(sol, prepared.leftmosts, prepared.leftvals, 0.0);
+  }
+
+  auto [reduced_x, success] = solvePreparedExactTrustRegionProblem(prepared, delta);
+  const double energy = quadraticEnergy(prepared.projected_hessian, prepared.projected_rhs, reduced_x);
+
+  const auto basis_ptrs = toPointers(prepared.basis);
+  mfem::Vector sol = combineDirections(basis_ptrs, reduced_x);
+  return std::make_tuple(sol, prepared.leftmosts, prepared.leftvals, energy);
+}
+
+TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
+                                               const std::vector<const mfem::Vector*>& A_directions,
+                                               const mfem::Vector& b, double delta, int num_leftmost)
+{
+  return solvePreparedSubspaceProblem(prepareSubspaceProblem(directions, A_directions, b, num_leftmost), delta);
+}
+
+TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& directions,
+                                                   const std::vector<const mfem::Vector*>& A_directions,
+                                                   const mfem::Vector& b, double delta, int num_leftmost)
+{
+  return solvePreparedSubspaceProblem(prepareSubspaceProblem(directions, A_directions, b, num_leftmost), delta);
 }
 
 #else
@@ -447,6 +464,16 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
   return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
 }
 
+CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
+                                                        const std::vector<const mfem::Vector*>& A_directions,
+                                                        const mfem::Vector& b, int)
+{
+  throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
+  CachedTrustRegionSubspaceProblem prepared;
+  prepared.zero_solution = b;
+  return prepared;
+}
+
 /// @brief report unavailable MFEM subspace solve when MFEM was built without LAPACK.
 TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>&,
                                                    const std::vector<const mfem::Vector*>&, const mfem::Vector& b,
@@ -454,6 +481,13 @@ TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem:
 {
   throw TrustRegionException("MFEM trust-region subspace solve requires MFEM LAPACK support.");
   return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
+}
+
+TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSubspaceProblem& prepared, double)
+{
+  throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
+  return std::make_tuple(prepared.zero_solution, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{},
+                         0.0);
 }
 
 #endif  // MFEM_USE_LAPACK

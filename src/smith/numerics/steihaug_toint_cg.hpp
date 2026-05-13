@@ -111,6 +111,9 @@ struct TrustRegionResults {
 using DotPair = std::pair<const mfem::Vector*, const mfem::Vector*>;                      ///< using
 using DotManyFunction = std::function<std::vector<double>(const std::vector<DotPair>&)>;  ///< using
 
+/// compute local dot products for many vector pairs
+std::vector<double> dotMany(const std::vector<DotPair>& pairs);
+
 /**
  * @brief Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
  *

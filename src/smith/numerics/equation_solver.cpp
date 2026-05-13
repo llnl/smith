@@ -29,9 +29,10 @@ namespace smith {
 
 namespace {
 
-#ifdef MFEM_USE_MPI
-size_t rootOnlyPrintLevel(size_t level, MPI_Comm comm)
+size_t rootOnlyPrintLevel(const mfem::NewtonSolver& solver, size_t level)
 {
+#ifdef MFEM_USE_MPI
+  const MPI_Comm comm = solver.GetComm();
   if (level > 0 && comm != MPI_COMM_NULL) {
     int rank = 0;
     MPI_Comm_rank(comm, &rank);
@@ -39,11 +40,9 @@ size_t rootOnlyPrintLevel(size_t level, MPI_Comm comm)
       return 0;
     }
   }
+#endif
   return level;
 }
-#else
-size_t rootOnlyPrintLevel(size_t level) { return level; }
-#endif
 
 }  // namespace
 
@@ -119,12 +118,7 @@ class NewtonSolver : public mfem::NewtonSolver {
     print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
     print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
     print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
-    print_level = rootOnlyPrintLevel(print_level
-#ifdef MFEM_USE_MPI
-                                     ,
-                                     GetComm()
-#endif
-    );
+    print_level = rootOnlyPrintLevel(*this, print_level);
 
     using real_t = mfem::real_t;
 
@@ -300,46 +294,15 @@ class TrustRegion : public mfem::NewtonSolver {
   /// compute several vector inner products with a single MPI reduction when possible
   std::vector<double> dot_many(const std::vector<DotPair>& pairs) const
   {
-    std::vector<double> products(pairs.size(), 0.0);
-
     if (dot_oper) {
+      std::vector<double> products(pairs.size(), 0.0);
       for (size_t i = 0; i < pairs.size(); ++i) {
         products[i] = Dot(*pairs[i].first, *pairs[i].second);
       }
       return products;
     }
 
-    std::vector<int> sizes(pairs.size());
-    std::vector<const double*> ptr_a(pairs.size());
-    std::vector<const double*> ptr_b(pairs.size());
-    for (size_t i = 0; i < pairs.size(); ++i) {
-      sizes[i] = pairs[i].first->Size();
-      MFEM_ASSERT(sizes[i] == pairs[i].second->Size(), "Incompatible vector sizes.");
-      ptr_a[i] = pairs[i].first->GetData();
-      ptr_b[i] = pairs[i].second->GetData();
-    }
-
-    bool all_same_size = true;
-    for (size_t i = 1; i < pairs.size(); ++i) {
-      if (sizes[i] != sizes[0]) {
-        all_same_size = false;
-        break;
-      }
-    }
-
-    if (all_same_size && !pairs.empty()) {
-      for (int j = 0; j < sizes[0]; ++j) {
-        for (size_t i = 0; i < pairs.size(); ++i) {
-          products[i] += ptr_a[i][j] * ptr_b[i][j];
-        }
-      }
-    } else {
-      for (size_t i = 0; i < pairs.size(); ++i) {
-        for (int j = 0; j < sizes[i]; ++j) {
-          products[i] += ptr_a[i][j] * ptr_b[i][j];
-        }
-      }
-    }
+    std::vector<double> products = smith::dotMany(pairs);
 
 #ifdef MFEM_USE_MPI
     const MPI_Comm dot_comm = GetComm();
@@ -354,43 +317,47 @@ class TrustRegion : public mfem::NewtonSolver {
     return products;
   }
 
-  /// solve the exact trust-region subspace problem with directions ds, and the leftmosts
-  template <typename HessVecFunc>
-  void solveTheSubspaceProblem([[maybe_unused]] mfem::Vector& z, [[maybe_unused]] const HessVecFunc& hess_vec_func,
-                               [[maybe_unused]] const std::vector<const mfem::Vector*> ds,
-                               [[maybe_unused]] const std::vector<const mfem::Vector*> Hds,
-                               [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta,
-                               [[maybe_unused]] int num_leftmost,
-                               [[maybe_unused]] std::vector<std::shared_ptr<mfem::Vector>>& candidate_left_mosts) const
+  /// build reusable subspace data for line-search retries
+  void prepareSubspaceProblemCache([[maybe_unused]] const std::vector<const mfem::Vector*>& ds,
+                                   [[maybe_unused]] const std::vector<const mfem::Vector*>& Hds,
+                                   [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] int num_leftmost,
+                                   [[maybe_unused]] CachedTrustRegionSubspaceProblem& prepared_subspace) const
   {
+#ifdef MFEM_USE_LAPACK
     SMITH_MARK_FUNCTION;
-    std::vector<const mfem::Vector*> directions;
-    for (auto& d : ds) {
-      directions.emplace_back(d);
-    }
-    for (auto& left : left_mosts) {
-      directions.emplace_back(left.get());
-    }
-
-    std::vector<const mfem::Vector*> H_directions;
-    for (auto& Hd : Hds) {
-      H_directions.emplace_back(Hd);
-    }
-    for (auto& H_left : H_left_mosts) {
-      H_directions.emplace_back(H_left.get());
-    }
+    std::vector<const mfem::Vector*> directions(ds.begin(), ds.end());
+    std::vector<const mfem::Vector*> H_directions(Hds.begin(), Hds.end());
+    for (auto& left : left_mosts) directions.emplace_back(left.get());
+    for (auto& H_left : H_left_mosts) H_directions.emplace_back(H_left.get());
 
     mfem::Vector b(g);
     b *= -1;
 
+    try {
+      prepared_subspace = smith::prepareSubspaceProblem(directions, H_directions, b, num_leftmost);
+    } catch (const std::exception& e) {
+      if (print_level >= 1) {
+        mfem::out << "subspace solve failed with " << e.what() << std::endl;
+      }
+      return;
+    }
+#endif
+  }
+
+  /// solve cached exact trust-region subspace problem for current trust-region size
+  template <typename HessVecFunc>
+  void solvePreparedSubspaceProblem([[maybe_unused]] mfem::Vector& z, [[maybe_unused]] const HessVecFunc& hess_vec_func,
+                                    [[maybe_unused]] const CachedTrustRegionSubspaceProblem& prepared_subspace,
+                                    [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta) const
+  {
+#ifdef MFEM_USE_LAPACK
+    SMITH_MARK_FUNCTION;
     mfem::Vector sol;
-    std::vector<std::shared_ptr<mfem::Vector>> leftvecs;
-    std::vector<double> leftvals;
     double energy_change;
 
     try {
-      std::tie(sol, leftvecs, leftvals, energy_change) =
-          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
+      std::tie(sol, std::ignore, std::ignore, energy_change) =
+          smith::solvePreparedSubspaceProblem(prepared_subspace, delta);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
         mfem::out << "subspace solve failed with " << e.what() << std::endl;
@@ -398,16 +365,11 @@ class TrustRegion : public mfem::NewtonSolver {
       return;
     }
 
-    candidate_left_mosts.clear();
-    for (auto& lv : leftvecs) {
-      candidate_left_mosts.emplace_back(std::move(lv));
-    }
-
     double base_energy = computeEnergy(g, hess_vec_func, z);
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_level >= 2) {
-      double leftval = leftvals.size() ? leftvals[0] : 1.0;
+      double leftval = prepared_subspace.leftvals.size() ? prepared_subspace.leftvals[0] : 1.0;
       mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
                 << energy_change << ".  Min eig: " << leftval << std::endl;
     }
@@ -415,6 +377,7 @@ class TrustRegion : public mfem::NewtonSolver {
     if (subspace_energy < base_energy) {
       z = sol;
     }
+#endif
   }
 
   /// finds tau s.t. (z + tau*(y-z))^2 = trSize^2
@@ -516,12 +479,7 @@ class TrustRegion : public mfem::NewtonSolver {
     print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
     print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
     print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
-    print_level = rootOnlyPrintLevel(print_level
-#ifdef MFEM_USE_MPI
-                                     ,
-                                     GetComm()
-#endif
-    );
+    print_level = rootOnlyPrintLevel(*this, print_level);
 
     using real_t = mfem::real_t;
 
@@ -636,7 +594,13 @@ class TrustRegion : public mfem::NewtonSolver {
 
       bool have_computed_Hvs = false;
       bool have_computed_H_left_mosts = false;
-      std::vector<std::shared_ptr<mfem::Vector>> candidate_left_mosts;
+      bool have_prepared_subspace = false;
+      CachedTrustRegionSubspaceProblem prepared_subspace;
+#ifdef MFEM_USE_LAPACK
+      constexpr bool can_use_subspace_solver = true;
+#else
+      constexpr bool can_use_subspace_solver = false;
+#endif
 
       int lineSearchIter = 0;
       while (lineSearchIter <= nonlinear_options.max_line_search_iterations) {
@@ -652,7 +616,7 @@ class TrustRegion : public mfem::NewtonSolver {
         bool use_with_option2 = (subspace_option >= 2) && (d_norm > (1.0 - 1.0e-6) * tr_size);
         bool use_with_option3 = (subspace_option >= 3);
 
-        if (use_with_option1 || use_with_option2 || use_with_option3) {
+        if (can_use_subspace_solver && (use_with_option1 || use_with_option2 || use_with_option3)) {
           if (!have_computed_Hvs) {
             have_computed_Hvs = true;
 
@@ -687,14 +651,20 @@ class TrustRegion : public mfem::NewtonSolver {
             }
           }
 
-          std::vector<const mfem::Vector*> ds{&trResults.z, &trResults.cauchy_point};
-          std::vector<const mfem::Vector*> H_ds{&trResults.H_z, &trResults.H_cauchy_point};
-          if (trResults.has_d_old) {
-            ds.push_back(&trResults.d_old);
-            H_ds.push_back(&trResults.H_d_old);
+          if (!have_prepared_subspace) {
+            have_prepared_subspace = true;
+
+            std::vector<const mfem::Vector*> ds{&trResults.z, &trResults.cauchy_point};
+            std::vector<const mfem::Vector*> H_ds{&trResults.H_z, &trResults.H_cauchy_point};
+            if (trResults.has_d_old) {
+              ds.push_back(&trResults.d_old);
+              H_ds.push_back(&trResults.H_d_old);
+            }
+
+            prepareSubspaceProblemCache(ds, H_ds, r, num_leftmost, prepared_subspace);
           }
 
-          solveTheSubspaceProblem(trResults.d, hess_vec_func, ds, H_ds, r, tr_size, num_leftmost, candidate_left_mosts);
+          solvePreparedSubspaceProblem(trResults.d, hess_vec_func, prepared_subspace, r, tr_size);
         }
 
         static constexpr double roundOffTol = 0.0;  // 1e-14;
@@ -721,8 +691,8 @@ class TrustRegion : public mfem::NewtonSolver {
         if (normPred <= norm_goal) {
           trResults.d_old = trResults.d;
           trResults.has_d_old = true;
-          if (!candidate_left_mosts.empty()) {
-            left_mosts = std::move(candidate_left_mosts);
+          if (!prepared_subspace.leftmosts.empty()) {
+            left_mosts = prepared_subspace.leftmosts;
           }
           X = x_pred;
           r = r_pred;
@@ -776,8 +746,8 @@ class TrustRegion : public mfem::NewtonSolver {
         if (willAccept) {
           trResults.d_old = trResults.d;
           trResults.has_d_old = true;
-          if (!candidate_left_mosts.empty()) {
-            left_mosts = std::move(candidate_left_mosts);
+          if (!prepared_subspace.leftmosts.empty()) {
+            left_mosts = prepared_subspace.leftmosts;
           }
           X = x_pred;
           r = r_pred;

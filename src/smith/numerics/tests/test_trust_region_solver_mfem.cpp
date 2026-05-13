@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <cmath>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -30,14 +29,6 @@ std::vector<mfem::Vector> applyDiagonalOperator(const mfem::Vector& diag,
     }
   }
   return out;
-}
-
-void expectNearVector(const mfem::Vector& a, const mfem::Vector& b, double tol)
-{
-  ASSERT_EQ(a.Size(), b.Size());
-  for (int i = 0; i < a.Size(); ++i) {
-    EXPECT_NEAR(a[i], b[i], tol);
-  }
 }
 
 std::vector<const mfem::Vector*> toPointers(const std::vector<mfem::Vector>& vectors)
@@ -79,44 +70,12 @@ TEST(TrustRegionSubspaceMfem, SolveHitsTrustRegionBoundary)
   const auto astates = applyDiagonalOperator(fixture.diag, states);
   const auto astate_ptrs = toPointers(astates);
 
-  auto [sol, leftvecs, leftvals, energy] =
-      smith::solveSubspaceProblemMfem(states, astate_ptrs, fixture.b, test_delta, 1);
+  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblem(states, astate_ptrs, fixture.b, test_delta, 1);
 
   EXPECT_NEAR(sol.Norml2(), test_delta, 1.0e-12);
   EXPECT_FALSE(leftvecs.empty());
   EXPECT_EQ(leftvals.size(), 1);
   EXPECT_LT(energy, 0.0);
-}
-
-TEST(TrustRegionSubspaceMfem, GenericSolveUsesMfemBackend)
-{
-  DiagonalSubspaceFixture fixture(test_size);
-
-  const std::vector<const mfem::Vector*> states = {&fixture.u1, &fixture.u2, &fixture.u3, &fixture.u2};
-  const auto astates = applyDiagonalOperator(fixture.diag, states);
-  const auto astate_ptrs = toPointers(astates);
-
-  auto [generic_sol, generic_leftvecs, generic_leftvals, generic_energy] =
-      smith::solveSubspaceProblem(states, astate_ptrs, fixture.b, test_delta, 2);
-  auto [mfem_sol, mfem_leftvecs, mfem_leftvals, mfem_energy] =
-      smith::solveSubspaceProblemMfem(states, astate_ptrs, fixture.b, test_delta, 2);
-
-  expectNearVector(generic_sol, mfem_sol, 1.0e-12);
-  ASSERT_EQ(generic_leftvecs.size(), mfem_leftvecs.size());
-  ASSERT_EQ(generic_leftvals.size(), mfem_leftvals.size());
-  for (size_t i = 0; i < generic_leftvecs.size(); ++i) {
-    const double same = smith::innerProduct(*generic_leftvecs[i], *mfem_leftvecs[i], MPI_COMM_WORLD);
-    mfem::Vector neg(*mfem_leftvecs[i]);
-    neg *= -1.0;
-    const double flipped = smith::innerProduct(*generic_leftvecs[i], neg, MPI_COMM_WORLD);
-    if (std::abs(flipped) > std::abs(same)) {
-      expectNearVector(*generic_leftvecs[i], neg, 1.0e-10);
-    } else {
-      expectNearVector(*generic_leftvecs[i], *mfem_leftvecs[i], 1.0e-10);
-    }
-    EXPECT_NEAR(generic_leftvals[i], mfem_leftvals[i], 1.0e-12);
-  }
-  EXPECT_NEAR(generic_energy, mfem_energy, 1.0e-12);
 }
 
 TEST(TrustRegionSubspaceMfem, SolveHandlesZeroDirection)

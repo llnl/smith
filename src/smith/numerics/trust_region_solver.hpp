@@ -43,6 +43,28 @@ class TrustRegionException : public std::exception {
 using TrustRegionSubspaceResult =
     std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector<double>, double>;
 
+/// Cached reduced trust-region subspace data reusable across trust-region radius updates.
+struct CachedTrustRegionSubspaceProblem {
+  /// zero vector with correct size/layout for empty-subspace returns
+  mfem::Vector zero_solution;
+  /// orthonormalized physical-space basis spanning reduced subspace
+  std::vector<std::shared_ptr<mfem::Vector>> basis;
+  /// reduced Hessian in cached subspace basis
+  mfem::DenseMatrix projected_hessian;
+  /// reduced right-hand side in cached subspace basis
+  mfem::Vector projected_rhs;
+  /// eigenvalues of reduced Hessian
+  mfem::Vector eigenvalues;
+  /// eigenvectors of reduced Hessian
+  mfem::DenseMatrix eigenvectors;
+  /// reduced right-hand side projected onto reduced Hessian eigenvectors
+  mfem::Vector eigen_rhs;
+  /// cached leftmost eigenvectors lifted back to physical space
+  std::vector<std::shared_ptr<mfem::Vector>> leftmosts;
+  /// eigenvalues corresponding to cached leftmost eigenvectors
+  std::vector<double> leftvals;
+};
+
 /// @brief computes the global size of mfem::Vector
 int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm);
 
@@ -58,5 +80,13 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
 TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& directions,
                                                    const std::vector<const mfem::Vector*>& A_directions,
                                                    const mfem::Vector& b, double delta, int num_leftmost);
+
+/// @brief prepares reduced trust-region subspace data reusable across trust-region radius updates
+CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
+                                                        const std::vector<const mfem::Vector*>& A_directions,
+                                                        const mfem::Vector& b, int num_leftmost);
+
+/// @brief solves cached reduced trust-region problem for given trust-region radius
+TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSubspaceProblem& prepared, double delta);
 
 }  // namespace smith

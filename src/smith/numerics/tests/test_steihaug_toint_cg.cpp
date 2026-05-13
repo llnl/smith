@@ -7,20 +7,6 @@
 #include <gtest/gtest.h>
 #include "smith/numerics/steihaug_toint_cg.hpp"
 
-namespace {
-
-std::vector<double> dot_many(const std::vector<smith::DotPair>& pairs)
-{
-  std::vector<double> out;
-  out.reserve(pairs.size());
-  for (const auto& [a, b] : pairs) {
-    out.push_back((*a) * (*b));
-  }
-  return out;
-}
-
-}  // namespace
-
 TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
 {
   int size = 2;
@@ -42,7 +28,8 @@ TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
 
   mfem::Vector rCurrent(size);
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), dot_many);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(),
+                         smith::dotMany);
 
   // Solution should be H^{-1} (-r0)
   // x = -0.5, y = -0.25
@@ -69,7 +56,8 @@ TEST(SteihaugTointCG, HitsBoundary)
 
   mfem::Vector rCurrent(size);
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), dot_many);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(),
+                         smith::dotMany);
 
   EXPECT_NEAR(results.z.Norml2(), 0.5, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::OnBoundary);
@@ -93,7 +81,8 @@ TEST(SteihaugTointCG, DetectsNegativeCurvature)
 
   mfem::Vector rCurrent(size);
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), dot_many);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(),
+                         smith::dotMany);
 
   // For negative curvature, it should go to boundary
   EXPECT_NEAR(results.z.Norml2(), 2.0, 1e-9);

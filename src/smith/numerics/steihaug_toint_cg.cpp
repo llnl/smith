@@ -20,6 +20,16 @@ void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double d
 
 }  // namespace
 
+std::vector<double> dotMany(const std::vector<DotPair>& pairs)
+{
+  std::vector<double> products(pairs.size(), 0.0);
+  for (size_t i = 0; i < pairs.size(); ++i) {
+    MFEM_ASSERT(pairs[i].first->Size() == pairs[i].second->Size(), "Incompatible vector sizes.");
+    products[i] = (*pairs[i].first) * (*pairs[i].second);
+  }
+  return products;
+}
+
 void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
                      const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
                      double r0_norm_squared, const DotManyFunction& dot_many)
