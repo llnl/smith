@@ -28,7 +28,7 @@ namespace smith {
 
 /// Sentinel: no time integration rule (used for parameter-only packs).
 struct NoTimeRule {
-  static constexpr int num_states = 0;
+  static constexpr int num_states = 0;  ///< Number of states.
 };
 
 /**
@@ -40,13 +40,14 @@ struct NoTimeRule {
  */
 template <int Dim, int Order, typename TimeRule, typename... Spaces>
 struct PhysicsFields {
-  using time_rule_type = TimeRule;
-  static constexpr int dim = Dim;
-  static constexpr int order = Order;
-  static constexpr std::size_t num_fields = sizeof...(Spaces);
-  std::shared_ptr<FieldStore> field_store;
-  std::tuple<FieldType<Spaces>...> fields;
+  using time_rule_type = TimeRule;                              ///< The time integration rule type.
+  static constexpr int dim = Dim;                               ///< Spatial dimension.
+  static constexpr int order = Order;                           ///< Spatial order.
+  static constexpr std::size_t num_fields = sizeof...(Spaces);  ///< Number of fields.
+  std::shared_ptr<FieldStore> field_store;                      ///< Pointer to the field store.
+  std::tuple<FieldType<Spaces>...> fields;                      ///< The fields.
 
+  /// Constructor
   PhysicsFields(std::shared_ptr<FieldStore> fs, FieldType<Spaces>... f)
       : field_store(std::move(fs)), fields(std::move(f)...)
   {
@@ -61,12 +62,14 @@ struct PhysicsFields {
  */
 template <typename... Spaces>
 struct CouplingParams {
-  using time_rule_type = NoTimeRule;
-  static constexpr std::size_t num_fields = sizeof...(Spaces);
-  std::tuple<FieldType<Spaces>...> fields;
+  using time_rule_type = NoTimeRule;                            ///< Time rule type (none).
+  static constexpr std::size_t num_fields = sizeof...(Spaces);  ///< Number of fields.
+  std::tuple<FieldType<Spaces>...> fields;                      ///< The fields.
+  /// Constructor
   CouplingParams(FieldType<Spaces>... fs) : fields(std::move(fs)...) {}
 };
 
+/// Deduction guide for CouplingParams
 template <typename... Spaces>
 CouplingParams(FieldType<Spaces>...) -> CouplingParams<Spaces...>;
 
@@ -78,9 +81,10 @@ CouplingParams(FieldType<Spaces>...) -> CouplingParams<Spaces...>;
  */
 template <typename... PFs>
 struct CouplingFields {
-  std::tuple<PFs...> packs;
+  std::tuple<PFs...> packs;  ///< The coupling packs.
 };
 
+/// Helper to construct a CouplingFields bundle
 template <typename... PFs>
 auto couplingFields(const PFs&... pfs)
 {
@@ -104,6 +108,7 @@ struct is_physics_fields_impl : std::false_type {};
 template <int D, int O, typename R, typename... S>
 struct is_physics_fields_impl<PhysicsFields<D, O, R, S...>> : std::true_type {};
 
+/// @brief True if T is a PhysicsFields type.
 template <typename T>
 inline constexpr bool is_physics_fields_v = is_physics_fields_impl<std::decay_t<T>>::value;
 
@@ -113,6 +118,7 @@ struct is_parameter_pack_impl : std::false_type {};
 template <typename... S>
 struct is_parameter_pack_impl<CouplingParams<S...>> : std::true_type {};
 
+/// @brief True if T is a CouplingParams type.
 template <typename T>
 inline constexpr bool is_parameter_pack_v = is_parameter_pack_impl<std::decay_t<T>>::value;
 
@@ -122,6 +128,7 @@ struct is_coupling_fields_impl : std::false_type {};
 template <typename... PFs>
 struct is_coupling_fields_impl<CouplingFields<PFs...>> : std::true_type {};
 
+/// @brief True if T is a CouplingFields type.
 template <typename T>
 inline constexpr bool is_coupling_fields_v = is_coupling_fields_impl<std::decay_t<T>>::value;
 
@@ -132,12 +139,15 @@ struct is_coupling_packs_impl : std::false_type {};
 template <typename... Packs>
 struct is_coupling_packs_impl<std::tuple<Packs...>> : std::true_type {};
 
+/// @brief True if T is a tuple of coupling packs.
 template <typename T>
 inline constexpr bool is_coupling_packs_v = is_coupling_packs_impl<std::decay_t<T>>::value;
 
+/// @brief Base case: T does not have a time rule.
 template <typename T, typename = void>
 inline constexpr bool has_time_rule_v = false;
 
+/// @brief True if T is a PhysicsFields with a time rule other than NoTimeRule.
 template <typename T>
 inline constexpr bool has_time_rule_v<T, std::enable_if_t<is_physics_fields_v<T>>> =
     !std::is_same_v<typename std::decay_t<T>::time_rule_type, NoTimeRule>;
@@ -163,20 +173,24 @@ inline constexpr bool trailing_coupling_args_valid_v = [] {
 // Trailing-arg extraction
 // -------------------------------------------------------------------------
 
+/// @brief Check if Trailing arguments contain CouplingFields.
 template <typename... Trailing>
 constexpr bool hasCouplingFields()
 {
   return ((is_coupling_fields_v<Trailing>) || ...);
 }
 
+/// @brief Check if Trailing arguments contain CouplingParams.
 template <typename... Trailing>
 constexpr bool hasParamPack()
 {
   return ((is_parameter_pack_v<Trailing>) || ...);
 }
 
+/// @brief Base case for extracting coupling packs (empty).
 inline auto extractCouplingPacks() { return std::tuple<>{}; }
 
+/// @brief Extract the tuple of coupling packs from Trailing arguments.
 template <typename First, typename... Rest>
 auto extractCouplingPacks(const First& first, const Rest&... rest)
 {
@@ -187,6 +201,7 @@ auto extractCouplingPacks(const First& first, const Rest&... rest)
   }
 }
 
+/// @brief Qualify parameters by prefixing their names.
 template <typename... Spaces>
 auto qualifyParams(const std::shared_ptr<FieldStore>& fs, const CouplingParams<Spaces...>& pack)
 {
@@ -222,8 +237,10 @@ void registerParamsIfNeeded(std::shared_ptr<FieldStore> fs, const Trailing&... t
   (register_one(trailing), ...);
 }
 
+/// @brief Base case for extracting qualified parameter pack (empty).
 inline auto extractParamPackQualified(const std::shared_ptr<FieldStore>& /*fs*/) { return std::tuple<>{}; }
 
+/// @brief Extract qualified parameter pack.
 template <typename First, typename... Rest>
 auto extractParamPackQualified(const std::shared_ptr<FieldStore>& fs, const First& first, const Rest&... rest)
 {
@@ -241,6 +258,7 @@ auto flattenCouplingFields(const PacksTuple& packs)
   return std::apply([](const auto&... pack) { return std::tuple_cat(pack.fields...); }, packs);
 }
 
+/// @brief Collect all coupling fields and parameter packs.
 template <typename... Trailing>
 auto collectCouplingFields(const std::shared_ptr<FieldStore>& fs, const Trailing&... trailing)
 {
@@ -253,6 +271,7 @@ auto collectCouplingFields(const std::shared_ptr<FieldStore>& fs, const Trailing
 // Time-rule interpolation
 // -------------------------------------------------------------------------
 
+/// @brief Implementation of time rule prefix application.
 template <typename Rule, typename TimeInfoT, typename ArgsTuple, typename Callback, std::size_t... StateIs,
           std::size_t... TailIs>
 decltype(auto) applyTimeRuleToPrefixImpl(const Rule& rule, const TimeInfoT& t_info, const ArgsTuple& raw_args,
@@ -268,6 +287,7 @@ decltype(auto) applyTimeRuleToPrefixImpl(const Rule& rule, const TimeInfoT& t_in
       interpolated);
 }
 
+/// @brief Apply time rule interpolation to the leading prefix of raw arguments.
 template <typename Rule, typename TimeInfoT, typename Callback, typename... RawArgs>
 decltype(auto) applyTimeRuleToPrefix(const Rule& rule, const TimeInfoT& t_info, Callback&& callback,
                                      const RawArgs&... raw_args)
@@ -280,6 +300,7 @@ decltype(auto) applyTimeRuleToPrefix(const Rule& rule, const TimeInfoT& t_info, 
                                    std::make_index_sequence<tail_count>{});
 }
 
+/// @brief Evaluate a single coupling pack's time rule.
 template <std::size_t Offset, typename Pack, typename TimeInfoT, typename RawTuple, std::size_t... Is>
 auto evaluateCouplingPack(const Pack& /*pack*/, const TimeInfoT& t_info, const RawTuple& raw_args,
                           std::index_sequence<Is...>)
@@ -293,6 +314,7 @@ auto evaluateCouplingPack(const Pack& /*pack*/, const TimeInfoT& t_info, const R
   }
 }
 
+/// @brief Evaluate all coupling packs over their corresponding raw arguments.
 template <std::size_t I, std::size_t Offset, typename PacksTuple, typename TimeInfoT, typename RawTuple>
 auto evaluateCouplingPacks(const PacksTuple& packs, const TimeInfoT& t_info, const RawTuple& raw_args)
 {
@@ -307,6 +329,7 @@ auto evaluateCouplingPacks(const PacksTuple& packs, const TimeInfoT& t_info, con
   }
 }
 
+/// @brief Interpolate coupling packs and invoke the callback.
 template <typename PacksTuple, typename TimeInfoT, typename Callback, typename... RawArgs>
 decltype(auto) applyCouplingTimeRules(const PacksTuple& packs, const TimeInfoT& t_info, Callback&& callback,
                                       const RawArgs&... raw_args)
@@ -350,10 +373,11 @@ decltype(auto) applyTimeRuleAndCoupling(const Rule& rule, const Coupling& coupli
 // Type-level coupling-space extraction (used by weak-form parameter type computation)
 // -------------------------------------------------------------------------
 
-/// Flatten a `tuple<Packs...>` type into `Parameters<all_pack_spaces...>`.
+/// @brief Flatten a `tuple<Packs...>` type into `Parameters<all_pack_spaces...>`.
 template <typename PacksTuple>
 struct FlattenCoupling;
 
+/// @brief Specialization of FlattenCoupling for a tuple of coupling packs.
 template <typename... Packs>
 struct FlattenCoupling<std::tuple<Packs...>> {
  private:
@@ -384,27 +408,33 @@ struct FlattenCoupling<std::tuple<Packs...>> {
   };
 
  public:
-  using parameters = typename concat<typename pack_spaces<std::decay_t<Packs>>::type...>::type;
+  using parameters =
+      typename concat<typename pack_spaces<std::decay_t<Packs>>::type...>::type;  ///< Flattened parameter spaces.
 };
 
+/// @brief Typedef for flattened coupling parameter spaces.
 template <typename PacksTuple>
 using flatten_coupling_t = typename FlattenCoupling<std::decay_t<PacksTuple>>::parameters;
 
-/// `Parameters<Space, packed_coupling_spaces...>` for a weak form's parameter list.
+/// @brief Type trait to construct `Parameters<Space, packed_coupling_spaces...>` for a weak form's parameter list.
 template <typename Rule, typename Space, typename PacksTuple>
 struct TimeRuleParamsImpl;
 
+/// @brief Specialization of TimeRuleParamsImpl.
 template <typename Rule, typename Space, typename... CS>
 struct TimeRuleParamsImpl<Rule, Space, Parameters<CS...>> {
-  using type = smith::TimeRuleParams<Rule, Space, CS...>;
+  using type = smith::TimeRuleParams<Rule, Space, CS...>;  ///< The constructed TimeRuleParams type.
 };
 
+/// @brief Typedef for TimeRuleParams.
 template <typename Rule, typename Space, typename PacksTuple>
 using TimeRuleParams = typename TimeRuleParamsImpl<Rule, Space, flatten_coupling_t<PacksTuple>>::type;
 
+/// @brief Type trait to append coupling parameter spaces to fixed parameters.
 template <typename PacksTuple, typename FixedParams>
 struct AppendCouplingToParams;
 
+/// @brief Specialization of AppendCouplingToParams.
 template <typename PacksTuple, typename... Fixed>
 struct AppendCouplingToParams<PacksTuple, Parameters<Fixed...>> {
  private:
@@ -416,7 +446,7 @@ struct AppendCouplingToParams<PacksTuple, Parameters<Fixed...>> {
   };
 
  public:
-  using type = typename expand<flatten_coupling_t<PacksTuple>>::type;
+  using type = typename expand<flatten_coupling_t<PacksTuple>>::type;  ///< The appended parameter list.
 };
 
 }  // namespace detail

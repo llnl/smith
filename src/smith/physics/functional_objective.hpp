@@ -81,6 +81,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
         mesh_->domain(body_name));
   }
 
+  /// @brief Add a body integral to the objective function.
   template <typename FuncOfTimeSpaceAndParams>
   void addBodyIntegral(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction)
   {
@@ -108,6 +109,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
         mesh_->domain(boundary_name));
   }
 
+  /// @brief Add a boundary integral to the objective function.
   template <typename FuncOfTimeSpaceAndParams>
   void addBoundaryIntegral(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction)
   {

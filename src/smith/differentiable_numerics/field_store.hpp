@@ -45,7 +45,7 @@ struct ReactionInfo {
  */
 template <typename Space, typename Time = void*>
 struct FieldType {
-  using space_type = Space;
+  using space_type = Space;  ///< The finite element space type.
 
   /**
    * @brief Construct a new FieldType object.
@@ -354,6 +354,7 @@ struct FieldStore {
   std::vector<const BoundaryConditionManager*> getBoundaryConditionManagers(
       const std::vector<std::string>& weak_form_names) const;
 
+  /// @brief Get ordered boundary condition managers corresponding to an ordered list of fields.
   std::vector<const BoundaryConditionManager*> getBoundaryConditionManagersForFields(
       const std::vector<std::string>& field_names) const;
 

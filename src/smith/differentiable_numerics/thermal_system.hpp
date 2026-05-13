@@ -205,6 +205,7 @@ auto registerThermalFields(std::shared_ptr<FieldStore> field_store,
  */
 namespace detail {
 
+/// @brief Internal thermal builder after coupling fields are assembled.
 template <int dim, int temp_order, typename TemperatureTimeRule, typename Coupling>
   requires detail::is_coupling_packs_v<Coupling>
 auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
