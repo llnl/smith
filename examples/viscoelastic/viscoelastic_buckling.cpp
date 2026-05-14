@@ -158,8 +158,6 @@ int main(int argc, char* argv[])
   smith::FiniteElementState temperature(mesh->mfemParMesh(), smith::L2<0>{}, "temperature");
   temperature = 300.0;
 
-  std::cout << "Nonlinear solver = " << nonlinear_options.nonlin_solver << std::endl;
-
   // Create solver
   smith::SolidMechanics<p, dim, smith::Parameters<smith::L2<0>>> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name,
@@ -243,7 +241,7 @@ int main(int argc, char* argv[])
       R += reaction(force_dof_list[i]);
     }
     double total;
-    MPI_Allreduce(&R, &total, ranks, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Reduce(&R, &total, ranks, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     return total;
   };
 
@@ -254,11 +252,13 @@ int main(int argc, char* argv[])
                                            mesh->domain("top"));
   
   std::ofstream file("force_displacement.csv");
-  if (rank == 0)  {
-    file << "# time displacement force\n";
+  file << "# time displacement force\n";
+  {
     double u = applied_displacement(solid_solver.time(), solid_solver.displacement());
     double f = compute_net_force(solid_solver.dual("reactions"));
-    file << solid_solver.time() << " " << u << " " << f << std::endl;
+    if (rank == 0)  {
+      file << solid_solver.time() << " " << u << " " << f << std::endl;
+    }
   }
 
 
