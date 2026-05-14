@@ -4,9 +4,9 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <set>

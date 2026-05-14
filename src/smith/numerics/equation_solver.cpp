@@ -5,8 +5,11 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "smith/numerics/equation_solver.hpp"
+#include "smith/numerics/steihaug_toint_cg.hpp"
 
+#include <array>
 #include <cstdlib>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <algorithm>
@@ -15,6 +18,7 @@
 #include <limits>
 #include <string>
 #include <tuple>
+#include <utility>
 
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/profiling.hpp"
@@ -22,6 +26,25 @@
 #include "smith/infrastructure/logger.hpp"
 
 namespace smith {
+
+namespace {
+
+size_t rootOnlyPrintLevel(const mfem::NewtonSolver& solver, size_t level)
+{
+#ifdef MFEM_USE_MPI
+  const MPI_Comm comm = solver.GetComm();
+  if (level > 0 && comm != MPI_COMM_NULL) {
+    int rank = 0;
+    MPI_Comm_rank(comm, &rank);
+    if (rank != 0) {
+      return 0;
+    }
+  }
+#endif
+  return level;
+}
+
+}  // namespace
 
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
 class NewtonSolver : public mfem::NewtonSolver {
@@ -92,8 +115,10 @@ class NewtonSolver : public mfem::NewtonSolver {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
 
-    print_level = print_options.iterations ? 1 : print_level;
-    print_level = print_options.summary ? 2 : print_level;
+    print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
+    print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
+    print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
+    print_level = rootOnlyPrintLevel(*this, print_level);
 
     using real_t = mfem::real_t;
 
@@ -214,94 +239,12 @@ class NewtonSolver : public mfem::NewtonSolver {
   }
 };
 
-/// Internal structure for storing trust region settings
-struct TrustRegionSettings {
-  /// cg tol
-  double cg_tol = 1e-8;
-  /// min cg iters
-  size_t min_cg_iterations = 0;  //
-  /// max cg iters should be around # of system dofs
-  size_t max_cg_iterations = 10000;  //
-  /// max cumulative iterations
-  size_t max_cumulative_iteration = 1;
-  /// minimum trust region size
-  double min_tr_size = 1e-13;
-  /// trust region decrease factor
-  double t1 = 0.25;
-  /// trust region increase factor
-  double t2 = 1.75;
-  /// worse case energy drop ratio.  trust region accepted if energy drop is better than this.
-  double eta1 = 1e-9;
-  /// non-ideal energy drop ratio.  trust region decreases if energy drop is worse than this.
-  double eta2 = 0.1;
-  /// ideal energy drop ratio.  trust region increases if energy drop is better than this.
-  double eta3 = 0.6;
-  /// parameter limiting how fast the energy can drop relative to the prediction (in case the energy surrogate is poor)
-  double eta4 = 4.2;
-};
-
-/// Internal structure for storing trust region stateful data
-struct TrustRegionResults {
-  /// Constructor takes the size of the solution vector
-  TrustRegionResults(int size)
-  {
-    z.SetSize(size);
-    H_z.SetSize(size);
-    d_old.SetSize(size);
-    H_d_old.SetSize(size);
-    d.SetSize(size);
-    H_d.SetSize(size);
-    Pr.SetSize(size);
-    cauchy_point.SetSize(size);
-    H_cauchy_point.SetSize(size);
-  }
-
-  /// resets trust region results for a new outer iteration
-  void reset()
-  {
-    z = 0.0;
-    cauchy_point = 0.0;
-  }
-
-  /// enumerates the possible final status of the trust region steps
-  enum class Status
-  {
-    Interior,
-    NegativeCurvature,
-    OnBoundary,
-    NonDescentDirection
-  };
-
-  /// step direction
-  mfem::Vector z;
-  /// action of hessian on current step z
-  mfem::Vector H_z;
-  /// old step direction
-  mfem::Vector d_old;
-  /// action of hessian on previous step z_old
-  mfem::Vector H_d_old;
-  /// incrementalCG direction
-  mfem::Vector d;
-  /// action of hessian on direction d
-  mfem::Vector H_d;
-  /// preconditioned residual
-  mfem::Vector Pr;
-  /// cauchy point
-  mfem::Vector cauchy_point;
-  /// action of hessian on direction of cauchy point
-  mfem::Vector H_cauchy_point;
-  /// specifies if step is interior, exterior, negative curvature, etc.
-  Status interior_status = Status::Interior;
-  /// iteration counter
-  size_t cg_iterations_count = 0;
-};
-
 /// trust region printing utility function
-void printTrustRegionInfo(double realObjective, double modelObjective, size_t cgIters, double trSize, bool willAccept)
+void printTrustRegionInfo(double realWork, double modelObjective, size_t cgIters, double trSize, bool willAccept)
 {
-  mfem::out << "real energy = " << std::setw(13) << realObjective << ", model energy = " << std::setw(13)
-            << modelObjective << ", cg iter = " << std::setw(7) << cgIters << ", next tr size = " << std::setw(8)
-            << trSize << ", accepting = " << willAccept << std::endl;
+  mfem::out << "real work = " << std::setw(13) << realWork << ", model energy = " << std::setw(13) << modelObjective
+            << ", cg iter = " << std::setw(7) << cgIters << ", next tr size = " << std::setw(8) << trSize
+            << ", accepting = " << willAccept << std::endl;
 }
 
 /**
@@ -339,17 +282,6 @@ class TrustRegion : public mfem::NewtonSolver {
   mutable size_t print_level = 0;
 
  public:
-  /// internal counter for hess-vecs
-  mutable size_t num_hess_vecs = 0;
-  /// internal counter for preconditions
-  mutable size_t num_preconds = 0;
-  /// internal counter for residuals
-  mutable size_t num_residuals = 0;
-  /// internal counter for subspace solves
-  mutable size_t num_subspace_solves = 0;
-  /// internal counter for matrix assembles
-  mutable size_t num_jacobian_assembles = 0;
-
 #ifdef MFEM_USE_MPI
   /// constructor
   TrustRegion(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts,
@@ -359,82 +291,85 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 #endif
 
-  /// finds tau s.t. (z + tau*d)^2 = trSize^2
-  void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
-                                  double dd) const
+  /// compute several vector inner products with a single MPI reduction when possible
+  std::vector<double> dot_many(const std::vector<DotPair>& pairs) const
   {
-    // find z + tau d
-    double deltadelta_m_zz = delta * delta - zz;
-    if (deltadelta_m_zz == 0) return;  // already on boundary
-    double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
-    z.Add(tau, d);
+    if (dot_oper) {
+      std::vector<double> products(pairs.size(), 0.0);
+      for (size_t i = 0; i < pairs.size(); ++i) {
+        products[i] = Dot(*pairs[i].first, *pairs[i].second);
+      }
+      return products;
+    }
+
+    std::vector<double> products = smith::dotMany(pairs);
+
+#ifdef MFEM_USE_MPI
+    const MPI_Comm dot_comm = GetComm();
+    if (dot_comm != MPI_COMM_NULL) {
+      std::vector<mfem::real_t> global_products(pairs.size());
+      MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T, MPI_SUM,
+                    dot_comm);
+      products.assign(global_products.begin(), global_products.end());
+    }
+#endif
+
+    return products;
   }
 
-  /// solve the exact trust-region subspace problem with directions ds, and the leftmosts
-  template <typename HessVecFunc>
-  void solveTheSubspaceProblem([[maybe_unused]] mfem::Vector& z, [[maybe_unused]] const HessVecFunc& hess_vec_func,
-                               [[maybe_unused]] const std::vector<const mfem::Vector*> ds,
-                               [[maybe_unused]] const std::vector<const mfem::Vector*> Hds,
-                               [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta,
-                               [[maybe_unused]] int num_leftmost) const
+  /// build reusable subspace data for line-search retries
+  void prepareSubspaceProblemCache([[maybe_unused]] const std::vector<const mfem::Vector*>& ds,
+                                   [[maybe_unused]] const std::vector<const mfem::Vector*>& Hds,
+                                   [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] int num_leftmost,
+                                   [[maybe_unused]] CachedTrustRegionSubspaceProblem& prepared_subspace) const
   {
-#ifdef SMITH_USE_SLEPC
+#ifdef MFEM_USE_LAPACK
     SMITH_MARK_FUNCTION;
-    ++num_subspace_solves;
-
-    std::vector<const mfem::Vector*> directions;
-    for (auto& d : ds) {
-      directions.emplace_back(d);
-    }
-    for (auto& left : left_mosts) {
-      directions.emplace_back(left.get());
-    }
-
-    std::vector<const mfem::Vector*> H_directions;
-    for (auto& Hd : Hds) {
-      H_directions.emplace_back(Hd);
-    }
-    for (auto& H_left : H_left_mosts) {
-      H_directions.emplace_back(H_left.get());
-    }
-
-    try {
-      std::tie(directions, H_directions) = removeDependentDirections(directions, H_directions);
-    } catch (const std::exception& e) {
-      if (print_level >= 2) {
-        mfem::out << "remove dependent directions failed with " << e.what() << std::endl;
-      }
-      return;
-    }
+    std::vector<const mfem::Vector*> directions(ds.begin(), ds.end());
+    std::vector<const mfem::Vector*> H_directions(Hds.begin(), Hds.end());
+    for (auto& left : left_mosts) directions.emplace_back(left.get());
+    for (auto& H_left : H_left_mosts) H_directions.emplace_back(H_left.get());
 
     mfem::Vector b(g);
     b *= -1;
 
-    mfem::Vector sol;
-    std::vector<std::shared_ptr<mfem::Vector>> leftvecs;
-    std::vector<double> leftvals;
-    double energy_change;
-
     try {
-      std::tie(sol, leftvecs, leftvals, energy_change) =
-          solveSubspaceProblem(directions, H_directions, b, delta, num_leftmost);
+      prepared_subspace = smith::prepareSubspaceProblem(directions, H_directions, b, num_leftmost);
     } catch (const std::exception& e) {
-      if (print_level == 1) {
+      if (print_level >= 1) {
         mfem::out << "subspace solve failed with " << e.what() << std::endl;
       }
       return;
     }
+#endif
+  }
 
-    left_mosts.clear();
-    for (auto& lv : leftvecs) {
-      left_mosts.emplace_back(std::move(lv));
+  /// solve cached exact trust-region subspace problem for current trust-region size
+  template <typename HessVecFunc>
+  void solvePreparedSubspaceProblem([[maybe_unused]] mfem::Vector& z, [[maybe_unused]] const HessVecFunc& hess_vec_func,
+                                    [[maybe_unused]] const CachedTrustRegionSubspaceProblem& prepared_subspace,
+                                    [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta) const
+  {
+#ifdef MFEM_USE_LAPACK
+    SMITH_MARK_FUNCTION;
+    mfem::Vector sol;
+    double energy_change;
+
+    try {
+      std::tie(sol, std::ignore, std::ignore, energy_change) =
+          smith::solvePreparedSubspaceProblem(prepared_subspace, delta);
+    } catch (const std::exception& e) {
+      if (print_level >= 1) {
+        mfem::out << "subspace solve failed with " << e.what() << std::endl;
+      }
+      return;
     }
 
     double base_energy = computeEnergy(g, hess_vec_func, z);
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_level >= 2) {
-      double leftval = leftvals.size() ? leftvals[0] : 1.0;
+      double leftval = prepared_subspace.leftvals.size() ? prepared_subspace.leftvals[0] : 1.0;
       mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
                 << energy_change << ".  Min eig: " << leftval << std::endl;
     }
@@ -460,9 +395,9 @@ class TrustRegion : public mfem::NewtonSolver {
   void doglegStep(const mfem::Vector& cp, const mfem::Vector& newtonP, double trSize, mfem::Vector& s) const
   {
     SMITH_MARK_FUNCTION;
-    // MRT, could optimize some of these eventually, compute on the outside and save
-    double cc = Dot(cp, cp);
-    double nn = Dot(newtonP, newtonP);
+    const auto dots = dot_many({{&cp, &cp}, {&newtonP, &newtonP}});
+    const double cc = dots[0];
+    const double nn = dots[1];
     double tt = trSize * trSize;
 
     s = 0.0;
@@ -495,109 +430,18 @@ class TrustRegion : public mfem::NewtonSolver {
   }
 
   /// Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
-  template <typename HessVecFunc, typename PrecondFunc>
-  void solveTrustRegionModelProblem(const mfem::Vector& r0, mfem::Vector& rCurrent, HessVecFunc hess_vec_func,
-                                    PrecondFunc precond, const TrustRegionSettings& settings, double& trSize,
-                                    TrustRegionResults& results) const
+  void solveModelProblem(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
+                         const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
+                         double r0_norm_squared) const
   {
-    SMITH_MARK_FUNCTION;
-    // minimize r0@z + 0.5*z@J@z
-    results.interior_status = TrustRegionResults::Status::Interior;
-    results.cg_iterations_count = 0;
-
-    auto& z = results.z;
-    auto& cgIter = results.cg_iterations_count;
-    auto& d = results.d;
-    auto& Pr = results.Pr;
-    auto& Hd = results.H_d;
-
-    const double cg_tol_squared = settings.cg_tol * settings.cg_tol;
-
-    if (Dot(r0, r0) <= cg_tol_squared && settings.min_cg_iterations == 0) {
-      if (print_level >= 2) {
-        mfem::out << "Trust region solution state within tolerance on first iteration."
-                  << "\n";
-      }
-      return;
-    }
-
-    rCurrent = r0;
-    precond(rCurrent, Pr);
-
-    // d = -Pr
-    d = Pr;
-    d *= -1.0;
-
-    z = 0.0;
-    double zz = 0.;
-    double rPr = Dot(rCurrent, Pr);
-    double zd = 0.0;
-    double dd = Dot(d, d);
-
-    // std::cout << "initial energy = " << computeEnergy(r0, hess_vec_func, z) << std::endl;
-
-    for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
-      // check if this is a descent direction
-      if (Dot(d, rCurrent) > 0) {
-        d *= -1;
-        results.interior_status = TrustRegionResults::Status::NonDescentDirection;
-      }
-
-      hess_vec_func(d, Hd);
-      const double curvature = Dot(d, Hd);
-      const double alphaCg = curvature != 0.0 ? rPr / curvature : 0.0;
-
-      auto& zPred = Pr;  // re-use Pr memory.
-                         // This predicted step will no longer be used by the time Pr is, so we can avoid an extra
-                         // vector floating around
-      add(z, alphaCg, d, zPred);
-      double zzNp1 = Dot(zPred, zPred);
-
-      const bool go_to_boundary = curvature <= 0 || zzNp1 >= trSize * trSize;
-      if (go_to_boundary) {
-        projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
-        if (curvature <= 0) {
-          results.interior_status = TrustRegionResults::Status::NegativeCurvature;
-        } else {
-          results.interior_status = TrustRegionResults::Status::OnBoundary;
-        }
-        return;
-      }
-
-      z = zPred;
-
-      if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
-        if (print_level >= 2) {
-          mfem::out << "Found a non descent direction\n";
-        }
-        return;
-      }
-
-      add(rCurrent, alphaCg, Hd, rCurrent);
-
-      precond(rCurrent, Pr);
-      double rPrNp1 = Dot(rCurrent, Pr);
-
-      if (Dot(rCurrent, rCurrent) <= cg_tol_squared && cgIter >= settings.min_cg_iterations) {
-        return;
-      }
-
-      double beta = rPrNp1 / rPr;
-      rPr = rPrNp1;
-      add(-1.0, Pr, beta, d, d);
-
-      zz = zzNp1;
-      zd = Dot(z, d);
-      dd = Dot(d, d);
-    }
-    cgIter--;  // if all cg iterations are taken, correct for output
+    auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
+    steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda);
   }
 
   /// assemble the jacobian
   void assembleJacobian(const mfem::Vector& x) const
   {
     SMITH_MARK_FUNCTION;
-    ++num_jacobian_assembles;
     grad = &oper->GetGradient(x);
     if (nonlinear_options.force_monolithic) {
       auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
@@ -609,16 +453,14 @@ class TrustRegion : public mfem::NewtonSolver {
   mfem::real_t computeResidual(const mfem::Vector& x_, mfem::Vector& r_) const
   {
     SMITH_MARK_FUNCTION;
-    ++num_residuals;
     oper->Mult(x_, r_);
     return Norm(r_);
   }
 
-  /// apply the action of the assembled Jacobian matrix to a vector
+  /// apply the action of the current Jacobian representation to a vector
   void hessVec(const mfem::Vector& x_, mfem::Vector& v_) const
   {
     SMITH_MARK_FUNCTION;
-    ++num_hess_vecs;
     grad->Mult(x_, v_);
   }
 
@@ -626,26 +468,20 @@ class TrustRegion : public mfem::NewtonSolver {
   void precond(const mfem::Vector& x_, mfem::Vector& v_) const
   {
     SMITH_MARK_FUNCTION;
-    ++num_preconds;
     tr_precond.Mult(x_, v_);
   };
 
   /// @overload
-  void Mult(const mfem::Vector&, mfem::Vector& X) const
+  void Mult(const mfem::Vector&, mfem::Vector& X) const override
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
-
-    print_level = print_options.iterations ? 1 : print_level;
-    print_level = print_options.summary ? 2 : print_level;
+    print_level = static_cast<size_t>(std::max(nonlinear_options.print_level, 0));
+    print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
+    print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
+    print_level = rootOnlyPrintLevel(*this, print_level);
 
     using real_t = mfem::real_t;
-
-    num_hess_vecs = 0;
-    num_preconds = 0;
-    num_residuals = 0;
-    num_subspace_solves = 0;
-    num_jacobian_assembles = 0;
 
     real_t norm, norm_goal = 0.0;
     norm = initial_norm = computeResidual(X, r);
@@ -718,23 +554,25 @@ class TrustRegion : public mfem::NewtonSolver {
       }
 
       auto hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { hessVec(x_, v_); };
-      auto precond_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { precond(x_, v_); };
 
       double cauchyPointNormSquared = tr_size * tr_size;
       trResults.reset();
 
-      hess_vec_func(r, trResults.H_d);
-      const double gKg = Dot(r, trResults.H_d);
-      if (gKg > 0) {
-        const double alphaCp = -Dot(r, r) / gKg;
-        add(trResults.cauchy_point, alphaCp, r, trResults.cauchy_point);
-        cauchyPointNormSquared = Dot(trResults.cauchy_point, trResults.cauchy_point);
-      } else {
-        const double alphaTr = -tr_size / std::sqrt(Dot(r, r));
-        add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
-        if (print_level >= 2) {
-          mfem::out << "Negative curvature un-preconditioned cauchy point direction found."
-                    << "\n";
+      {
+        hess_vec_func(r, trResults.H_d);
+        const double gKg = Dot(r, trResults.H_d);
+        const double residual_norm_squared = norm * norm;
+        if (gKg > 0) {
+          const double alphaCp = -residual_norm_squared / gKg;
+          add(trResults.cauchy_point, alphaCp, r, trResults.cauchy_point);
+          cauchyPointNormSquared = Dot(trResults.cauchy_point, trResults.cauchy_point);
+        } else {
+          const double alphaTr = -tr_size / norm;
+          add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
+          if (print_level >= 2) {
+            mfem::out << "Negative curvature un-preconditioned cauchy point direction found."
+                      << "\n";
+          }
         }
       }
 
@@ -750,49 +588,92 @@ class TrustRegion : public mfem::NewtonSolver {
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
         settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
-        solveTrustRegionModelProblem(r, scratch, hess_vec_func, precond_func, settings, tr_size, trResults);
+        solveModelProblem(r, scratch, *grad, &this->tr_precond, settings, tr_size, trResults, norm * norm);
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
 
       bool have_computed_Hvs = false;
+      bool have_computed_H_left_mosts = false;
+      bool have_prepared_subspace = false;
+      CachedTrustRegionSubspaceProblem prepared_subspace;
+#ifdef MFEM_USE_LAPACK
+      constexpr bool can_use_subspace_solver = true;
+#else
+      constexpr bool can_use_subspace_solver = false;
+#endif
 
       int lineSearchIter = 0;
       while (lineSearchIter <= nonlinear_options.max_line_search_iterations) {
         ++lineSearchIter;
 
         doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
-
+        const bool check_subspace_boundary = subspace_option >= 1;
+        const double d_norm = check_subspace_boundary ? std::sqrt(Dot(trResults.d, trResults.d)) : 0.0;
         bool use_with_option1 =
             (subspace_option >= 1) && (trResults.interior_status == TrustRegionResults::Status::NonDescentDirection ||
                                        trResults.interior_status == TrustRegionResults::Status::NegativeCurvature ||
-                                       ((Norm(trResults.d) > (1.0 - 1.0e-6) * tr_size) && lineSearchIter > 1));
-        bool use_with_option2 = (subspace_option >= 2) && (Norm(trResults.d) > (1.0 - 1.0e-6) * tr_size);
+                                       ((d_norm > (1.0 - 1.0e-6) * tr_size) && lineSearchIter > 1));
+        bool use_with_option2 = (subspace_option >= 2) && (d_norm > (1.0 - 1.0e-6) * tr_size);
         bool use_with_option3 = (subspace_option >= 3);
 
-        if (use_with_option1 || use_with_option2 || use_with_option3) {
+        if (can_use_subspace_solver && (use_with_option1 || use_with_option2 || use_with_option3)) {
           if (!have_computed_Hvs) {
             have_computed_Hvs = true;
-            hess_vec_func(trResults.z, trResults.H_z);
-            hess_vec_func(trResults.d_old, trResults.H_d_old);
-            hess_vec_func(trResults.cauchy_point, trResults.H_cauchy_point);
+
+            std::vector<const mfem::Vector*> subspace_hess_inputs{&trResults.z, &trResults.cauchy_point};
+            std::vector<mfem::Vector*> subspace_hess_outputs{&trResults.H_z, &trResults.H_cauchy_point};
+            if (trResults.has_d_old) {
+              subspace_hess_inputs.push_back(&trResults.d_old);
+              subspace_hess_outputs.push_back(&trResults.H_d_old);
+            }
+
+            MFEM_VERIFY(subspace_hess_inputs.size() == subspace_hess_outputs.size(),
+                        "Subspace Hessian-vector batch input/output size mismatch");
+            for (size_t i = 0; i < subspace_hess_inputs.size(); ++i) {
+              hess_vec_func(*subspace_hess_inputs[i], *subspace_hess_outputs[i]);
+            }
           }
 
-          H_left_mosts.clear();
-          for (auto& left : left_mosts) {
-            H_left_mosts.emplace_back(std::make_shared<mfem::Vector>(*left));
-            hess_vec_func(*left, *H_left_mosts.back());
+          if (!have_computed_H_left_mosts) {
+            have_computed_H_left_mosts = true;
+            H_left_mosts.clear();
+            std::vector<const mfem::Vector*> leftmost_inputs;
+            std::vector<mfem::Vector*> leftmost_outputs;
+            for (auto& left : left_mosts) {
+              H_left_mosts.emplace_back(std::make_shared<mfem::Vector>(*left));
+              leftmost_inputs.push_back(left.get());
+              leftmost_outputs.push_back(H_left_mosts.back().get());
+            }
+            MFEM_VERIFY(leftmost_inputs.size() == leftmost_outputs.size(),
+                        "Subspace Hessian-vector batch input/output size mismatch");
+            for (size_t i = 0; i < leftmost_inputs.size(); ++i) {
+              hess_vec_func(*leftmost_inputs[i], *leftmost_outputs[i]);
+            }
           }
 
-          std::vector<const mfem::Vector*> ds{&trResults.z, &trResults.d_old, &trResults.cauchy_point};
-          std::vector<const mfem::Vector*> H_ds{&trResults.H_z, &trResults.H_d_old, &trResults.H_cauchy_point};
-          solveTheSubspaceProblem(trResults.d, hess_vec_func, ds, H_ds, r, tr_size, num_leftmost);
+          if (!have_prepared_subspace) {
+            have_prepared_subspace = true;
+
+            std::vector<const mfem::Vector*> ds{&trResults.z, &trResults.cauchy_point};
+            std::vector<const mfem::Vector*> H_ds{&trResults.H_z, &trResults.H_cauchy_point};
+            if (trResults.has_d_old) {
+              ds.push_back(&trResults.d_old);
+              H_ds.push_back(&trResults.H_d_old);
+            }
+
+            prepareSubspaceProblemCache(ds, H_ds, r, num_leftmost, prepared_subspace);
+          }
+
+          solvePreparedSubspaceProblem(trResults.d, hess_vec_func, prepared_subspace, r, tr_size);
         }
 
         static constexpr double roundOffTol = 0.0;  // 1e-14;
 
         hess_vec_func(trResults.d, trResults.H_d);
-        double dHd = Dot(trResults.d, trResults.H_d);
-        double modelObjective = Dot(r, trResults.d) + 0.5 * dHd - roundOffTol;
+        const auto dots = dot_many({{&trResults.d, &trResults.H_d}, {&r, &trResults.d}});
+        const double dHd = dots[0];
+        const double rd = dots[1];
+        double modelObjective = rd + 0.5 * dHd - roundOffTol;
 
         add(X, trResults.d, x_pred);
 
@@ -800,7 +681,7 @@ class TrustRegion : public mfem::NewtonSolver {
         double normPred = std::numeric_limits<double>::max();
         try {
           normPred = computeResidual(x_pred, r_pred);
-          double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
+          double obj1 = 0.5 * (rd + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();
@@ -809,6 +690,10 @@ class TrustRegion : public mfem::NewtonSolver {
 
         if (normPred <= norm_goal) {
           trResults.d_old = trResults.d;
+          trResults.has_d_old = true;
+          if (!prepared_subspace.leftmosts.empty()) {
+            left_mosts = prepared_subspace.leftmosts;
+          }
           X = x_pred;
           r = r_pred;
           norm = normPred;
@@ -850,7 +735,7 @@ class TrustRegion : public mfem::NewtonSolver {
         // modelRes = g + Jd
         // modelResNorm = np.linalg.norm(modelRes)
         // realResNorm = np.linalg.norm(gy)
-        bool willAccept = rho >= settings.eta1 && rho <= settings.eta4;  // or (rho >= -0 and realResNorm <= gNorm)
+        const bool willAccept = rho >= settings.eta1 && rho <= settings.eta4;
 
         if (print_level >= 2) {
           printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, willAccept);
@@ -860,6 +745,10 @@ class TrustRegion : public mfem::NewtonSolver {
 
         if (willAccept) {
           trResults.d_old = trResults.d;
+          trResults.has_d_old = true;
+          if (!prepared_subspace.leftmosts.empty()) {
+            left_mosts = prepared_subspace.leftmosts;
+          }
           X = x_pred;
           r = r_pred;
           norm = normPred;
@@ -877,14 +766,6 @@ class TrustRegion : public mfem::NewtonSolver {
     }
     if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
       mfem::out << "TrustRegion: No convergence!\n";
-    }
-
-    if (false && print_level >= 2) {
-      mfem::out << "num hess vecs = " << num_hess_vecs << "\n";
-      mfem::out << "num preconds = " << num_preconds << "\n";
-      mfem::out << "num residuals = " << num_residuals << "\n";
-      mfem::out << "num subspace solves = " << num_subspace_solves << "\n";
-      mfem::out << "num jacobian_assembles = " << num_jacobian_assembles << "\n";
     }
   }
 };
@@ -1298,7 +1179,9 @@ void EquationSolver::defineInputFileSchema(axom::inlet::Container& container)
   nonlinear_container.addDouble("abs_tol", "Absolute tolerance for the Newton solve.").defaultValue(1.0e-4);
   nonlinear_container.addInt("max_iter", "Maximum iterations for the Newton solve.").defaultValue(500);
   nonlinear_container.addInt("print_level", "Nonlinear print level.").defaultValue(0);
-  nonlinear_container.addString("solver_type", "Solver type (Newton|KINFullStep|KINLineSearch)").defaultValue("Newton");
+  nonlinear_container
+      .addString("solver_type", "Solver type (Newton|NewtonLineSearch|TrustRegion|KINFullStep|KINLineSearch)")
+      .defaultValue("Newton");
 }
 
 }  // namespace smith
@@ -1373,6 +1256,10 @@ smith::NonlinearSolverOptions FromInlet<smith::NonlinearSolverOptions>::operator
   const std::string solver_type = base["solver_type"];
   if (solver_type == "Newton") {
     options.nonlin_solver = smith::NonlinearSolver::Newton;
+  } else if (solver_type == "NewtonLineSearch") {
+    options.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch;
+  } else if (solver_type == "TrustRegion") {
+    options.nonlin_solver = smith::NonlinearSolver::TrustRegion;
   } else if (solver_type == "KINFullStep") {
     options.nonlin_solver = smith::NonlinearSolver::KINFullStep;
   } else if (solver_type == "KINLineSearch") {
