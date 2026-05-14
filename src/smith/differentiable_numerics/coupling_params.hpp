@@ -300,50 +300,60 @@ decltype(auto) applyTimeRuleAndCoupling(const Rule& rule, const Coupling& coupli
 template <typename PacksTuple>
 struct FlattenCoupling;
 
+/// @brief Converts a `std::tuple<...>` of spaces into `Parameters<...>`.
 template <typename Tuple>
 struct TupleToParameters;
 
+/// @brief Specialization of TupleToParameters for a tuple of spaces.
 template <typename... Spaces>
 struct TupleToParameters<std::tuple<Spaces...>> {
-  using type = Parameters<Spaces...>;
+  using type = Parameters<Spaces...>;  ///< The converted parameter pack.
 };
 
+/// @brief Typedef for converting a tuple of spaces into `Parameters<...>`.
 template <typename Tuple>
 using tuple_to_parameters_t = typename TupleToParameters<std::decay_t<Tuple>>::type;
 
+/// @brief Maps a coupling pack type to a `std::tuple<...>` of its spaces.
 template <typename Pack>
 struct pack_tuple;
 
+/// @brief Specialization of pack_tuple for physics coupling fields.
 template <int D, int O, typename R, typename... Spaces>
 struct pack_tuple<PhysicsFields<D, O, R, Spaces...>> {
-  using type = std::tuple<Spaces...>;
+  using type = std::tuple<Spaces...>;  ///< The coupling spaces as a tuple.
 };
 
+/// @brief Specialization of pack_tuple for parameter-only fields.
 template <typename... Spaces>
 struct pack_tuple<ParamFields<Spaces...>> {
-  using type = std::tuple<Spaces...>;
+  using type = std::tuple<Spaces...>;  ///< The parameter spaces as a tuple.
 };
 
+/// @brief Typedef for extracting a tuple of spaces from a coupling pack.
 template <typename Pack>
 using pack_tuple_t = typename pack_tuple<std::decay_t<Pack>>::type;
 
+/// @brief Typedef for concatenating space tuples with `std::tuple_cat`.
 template <typename... Tuples>
 using tuple_cat_t = decltype(std::tuple_cat(std::declval<Tuples>()...));
 
+/// @brief Appends coupling parameter spaces to an existing `Parameters<...>` list.
 template <typename CouplingParams, typename FixedParams>
 struct AppendParameters;
 
+/// @brief Specialization of AppendParameters for two `Parameters<...>` packs.
 template <typename... Coupled, typename... Fixed>
 struct AppendParameters<Parameters<Coupled...>, Parameters<Fixed...>> {
-  using type = Parameters<Fixed..., Coupled...>;
+  using type = Parameters<Fixed..., Coupled...>;  ///< The appended parameter list.
 };
 
 /// @brief Specialization of FlattenCoupling for a tuple of coupling packs.
 template <typename... Packs>
 struct FlattenCoupling<std::tuple<Packs...>> {
  public:
-  using tuple_type = tuple_cat_t<pack_tuple_t<Packs>...>;
-  using parameters = tuple_to_parameters_t<tuple_type>;  ///< Flattened parameter spaces.
+  using tuple_type = tuple_cat_t<pack_tuple_t<Packs>...>;  ///< The flattened tuple of coupling spaces.
+  using parameters = tuple_to_parameters_t<tuple_type>;    ///< Flattened parameter spaces.
 };
 
 /// @brief Typedef for flattened coupling parameter spaces.
