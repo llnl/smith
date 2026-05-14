@@ -26,10 +26,30 @@ class ParaviewWriter {
  public:
   using StateVecs = std::vector<std::shared_ptr<FiniteElementState> >;  ///< using
 
-  /// Construct from ParaViewDataCollection, a vector of shared_ptr to FiniteElementState, and vector of shared_ptr to
-  /// FiniteElementState which dual fields will be copied into.
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_)
+  /// @brief Options that control which fields are written to ParaView output.
+  struct Options {
+    /// @brief When true, write dual/reaction fields alongside the primary states.
+    bool write_duals{true};
+  };
+
+  /// @brief Construct a writer backed by an existing ParaView data collection.
+  /// @param[in] pv_ ParaView data collection that owns the output database.
+  /// @param[in] states_ Output state fields that will be updated before each write.
+  /// @param[in] tracked_reactions_ Output dual fields that will be updated before each write.
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_,
+                 const StateVecs& tracked_reactions_)
+      : pv(std::move(pv_)), states(states_), dual_states(tracked_reactions_), opts({})
+  {
+  }
+
+  /// @brief Construct a writer backed by an existing ParaView data collection with explicit output options.
+  /// @param[in] pv_ ParaView data collection that owns the output database.
+  /// @param[in] states_ Output state fields that will be updated before each write.
+  /// @param[in] tracked_reactions_ Output dual fields that will be updated before each write.
+  /// @param[in] opts_ Options that control which fields are emitted.
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_,
+                 const StateVecs& tracked_reactions_, Options opts_)
+      : pv(std::move(pv_)), states(states_), dual_states(tracked_reactions_), opts(opts_)
   {
   }
 
@@ -82,9 +102,12 @@ class ParaviewWriter {
       *state = *current_fields[n].get();
       state->gridFunction();
 
-      auto& dual = dual_states[n];
-      current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
-      dual->gridFunction();
+      if (opts.write_duals) {
+        SLIC_ERROR_ROOT_IF(dual_states.size() != states.size(), "wrong number of output dual states to write");
+        auto& dual = dual_states[n];
+        current_fields[n].get_dual()->linearForm().ParallelAssemble(*dual);
+        dual->gridFunction();
+      }
     }
 
     pv->SetCycle(step);
@@ -102,12 +125,13 @@ class ParaviewWriter {
   std::unique_ptr<mfem::ParaViewDataCollection> pv;
   StateVecs states;
   StateVecs dual_states;
+  Options opts;
 };
 
 /// @brief Creates a ParaviewWriter from a mesh, vector of FieldState, and the name of the output paraview file.  File
 /// will be in directory filename/filename.pvd.
 inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
-                                 std::string output_name)
+                                 std::string output_name, ParaviewWriter::Options opts)
 {
   if (output_name == "") {
     output_name = "default";
@@ -128,10 +152,12 @@ inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<Fiel
     paraview_dc->RegisterField(state->name(), &output_states.back()->gridFunction());
     max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
 
-    const auto& dual = fstate.get_dual();
-    output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
-    paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
+    if (opts.write_duals) {
+      const auto& dual = fstate.get_dual();
+      output_duals.push_back(std::make_shared<smith::FiniteElementState>(dual->space(), dual->name()));
+      paraview_dc->RegisterField(dual->name(), &output_duals.back()->gridFunction());
+      max_order_in_fields = std::max(max_order_in_fields, dual->space().GetOrder(0));
+    }
   }
 
   // Set the options for the paraview output files
@@ -140,7 +166,17 @@ inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<Fiel
   paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
   paraview_dc->SetCompression(true);
 
-  return ParaviewWriter(std::move(paraview_dc), output_states, output_duals);
+  return ParaviewWriter(std::move(paraview_dc), output_states, output_duals, opts);
+}
+
+/// @brief Create a ParaView writer using the default output options.
+/// @param[in] mesh Mesh used to define the ParaView data collection.
+/// @param[in] states Field states whose values and duals will be registered for output.
+/// @param[in] output_name Base name for the ParaView output directory and `.pvd` file.
+inline auto createParaviewWriter(const smith::Mesh& mesh, const std::vector<FieldState>& states,
+                                 std::string output_name)
+{
+  return createParaviewWriter(mesh, states, std::move(output_name), ParaviewWriter::Options{});
 }
 
 /// @brief Creates a ParaviewWriter from an mfem::ParMesh, vector of FiniteElementState pointers, and the name of the

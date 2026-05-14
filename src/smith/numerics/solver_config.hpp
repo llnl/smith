@@ -13,9 +13,11 @@
 #pragma once
 
 #include <variant>
+#include <vector>
 
 #include "mfem.hpp"
 #include "smith/infrastructure/format.hpp"
+#include "smith/numerics/block_preconditioner.hpp"
 
 namespace smith {
 
@@ -101,12 +103,13 @@ struct TimesteppingOptions {
 /// Linear solution method indicator
 enum class LinearSolver
 {
-  CG,        /**< Conjugate gradient */
-  GMRES,     /**< Generalized minimal residual method */
-  SuperLU,   /**< SuperLU MPI-enabled direct nodal solver */
-  Strumpack, /**< Strumpack MPI-enabled direct frontal solver*/
-  PetscCG,   /**< PETSc MPI-enabled conjugate gradient solver */
-  PetscGMRES /**< PETSc MPI-enabled generalize minimal residual solver */
+  CG,         /**< Conjugate gradient */
+  GMRES,      /**< Generalized minimal residual method */
+  SuperLU,    /**< SuperLU MPI-enabled direct nodal solver */
+  Strumpack,  /**< Strumpack MPI-enabled direct frontal solver*/
+  PetscCG,    /**< PETSc MPI-enabled conjugate gradient solver */
+  PetscGMRES, /**< PETSc MPI-enabled generalize minimal residual solver */
+  None        /**< Preconditioner application only, No linear solver Krylov iterations */
 };
 // _linear_solvers_end
 
@@ -126,6 +129,8 @@ inline std::string linearName(const LinearSolver& s)
       return "PetscCG";
     case LinearSolver::PetscGMRES:
       return "PetscGMRES";
+    case LinearSolver::None:
+      return "None";
   }
   // This cannot happen, but GCC doesn't know that
   return "UNKNOWN";
@@ -139,6 +144,7 @@ inline std::map<std::string, LinearSolver> linearSolverMap = {
     {"CG", LinearSolver::CG},           {"GMRES", LinearSolver::GMRES},
     {"SuperLU", LinearSolver::SuperLU}, {"Strumpack", LinearSolver::Strumpack},
     {"PetscCG", LinearSolver::PetscCG}, {"PetscGMRES", LinearSolver::PetscGMRES},
+    {"None", LinearSolver::None},
 };
 
 // Add a custom list of strings? conduit node?
@@ -343,6 +349,9 @@ enum class Preconditioner
   AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
   Petsc,            /**< PETSc preconditioner,  */
   AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
+  BlockDiagonal,    /**< Block diagonal preconditioner */
+  BlockTriangular,  /**< Block triangular preconditioner */
+  BlockSchur,       /**< Block Schur preconditioner */
   None              /**< No preconditioner used */
 };
 // _preconditioners_end
@@ -367,6 +376,12 @@ inline std::string preconditionerName(Preconditioner p)
       return "Petsc";
     case Preconditioner::AMGFContact:
       return "AMGFContact";
+    case Preconditioner::BlockDiagonal:
+      return "BlockDiagonal";
+    case Preconditioner::BlockTriangular:
+      return "BlockTriangular";
+    case Preconditioner::BlockSchur:
+      return "BlockSchur";
     case Preconditioner::None:
       return "None";
   }
@@ -387,6 +402,9 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"AMGX", Preconditioner::AMGX},
     {"Petsc", Preconditioner::Petsc},
     {"AMGFContact", Preconditioner::AMGFContact},
+    {"BlockDiagonal", Preconditioner::BlockDiagonal},
+    {"BlockTriangular", Preconditioner::BlockTriangular},
+    {"BlockSchur", Preconditioner::BlockSchur},
     {"None", Preconditioner::None},
 };
 
@@ -422,6 +440,21 @@ struct LinearSolverOptions {
 
   /// Debugging print level for the preconditioner
   int preconditioner_print_level = 0;
+
+  /// Subblock linear solver options for block preconditioners
+  std::vector<LinearSolverOptions> sub_block_linear_solver_options = {};
+
+  /// Block Triangular Preconditioner factorization type
+  BlockTriangularType block_triangular_type = BlockTriangularType::Lower;
+
+  /// Block Schur preconditioner factorization type
+  BlockSchurType block_schur_type = BlockSchurType::Full;
+
+  /// Schur approximation type
+  SchurApproxType schur_approx_type = SchurApproxType::DiagInv;
+
+  /// Whether to use Hypre's elasticity-specific AMG options (requires byVDIM ordering)
+  bool amg_elasticity = false;
 };
 // _linear_options_end
 
@@ -467,8 +500,8 @@ struct NonlinearSolverOptions {
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
 
-  /// Should the gradient be converted to a monolithic matrix
-  bool force_monolithic = false;
+  /// Option to use the previous stiffness matrix to solve with updated boundary conditions to 'pre-smooth' the solution
+  bool warm_start = false;
 };
 // _nonlinear_options_end
 

@@ -31,6 +31,9 @@ using namespace smith::mfem_ext;
 
 using param_t = std::tuple<NonlinearSolver, LinearSolver, Preconditioner, PetscPCType>;
 
+namespace {
+}  // namespace
+
 class EquationSolverSuite : public testing::TestWithParam<param_t> {
  protected:
   void SetUp() override { std::tie(nonlin_solver, lin_solver, precond, pc_type) = GetParam(); }

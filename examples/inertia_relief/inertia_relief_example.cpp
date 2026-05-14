@@ -1,3 +1,4 @@
+
 // Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
@@ -16,6 +17,7 @@
 #include <format>
 
 #include "smith/smith.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 
 #include "mfem.hpp"
 
@@ -35,51 +37,17 @@ using VectorSpace = smith::H1<disp_order, dim>;
 using DensitySpace = smith::L2<disp_order - 1>;
 
 using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
-using SolidWeakFormT = smith::SolidWeakForm<disp_order, dim, smith::Parameters<DensitySpace>>;
+using SolidWeakFormT =
+    smith::FunctionalWeakForm<dim, smith::H1<disp_order, dim>,
+                              smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
+                                                smith::H1<disp_order, dim>, DensitySpace>>;
 
 enum FIELD
 {
-  DISP = SolidWeakFormT::DISPLACEMENT,
-  VELO = SolidWeakFormT::VELOCITY,
-  ACCEL = SolidWeakFormT::ACCELERATION,
-  DENSITY = SolidWeakFormT::NUM_STATES
-};
-
-class ParaviewWriter {
- public:
-  using StateVecs = std::vector<std::shared_ptr<smith::FiniteElementState>>;
-  using DualVecs = std::vector<std::shared_ptr<smith::FiniteElementDual>>;
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
-      : pv(std::move(pv_)), states(states_)
-  {
-  }
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_)
-  {
-  }
-
-  void write(int step, double time, const std::vector<smith::FiniteElementState const*>& current_states)
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
-
-    for (size_t n = 0; n < states.size(); ++n) {
-      auto& state = states[n];
-      *state = *current_states[n];
-      state->gridFunction();
-    }
-
-    pv->SetCycle(step);
-    pv->SetTime(time);
-    pv->Save();
-  }
-
- private:
-  std::unique_ptr<mfem::ParaViewDataCollection> pv;
-  StateVecs states;
-  StateVecs dual_states;
+  DISP = 0,
+  VELO = 1,
+  ACCEL = 2,
+  DENSITY = 3
 };
 
 /* Nonlinear problem of the form
@@ -202,21 +170,30 @@ int main(int argc, char* argv[])
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
-  solid_mechanics_weak_form->setMaterial(smith::DependsOn<0>{}, mesh->entireBodyName(), mat);
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto rho) {
+        typename SolidMaterial::State state;
+        auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), rho);
+        return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(rho), pk_stress};
+      });
 
   // apply some traction boundary conditions
   std::string surface_name = "side";
   mesh->addDomainOfBoundaryElements(surface_name, smith::by_attr<dim>(1));
-  solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+  solid_mechanics_weak_form->addBoundaryFlux(
+      surface_name, [](auto /*t_info*/, auto /*X*/, auto n, auto /*u*/, auto /*v*/, auto /*a*/, auto /*density*/) {
+        return 1.0 * n;
+      });
 
   smith::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 1.e0;
   }
 
-  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
-    return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
-  });
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [constant_force](auto /*t_info*/, auto X, auto... /*inputs*/) {
+        return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(X)};
+      });
 
   // construct constraints
   params[0] = 1.;
@@ -274,7 +251,7 @@ int main(int argc, char* argv[])
     return u;
   });
 
-  auto writer = createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
+  auto writer = smith::createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
   if (visualize) {
     writer.write(0, 0.0, objective_states);
   }

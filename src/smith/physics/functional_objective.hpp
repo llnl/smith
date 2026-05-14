@@ -71,8 +71,35 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name,
                        const FuncOfTimeSpaceAndParams& qfunction)
   {
-    objective_->AddDomainIntegral(smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{}, qfunction,
-                                  mesh_->domain(body_name));
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    objective_->AddDomainIntegral(
+        smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{},
+        [dt, cycle, qfunction](double time, auto X, auto... params) {
+          return invokeTimeAwareIntegrand(qfunction, time, *dt, *cycle, X, params...);
+        },
+        mesh_->domain(body_name));
+  }
+
+  /**
+   * @brief register a custom boundary integral calculation as part of the residual
+   *
+   * @tparam active_parameters a list of indices, describing which parameters to pass to the q-function
+   * @param boundary_name string specifying the boundary to integrate over
+   * @param qfunction a callable that returns a tuple of body-force and stress
+   */
+  template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name,
+                           const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    objective_->AddBoundaryIntegral(
+        smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{},
+        [dt, cycle, qfunction](double time, auto X, auto... params) {
+          return invokeTimeAwareIntegrand(qfunction, time, *dt, *cycle, X, params...);
+        },
+        mesh_->domain(boundary_name));
   }
 
   /// @overload
@@ -112,6 +139,19 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   }
 
  private:
+  template <typename FuncOfTimeSpaceAndParams, typename XType, typename... ParamTypes>
+  static auto invokeTimeAwareIntegrand(const FuncOfTimeSpaceAndParams& qfunction, double time, double dt, size_t cycle,
+                                       XType&& X, ParamTypes&&... params)
+  {
+    if constexpr (requires {
+                    qfunction(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<ParamTypes>(params)...);
+                  }) {
+      return qfunction(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<ParamTypes>(params)...);
+    } else {
+      return qfunction(time, std::forward<XType>(X), std::forward<ParamTypes>(params)...);
+    }
+  }
+
   /// @brief Utility to evaluate residual using all fields in vector
   template <int... i>
   auto evaluateObjective(std::integer_sequence<int, i...>, double time, ConstFieldPtr shape_disp,

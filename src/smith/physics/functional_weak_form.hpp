@@ -61,7 +61,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         std::format("{} parameter spaces given in the template argument but {} input mfem spaces were supplied.",
                     sizeof...(InputSpaces), input_mfem_spaces.size()));
 
+    // Validate output space
+    validateSpace<OutputSpace>(output_mfem_space, "output");
+
+    // Validate input spaces
     if constexpr (sizeof...(InputSpaces) > 0) {
+      // Validate each input space using a helper
+      validateInputSpaces<0>(input_mfem_spaces);
+
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { trial_spaces[i] = input_mfem_spaces[i]; });
       for_constexpr<sizeof...(InputSpaces)>(
           [&](auto i) { vector_residual_trial_spaces[i + 1] = input_mfem_spaces[i]; });
@@ -103,13 +110,19 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyIntegralType>
   void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
   {
-    weak_form_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, integrand,
-                                  mesh_->domain(body_name));
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    weak_form_->AddDomainIntegral(
+        Dimension<spatial_dim>{}, DependsOn<active_parameters...>{},
+        [dt, cycle, integrand](double time, auto X, auto... inputs) {
+          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, inputs...);
+        },
+        mesh_->domain(body_name));
 
     v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double time, auto X, auto V, auto... inputs) {
-          auto orig_tuple = integrand(time, X, inputs...);
+        [dt, cycle, integrand](double time, auto X, auto V, auto... inputs) {
+          auto orig_tuple = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, inputs...);
           return smith::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  smith::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
@@ -120,7 +133,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename BodyForceType>
   void addBodyIntegral(std::string body_name, BodyForceType body_integral)
   {
-    addBodyIntegral(DependsOn<>{}, body_name, body_integral);
+    addBodyIntegralWithAllParams(body_name, body_integral, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -146,8 +159,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyLoadType>
   void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
   {
-    addBodyIntegral(depends_on, body_name, [load_function](double t, auto X, auto... inputs) {
-      return smith::tuple{-load_function(t, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+    addBodyIntegral(depends_on, body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      return smith::tuple{-invokeTimeAwareSource(load_function, t_info, get<VALUE>(X), get<VALUE>(inputs)...),
+                          smith::zero{}};
     });
   }
 
@@ -155,7 +169,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {
-    return addBodySource(DependsOn<>{}, body_name, load_function);
+    return addBodySourceWithAllParams(body_name, load_function,
+                                      std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -184,13 +199,19 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <int... active_parameters, typename BoundaryIntegrandType>
   void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, BoundaryIntegrandType integrand)
   {
-    weak_form_->AddBoundaryIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
-                                    mesh_->domain(boundary_name));
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    weak_form_->AddBoundaryIntegral(
+        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
+        [dt, cycle, integrand](double time, auto X, auto... params) {
+          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+        },
+        mesh_->domain(boundary_name));
 
     v_dot_weak_form_residual_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double t, auto X, auto V, auto... params) {
-          auto orig_surface_flux = integrand(t, X, params...);
+        [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
+          auto orig_surface_flux = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
           return smith::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
@@ -200,7 +221,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename BoundaryIntegrandType>
   void addBoundaryIntegral(std::string boundary_name, const BoundaryIntegrandType& integrand)
   {
-    addBoundaryIntegral(DependsOn<>{}, boundary_name, integrand);
+    addBoundaryIntegralWithAllParams(boundary_name, integrand,
+                                     std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -225,14 +247,20 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name,
                                    InteriorIntegrandType integrand)
   {
-    weak_form_->AddInteriorFaceIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
-                                        mesh_->domain(interior_name));
+    const double* dt = &dt_;
+    const size_t* cycle = &cycle_;
+    weak_form_->AddInteriorFaceIntegral(
+        Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{},
+        [dt, cycle, integrand](double time, auto X, auto... params) {
+          return invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
+        },
+        mesh_->domain(interior_name));
 
     v_dot_weak_form_residual_->AddInteriorFaceIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double t, auto X, auto V, auto... params) {
+        [dt, cycle, integrand](double time, auto X, auto V, auto... params) {
           auto [V1, V2] = V;
-          auto orig_surface_flux = integrand(t, X, params...);
+          auto orig_surface_flux = invokeTimeAwareIntegrand(integrand, time, *dt, *cycle, X, params...);
           auto [flux_pos, flux_neg] = orig_surface_flux;
           return smith::inner(V1, flux_pos) + smith::inner(V2, flux_neg);
         },
@@ -243,7 +271,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename InteriorIntegrandType>
   void addInteriorBoundaryIntegral(std::string interior_name, const InteriorIntegrandType& integrand)
   {
-    addInteriorBoundaryIntegral(DependsOn<>{}, interior_name, integrand);
+    addInteriorBoundaryIntegralWithAllParams(interior_name, integrand,
+                                             std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -271,9 +300,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
                        BoundaryFluxType flux_function)
   {
-    addBoundaryIntegral(depends_on, boundary_name, [flux_function](double t, auto X, auto... inputs) {
+    addBoundaryIntegral(depends_on, boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
       auto n = cross(get<DERIVATIVE>(X));
-      return -flux_function(t, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
+      return -invokeTimeAwareFlux(flux_function, t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
     });
   }
 
@@ -281,13 +310,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename BoundaryFluxType>
   void addBoundaryFlux(std::string boundary_name, const BoundaryFluxType& integrand)
   {
-    addBoundaryFlux(DependsOn<>{}, boundary_name, integrand);
+    addBoundaryFluxWithAllParams(boundary_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /// @overload
   mfem::Vector residual(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                         [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
+    validateFields(fields, "residual");
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
     auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
@@ -300,6 +330,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       const std::vector<double>& jacobian_weights,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
+    validateFields(fields, "jacobian");
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
 
@@ -338,6 +369,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
            DualFieldPtr jvp_reaction) const override
   {
+    validateFields(fields, "jvp");
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
@@ -363,11 +395,13 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
            DualFieldPtr vjp_shape_disp_sensitivity, const std::vector<DualFieldPtr>& vjp_sensitivities,
            [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
   {
+    validateFields(fields, "vjp");
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
     dt_ = time_info.dt();
     cycle_ = time_info.cycle();
+
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
                                            time_info.time(), shape_disp, v_field, fields);
     {
@@ -399,6 +433,159 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
  protected:
+  template <typename BodyIntegralType, int... all_params>
+  /// @brief Forwards body integrand with dependency list covering all input parameters.
+  void addBodyIntegralWithAllParams(std::string body_name, BodyIntegralType integrand,
+                                    std::integer_sequence<int, all_params...>)
+  {
+    this->template addBodyIntegral<all_params...>(DependsOn<all_params...>{}, body_name, integrand);
+  }
+
+  template <typename BodyLoadType, int... all_params>
+  /// @brief Forwards body source with dependency list covering all input parameters.
+  void addBodySourceWithAllParams(std::string body_name, BodyLoadType load_function,
+                                  std::integer_sequence<int, all_params...>)
+  {
+    this->template addBodySource<all_params...>(DependsOn<all_params...>{}, body_name, load_function);
+  }
+
+  template <typename BoundaryIntegrandType, int... all_params>
+  /// @brief Forwards boundary integrand with dependency list covering all input parameters.
+  void addBoundaryIntegralWithAllParams(std::string boundary_name, BoundaryIntegrandType integrand,
+                                        std::integer_sequence<int, all_params...>)
+  {
+    this->template addBoundaryIntegral<all_params...>(DependsOn<all_params...>{}, boundary_name, integrand);
+  }
+
+  template <typename BoundaryFluxType, int... all_params>
+  /// @brief Forwards boundary flux with dependency list covering all input parameters.
+  void addBoundaryFluxWithAllParams(std::string boundary_name, BoundaryFluxType flux_function,
+                                    std::integer_sequence<int, all_params...>)
+  {
+    this->template addBoundaryFlux<all_params...>(DependsOn<all_params...>{}, boundary_name, flux_function);
+  }
+
+  template <typename InteriorIntegrandType, int... all_params>
+  /// @brief Forwards interior-boundary integrand with dependency list covering all input parameters.
+  void addInteriorBoundaryIntegralWithAllParams(std::string interior_name, InteriorIntegrandType integrand,
+                                                std::integer_sequence<int, all_params...>)
+  {
+    this->template addInteriorBoundaryIntegral<all_params...>(DependsOn<all_params...>{}, interior_name, integrand);
+  }
+
+  template <typename IntegrandType, typename XType, typename... InputTypes>
+  /// @brief Calls integrand with `TimeInfo` when available, else with scalar time.
+  static auto invokeTimeAwareIntegrand(const IntegrandType& integrand, double time, double dt, size_t cycle, XType&& X,
+                                       InputTypes&&... inputs)
+  {
+    if constexpr (requires {
+                    integrand(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+                  }) {
+      return integrand(TimeInfo(time, dt, cycle), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    } else {
+      return integrand(time, std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    }
+  }
+
+  template <typename LoadFunctionType, typename XType, typename... InputTypes>
+  /// @brief Calls source with `TimeInfo` when available, else with scalar time.
+  static auto invokeTimeAwareSource(const LoadFunctionType& load_function, const TimeInfo& t_info, XType&& X,
+                                    InputTypes&&... inputs)
+  {
+    if constexpr (requires { load_function(t_info, std::forward<XType>(X), std::forward<InputTypes>(inputs)...); }) {
+      return load_function(t_info, std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    } else {
+      return load_function(t_info.time(), std::forward<XType>(X), std::forward<InputTypes>(inputs)...);
+    }
+  }
+
+  template <typename FluxFunctionType, typename XType, typename NType, typename... InputTypes>
+  /// @brief Calls flux with `TimeInfo` when available, else with scalar time.
+  static auto invokeTimeAwareFlux(const FluxFunctionType& flux_function, const TimeInfo& t_info, XType&& X, NType&& n,
+                                  InputTypes&&... inputs)
+  {
+    if constexpr (requires {
+                    flux_function(t_info, std::forward<XType>(X), std::forward<NType>(n),
+                                  std::forward<InputTypes>(inputs)...);
+                  }) {
+      return flux_function(t_info, std::forward<XType>(X), std::forward<NType>(n), std::forward<InputTypes>(inputs)...);
+    } else {
+      return flux_function(t_info.time(), std::forward<XType>(X), std::forward<NType>(n),
+                           std::forward<InputTypes>(inputs)...);
+    }
+  }
+
+  /// @brief Helper to validate input spaces recursively (for constructor)
+  template <size_t I>
+  void validateInputSpaces(const SpacesT& input_mfem_spaces) const
+  {
+    if constexpr (I < sizeof...(InputSpaces)) {
+      using Space = typename std::tuple_element<I, std::tuple<InputSpaces...>>::type;
+      validateSpace<Space>(*input_mfem_spaces[I], axom::fmt::format("input[{}]", I));
+      validateInputSpaces<I + 1>(input_mfem_spaces);
+    }
+  }
+
+  /// @brief Helper to validate fields passed to residual/jacobian/vjp/jvp
+  template <size_t I>
+  void validateFieldsRecursive(const std::vector<ConstFieldPtr>& fields, const std::string& method_name) const
+  {
+    if constexpr (I < sizeof...(InputSpaces)) {
+      using Space = typename std::tuple_element<I, std::tuple<InputSpaces...>>::type;
+      validateSpace<Space>(fields[I]->space(),
+                           axom::fmt::format("{}(): field[{}] ('{}')", method_name, I, fields[I]->name()));
+      validateFieldsRecursive<I + 1>(fields, method_name);
+    }
+  }
+
+  /// @brief Validate that fields vector matches the templated input spaces
+  void validateFields(const std::vector<ConstFieldPtr>& fields, const std::string& method_name) const
+  {
+    SLIC_ERROR_ROOT_IF(fields.size() != sizeof...(InputSpaces),
+                       axom::fmt::format("{}(): fields.size()={} but weak form expects {} InputSpaces", method_name,
+                                         fields.size(), sizeof...(InputSpaces)));
+
+    if constexpr (sizeof...(InputSpaces) > 0) {
+      validateFieldsRecursive<0>(fields, method_name);
+    }
+  }
+
+  /// @brief Validate that an mfem space matches the template space parameters
+  template <typename Space>
+  static void validateSpace(const mfem::ParFiniteElementSpace& mfem_space, const std::string& space_name)
+  {
+    const auto* fec = mfem_space.FEColl();
+
+    // Note: We check using the name string rather than dynamic_cast because MFEM
+    // has multiple FECollection types that represent H1 and L2 spaces
+    if constexpr (Space::family == Family::H1) {
+      std::string fec_name = fec->Name();
+      bool is_h1 =
+          (fec_name.find("H1") != std::string::npos || fec_name.find("ND_") != std::string::npos ||  // Nedelec elements
+           fec_name.find("Linear") != std::string::npos);
+      SLIC_ERROR_ROOT_IF(!is_h1, axom::fmt::format("Space '{}': Template specifies H1 family but mfem space uses '{}'",
+                                                   space_name, fec_name));
+    } else if constexpr (Space::family == Family::L2) {
+      std::string fec_name = fec->Name();
+      bool is_l2 = (fec_name.find("L2") != std::string::npos || fec_name.find("DG") != std::string::npos ||
+                    fec_name.find("Const") != std::string::npos);
+      SLIC_ERROR_ROOT_IF(
+          !is_l2, axom::fmt::format("Space '{}': Template specifies L2/DG family but mfem space uses '{}'", space_name,
+                                    fec_name));
+    }
+
+    // Validate order
+    SLIC_ERROR_ROOT_IF(fec->GetOrder() != Space::order,
+                       axom::fmt::format("Space '{}': Template specifies order {} but mfem space has order {}",
+                                         space_name, Space::order, fec->GetOrder()));
+
+    // Validate vector dimension
+    SLIC_ERROR_ROOT_IF(
+        mfem_space.GetVDim() != Space::components,
+        axom::fmt::format("Space '{}': Template specifies {} components but mfem space has {} components (VDim)",
+                          space_name, Space::components, mfem_space.GetVDim()));
+  }
+
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
   auto jacobianFunctions(std::integer_sequence<int, i...>, double time, ConstFieldPtr shape_disp,
