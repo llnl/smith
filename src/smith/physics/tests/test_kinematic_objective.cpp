@@ -13,7 +13,7 @@
 #include "mpi.h"
 #include "mfem.hpp"
 
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/physics/functional_objective.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/physics/state/state_manager.hpp"
@@ -38,9 +38,9 @@ struct ConstrainedWeakFormFixture : public testing::Test {
   using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
 
   using SolidWeakFormT =
-      smith::TimeDiscretizedWeakForm<dim, smith::H1<disp_order, dim>,
-                                     smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
-                                                       smith::H1<disp_order, dim>, DensitySpace>>;
+      smith::FunctionalWeakForm<dim, smith::H1<disp_order, dim>,
+                                smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
+                                                  smith::H1<disp_order, dim>, DensitySpace>>;
 
   enum FIELD
   {
@@ -59,8 +59,7 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     mat.K = 1.0;
     mat.G = 0.5;
     solid_mechanics_weak_form->addBodyIntegral(
-        smith::DependsOn<0>{}, mesh->entireBodyName(),
-        [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
+        mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density) {
           typename SolidMaterial::State state;
           auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density);
           return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density), pk_stress};
@@ -90,8 +89,8 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     ObjectiveT::SpacesT param_space_ptrs{&input_fields[DISP]->space(), &input_fields[DENSITY]->space()};
 
     ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
-    mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
-                                   [](double /*time*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
+    mass_objective.addBodyIntegral(mesh->entireBodyName(),
+                                   [](auto /*t_info*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
 
     double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
@@ -99,12 +98,9 @@ struct ConstrainedWeakFormFixture : public testing::Test {
 
     for (int i = 0; i < dim; ++i) {
       auto cg_objective = std::make_shared<ObjectiveT>("translation" + std::to_string(i), mesh, param_space_ptrs);
-      cg_objective->addBodyIntegral(
-          smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-          [i](double
-              /*time*/,
-              auto X, auto U,
-              auto RHO) { return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO); });
+      cg_objective->addBodyIntegral(mesh->entireBodyName(), [i](auto /*t_info*/, auto X, auto U, auto RHO) {
+        return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
+      });
       initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
       constraint_evaluators.push_back(cg_objective);
     }
@@ -112,8 +108,8 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     for (int i = 0; i < dim; ++i) {
       auto center_rotation_objective =
           std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh, param_space_ptrs);
-      center_rotation_objective->addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-                                                 [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
+      center_rotation_objective->addBodyIntegral(mesh->entireBodyName(),
+                                                 [i, initial_cg](auto /*t_info*/, auto X, auto U, auto RHO) {
                                                    auto u = get<smith::VALUE>(U);
                                                    auto x = get<smith::VALUE>(X) + u;
                                                    auto dx = x - initial_cg;

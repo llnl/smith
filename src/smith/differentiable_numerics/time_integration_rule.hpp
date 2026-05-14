@@ -114,6 +114,7 @@ class QuasiStaticRule : public TimeIntegrationRule {
 
   /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1>
+  /// @brief Return the static field value.
   SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
   {
     return field_new;
@@ -121,6 +122,7 @@ class QuasiStaticRule : public TimeIntegrationRule {
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1>
+  /// @brief Return zero first derivative for a static field.
   SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
   {
     return zero{};
@@ -153,6 +155,65 @@ class QuasiStaticRule : public TimeIntegrationRule {
   }
 };
 
+/// @brief encodes rules for static postprocessing fields with zero time derivatives.
+class StaticTimeIntegrationRule : public TimeIntegrationRule {
+ public:
+  static constexpr int num_states = 1;  ///< number of states required by this rule (compile-time)
+
+  int num_args() const override { return num_states; }
+
+  /**
+   * @brief Return the static field value.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
+  {
+    return field_new;
+  }
+
+  /**
+   * @brief Return zero first derivative for a static field.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
+  {
+    return zero{};
+  }
+
+  /**
+   * @brief Return zero second derivative for a static field.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto ddot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
+  {
+    return zero{};
+  }
+
+  /**
+   * @brief Return value, first derivative, and second derivative for a static field.
+   */
+  template <typename T1>
+  SMITH_HOST_DEVICE auto interpolate(const TimeInfo& t, const T1& field_new) const
+  {
+    return std::make_tuple(value(t, field_new), dot(t, field_new), ddot(t, field_new));
+  }
+
+  FieldState corrected_value(const TimeInfo& t, const std::vector<FieldState>& states) const override
+  {
+    return value(t, states[0]);
+  }
+
+  FieldState corrected_dot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    return zeroCopy(states[0]);
+  }
+
+  FieldState corrected_ddot(const TimeInfo& /*t*/, const std::vector<FieldState>& states) const override
+  {
+    return zeroCopy(states[0]);
+  }
+};
+
 /// @brief Alias for BackwardEulerFirstOrderTimeIntegrationRule for convenience.  Quasi-static still should compute
 /// velocities (viscosities) using backward Euler.
 using QuasiStaticFirstOrderTimeIntegrationRule = BackwardEulerFirstOrderTimeIntegrationRule;
@@ -180,7 +241,12 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
                                [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                                [[maybe_unused]] const T4& accel_old) const
   {
-    return field_new;
+    auto regular_value = field_new + (field_old - field_old);
+    auto cycle_zero_correction = field_old - field_new;
+    if (t.isCycleZeroEvaluation()) {
+      return regular_value + cycle_zero_correction;
+    }
+    return regular_value + (cycle_zero_correction - cycle_zero_correction);
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
@@ -189,7 +255,12 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
                              [[maybe_unused]] const T2& field_old, [[maybe_unused]] const T3& velo_old,
                              [[maybe_unused]] const T4& accel_old) const
   {
-    return (2.0 / t.dt()) * (field_new - field_old) - velo_old;
+    auto regular_dot = (2.0 / t.dt()) * (field_new - field_old) - velo_old;
+    auto cycle_zero_correction = velo_old - regular_dot;
+    if (t.isCycleZeroEvaluation()) {
+      return regular_dot + cycle_zero_correction;
+    }
+    return regular_dot + (cycle_zero_correction - cycle_zero_correction);
   }
 
   /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
@@ -199,7 +270,12 @@ struct ImplicitNewmarkSecondOrderTimeIntegrationRule : public TimeIntegrationRul
                               [[maybe_unused]] const T4& accel_old) const
   {
     auto dt = t.dt();
-    return (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
+    auto regular_ddot = (4.0 / (dt * dt)) * (field_new - field_old) - (4.0 / dt) * velo_old - accel_old;
+    auto cycle_zero_correction = accel_old - regular_ddot;
+    if (t.isCycleZeroEvaluation()) {
+      return regular_ddot + cycle_zero_correction;
+    }
+    return regular_ddot + (cycle_zero_correction - cycle_zero_correction);
   }
 
   /// @brief interpolate all derived quantities in one call

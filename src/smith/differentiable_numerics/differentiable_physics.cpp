@@ -119,9 +119,13 @@ const FiniteElementState& DifferentiablePhysics::state([[maybe_unused]] const st
 
 const FiniteElementDual& DifferentiablePhysics::dual(const std::string& reaction_name) const
 {
-  SLIC_ERROR_IF(reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
-                axom::fmt::format("Could not find reaction named {0} in mesh with tag \"{1}\" to get", reaction_name,
-                                  mesh_->tag()));
+  if (reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end()) {
+    std::string available;
+    for (auto& n : reaction_names_) available += n + " ";
+    SLIC_ERROR(axom::fmt::format(
+        "Could not find reaction named {0} in mesh with tag \"{1}\" to get. Available reactions (size {2}): {3}",
+        reaction_name, mesh_->tag(), reaction_names_.size(), available));
+  }
   size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
 
   SLIC_ERROR_IF(reaction_states_.empty() && !reaction_names_.empty(),
@@ -314,6 +318,27 @@ std::vector<FieldState> DifferentiablePhysics::getFieldStatesAndParamStates() co
   fields.insert(fields.end(), field_states_.begin(), field_states_.end());
   fields.insert(fields.end(), field_params_.begin(), field_params_.end());
   return fields;
+}
+
+FieldState DifferentiablePhysics::getInitialFieldState(const std::string& state_name) const
+{
+  SLIC_ERROR_IF(state_name_to_field_index_.find(state_name) == state_name_to_field_index_.end(),
+                std::format("Could not find initial field named {0}", state_name));
+  return initial_field_states_[state_name_to_field_index_.at(state_name)];
+}
+
+FieldState DifferentiablePhysics::getFieldState(const std::string& state_name) const
+{
+  SLIC_ERROR_IF(state_name_to_field_index_.find(state_name) == state_name_to_field_index_.end(),
+                std::format("Could not find field named {0}", state_name));
+  return field_states_[state_name_to_field_index_.at(state_name)];
+}
+
+FieldState DifferentiablePhysics::getFieldParam(const std::string& param_name) const
+{
+  SLIC_ERROR_IF(param_name_to_field_index_.find(param_name) == param_name_to_field_index_.end(),
+                std::format("Could not find parameter named {0}", param_name));
+  return field_params_[param_name_to_field_index_.at(param_name)];
 }
 
 FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field_shape_displacement_; }

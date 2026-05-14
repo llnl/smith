@@ -16,6 +16,7 @@
 #include "smith/physics/base_physics.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
+#include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include <vector>
 #include <map>
 
@@ -138,12 +139,21 @@ class DifferentiablePhysics : public BasePhysics {
   /// @return Copies of the tracked initial state fields.
   std::vector<FieldState> getInitialFieldStates() const { return initial_field_states_; }
 
+  /// @brief Get a tracked initial state field by name.
+  FieldState getInitialFieldState(const std::string& state_name) const;
+
   /// @brief Get the current primal state fields.
   /// @return Copies of the tracked state fields at the current cycle.
   std::vector<FieldState> getFieldStates() const { return field_states_; }
 
+  /// @brief Get a tracked current state field by name.
+  FieldState getFieldState(const std::string& state_name) const;
+
   /// @brief Get all the parameter FieldStates
   std::vector<FieldState> getFieldParams() const { return field_params_; }
+
+  /// @brief Get a tracked parameter field by name.
+  FieldState getFieldParam(const std::string& param_name) const;
 
   /// @brief Get the tracked state fields followed by the tracked parameter fields.
   /// @return A concatenated vector of state fields then parameter fields.
@@ -196,5 +206,38 @@ class DifferentiablePhysics : public BasePhysics {
   int cycle_prev_ =
       0;  ///< previous cycle, saved to reconstruct the start of step time used in computing reaction forces
 };
+
+template <typename SystemType>
+/**
+ * @brief Build a `DifferentiablePhysics` from a preconfigured system and advancer.
+ *
+ * @param system System whose field store owns states, parameters, mesh, and reactions.
+ * @param advancer Time integrator used for forward solves.
+ * @param physics_name Name exposed through the `BasePhysics` interface.
+ */
+std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr<SystemType> system,
+                                                                 std::shared_ptr<StateAdvancer> advancer,
+                                                                 const std::string& physics_name)
+{
+  return std::make_unique<DifferentiablePhysics>(
+      system->field_store->getMesh(), system->field_store->graph(), system->field_store->getShapeDisp(),
+      system->field_store->getStateFields(), system->field_store->getParameterFields(), std::move(advancer),
+      physics_name, system->field_store->getReactionInfos());
+}
+
+template <typename SystemType>
+/**
+ * @brief Build a `DifferentiablePhysics` and default multiphysics advancer from a system.
+ *
+ * Uses cycle-zero and post-solve systems already attached to `system`.
+ *
+ * @param system Main system to wrap.
+ * @param physics_name Name exposed through the `BasePhysics` interface.
+ */
+std::unique_ptr<DifferentiablePhysics> makeDifferentiablePhysics(std::shared_ptr<SystemType> system,
+                                                                 const std::string& physics_name)
+{
+  return makeDifferentiablePhysics(system, makeAdvancer(system), physics_name);
+}
 
 }  // namespace smith

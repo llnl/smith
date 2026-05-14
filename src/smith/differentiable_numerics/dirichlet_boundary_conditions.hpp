@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 
 namespace smith {
@@ -158,12 +160,24 @@ class DirichletBoundaryConditions {
     setFixedVectorBCs<spatial_dim, field_dim>(domain, components);
   }
 
-  /// @brief Return the smith BoundaryConditionManager
+  /// @brief Return the value-level smith BoundaryConditionManager.
   const smith::BoundaryConditionManager& getBoundaryConditionManager() const { return bcs_; }
 
+  /// @brief Return the BC manager whose prescribed values are the second time derivative of the
+  ///        value-level BC, computed by one-sided three-point forward FD with step
+  ///        @c h = 1e-4 * max(1,|t|).
+  ///
+  /// Rebuilt on each call from current value-level essentials, so late additions are reflected.
+  const smith::BoundaryConditionManager& getSecondDerivativeManager() const;
+
  private:
+  void rebuildSecondDerivativeManager(BoundaryConditionManager& target) const;
+
+  const mfem::ParMesh& mfem_mesh_;       ///< for constructing derivative-level managers
   smith::BoundaryConditionManager bcs_;  ///< boundary condition manager that does the heavy lifting
   mfem::ParFiniteElementSpace& space_;   ///< save the space for the field which will be constrained
+
+  mutable std::optional<BoundaryConditionManager> second_derivative_manager_;
 };
 
 }  // namespace smith

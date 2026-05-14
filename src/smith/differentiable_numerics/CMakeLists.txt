@@ -10,7 +10,8 @@ set(differentiable_numerics_sources
     differentiable_physics.cpp
     lumped_mass_explicit_newmark_state_advancer.cpp
     nonlinear_block_solver.cpp
-    coupled_system_solver.cpp
+    system_solver.cpp
+    system_base.cpp
     nonlinear_solve.cpp
     evaluate_objective.cpp
     dirichlet_boundary_conditions.cpp
@@ -23,7 +24,7 @@ set(differentiable_numerics_headers
     state_advancer.hpp
     reaction.hpp
     nonlinear_block_solver.hpp
-    coupled_system_solver.hpp
+    system_solver.hpp
     differentiable_physics.hpp
     timestep_estimator.hpp
     explicit_dynamic_solve.hpp
@@ -33,13 +34,18 @@ set(differentiable_numerics_headers
     evaluate_objective.hpp
     dirichlet_boundary_conditions.hpp
     time_integration_rule.hpp
-    time_discretized_weak_form.hpp
     paraview_writer.hpp
     multiphysics_time_integrator.hpp
     solid_mechanics_system.hpp
     solid_mechanics_with_internal_vars_system.hpp
+    state_variable_system.hpp
     thermal_system.hpp
     thermo_mechanics_system.hpp
+    thermo_mechanics_with_internal_vars_system.hpp
+    time_info_solid_materials.hpp
+    time_info_thermo_mechanical_materials.hpp
+    coupling_params.hpp
+    combined_system.hpp
     system_base.hpp
     differentiable_test_utils.hpp
     )

@@ -20,7 +20,7 @@ class NonlinearBlockSolverBase;
 class BoundaryConditionManager;
 
 /// @brief Orchestrates staggered solution for multiphysics systems.
-class CoupledSystemSolver {
+class SystemSolver {
  public:
   /// @brief Represents a single stage in a staggered iteration.
   struct Stage {
@@ -31,18 +31,18 @@ class CoupledSystemSolver {
                                                        ///< A value of 1.0 (default) means no relaxation (full update).
   };
 
-  /// @brief Construct a monolithic CoupledSystemSolver from a single block solver.
+  /// @brief Construct a monolithic SystemSolver from a single block solver.
   /// @param single_solver The solver to use for all blocks simultaneously.
-  CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver);
+  SystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver);
 
-  /// @brief Construct a CoupledSystemSolver for staggered iteration.
+  /// @brief Construct a SystemSolver for staggered iteration.
   /// @param max_staggered_iterations Maximum number of staggered sweeps across all stages.  When
   ///        @p exact_staggered_steps is false, the solver may exit early once all stage solvers
   ///        report convergence.
   /// @param exact_staggered_steps If true, always perform exactly @p max_staggered_iterations
   ///        sweeps with no early-exit convergence check.  Useful when a fixed number of
   ///        partitioned-stagger steps is required regardless of residual level.
-  CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
+  SystemSolver(int max_staggered_iterations, bool exact_staggered_steps = false);
 
   /// @brief Convenience method to add a solver stage.
   /// @param block_indices Indices of the blocks to solve.
@@ -50,6 +50,12 @@ class CoupledSystemSolver {
   /// @param relaxation_factor Per-stage relaxation factor in `(0, 1]`.
   void addSubsystemSolver(const std::vector<size_t>& block_indices, std::shared_ptr<NonlinearBlockSolverBase> solver,
                           double relaxation_factor = 1.0);
+
+  /// @brief Append stages from another solver using a local-to-global block mapping.
+  /// @param subsystem_solver Source solver whose stages operate on subsystem-local block indices.
+  /// @param global_block_indices Mapping from subsystem-local block index to global block index.
+  void appendStagesWithBlockMapping(const SystemSolver& subsystem_solver,
+                                    const std::vector<size_t>& global_block_indices);
 
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.
@@ -68,7 +74,13 @@ class CoupledSystemSolver {
 
   /// @brief Build a single-block solver from the stage responsible for @p block_index.
   /// Prefers constructing a fresh solver instance when the underlying stage solver retains rebuildable config.
-  std::shared_ptr<CoupledSystemSolver> singleBlockSolver(size_t block_index) const;
+  std::shared_ptr<SystemSolver> singleBlockSolver(size_t block_index) const;
+
+  /// @brief Maximum number of staggered sweeps allowed for this solver.
+  int maxStaggeredIterations() const { return max_staggered_iterations_; }
+
+  /// @brief Whether solver always performs exactly `maxStaggeredIterations()` sweeps.
+  bool exactStaggeredSteps() const { return exact_staggered_steps_; }
 
  private:
   int max_staggered_iterations_;  ///< Maximum number of staggered iterations.

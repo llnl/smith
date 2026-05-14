@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/physics/weak_form.hpp"
@@ -13,40 +13,66 @@
 
 #include <algorithm>
 #include <numeric>
+#include <unordered_map>
+#include <string>
 #include <axom/slic.hpp>
 #include <axom/fmt.hpp>
 
 namespace smith {
 
-CoupledSystemSolver::CoupledSystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver)
+SystemSolver::SystemSolver(std::shared_ptr<NonlinearBlockSolverBase> single_solver)
     : max_staggered_iterations_(1), exact_staggered_steps_(false)
 {
   addSubsystemSolver({}, std::move(single_solver));
 }
 
-CoupledSystemSolver::CoupledSystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
+SystemSolver::SystemSolver(int max_staggered_iterations, bool exact_staggered_steps)
     : max_staggered_iterations_(max_staggered_iterations), exact_staggered_steps_(exact_staggered_steps)
 {
   SLIC_ERROR_IF(max_staggered_iterations <= 0, "max_staggered_iterations must be > 0");
 }
 
-void CoupledSystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
-                                             std::shared_ptr<NonlinearBlockSolverBase> solver, double relaxation_factor)
+void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
+                                      std::shared_ptr<NonlinearBlockSolverBase> solver, double relaxation_factor)
 {
-  SLIC_ERROR_IF(!solver, "CoupledSystemSolver stage solver must be non-null");
+  SLIC_ERROR_IF(!solver, "SystemSolver stage solver must be non-null");
   SLIC_ERROR_IF(relaxation_factor <= 0.0 || relaxation_factor > 1.0,
                 axom::fmt::format("Stage relaxation_factor {} must be in (0, 1]", relaxation_factor));
 
   stages_.push_back(Stage{block_indices, std::move(solver), relaxation_factor});
 }
 
-std::vector<FieldState> CoupledSystemSolver::solve(
-    const std::vector<WeakForm*>& residual_evals, const std::vector<std::vector<size_t>>& block_indices,
-    const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
-    const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
-    const std::vector<const BoundaryConditionManager*>& bc_managers) const
+void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_solver,
+                                                const std::vector<size_t>& global_block_indices)
 {
-  SLIC_ERROR_IF(stages_.empty(), "CoupledSystemSolver has no stages defined.");
+  SLIC_ERROR_IF(global_block_indices.empty(), "Global block index map must be non-empty");
+
+  for (const auto& stage : subsystem_solver.stages_) {
+    std::vector<size_t> remapped_block_indices;
+    if (stage.block_indices.empty()) {
+      remapped_block_indices = global_block_indices;
+    } else {
+      remapped_block_indices.reserve(stage.block_indices.size());
+      for (size_t local_block_index : stage.block_indices) {
+        SLIC_ERROR_IF(local_block_index >= global_block_indices.size(),
+                      axom::fmt::format("Local block index {} exceeds subsystem size {}", local_block_index,
+                                        global_block_indices.size()));
+        remapped_block_indices.push_back(global_block_indices[local_block_index]);
+      }
+    }
+    addSubsystemSolver(remapped_block_indices, stage.solver, stage.relaxation_factor);
+  }
+}
+
+std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
+                                            const std::vector<std::vector<size_t>>& block_indices,
+                                            const FieldState& shape_disp,
+                                            const std::vector<std::vector<FieldState>>& states,
+                                            const std::vector<std::vector<FieldState>>& params,
+                                            const TimeInfo& time_info,
+                                            const std::vector<const BoundaryConditionManager*>& bc_managers) const
+{
+  SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
 
   size_t num_residuals = residual_evals.size();
   std::vector<Stage> active_stages = stages_;
@@ -54,6 +80,10 @@ std::vector<FieldState> CoupledSystemSolver::solve(
     if (stage.block_indices.empty()) {
       stage.block_indices.resize(num_residuals);
       std::iota(stage.block_indices.begin(), stage.block_indices.end(), 0);
+    }
+    for (size_t block_index : stage.block_indices) {
+      SLIC_ERROR_IF(block_index >= num_residuals,
+                    axom::fmt::format("Stage block index {} exceeds residual count {}", block_index, num_residuals));
     }
   }
   // Set the inner tolerance factor based on the number of stages.  For single-stage
@@ -73,6 +103,16 @@ std::vector<FieldState> CoupledSystemSolver::solve(
 
   // Working copy of states, updated in-place as stages solve
   std::vector<std::vector<FieldState>> current_states = states;
+
+  // Pre-compute name -> (row, slot) routing so the propagation loop avoids O(N*M) string compares
+  // on every staggered iteration. Field-name identity within current_states is invariant across
+  // the iteration loop: only values are replaced, never the underlying name.
+  std::unordered_map<std::string, std::vector<std::pair<size_t, size_t>>> field_routing;
+  for (size_t r = 0; r < num_residuals; ++r) {
+    for (size_t slot = 0; slot < current_states[r].size(); ++slot) {
+      field_routing[current_states[r][slot].get()->name()].emplace_back(r, slot);
+    }
+  }
 
   // Helper lambda to assemble input pointers, evaluate residual, and zero essential BCs
   auto eval_residual_and_zero_bcs = [&](size_t global_row) {
@@ -132,7 +172,9 @@ std::vector<FieldState> CoupledSystemSolver::solve(
           block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
                       stage.solver.get(), stage_bc_managers);
 
-      // Propagate updated fields to all residuals that reference them.
+      // Propagate updated fields to every residual input that references the solved field.
+      // Match by field name (looked up via the pre-computed routing map): coupling fields appear
+      // as fixed inputs in other rows and therefore do not have a valid unknown-block entry there.
       // Apply relaxation: x_new = omega * x_solved + (1 - omega) * x_k.
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_col = stage.block_indices[i];
@@ -143,10 +185,10 @@ std::vector<FieldState> CoupledSystemSolver::solve(
           new_state = weighted_average(new_state, old_state, stage.relaxation_factor);
         }
 
-        for (size_t r = 0; r < num_residuals; ++r) {
-          size_t c = block_indices[r][global_col];
-          if (c != invalid_block_index) {
-            current_states[r][c] = new_state;
+        auto it = field_routing.find(new_state.get()->name());
+        if (it != field_routing.end()) {
+          for (const auto& [r, slot] : it->second) {
+            current_states[r][slot] = new_state;
           }
         }
       }
@@ -188,12 +230,12 @@ std::vector<FieldState> CoupledSystemSolver::solve(
   return final_solutions;
 }
 
-std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size_t block_index) const
+std::shared_ptr<SystemSolver> SystemSolver::singleBlockSolver(size_t block_index) const
 {
   constexpr bool exact_staggered_steps = true;
   for (const auto& stage : stages_) {
     if (stage.block_indices.empty()) {
-      auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps);
+      auto result = std::make_shared<SystemSolver>(1, exact_staggered_steps);
       std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
       if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
         if (auto cloned_solver = equation_solver->cloneFresh()) {
@@ -207,7 +249,7 @@ std::shared_ptr<CoupledSystemSolver> CoupledSystemSolver::singleBlockSolver(size
 
     auto found = std::find(stage.block_indices.begin(), stage.block_indices.end(), block_index);
     if (found != stage.block_indices.end()) {
-      auto result = std::make_shared<CoupledSystemSolver>(1, exact_staggered_steps);
+      auto result = std::make_shared<SystemSolver>(1, exact_staggered_steps);
       std::shared_ptr<NonlinearBlockSolverBase> stage_solver = stage.solver;
       if (const auto* equation_solver = dynamic_cast<const NonlinearBlockSolver*>(stage.solver.get())) {
         if (auto cloned_solver = equation_solver->cloneFresh()) {

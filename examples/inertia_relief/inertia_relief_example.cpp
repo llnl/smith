@@ -38,9 +38,9 @@ using DensitySpace = smith::L2<disp_order - 1>;
 
 using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
 using SolidWeakFormT =
-    smith::TimeDiscretizedWeakForm<dim, smith::H1<disp_order, dim>,
-                                   smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
-                                                     smith::H1<disp_order, dim>, DensitySpace>>;
+    smith::FunctionalWeakForm<dim, smith::H1<disp_order, dim>,
+                              smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
+                                                smith::H1<disp_order, dim>, DensitySpace>>;
 
 enum FIELD
 {
@@ -212,20 +212,17 @@ int main(int argc, char* argv[])
 
   ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
-  mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
-                                 [](double /*t*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
+  mass_objective.addBodyIntegral(
+      mesh->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto /*U*/, auto RHO) { return get<smith::VALUE>(RHO); });
   double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
   smith::tensor<double, dim> initial_cg;  // center of gravity
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
-    cg_objective->addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-                                  [i](double
-                                      /*time*/,
-                                      auto X, auto U, auto RHO) {
-                                    return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
-                                  });
+    cg_objective->addBodyIntegral(mesh->entireBodyName(), [i](auto /*t_info*/, auto X, auto U, auto RHO) {
+      return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
+    });
     initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
@@ -234,8 +231,8 @@ int main(int argc, char* argv[])
   for (int i = 0; i < dim; ++i) {
     auto center_rotation_objective =
         std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh, param_space_ptrs);
-    center_rotation_objective->addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-                                               [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
+    center_rotation_objective->addBodyIntegral(mesh->entireBodyName(),
+                                               [i, initial_cg](auto /*t_info*/, auto X, auto U, auto RHO) {
                                                  auto u = get<smith::VALUE>(U);
                                                  auto x = get<smith::VALUE>(X) + u;
                                                  auto dx = x - initial_cg;

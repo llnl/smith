@@ -12,10 +12,11 @@ set(numerics_serial_test_sources
     test_odes.cpp
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
+    test_linear_solver_none.cpp
     test_block_preconditioner_custom_operators.cpp
     )
 
-smith_add_tests( SOURCES       ${numerics_serial_test_sources}
+smith_add_tests(SOURCES       ${numerics_serial_test_sources}
                  DEPENDS_ON    ${numerics_test_dependencies}
                  NUM_MPI_TASKS 1)
 
