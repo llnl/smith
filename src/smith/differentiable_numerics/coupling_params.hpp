@@ -300,39 +300,50 @@ decltype(auto) applyTimeRuleAndCoupling(const Rule& rule, const Coupling& coupli
 template <typename PacksTuple>
 struct FlattenCoupling;
 
+template <typename Tuple>
+struct TupleToParameters;
+
+template <typename... Spaces>
+struct TupleToParameters<std::tuple<Spaces...>> {
+  using type = Parameters<Spaces...>;
+};
+
+template <typename Tuple>
+using tuple_to_parameters_t = typename TupleToParameters<std::decay_t<Tuple>>::type;
+
+template <typename Pack>
+struct pack_tuple;
+
+template <int D, int O, typename R, typename... Spaces>
+struct pack_tuple<PhysicsFields<D, O, R, Spaces...>> {
+  using type = std::tuple<Spaces...>;
+};
+
+template <typename... Spaces>
+struct pack_tuple<ParamFields<Spaces...>> {
+  using type = std::tuple<Spaces...>;
+};
+
+template <typename Pack>
+using pack_tuple_t = typename pack_tuple<std::decay_t<Pack>>::type;
+
+template <typename... Tuples>
+using tuple_cat_t = decltype(std::tuple_cat(std::declval<Tuples>()...));
+
+template <typename CouplingParams, typename FixedParams>
+struct AppendParameters;
+
+template <typename... Coupled, typename... Fixed>
+struct AppendParameters<Parameters<Coupled...>, Parameters<Fixed...>> {
+  using type = Parameters<Fixed..., Coupled...>;
+};
+
 /// @brief Specialization of FlattenCoupling for a tuple of coupling packs.
 template <typename... Packs>
 struct FlattenCoupling<std::tuple<Packs...>> {
- private:
-  template <typename Pack>
-  struct pack_spaces;
-  template <int D, int O, typename R, typename... S>
-  struct pack_spaces<PhysicsFields<D, O, R, S...>> {
-    using type = Parameters<S...>;
-  };
-  template <typename... S>
-  struct pack_spaces<ParamFields<S...>> {
-    using type = Parameters<S...>;
-  };
-
-  template <typename... Ps>
-  struct concat;
-  template <>
-  struct concat<> {
-    using type = Parameters<>;
-  };
-  template <typename... A>
-  struct concat<Parameters<A...>> {
-    using type = Parameters<A...>;
-  };
-  template <typename... A, typename... B, typename... Rest>
-  struct concat<Parameters<A...>, Parameters<B...>, Rest...> {
-    using type = typename concat<Parameters<A..., B...>, Rest...>::type;
-  };
-
  public:
-  using parameters =
-      typename concat<typename pack_spaces<std::decay_t<Packs>>::type...>::type;  ///< Flattened parameter spaces.
+  using tuple_type = tuple_cat_t<pack_tuple_t<Packs>...>;
+  using parameters = tuple_to_parameters_t<tuple_type>;  ///< Flattened parameter spaces.
 };
 
 /// @brief Typedef for flattened coupling parameter spaces.
@@ -360,16 +371,8 @@ struct AppendCouplingToParams;
 /// @brief Specialization of AppendCouplingToParams.
 template <typename PacksTuple, typename... Fixed>
 struct AppendCouplingToParams<PacksTuple, Parameters<Fixed...>> {
- private:
-  template <typename P>
-  struct expand;
-  template <typename... CS>
-  struct expand<Parameters<CS...>> {
-    using type = Parameters<Fixed..., CS...>;
-  };
-
- public:
-  using type = typename expand<flatten_coupling_t<PacksTuple>>::type;  ///< The appended parameter list.
+  using type = typename AppendParameters<flatten_coupling_t<PacksTuple>, Parameters<Fixed...>>::type;
+  ///< The appended parameter list.
 };
 
 }  // namespace detail
