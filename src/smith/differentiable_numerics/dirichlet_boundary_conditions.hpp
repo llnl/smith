@@ -90,11 +90,31 @@ class DirichletBoundaryConditions {
     bcs_.addEssential(dof_list, component_disp_bdr_coef_, space_, 0);
   }
 
+  /// @brief Specify time and space varying Dirichlet boundary conditions over an explicit list of local scalar dofs.
+  template <int spatial_dim, typename AppliedDisplacementFunction>
+  void setScalarBCsOnLocalDofs(const mfem::Array<int>& local_dofs, AppliedDisplacementFunction applied_displacement)
+  {
+    auto mfem_coefficient_function = [applied_displacement](const mfem::Vector& X_mfem, double t) {
+      auto X = make_tensor<spatial_dim>([&X_mfem](int k) { return X_mfem[k]; });
+      return applied_displacement(t, X);
+    };
+
+    auto component_disp_bdr_coef_ = std::make_shared<mfem::FunctionCoefficient>(mfem_coefficient_function);
+    bcs_.addEssential(local_dofs, component_disp_bdr_coef_, space_, 0);
+  }
+
   /// @brief Constrain the dofs of a scalar field over a domain
   template <int spatial_dim>
   void setFixedScalarBCs(const Domain& domain)
   {
     setScalarBCs<spatial_dim>(domain, [](auto, auto) { return 0.0; });
+  }
+
+  /// @brief Constrain an explicit list of local scalar dofs.
+  template <int spatial_dim>
+  void setFixedScalarBCsOnLocalDofs(const mfem::Array<int>& local_dofs)
+  {
+    setScalarBCsOnLocalDofs<spatial_dim>(local_dofs, [](auto, auto) { return 0.0; });
   }
 
   /// @brief Constrain the vector dofs over a domain corresponding to a subset of the vector components
@@ -104,12 +124,26 @@ class DirichletBoundaryConditions {
     setVectorBCs<spatial_dim>(domain, components, [](auto, auto) { return smith::tensor<double, field_dim>{}; });
   }
 
-  /// @brief Constrain the dofs of a scalar field over a domain
+  template <int spatial_dim>
+  /// @brief Constrain selected vector components over a domain to zero.
+  void setFixedVectorBCs(const Domain& domain, std::vector<int> components)
+  {
+    setFixedVectorBCs<spatial_dim, spatial_dim>(domain, components);
+  }
+
+  /// @brief Constrain one vector component over a domain to zero.
   template <int spatial_dim, int field_dim>
   void setFixedVectorBCs(const Domain& domain, int component)
   {
     std::vector<int> components{component};
-    setVectorBCs<spatial_dim, field_dim>(domain, components);
+    setFixedVectorBCs<spatial_dim, field_dim>(domain, components);
+  }
+
+  /// @brief Constrain one vector component over a domain to zero.
+  template <int spatial_dim>
+  void setFixedVectorBCs(const Domain& domain, int component)
+  {
+    setFixedVectorBCs<spatial_dim, spatial_dim>(domain, component);
   }
 
   /// @brief Constrain all the vector dofs over a domain
