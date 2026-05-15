@@ -7,11 +7,17 @@
 set(differentiable_numerics_test_depends smith_physics smith_differentiable_numerics gtest)
 
 set(differentiable_numerics_test_source
+    test_solver_convergence.cpp
     test_field_state.cpp
+    test_solid_dynamics.cpp
     test_explicit_dynamics.cpp
-    test_solid_mechanics_state_advancer.cpp
     test_porous_heat_sink.cpp
     test_thermo_mechanics.cpp
+    test_thermal_static.cpp
+    test_solid_static_with_internal_vars.cpp
+    test_multiphysics_time_integrator.cpp
+    test_mixed_poisson.cpp
+    test_amg_vdim_block_preconditioner.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

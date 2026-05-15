@@ -33,7 +33,7 @@ FieldState applyZeroBoundaryConditions(const FieldState& s, const BoundaryCondit
   return s_bc.finalize();
 }
 
-std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
+std::pair<std::vector<FieldState>, std::vector<ReactionState>> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
     const TimeInfo& time_info, const FieldState& shape_disp, const std::vector<FieldState>& states_in,
     const std::vector<FieldState>& params) const
 {
@@ -59,7 +59,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
     auto lumped_mass = computeLumpedMass(mass_residual_eval_.get(), shape_disp, states[DISP], params[DENSITY]);
     auto diag_inv = diagInverse(lumped_mass);  // should return inverse of diagonal matrix as a field state
     m_diag_inv = std::make_unique<FieldState>(diag_inv);
-    auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, states, params, time_info, ACCEL);
+    auto zero_mass_res = evalReaction(residual_eval_.get(), shape_disp, states, params, time_info, ACCEL);
     auto a_initial = negativeComponentWiseMult(*m_diag_inv, zero_mass_res, bc_manager_.get());
     states[ACCEL] = a_initial;
   }
@@ -93,7 +93,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
     std::vector<FieldState> state_pred{u_pred, v_half_step, zeroCopy(a)};
 
     // should return the evaluation of the residual for the current state variables
-    auto zero_mass_res = evalResidual(residual_eval_.get(), shape_disp, state_pred, params,
+    auto zero_mass_res = evalReaction(residual_eval_.get(), shape_disp, state_pred, params,
                                       TimeInfo(time.get(), time_info.dt(), time_info.cycle()), ACCEL);
 
     // m_diag_inv*zero_mass_res; // calculate the acceleration
@@ -110,7 +110,7 @@ std::vector<FieldState> LumpedMassExplicitNewmarkStateAdvancer::advanceState(
   }
 
   // place all solved updated states into the output
-  return states;
+  return {states, std::vector<ReactionState>{}};
 }
 
 }  // namespace smith

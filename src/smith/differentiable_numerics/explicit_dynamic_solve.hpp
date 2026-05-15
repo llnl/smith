@@ -96,7 +96,7 @@ inline FieldState diagInverse(const FieldState& x)
 /// @brief gretl-function implementation which evaluates the residual force (which is minus the mechanical force) given
 /// shape displacement, states and params.  The inertial index denotes which index in the state corresponds to the
 /// highest time derivative term (e.g., acceleration for solid mechanics).
-inline FieldState evalResidual(const WeakForm* residual_eval, FieldState shape_disp,
+inline FieldState evalReaction(const WeakForm* residual_eval, FieldState shape_disp,
                                const std::vector<FieldState>& states, const std::vector<FieldState>& params,
                                TimeInfo time_info, size_t inertial_index)
 {

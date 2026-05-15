@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "smith/numerics/equation_solver.hpp"
+#include "smith/numerics/block_preconditioner.hpp"
+#include "smith/numerics/solver_with_preconditioner.hpp"
 
 #include <cstdlib>
 #include <iomanip>
@@ -23,8 +25,98 @@
 
 namespace smith {
 
+namespace {
+/**
+ * @brief Simple solver wrapper that only applies a preconditioner.
+ */
+class PreconditionerOnlySolver : public mfem::IterativeSolver {
+ public:
+  PreconditionerOnlySolver(MPI_Comm mpi_comm) : mfem::IterativeSolver(mpi_comm) {}
+
+  /// @overload
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    if (prec) {
+      prec->Mult(x, y);
+    } else {
+      y = x;
+    }
+  }
+
+  /// @overload
+  void SetOperator(const mfem::Operator& op) override
+  {
+    if (prec) {
+      prec->SetOperator(op);
+    }
+    width = op.Width();
+    height = op.Height();
+  }
+
+ private:
+  // Note: mfem::IterativeSolver already has a 'prec' member (mfem::Solver*)
+};
+
+bool preconditionerSupportsBlockOperator(Preconditioner preconditioner)
+{
+  switch (preconditioner) {
+    case Preconditioner::None:
+    case Preconditioner::BlockDiagonal:
+    case Preconditioner::BlockTriangular:
+    case Preconditioner::BlockSchur:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool linearSolverSupportsBlockOperator(LinearSolver linear_solver)
+{
+  switch (linear_solver) {
+    case LinearSolver::CG:
+    case LinearSolver::GMRES:
+    case LinearSolver::SuperLU:
+#ifdef MFEM_USE_STRUMPACK
+    case LinearSolver::Strumpack:
+#endif
+#ifdef SMITH_USE_PETSC
+    case LinearSolver::PetscCG:
+    case LinearSolver::PetscGMRES:
+#endif
+    case LinearSolver::None:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool monolithicizeOperatorIfNeeded(const LinearSolverOptions& linear_options, mfem::Operator& assembled_gradient,
+                                   mfem::Operator*& gradient_operator)
+{
+  auto* block_gradient = dynamic_cast<const mfem::BlockOperator*>(&assembled_gradient);
+  if (!block_gradient) {
+    gradient_operator = &assembled_gradient;
+    return false;
+  }
+
+  if (!requiresMonolithicOperator(linear_options)) {
+    gradient_operator = &assembled_gradient;
+    return false;
+  }
+
+  gradient_operator = buildMonolithicMatrix(*block_gradient).release();
+  SLIC_DEBUG_ROOT(
+      axom::fmt::format("Automatically monolithicizing block Jacobian for linear solver {} with "
+                        "preconditioner {}",
+                        linearName(linear_options.linear_solver), preconditionerName(linear_options.preconditioner)));
+  return true;
+}
+
+}  // namespace
+
+/// @cond
 /// Newton solver with a 2-way line-search.  Reverts to regular Newton if max_line_search_iterations is set to 0.
-class NewtonSolver : public mfem::NewtonSolver {
+class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonlinearSolver {
  protected:
   /// initial solution vector to do line-search off of
   mutable mfem::Vector x0;
@@ -32,44 +124,79 @@ class NewtonSolver : public mfem::NewtonSolver {
   /// nonlinear solver options
   NonlinearSolverOptions nonlinear_options;
 
+  /// linear solver options
+  LinearSolverOptions linear_options;
+
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
+  /// Tracks if grad was monolithicized and needs deletion
+  mutable bool grad_monolithic = false;
+
+  std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
+
  public:
   /// constructor
-  NewtonSolver(const NonlinearSolverOptions& nonlinear_opts) : nonlinear_options(nonlinear_opts) {}
+  NewtonSolver(const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts)
+      : nonlinear_options(nonlinear_opts), linear_options(linear_opts)
+  {
+  }
 
 #ifdef MFEM_USE_MPI
   /// parallel constructor
-  NewtonSolver(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts)
-      : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts)
+  NewtonSolver(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts)
+      : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts), linear_options(linear_opts)
   {
   }
 #endif
 
-  /// Evaluate the residual, put in rOut and return its norm.
-  double evaluateNorm(const mfem::Vector& x, mfem::Vector& rOut) const
+  /// destructor
+  virtual ~NewtonSolver()
+  {
+    if (grad_monolithic) delete grad;
+  }
+
+  void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) override
+  {
+    convergence_manager_ = std::move(convergence_manager);
+  }
+
+  /// Evaluate the residual and convergence status.
+  ConvergenceStatus evaluateConvergence(const mfem::Vector& x, mfem::Vector& rOut) const
   {
     SMITH_MARK_FUNCTION;
-    double normEval = std::numeric_limits<double>::max();
+    ConvergenceStatus status;
+    status.global_norm = std::numeric_limits<double>::max();
+    status.global_goal = std::numeric_limits<double>::max();
     try {
       oper->Mult(x, rOut);
-      normEval = Norm(rOut);
+      if (convergence_manager_) {
+        status = convergence_manager_->evaluate(1.0, rOut);
+      } else {
+        status.block_norms = {Norm(rOut)};
+        status.global_norm = status.block_norms.front();
+        status.global_goal = std::max(rel_tol * initial_norm, abs_tol);
+        status.global_converged = status.global_norm <= status.global_goal;
+        status.converged = status.global_converged;
+      }
     } catch (const std::exception&) {
-      normEval = std::numeric_limits<double>::max();
+      status.global_norm = std::numeric_limits<double>::max();
+      status.global_goal = std::numeric_limits<double>::max();
     }
-    return normEval;
+    return status;
   }
 
   /// assemble the jacobian
   void assembleJacobian(const mfem::Vector& x) const
   {
     SMITH_MARK_FUNCTION;
-    grad = &oper->GetGradient(x);
-    if (nonlinear_options.force_monolithic) {
-      auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
-      if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
+    if (grad_monolithic) {
+      delete grad;
+      grad = nullptr;
+      grad_monolithic = false;
     }
+    mfem::Operator& assembled_gradient = oper->GetGradient(x);
+    grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
   }
 
   /// set the preconditioner for the linear solver
@@ -87,7 +214,7 @@ class NewtonSolver : public mfem::NewtonSolver {
   }
 
   /// @overload
-  void Mult(const mfem::Vector&, mfem::Vector& x) const
+  void Mult(const mfem::Vector&, mfem::Vector& x) const override
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
@@ -97,15 +224,15 @@ class NewtonSolver : public mfem::NewtonSolver {
 
     using real_t = mfem::real_t;
 
-    real_t norm, norm_goal = 0;
-    norm = initial_norm = evaluateNorm(x, r);
+    ConvergenceStatus status = evaluateConvergence(x, r);
+    real_t norm = status.global_norm;
+    initial_norm = norm;
     if (norm == 0.0) return;
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
     }
 
-    norm_goal = std::max(rel_tol * initial_norm, abs_tol);
     prec->iterative_mode = false;
 
     int it = 0;
@@ -125,7 +252,7 @@ class NewtonSolver : public mfem::NewtonSolver {
         return;
       }
 
-      if (norm <= norm_goal && it >= nonlinear_options.min_iterations) {
+      if (status.converged && it >= nonlinear_options.min_iterations) {
         converged = true;
         break;
       } else if (it >= max_iter) {
@@ -146,7 +273,8 @@ class NewtonSolver : public mfem::NewtonSolver {
 
       real_t stepScale = 1.0;
       add(x0, -stepScale, c, x);
-      norm = evaluateNorm(x, r);
+      status = evaluateConvergence(x, r);
+      norm = status.global_norm;
 
       const int max_ls_iters = nonlinear_options.max_line_search_iterations;
       static constexpr real_t reduction = 0.5;
@@ -164,20 +292,23 @@ class NewtonSolver : public mfem::NewtonSolver {
       for (; !is_improved(norm, stepScale) && ls_iter < max_ls_iters; ++ls_iter, ++ls_iter_sum) {
         stepScale *= reduction;
         add(x0, -stepScale, c, x);
-        norm = evaluateNorm(x, r);
+        status = evaluateConvergence(x, r);
+        norm = status.global_norm;
       }
 
       // try the opposite direction and linesearch back from there
       if (max_ls_iters > 0 && ls_iter == max_ls_iters && !is_improved(norm, stepScale)) {
         stepScale = 1.0;
         add(x0, stepScale, c, x);
-        norm = evaluateNorm(x, r);
+        status = evaluateConvergence(x, r);
+        norm = status.global_norm;
 
         ls_iter = 0;
         for (; !is_improved(norm, stepScale) && ls_iter < max_ls_iters; ++ls_iter, ++ls_iter_sum) {
           stepScale *= reduction;
           add(x0, stepScale, c, x);
-          norm = evaluateNorm(x, r);
+          status = evaluateConvergence(x, r);
+          norm = status.global_norm;
         }
 
         // ok, the opposite direction was also terrible, lets go back, cut in half 1 last time and accept it hoping for
@@ -186,7 +317,8 @@ class NewtonSolver : public mfem::NewtonSolver {
           ++ls_iter_sum;
           stepScale *= reduction;
           add(x0, -stepScale, c, x);
-          norm = evaluateNorm(x, r);
+          status = evaluateConvergence(x, r);
+          norm = status.global_norm;
         }
       }
 
@@ -313,7 +445,7 @@ void printTrustRegionInfo(double realObjective, double modelObjective, size_t cg
  * rely on an incremental work approximation: 0.5 (f^n + f^{n+1}) dot (u^{n+1} - u^n).  While less theoretically sound,
  * it appears to be very effective in practice.
  */
-class TrustRegion : public mfem::NewtonSolver {
+class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinearSolver {
  protected:
   /// predicted solution
   mutable mfem::Vector x_pred;
@@ -338,6 +470,11 @@ class TrustRegion : public mfem::NewtonSolver {
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
+  /// Tracks if grad was monolithicized and needs deletion
+  mutable bool grad_monolithic = false;
+
+  std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
+
  public:
   /// internal counter for hess-vecs
   mutable size_t num_hess_vecs = 0;
@@ -358,6 +495,17 @@ class TrustRegion : public mfem::NewtonSolver {
   {
   }
 #endif
+
+  /// destructor
+  virtual ~TrustRegion()
+  {
+    if (grad_monolithic) delete grad;
+  }
+
+  void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) override
+  {
+    convergence_manager_ = std::move(convergence_manager);
+  }
 
   /// finds tau s.t. (z + tau*d)^2 = trSize^2
   void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd,
@@ -598,11 +746,13 @@ class TrustRegion : public mfem::NewtonSolver {
   {
     SMITH_MARK_FUNCTION;
     ++num_jacobian_assembles;
-    grad = &oper->GetGradient(x);
-    if (nonlinear_options.force_monolithic) {
-      auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
-      if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
+    if (grad_monolithic) {
+      delete grad;
+      grad = nullptr;
+      grad_monolithic = false;
     }
+    mfem::Operator& assembled_gradient = oper->GetGradient(x);
+    grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
   }
 
   /// evaluate the nonlinear residual
@@ -612,6 +762,28 @@ class TrustRegion : public mfem::NewtonSolver {
     ++num_residuals;
     oper->Mult(x_, r_);
     return Norm(r_);
+  }
+
+  ConvergenceStatus evaluateConvergence(const mfem::Vector& x_, mfem::Vector& r_) const
+  {
+    ConvergenceStatus status;
+    status.global_norm = std::numeric_limits<double>::max();
+    status.global_goal = std::numeric_limits<double>::max();
+    try {
+      status.global_norm = computeResidual(x_, r_);
+      if (convergence_manager_) {
+        status = convergence_manager_->evaluate(1.0, r_);
+      } else {
+        status.block_norms = {status.global_norm};
+        status.global_goal = std::max(rel_tol * initial_norm, abs_tol);
+        status.global_converged = status.global_norm <= status.global_goal;
+        status.converged = status.global_converged;
+      }
+    } catch (const std::exception&) {
+      status.global_norm = std::numeric_limits<double>::max();
+      status.global_goal = std::numeric_limits<double>::max();
+    }
+    return status;
   }
 
   /// apply the action of the assembled Jacobian matrix to a vector
@@ -631,7 +803,7 @@ class TrustRegion : public mfem::NewtonSolver {
   };
 
   /// @overload
-  void Mult(const mfem::Vector&, mfem::Vector& X) const
+  void Mult(const mfem::Vector&, mfem::Vector& X) const override
   {
     MFEM_ASSERT(oper != NULL, "the Operator is not set (use SetOperator).");
     MFEM_ASSERT(prec != NULL, "the Solver is not set (use SetSolver).");
@@ -647,11 +819,11 @@ class TrustRegion : public mfem::NewtonSolver {
     num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
-    real_t norm, norm_goal = 0.0;
-    norm = initial_norm = computeResidual(X, r);
+    ConvergenceStatus status = evaluateConvergence(X, r);
+    real_t norm = status.global_norm;
+    real_t norm_goal = status.global_goal;
+    initial_norm = norm;
     if (norm == 0.0) return;
-
-    norm_goal = std::max(rel_tol * initial_norm, abs_tol);
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -701,7 +873,7 @@ class TrustRegion : public mfem::NewtonSolver {
         return;
       }
 
-      if (norm <= norm_goal && it >= nonlinear_options.min_iterations) {
+      if (status.converged && it >= nonlinear_options.min_iterations) {
         converged = true;
         break;
       } else if (it >= max_iter) {
@@ -799,25 +971,25 @@ class TrustRegion : public mfem::NewtonSolver {
         double realObjective = std::numeric_limits<double>::max();
         double normPred = std::numeric_limits<double>::max();
         try {
-          normPred = computeResidual(x_pred, r_pred);
+          auto predicted_status = evaluateConvergence(x_pred, r_pred);
+          normPred = predicted_status.global_norm;
           double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
+          if (predicted_status.converged) {
+            trResults.d_old = trResults.d;
+            X = x_pred;
+            r = r_pred;
+            status = predicted_status;
+            norm = status.global_norm;
+            if (print_level >= 2) {
+              printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
+              trResults.cg_iterations_count = 0;
+            }
+            break;
+          }
         } catch (const std::exception&) {
           realObjective = std::numeric_limits<double>::max();
           normPred = std::numeric_limits<double>::max();
-        }
-
-        if (normPred <= norm_goal) {
-          trResults.d_old = trResults.d;
-          X = x_pred;
-          r = r_pred;
-          norm = normPred;
-          if (print_level >= 2) {
-            printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
-            trResults.cg_iterations_count =
-                0;  // zero this output so it doesn't look like the linesearch is doing cg iterations
-          }
-          break;
         }
 
         double modelImprove = -modelObjective;
@@ -862,6 +1034,7 @@ class TrustRegion : public mfem::NewtonSolver {
           trResults.d_old = trResults.d;
           X = x_pred;
           r = r_pred;
+          status = convergence_manager_ ? convergence_manager_->evaluate(1.0, r_pred) : status;
           norm = normPred;
           break;
         }
@@ -888,6 +1061,7 @@ class TrustRegion : public mfem::NewtonSolver {
     }
   }
 };
+/// @endcond
 
 EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions lin_opts, MPI_Comm comm)
 {
@@ -896,6 +1070,9 @@ EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolv
   lin_solver_ = std::move(lin_solver);
   preconditioner_ = std::move(preconditioner);
   nonlin_solver_ = buildNonlinearSolver(nonlinear_opts, lin_opts, *preconditioner_, comm);
+  convergence_manager_ = std::make_shared<EquationSolverConvergenceManager>(comm, nonlinear_opts.absolute_tol,
+                                                                            nonlinear_opts.relative_tol);
+  attachConvergenceManager();
 }
 
 EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_solver,
@@ -910,8 +1087,30 @@ EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_sol
   preconditioner_ = std::move(preconditioner);
 }
 
+void EquationSolver::attachConvergenceManager() const
+{
+  if (!convergence_manager_ || !nonlin_solver_) {
+    return;
+  }
+
+  if (auto* managed_solver = dynamic_cast<ConvergenceManagedNonlinearSolver*>(nonlin_solver_.get())) {
+    managed_solver->setConvergenceManager(convergence_manager_);
+  }
+}
+
+void EquationSolver::initializeConvergenceManager(double abs_tol, double rel_tol, MPI_Comm comm) const
+{
+  if (!convergence_manager_) {
+    convergence_manager_ = std::make_shared<EquationSolverConvergenceManager>(comm, abs_tol, rel_tol);
+  } else {
+    convergence_manager_->setTolerances(abs_tol, rel_tol);
+  }
+  attachConvergenceManager();
+}
+
 void EquationSolver::setOperator(const mfem::Operator& op)
 {
+  attachConvergenceManager();
   nonlin_solver_->SetOperator(op);
 
   // Now that the nonlinear solver knows about the operator, we can set its linear solver
@@ -921,8 +1120,21 @@ void EquationSolver::setOperator(const mfem::Operator& op)
   }
 }
 
+void EquationSolver::setConvergenceTolerances(double abs_tol, double rel_tol, MPI_Comm comm) const
+{
+  initializeConvergenceManager(abs_tol, rel_tol, comm);
+}
+
+void EquationSolver::resetConvergenceState() const
+{
+  if (convergence_manager_) {
+    convergence_manager_->reset();
+  }
+}
+
 void EquationSolver::solve(mfem::Vector& x) const
 {
+  resetConvergenceState();
   mfem::Vector zero(x);
   zero = 0.0;
   // KINSOL does not handle non-zero RHS, so we enforce that the RHS
@@ -938,6 +1150,21 @@ void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
   superlu_solver_.Mult(input, output);
 }
 
+/**
+ * @brief Build a monolithic HypreParMatrix from a BlockOperator.
+ *
+ * PERFORMANCE NOTE: This function creates a NEW monolithic matrix by copying data from
+ * the block structure. This incurs a performance overhead:
+ * - Memory: Allocates new matrix storage
+ * - Time: Copies all block data into monolithic format
+ *
+ * This is necessary when using direct solvers (SuperLU, Strumpack) that require
+ * monolithic matrices. For iterative solvers, the BlockOperator can be used directly
+ * without this copy overhead.
+ *
+ * @param block_operator The block operator to convert.
+ * @return Unique pointer to the new monolithic HypreParMatrix.
+ */
 std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOperator& block_operator)
 {
   int row_blocks = block_operator.NumRowBlocks();
@@ -962,7 +1189,8 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
     }
   }
 
-  // Note that MFEM passes ownership of this matrix to the caller
+  // Note that MFEM passes ownership of this matrix to the caller.
+  // MFEM creates a new monolithic matrix (not a view), so this is a COPY operation.
   return std::unique_ptr<mfem::HypreParMatrix>(mfem::HypreParMatrixFromBlocks(hypre_blocks));
 }
 
@@ -973,9 +1201,9 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
-    auto monolithic_mat = buildMonolithicMatrix(*block_operator);
+    monolithic_mat_ = buildMonolithicMatrix(*block_operator);
 
-    superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*monolithic_mat);
+    superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*monolithic_mat_);
   } else {
     // If this is not a block system, check that the input operator is a HypreParMatrix as expected
     auto* matrix = dynamic_cast<const mfem::HypreParMatrix*>(&op);
@@ -984,7 +1212,8 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
 
     superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*matrix);
   }
-
+  height = op.Height();
+  width = op.Width();
   superlu_solver_.SetOperator(*superlu_mat_);
 }
 
@@ -1005,9 +1234,9 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
-    auto monolithic_mat = buildMonolithicMatrix(*block_operator);
+    monolithic_mat_ = buildMonolithicMatrix(*block_operator);
 
-    strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*monolithic_mat);
+    strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*monolithic_mat_);
   } else {
     // If this is not a block system, check that the input operator is a HypreParMatrix as expected
     auto* matrix = dynamic_cast<const mfem::HypreParMatrix*>(&op);
@@ -1032,13 +1261,13 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions 
   if (nonlinear_opts.nonlin_solver == NonlinearSolver::Newton) {
     nonlinear_opts.max_line_search_iterations = 0;
     SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "Newton's method does not support nonzero min_iterations");
-    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
+    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts, linear_opts);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::LBFGS) {
     nonlinear_opts.max_line_search_iterations = 0;
     SLIC_ERROR_ROOT_IF(nonlinear_opts.min_iterations != 0, "LBFGS does not support nonzero min_iterations");
     nonlinear_solver = std::make_unique<mfem::LBFGSSolver>(comm);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::NewtonLineSearch) {
-    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts);
+    nonlinear_solver = std::make_unique<NewtonSolver>(comm, nonlinear_opts, linear_opts);
   } else if (nonlinear_opts.nonlin_solver == NonlinearSolver::TrustRegion) {
     nonlinear_solver = std::make_unique<TrustRegion>(comm, nonlinear_opts, linear_opts, prec);
 #ifdef SMITH_USE_PETSC
@@ -1136,6 +1365,9 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
       exit(1);
       break;
 #endif
+    case LinearSolver::None:
+      iter_lin_solver = std::make_unique<PreconditionerOnlySolver>(comm);
+      break;
     default:
       SLIC_ERROR_ROOT("Linear solver type not recognized.");
       exit(1);
@@ -1151,6 +1383,12 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
   }
 
   return {std::move(iter_lin_solver), std::move(preconditioner)};
+}
+
+bool requiresMonolithicOperator(const LinearSolverOptions& linear_opts)
+{
+  return !linearSolverSupportsBlockOperator(linear_opts.linear_solver) ||
+         !preconditionerSupportsBlockOperator(linear_opts.preconditioner);
 }
 
 #ifdef MFEM_USE_AMGX
@@ -1255,6 +1493,23 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     amgfcontact_preconditioner->GetAMG().SetSystemsOptions(amgfcontact_opts.dim_systems_options);
     amgfcontact_preconditioner->GetAMG().SetRelaxType(amgfcontact_opts.relax_type);
     preconditioner_solver = std::move(amgfcontact_preconditioner);
+  } else if (preconditioner == Preconditioner::BlockDiagonal || preconditioner == Preconditioner::BlockTriangular ||
+             preconditioner == Preconditioner::BlockSchur) {
+    std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
+    for (const auto& opt : linear_opts.sub_block_linear_solver_options) {
+      auto [lin, prec] = buildLinearSolverAndPreconditioner(opt, comm);
+      inner_solvers.push_back(std::make_unique<smith::SolverWithPreconditioner>(std::move(lin), std::move(prec)));
+    }
+
+    if (preconditioner == Preconditioner::BlockDiagonal) {
+      preconditioner_solver = std::make_unique<BlockDiagonalPreconditioner>(std::move(inner_solvers));
+    } else if (preconditioner == Preconditioner::BlockTriangular) {
+      preconditioner_solver =
+          std::make_unique<BlockTriangularPreconditioner>(std::move(inner_solvers), linear_opts.block_triangular_type);
+    } else if (preconditioner == Preconditioner::BlockSchur) {
+      preconditioner_solver = std::make_unique<BlockSchurPreconditioner>(
+          std::move(inner_solvers), linear_opts.block_schur_type, linear_opts.schur_approx_type);
+    }
   } else {
     SLIC_ERROR_ROOT_IF(preconditioner != Preconditioner::None, "Unknown preconditioner type requested");
   }
