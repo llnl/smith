@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -299,6 +300,32 @@ TEST(domain, of_elements)
     // check that by_attr compiles
     Domain d4 = Domain::ofElements(*mesh, by_attr<dim>(3));
   }
+}
+
+TEST(domain, of_vertices_finds_dofs)
+{
+  constexpr int dim = 2;
+  constexpr int p = 2;
+  auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
+  auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
+
+  auto fec = mfem::H1_FECollection(p, dim);
+  auto fes = mfem::ParFiniteElementSpace(mesh.get(), &fec);
+
+  Domain lower_left =
+      Domain::ofVertices(*mesh, [](vec2 x) { return std::abs(x[0]) < 1e-12 && std::abs(x[1]) < 1e-12; });
+  EXPECT_EQ(lower_left.dim_, 0);
+  EXPECT_EQ(lower_left.vertex_ids_.size(), 1);
+
+  mfem::Array<int> dof_indices = lower_left.dof_list(&fes);
+  EXPECT_EQ(dof_indices.Size(), 1);
+
+  Domain upper_right =
+      Domain::ofVertices(*mesh, [](vec2 x) { return std::abs(x[0] - 1.0) < 1e-12 && std::abs(x[1] - 1.0) < 1e-12; });
+  EXPECT_EQ(upper_right.vertex_ids_.size(), 1);
+
+  dof_indices = (lower_left | upper_right).dof_list(&fes);
+  EXPECT_EQ(dof_indices.Size(), 2);
 }
 
 TEST(domain, entireDomain2d)
