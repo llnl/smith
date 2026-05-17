@@ -343,6 +343,7 @@ enum class Preconditioner
   AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
   Petsc,            /**< PETSc preconditioner,  */
   AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
+  Deflation,        /**< Custom two-level deflation (per-rank affine basis + Jacobi) */
   None              /**< No preconditioner used */
 };
 // _preconditioners_end
@@ -367,6 +368,8 @@ inline std::string preconditionerName(Preconditioner p)
       return "Petsc";
     case Preconditioner::AMGFContact:
       return "AMGFContact";
+    case Preconditioner::Deflation:
+      return "Deflation";
     case Preconditioner::None:
       return "None";
   }
@@ -387,6 +390,7 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"AMGX", Preconditioner::AMGX},
     {"Petsc", Preconditioner::Petsc},
     {"AMGFContact", Preconditioner::AMGFContact},
+    {"Deflation", Preconditioner::Deflation},
     {"None", Preconditioner::None},
 };
 
@@ -404,6 +408,10 @@ struct LinearSolverOptions {
 
   /// AMGFContact Options, used for Preconditioner::AMGFContact
   AMGFContactOptions amgfcontact_options = AMGFContactOptions{};
+
+  /// ParFiniteElementSpace handle, REQUIRED for Preconditioner::Deflation; ignored otherwise.
+  /// Non-owning. Lifetime must outlive the preconditioner.
+  mfem::ParFiniteElementSpace* deflation_fes = nullptr;
 
   /// PETSc preconditioner type
   PetscPCType petsc_preconditioner = PetscPCType::JACOBI;

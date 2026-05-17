@@ -15,6 +15,7 @@ set(numerics_headers
     trust_region_solver.hpp
     dense_petsc.hpp
     block_preconditioner.hpp
+    deflation.hpp
     )
 
 set(numerics_sources
@@ -23,6 +24,7 @@ set(numerics_sources
     odes.cpp
     petsc_solvers.cpp
     block_preconditioner.cpp
+    deflation.cpp
     )
 
 set(numerics_depends smith_infrastructure smith_functional smith_boundary_conditions)

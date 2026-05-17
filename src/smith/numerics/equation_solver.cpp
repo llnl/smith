@@ -19,6 +19,7 @@
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/profiling.hpp"
 #include "smith/numerics/trust_region_solver.hpp"
+#include "smith/numerics/deflation.hpp"
 #include "smith/infrastructure/logger.hpp"
 
 namespace smith {
@@ -1248,6 +1249,10 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 #else
     SLIC_ERROR_ROOT("PETSc preconditioner requested in non-PETSc build");
 #endif
+  } else if (preconditioner == Preconditioner::Deflation) {
+    SLIC_ERROR_ROOT_IF(linear_opts.deflation_fes == nullptr,
+                       "Preconditioner::Deflation requires LinearSolverOptions::deflation_fes to be set");
+    preconditioner_solver = std::make_unique<DeflationPreconditioner>(*linear_opts.deflation_fes);
   } else if (preconditioner == Preconditioner::AMGFContact) {
     auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
     auto amgfcontact_opts = linear_opts.amgfcontact_options;
