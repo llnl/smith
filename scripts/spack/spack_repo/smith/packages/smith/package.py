@@ -107,6 +107,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     depends_on("lua")
 
+    depends_on("openblas", when="platform=darwin")
+
     depends_on("enzyme@0.0.180:", when="+enzyme")
     depends_on("cuda+allow-unsupported-compilers", when="+enzyme+cuda")
     depends_on("enzyme %libllvm=llvm-amdgpu", when="+enzyme+rocm")
