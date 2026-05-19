@@ -11,20 +11,23 @@ Developer Guide
    :hidden:
    :maxdepth: 2
 
-   style_guide
-   docker_env
-   modern_cpp
-   testing
-   logging
-   profiling
-   memory_checking
-   new_docker_image
-   tensor_dual
-   functional
    codevelop
-   state_manager
+   docker_env
    equation_solver
+   functional
+   gitflow_branching
+   logging
    macmini
+   memory_checking
+   modern_cpp
+   new_docker_image
+   profiling
+   release
+   semantic_versioning
+   state_manager
+   style_guide
+   tensor_dual
+   testing
 
 Developing a New Physics Module
 -------------------------------
