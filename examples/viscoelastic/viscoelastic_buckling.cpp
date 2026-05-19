@@ -145,6 +145,7 @@ int main(int argc, char* argv[])
   // Create and refine mesh
   auto mesh = std::make_shared<smith::Mesh>(meshfile, mesh_tag, serial_refinement, parallel_refinement);
   //mesh->mfemParMesh().Print();
+  SLIC_INFO_ROOT(axom::fmt::format("Mesh has {} elements", mesh->mfemParMesh().GetNE()));
   auto mesh_coord_order = mesh->mfemParMesh().GetNodes()->FESpace()->GetMaxElementOrder();
   SLIC_WARNING_ROOT_IF(p != mesh_coord_order, axom::fmt::format("Displacement order p does not match mesh coord order at runtime, p = {}, mesh.p = {}", p, mesh_coord_order));
 
