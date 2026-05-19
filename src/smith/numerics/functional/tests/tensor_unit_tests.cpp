@@ -35,7 +35,11 @@ TEST(Tensor, BasicOperations)
   tensor<double, 3> u = {1, 2, 3};
   tensor<double, 4> v = {4, 5, 6, 7};
 
+  EXPECT_EQ(first_dim(u), 3);
+  EXPECT_EQ(first_dim(v), 4);
+
   tensor<double, 3, 3> A = make_tensor<3, 3>([](int i, int j) { return i + 2.0 * j; });
+  EXPECT_EQ(first_dim(A), 3);
 
   double squared_normA = 111.0;
   EXPECT_LT(abs(squared_norm(A) - squared_normA), tolerance);
@@ -62,6 +66,9 @@ TEST(Tensor, BasicOperations)
   EXPECT_LT(abs(dot(u, A, u) - uAu), tolerance);
 
   tensor<double, 3, 4> B = make_tensor<3, 4>([](auto i, auto j) { return 3.0 * i - j; });
+  EXPECT_EQ(first_dim(B), 3);
+  // Ensure that first_dim is a compile-time constant
+  static_assert(first_dim(B) == 3, "Size of leftmost tensor index dimension is wrong");
 
   double uBv = 300;
   EXPECT_LT(abs(dot(u, B, v) - uBv), tolerance);

@@ -68,7 +68,7 @@ jobs:
       options: --user root
     steps:
       - name: Checkout Smith
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
       - name: Print Matrix Variables
@@ -89,7 +89,7 @@ jobs:
       - name: Upload Test Results
         # CUDA containers do not run tests, because runners don't have GPUs, so skip upload in that case
         if: ${{ matrix.config.compiler_image != needs.set_image_vars.outputs.cuda_docker_image }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: Test Results ${{ matrix.config.host_config }} ${{ matrix.build_type }} ${{ matrix.config.cmake_opts }}
           path: "**/Test.xml"
@@ -114,14 +114,14 @@ jobs:
         HOST_CONFIG: llvm@19.1.1.cmake
     steps:
     - name: Checkout Smith
-      uses: actions/checkout@v4
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         submodules: recursive
     - name: Check ${{ matrix.check_type }}
       run: ./scripts/github-actions/linux-check.sh 
     - name: Upload coverage to Codecov
       if: ${{ matrix.check_type == 'coverage' }}
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
       with:
         fail_ci_if_error: true
         files: smith_coverage.info.cleaned

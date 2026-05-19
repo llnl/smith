@@ -338,7 +338,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(MFEM_USE_UMPIRE OFF CACHE BOOL "")
         endif()
 
-        # Temporarily unset asan flags when finding blas, in order to avoid conflicts with fortran and asan.
+        # Temporarily unset compiler and linker flags when configuring MFEM, in order to avoid conflicts with fortran and asan.
         if(APPLE AND ENABLE_ASAN)
             set(TMP_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
             set(TMP_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
