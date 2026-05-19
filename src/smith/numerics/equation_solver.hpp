@@ -113,6 +113,13 @@ class EquationSolver {
   mfem::Solver& preconditioner() { return *preconditioner_; }
 
   /**
+   * @brief If the underlying preconditioner is a DeflationPreconditioner constructed without a
+   * finite element space (deferred binding), attach the supplied FES so it can build its
+   * coarse basis on the next SetOperator.  No-op for any other preconditioner type.
+   */
+  void attachDeflationFES(mfem::ParFiniteElementSpace& fes);
+
+  /**
    * @overload
    */
   const mfem::Solver& preconditioner() const { return *preconditioner_; }

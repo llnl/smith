@@ -221,6 +221,10 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                        "EquationSolver argument is nullptr in SolidMechanics constructor. It is possible that it was "
                        "previously moved.");
 
+    // Late-bind the displacement FES to the deflation preconditioner if one was requested
+    // (factory-built ones are constructed without a FES). No-op otherwise.
+    nonlin_solver_->attachDeflationFES(displacement_.space());
+
     // Check for dynamic mode
     if (timestepping_opts.timestepper != TimestepMethod::QuasiStatic) {
       ode2_.SetTimestepper(timestepping_opts.timestepper);

@@ -16,6 +16,7 @@ set(numerics_headers
     dense_petsc.hpp
     block_preconditioner.hpp
     deflation.hpp
+    batched_matvec.hpp
     )
 
 set(numerics_sources
@@ -25,6 +26,7 @@ set(numerics_sources
     petsc_solvers.cpp
     block_preconditioner.cpp
     deflation.cpp
+    batched_matvec.cpp
     )
 
 set(numerics_depends smith_infrastructure smith_functional smith_boundary_conditions)

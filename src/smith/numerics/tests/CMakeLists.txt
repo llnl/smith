@@ -21,6 +21,7 @@ smith_add_tests( SOURCES       ${numerics_serial_test_sources}
 
 set(numerics_parallel_test_sources
     test_deflation.cpp
+    test_batched_matvec.cpp
     )
 
 smith_add_tests( SOURCES       ${numerics_parallel_test_sources}

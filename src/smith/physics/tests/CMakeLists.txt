@@ -70,6 +70,7 @@ set(physics_parallel_test_sources
     lce_Bertoldi_lattice.cpp
     parameterized_thermomechanics_example.cpp
     parameterized_thermal.cpp
+    shallow_arch_buckling.cpp
     solid.cpp
     solid_periodic.cpp
     solid_shape.cpp

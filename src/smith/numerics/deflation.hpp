@@ -27,6 +27,27 @@
 
 namespace smith {
 
+/// How the coarse correction is applied inside `Mult`.
+enum class CoarseMode {
+  /// z = M_J^{-1} r + W (WtAW)^{-1} W^T r   (default — global Galerkin coarse solve via Allgather)
+  Additive,
+  /// z = M_J^{-1} r + W (WtAW_pp)^{-1} W^T r
+  /// Uses only the diagonal block of WtAW (= W_p^T A_diag|_p W_p). No MPI comm in the coarse step.
+  AdditiveLocal,
+  /// K=1 multi-step block-Jacobi-Schwarz approximation of (WtAW)^{-1}. One neighbor-only
+  /// exchange of mpr doubles per neighbor (replaces the Allgather). Symmetric by construction.
+  ///   u = WtAW_pp^{-1} c_local
+  ///   exchange u with halo neighbors → u_s
+  ///   alpha = u - WtAW_pp^{-1} Σ_s WtAW_{p,s} u_s
+  AdditiveSchwarz,
+  /// Symmetric multiplicative V-cycle:
+  ///   z = Π r;                              # coarse pre
+  ///   z += M_J^{-1} (r - A z);              # smoother
+  ///   z += Π (r - A z);                     # coarse post   (with Π = W (WtAW)^{-1} W^T)
+  /// Costs 2 extra parallel A·z matvecs per Mult vs Additive. Symmetric by construction.
+  Multiplicative,
+};
+
 class DeflationPreconditioner : public mfem::Solver {
  public:
   /**
@@ -37,6 +58,18 @@ class DeflationPreconditioner : public mfem::Solver {
   explicit DeflationPreconditioner(mfem::ParFiniteElementSpace& fes,
                                    bool use_smoother = true,
                                    mfem::HypreSmoother::Type smoother_type = mfem::HypreSmoother::Jacobi);
+
+  /// Deferred-FES constructor. The FES must be supplied via `attachFES(...)` before the first
+  /// `SetOperator`. Lets framework code (SolidMechanics) construct the preconditioner before
+  /// it knows the displacement FES.
+  explicit DeflationPreconditioner(bool use_smoother = true,
+                                   mfem::HypreSmoother::Type smoother_type = mfem::HypreSmoother::Jacobi);
+
+  /// Bind the FES post-construction. Required when the deferred-FES constructor was used.
+  /// Subsequent `SetOperator` calls build the basis against this FES.
+  void attachFES(mfem::ParFiniteElementSpace& fes);
+
+  bool hasFES() const { return fes_ != nullptr; }
 
   /// factor W^T A W; also forwards to the inner smoother. A must be HypreParMatrix.
   void SetOperator(const mfem::Operator& op) override;
@@ -52,8 +85,33 @@ class DeflationPreconditioner : public mfem::Solver {
 
   int numLocalColumns() const { return static_cast<int>(W_local_.size()); }
   int numGlobalColumns() const { return m_; }
+  int myColumnOffset() const { return my_col_offset_; }
   const std::vector<mfem::Vector>& localColumns() const { return W_local_; }
   const mfem::DenseMatrix& coarseMatrix() const { return WtAW_; }
+
+  // -------------------- Hooks for trust-region integration --------------------
+
+  /// y_local += scale * W * alpha_local, where alpha_local is this rank's mpr-slice.
+  /// Only this rank's owned tdofs receive nonzero contributions.
+  void applyW(const mfem::Vector& alpha_local, mfem::Vector& y, double scale = 1.0) const;
+
+  /// alpha_local = W^T * r  (size mpr, this rank's owned slice).
+  void applyWtranspose(const mfem::Vector& r, mfem::Vector& alpha_local) const;
+
+  /// Given mpr-size local rhs `c_local = W^T r |_p`, solve W^T A W * alpha = c_global and
+  /// return the full global m-vector `alpha`. Allgather + Cholesky/LU on the cached factors.
+  void solveCoarse(const mfem::Vector& c_local, mfem::Vector& alpha_global) const;
+
+  /// True iff the cached W^T A W factorization used Cholesky (i.e. coarse matrix was SPD).
+  bool coarseIsSPD() const { return WtAW_uses_cholesky_; }
+
+  /// Smallest eigenvalue of W^T A W. Computed lazily on first call after SetOperator.
+  double coarseLeftmostEigenvalue() const;
+
+  /// Builds a coarse negative-curvature direction d = W * v where v is the unit eigenvector
+  /// of W^T A W associated with the smallest eigenvalue. Output `d` is sized to the local
+  /// tdof count and contains only this rank's W-slice contribution.
+  void coarseLeftmostDirection(mfem::Vector& d) const;
 
   // === TIMING BEGIN === (remove block when no longer needed)
   double setopMatvecTime() const { return setop_matvec_time_; }
@@ -76,13 +134,19 @@ class DeflationPreconditioner : public mfem::Solver {
   /// without it W^T A W includes constrained dofs in the coarse space.
   void setEssentialTrueDofs(const mfem::Array<int>& ess_tdofs);
 
+  /// Switch between coarse-correction modes. Can be called any time after SetOperator.
+  void setCoarseMode(CoarseMode m) { coarse_mode_ = m; }
+  CoarseMode coarseMode() const { return coarse_mode_; }
+
  private:
   void buildBasis();
   void applyEssentialDofMask();
   void packWMatrix();
+  void centerLinearModes();
   void addScaledCoarseCorrection(const mfem::Vector& r, mfem::Vector& y, double scale) const;
+  void ensureLeftmostComputed() const;
 
-  mfem::ParFiniteElementSpace& fes_;
+  mfem::ParFiniteElementSpace* fes_ = nullptr;
   int dim_ = 0;
   int modes_per_rank_ = 0;
   int m_ = 0;
@@ -92,12 +156,33 @@ class DeflationPreconditioner : public mfem::Solver {
 
   std::vector<mfem::Vector> W_local_;
   // packed N_local x modes_per_rank sparse matrix, columns = W_local_[i]. Per-row nnz is 4 (3D)
-  // or 3 (2D) since each col is nonzero only on its component's tdofs.
+  // or 3 (2D) since each col is nonzero only on its component's tdofs. Used in the per-iter
+  // coarse correction (W_mat_ MultTranspose + AddMult).
   std::unique_ptr<mfem::SparseMatrix> W_mat_;
+  // Dense packed view of the same columns. Used by `assembleWtAW` in SetOperator.
+  mfem::DenseMatrix W_dense_;
 
   mutable mfem::DenseMatrix WtAW_;
-  mutable mfem::DenseMatrixInverse WtAW_inv_;
+  mutable mfem::DenseMatrix WtAW_cholesky_;
+  mutable mfem::CholeskyFactors WtAW_cholesky_factors_;
+  mutable mfem::DenseMatrixInverse WtAW_lu_inv_;
+  mutable bool WtAW_uses_cholesky_ = false;
+  mutable mfem::DenseMatrix WtAW_pp_;            // diagonal block (p, p) — for AdditiveLocal mode.
+  mutable mfem::DenseMatrix WtAW_pp_cholesky_;
+  mutable mfem::CholeskyFactors WtAW_pp_cholesky_factors_;
+  mutable mfem::DenseMatrixInverse WtAW_pp_lu_inv_;
+  mutable bool WtAW_pp_uses_cholesky_ = false;
   mutable bool factored_ = false;
+  // Leftmost eigenpair cache (recomputed on each SetOperator via invalidation).
+  mutable mfem::Vector leftmost_evec_;       // length m_
+  mutable double leftmost_eval_ = 0.0;
+  mutable bool leftmost_valid_ = false;
+  CoarseMode coarse_mode_ = CoarseMode::Additive;
+  mutable mfem::Vector mult_tmp_;                // buffer for A·z in Multiplicative mode.
+
+  // AdditiveSchwarz: cached neighbor list + off-diag WtAW blocks (mpr × mpr each).
+  mutable std::vector<int> schwarz_neighbors_;
+  mutable std::vector<mfem::DenseMatrix> schwarz_neighbor_blocks_;
 
   const mfem::HypreParMatrix* A_ = nullptr;
 

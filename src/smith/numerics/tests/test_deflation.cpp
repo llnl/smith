@@ -24,10 +24,18 @@ struct ProblemSetup {
   std::unique_ptr<mfem::HypreParMatrix> A;
 };
 
-ProblemSetup makeCube(mfem::Ordering::Type ordering)
+ProblemSetup makeCube(mfem::Ordering::Type ordering, double translate = 0.0)
 {
   ProblemSetup s;
   auto serial_mesh = mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0);
+  if (translate != 0.0) {
+    for (int v = 0; v < serial_mesh.GetNV(); ++v) {
+      double* coord = serial_mesh.GetVertex(v);
+      coord[0] += translate;
+      coord[1] += translate;
+      coord[2] += translate;
+    }
+  }
   s.pmesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, serial_mesh);
   constexpr int order = 1;
   constexpr int dim = 3;
@@ -136,6 +144,123 @@ TEST(Deflation, AffinePatch_CG_OneIter_byVDIM)
   EXPECT_LE(cg.GetNumIterations(), 1);
 }
 
+// After basis construction (centered), each linear-mode column should have mean zero on its
+// component's active (= unmasked) tdofs. Verified by dotting against the constant mode.
+TEST(Deflation, CenteredLinearModesHaveZeroMean)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM, /*translate=*/100.0);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.SetOperator(*s.A);
+
+  constexpr int dim = 3;
+  const auto& cols = defl.localColumns();
+  for (int c = 0; c < dim; ++c) {
+    const auto& const_col = cols[static_cast<size_t>(c * (dim + 1))];
+    double n_active = const_col.Sum();
+    if (n_active <= 0.0) continue;
+    for (int k = 1; k <= dim; ++k) {
+      const auto& lin_col = cols[static_cast<size_t>(c * (dim + 1) + k)];
+      double mean = lin_col.Sum() / n_active;
+      EXPECT_LT(std::abs(mean), 1e-12) << "component " << c << " linear k=" << k;
+    }
+  }
+}
+
+// Translated mesh: span of W is unchanged so the pure-coarse identity on affine RHS must
+// still hold to machine precision. Sanity that centering didn't break span.
+TEST(Deflation, AffinePatchPureCoarse_TranslatedMesh)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM, /*translate=*/100.0);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.SetOperator(*s.A);
+
+  auto [alpha, v] = makeAffine(defl, s.fes->GetTrueVSize());
+  mfem::Vector r(v.Size());
+  s.A->Mult(v, r);
+  r *= -1.0;
+
+  mfem::Vector z0(v.Size());
+  defl.coarseSolve(r, z0);
+
+  mfem::Vector diff(z0);
+  diff -= v;
+  EXPECT_LT(diff.Norml2() / v.Norml2(), 1.0e-10);
+}
+
+// TR hooks round-trip. WtAW is rank-deficient on this small cube (some ranks own too few
+// vertices for the per-rank affine basis to be independent), so alpha_got needn't equal
+// alpha_expected — but applying W to it must still reconstruct v.
+TEST(Deflation, TrustRegionHooks_RoundTrip)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.SetOperator(*s.A);
+
+  auto [alpha_expected, v] = makeAffine(defl, s.fes->GetTrueVSize());
+
+  // applyW with this rank's owned slice of alpha reconstructs v exactly (W has disjoint
+  // supports across ranks, so v is fully captured by the rank-local W slice).
+  int my_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+  mfem::Vector alpha_local(alpha_expected.GetData() + my_rank * defl.numLocalColumns(),
+                           defl.numLocalColumns());
+  mfem::Vector v_reconstructed(v.Size());
+  v_reconstructed = 0.0;
+  defl.applyW(alpha_local, v_reconstructed);
+  mfem::Vector vdiff(v_reconstructed);
+  vdiff -= v;
+  EXPECT_LT(vdiff.Norml2() / v.Norml2(), 1.0e-12);
+
+  // Round-trip through solveCoarse: c = W^T A v, alpha_got = WtAW^{-1} c, then check
+  // W * alpha_got reconstructs v. This is what trust-region actually needs.
+  mfem::Vector Av(v.Size());
+  s.A->Mult(v, Av);
+  mfem::Vector c_local;
+  defl.applyWtranspose(Av, c_local);
+  EXPECT_EQ(c_local.Size(), defl.numLocalColumns());
+
+  mfem::Vector alpha_got;
+  defl.solveCoarse(c_local, alpha_got);
+  ASSERT_EQ(alpha_got.Size(), alpha_expected.Size());
+
+  mfem::Vector alpha_got_local(alpha_got.GetData() + my_rank * defl.numLocalColumns(),
+                               defl.numLocalColumns());
+  mfem::Vector v_from_solve(v.Size());
+  v_from_solve = 0.0;
+  defl.applyW(alpha_got_local, v_from_solve);
+  mfem::Vector vd2(v_from_solve);
+  vd2 -= v;
+  EXPECT_LT(vd2.Norml2() / v.Norml2(), 1.0e-9);
+}
+
+// Leftmost eigenpair: must equal the smallest eigenvalue of WtAW directly computed. On this
+// small cube WtAW may be near-singular (LU fallback path), but the eigen-decomposition is
+// still well-defined.
+TEST(Deflation, CoarseLeftmostEigenpair)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.SetOperator(*s.A);
+
+  const double lam = defl.coarseLeftmostEigenvalue();
+
+  mfem::DenseMatrix M(defl.coarseMatrix());
+  mfem::DenseMatrixEigensystem eig(M);
+  eig.Eval();
+  const mfem::Vector& evs = eig.Eigenvalues();
+  double evmin = evs(0);
+  for (int i = 1; i < evs.Size(); ++i) evmin = std::min(evmin, evs(i));
+  EXPECT_NEAR(lam, evmin, 1e-10 * std::max(1.0, std::abs(evmin)));
+
+  // d = W * v: must be nonzero (so it's a usable direction in the TR subspace).
+  mfem::Vector d;
+  defl.coarseLeftmostDirection(d);
+  EXPECT_EQ(d.Size(), s.fes->GetTrueVSize());
+  double dnorm_sq_local = d * d, dnorm_sq = 0.0;
+  MPI_Allreduce(&dnorm_sq_local, &dnorm_sq, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  EXPECT_GT(dnorm_sq, 1.0e-30);
+}
+
 namespace {
 
 // Build a 3D cantilever beam: x ∈ [0, Lx], y ∈ [0, Ly], z ∈ [0, Lz].
@@ -214,7 +339,8 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
   mfem::Vector X, B;
   a.FormLinearSystem(ess_tdofs, x_gf, b, A, X, B);
 
-  auto runCG = [&](smith::Preconditioner pc, const char* label) -> int {
+  auto runCG = [&](smith::Preconditioner pc, const char* label,
+                   smith::CoarseMode dmode = smith::CoarseMode::Additive) -> int {
     smith::LinearSolverOptions opts;
     opts.linear_solver = smith::LinearSolver::CG;
     opts.preconditioner = pc;
@@ -230,7 +356,10 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
     if (pc == smith::Preconditioner::Deflation) {
       dp = dynamic_cast<smith::DeflationPreconditioner*>(prec.get());
       EXPECT_NE(dp, nullptr);
-      if (dp) dp->setEssentialTrueDofs(ess_tdofs);
+      if (dp) {
+        dp->setEssentialTrueDofs(ess_tdofs);
+        dp->setCoarseMode(dmode);
+      }
     }
 
     auto* iter = dynamic_cast<mfem::IterativeSolver*>(lin_solver.get());
@@ -296,13 +425,20 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
 
   int iters_jac = runCG(smith::Preconditioner::HypreJacobi, "Jacobi");
   int iters_amg = runCG(smith::Preconditioner::HypreAMG, "HypreAMG");
-  int iters_def = runCG(smith::Preconditioner::Deflation, "Deflation");
+  int iters_def_add = runCG(smith::Preconditioner::Deflation, "Deflation_Add", smith::CoarseMode::Additive);
+  int iters_def_loc =
+      runCG(smith::Preconditioner::Deflation, "Deflation_AddLocal", smith::CoarseMode::AdditiveLocal);
+  int iters_def_sch =
+      runCG(smith::Preconditioner::Deflation, "Deflation_Schwarz", smith::CoarseMode::AdditiveSchwarz);
+  int iters_def_mul =
+      runCG(smith::Preconditioner::Deflation, "Deflation_Mult", smith::CoarseMode::Multiplicative);
 
   if (my_rank == 0) {
     std::cout << "[Beam summary] ranks=" << n_ranks << " Jacobi=" << iters_jac << " AMG=" << iters_amg
-              << " Deflation=" << iters_def << "\n";
+              << " Def_Add=" << iters_def_add << " Def_AddLocal=" << iters_def_loc
+              << " Def_Schwarz=" << iters_def_sch << " Def_Mult=" << iters_def_mul << "\n";
   }
-  EXPECT_LT(iters_def, iters_jac) << "deflation should beat plain Jacobi";
+  EXPECT_LT(iters_def_add, iters_jac) << "deflation should beat plain Jacobi";
 }
 
 int main(int argc, char* argv[])
