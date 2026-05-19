@@ -102,8 +102,14 @@ std::vector<FieldState> CoupledSystemSolver::solve(
   }
 
   for (int iter = 0; iter < max_staggered_iterations_; ++iter) {
+    SLIC_INFO_ROOT("Solving staggered iteration " << iter);
+    smith::logger::flush();
+
     // --- Run each stage ---
     for (size_t stage_idx = 0; stage_idx < active_stages.size(); ++stage_idx) {
+      SLIC_INFO_ROOT("Solving stage " << stage_idx);
+      smith::logger::flush();
+
       const auto& stage = active_stages[stage_idx];
       size_t num_stage_blocks = stage.block_indices.size();
 

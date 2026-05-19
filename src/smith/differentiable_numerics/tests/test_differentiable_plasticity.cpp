@@ -44,12 +44,9 @@ class DifferentiableJ2SmallStrain {
                                            const T2& epsilon_dot, const tensor<T3, dim, dim>& du_dX) const
   {
     using std::sqrt;
-    constexpr auto I = Identity<dim>();
-    const double K = E / (3.0 * (1.0 - 2.0 * nu));
     const double G = 0.5 * E / (1.0 + nu);
 
     auto el_strain = sym(du_dX) - Fp_old;
-    auto p = K * tr(el_strain);
     auto s = 2.0 * G * dev(el_strain);
     auto sigma_b = 2.0 / 3.0 * Hk * Fp_old;
     auto eta = s - sigma_b;
@@ -66,12 +63,9 @@ class DifferentiableJ2SmallStrain {
                                        const tensor<T4, dim, dim>& du_dX) const
   {
     using std::sqrt;
-    constexpr auto I = Identity<dim>();
-    const double K = E / (3.0 * (1.0 - 2.0 * nu));
     const double G = 0.5 * E / (1.0 + nu);
 
     auto el_strain = sym(du_dX) - Fp_old;
-    auto p = K * tr(el_strain);
     auto s = 2.0 * G * dev(el_strain);
     auto sigma_b = 2.0 / 3.0 * Hk * Fp_old;
     auto eta = s - sigma_b;
@@ -90,44 +84,44 @@ class DifferentiableJ2SmallStrain {
 
 smith::LinearSolverOptions primal_lin_opts{.linear_solver = smith::LinearSolver::CG,
                                            .preconditioner = smith::Preconditioner::HypreAMG,
-                                           .relative_tol = 1e-6,
-                                           .absolute_tol = 1e-10,
+                                           .relative_tol = 1e-12,
+                                           .absolute_tol = 1e-12,
                                            .max_iterations = 200,
                                            .print_level = 0};
 
-smith::NonlinearSolverOptions primal_nonlin_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
-                                                 .relative_tol = 1.0e-6,
-                                                 .absolute_tol = 1.0e-8,
+smith::NonlinearSolverOptions primal_nonlin_opts{.nonlin_solver = NonlinearSolver::Newton,
+                                                 .relative_tol = 1.0e-12,
+                                                 .absolute_tol = 1.0e-12,
                                                  .max_iterations = 25,
-                                                 .print_level = 1};
+                                                 .print_level = 2};
 
 smith::LinearSolverOptions state_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
                                           .preconditioner = smith::Preconditioner::HypreAMG,
-                                          .relative_tol = 1e-6,
+                                          .relative_tol = 1e-10,
                                           .absolute_tol = 1e-10,
                                           .max_iterations = 200,
                                           .print_level = 0};
 
-smith::NonlinearSolverOptions state_nonlin_opts{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
-                                                .relative_tol = 1.0e-6,
-                                                .absolute_tol = 1.0e-8,
+smith::NonlinearSolverOptions state_nonlin_opts{.nonlin_solver = NonlinearSolver::Newton,
+                                                .relative_tol = 1.0e-10,
+                                                .absolute_tol = 1.0e-10,
                                                 .max_iterations = 25,
-                                                .print_level = 1};
+                                                .print_level = 2};
 
 TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement = 1;
-  int parallel_refinement = 1;
+  int serial_refinement = 0;
+  int parallel_refinement = 0;
 
   static constexpr int dim = 3;
-  static constexpr int order = 1;
+  static constexpr int order = 2;
 
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, "plasticity_small_strain");
 
-  std::string filename = SMITH_REPO_DIR "/data/meshes/patch3D_tets.mesh";
+  std::string filename = SMITH_REPO_DIR "/data/meshes/beam-hex.mesh";
   const std::string meshtag = "mesh";
   auto mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(filename), meshtag, serial_refinement,
                                             parallel_refinement);
@@ -141,10 +135,49 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
   auto plastic_mechanics_system = buildPlasticMechanicsSystem<dim, order>(mesh, staggered_coupled_solver);
 
   using Hardening = solid_mechanics::LinearHardening;
-  Hardening hardening{.sigma_y = 50.0, .Hi = 50.0, .eta = 0.0};
+  Hardening hardening{.sigma_y = 500.0, .Hi = 0.0, .eta = 0.5};
   DifferentiableJ2SmallStrain<dim, Hardening> mat(hardening, 1e+4, 0.25, 5.0, 1.0);
 
   plastic_mechanics_system.setMaterial(mesh->entireBodyName(), mat);
+  plastic_mechanics_system.setPlasticity(mesh->entireBodyName(), mat);
+
+  // prescribe zero displacement at the supported end of the beam,
+  mesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
+  plastic_mechanics_system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("support"));
+
+  // apply a displacement along z to the the tip of the beam
+  mesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
+  auto translated_in_z = [](double t, tensor<double, dim>) {
+    tensor<double, dim> u{};
+    u[2] = t * (t - 1);
+    return u;
+  };
+  plastic_mechanics_system.disp_bc->setVectorBCs<dim>(mesh->domain("tip"), {2}, translated_in_z);
+
+  double dt = 0.1;
+  double time = 0.0;
+  auto shape_disp = plastic_mechanics_system.field_store->getShapeDisp();
+  auto states = plastic_mechanics_system.getStateFields();
+  auto params = plastic_mechanics_system.getParameterFields();
+
+  auto pv_writer = createParaviewWriter(*mesh, states, "J2_small_strain");
+  pv_writer.write(0, 0.0, states);
+
+  std::vector<ReactionState> reactions;
+  for (size_t step = 0; step < 1; ++step) {
+    std::tie(states, reactions) =
+        plastic_mechanics_system.advancer->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+    time += dt;
+    pv_writer.write(step + 1, time, states);
+  }
+
 }
 
 } // namespace smith
+
+int main(int argc, char* argv[])
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  smith::ApplicationManager applicationManager(argc, argv);
+  return RUN_ALL_TESTS();
+}
