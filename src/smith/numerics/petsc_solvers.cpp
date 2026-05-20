@@ -6,6 +6,7 @@
 
 #include "smith/numerics/petsc_solvers.hpp"
 
+#include <cmath>
 #include <unordered_map>
 
 #include "smith/infrastructure/logger.hpp"
@@ -932,6 +933,12 @@ void PetscNewtonSolver::SetTolerances()
     // ensure we don't fail immediately if a nan occurs
     PetscCallAbort(GetComm(), SNESLineSearchSetPreCheck(linesearch, linesearchPreCheckBackoffOnNan, nullptr));
   }
+  ConfigureConvergenceTest();
+}
+
+void PetscNewtonSolver::ConfigureConvergenceTest()
+{
+  PetscCallAbort(GetComm(), SNESSetConvergenceTest(*this, SNESConvergedDefault, nullptr, nullptr));
 }
 
 void PetscNewtonSolver::SetNonPetscSolver(mfem::Solver& solver)
@@ -1003,6 +1010,14 @@ void PetscNewtonSolver::SetOperator(const mfem::Operator& op)
   SetTolerances();
   clcustom = false;
   Customize();
+}
+
+void PetscNewtonSolver::setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager)
+{
+  convergence_manager_ = std::move(convergence_manager);
+  if (operatorset) {
+    ConfigureConvergenceTest();
+  }
 }
 
 void PetscNewtonSolver::Mult(const mfem::Vector& b, mfem::Vector& x) const
