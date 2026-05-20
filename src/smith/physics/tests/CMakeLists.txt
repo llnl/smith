@@ -29,6 +29,7 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
+    shallow_arch_buckling.cpp
     test_functional_weak_form.cpp
     thermomech_statics_patch.cpp
     parameterized_thermomechanics_example.cpp
@@ -49,6 +50,7 @@ endif()
 
 if (SMITH_USE_ENZYME)
     list(APPEND physics_serial_test_sources
+                test_dfem_weak_form.cpp
                 test_dfem_explicit_dynamics.cpp)
 endif()
 
@@ -59,6 +61,7 @@ smith_add_tests(SOURCES       ${physics_serial_test_sources}
 if (SMITH_USE_ENZYME)
     # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
     # desired occupancy was 4, final occupancy is 3 [-Werror,-Wpass-failed]
+    target_compile_options(test_dfem_weak_form PRIVATE -Wno-pass-failed)
     target_compile_options(test_dfem_explicit_dynamics PRIVATE -Wno-pass-failed)
 endif()
 

@@ -158,6 +158,7 @@ class EquationSolver {
   mutable std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 };
 
+#ifdef MFEM_USE_SUPERLU
 /**
  * @brief A wrapper class for using the MFEM SuperLU solver with a HypreParMatrix
  */
@@ -214,6 +215,7 @@ class SuperLUSolver : public mfem::Solver {
    */
   mfem::SuperLUSolver superlu_solver_;
 };
+#endif
 
 #ifdef MFEM_USE_STRUMPACK
 /**

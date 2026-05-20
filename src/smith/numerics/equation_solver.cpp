@@ -1163,6 +1163,7 @@ void EquationSolver::solve(mfem::Vector& x) const
   nonlin_solver_->Mult(zero, x);
 }
 
+#ifdef MFEM_USE_SUPERLU
 void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
 {
   SLIC_ERROR_ROOT_IF(!superlu_mat_, "Operator must be set prior to solving with SuperLU");
@@ -1170,6 +1171,7 @@ void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
   // Use the underlying MFEM-based solver and SuperLU matrix type to solve the system
   superlu_solver_.Mult(input, output);
 }
+#endif
 
 /**
  * @brief Build a monolithic HypreParMatrix from a BlockOperator.
@@ -1215,6 +1217,7 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
   return std::unique_ptr<mfem::HypreParMatrix>(mfem::HypreParMatrixFromBlocks(hypre_blocks));
 }
 
+#ifdef MFEM_USE_SUPERLU
 void SuperLUSolver::SetOperator(const mfem::Operator& op)
 {
   // Check if this is a block operator
@@ -1237,6 +1240,7 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
   width = op.Width();
   superlu_solver_.SetOperator(*superlu_mat_);
 }
+#endif
 
 #ifdef MFEM_USE_STRUMPACK
 
@@ -1350,8 +1354,12 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
   auto preconditioner = buildPreconditioner(linear_opts, comm);
 
   if (linear_opts.linear_solver == LinearSolver::SuperLU) {
+#ifdef MFEM_USE_SUPERLU
     auto lin_solver = std::make_unique<SuperLUSolver>(linear_opts.print_level, comm);
     return {std::move(lin_solver), std::move(preconditioner)};
+#else
+    SLIC_ERROR_ROOT("SuperLU was not enabled when MFEM was built");
+#endif
   }
 
 #ifdef MFEM_USE_STRUMPACK

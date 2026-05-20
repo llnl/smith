@@ -117,10 +117,11 @@ auto create_solid_mass_weak_form(const std::string& physics_name, std::shared_pt
 
   residual->addBodyIntegral(
       mesh->mfemParMesh().attributes,
-      [](mfem::future::tensor<mfem::real_t, SpatialDim, SpatialDim> dX_dxi, mfem::real_t weight, double rho) {
+      [](mfem::future::tensor<mfem::real_t, SpatialDim, SpatialDim> dX_dxi, mfem::real_t weight, double rho,
+         mfem::future::tensor<mfem::real_t, MassDim>& out) {
         auto ones = mfem::future::make_tensor<MassDim>([](int) { return 1.0; });
         auto J = mfem::future::det(dX_dxi) * weight;
-        return mfem::future::tuple{rho * ones * J};
+        out = rho * ones * J;
       },
       mass_integral_inputs, mass_integral_outputs, ir, std::index_sequence<>{});
   return residual;
