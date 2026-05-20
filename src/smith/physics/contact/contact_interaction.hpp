@@ -102,8 +102,8 @@ class ContactInteraction {
    * Block row/col 0: displacement space
    * Block row/col 1: pressure space
    *
-   * The element Jacobian contributions are computed upon calling ContactData::update(). This method does MPI
-   * communication to move Jacobian contributions to the correct rank, then assembles the contributions.
+   * The element Jacobian contributions are computed upon calling ContactData::updateForcesAndJacobian(). This method
+   * does MPI communication to move Jacobian contributions to the correct rank, then assembles the contributions.
    *
    * @return Contact Jacobian as a BlockOperator
    */

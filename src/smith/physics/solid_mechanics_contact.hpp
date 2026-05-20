@@ -137,7 +137,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     double dt = 0.0;
     mfem::Vector p(contact_.numPressureDofs());
     p = 0.0;
-    contact_.update(cycle, time, dt, BasePhysics::shapeDisplacement(), displacement_, p);
+    contact_.updateForcesAndJacobian(cycle, time, dt, BasePhysics::shapeDisplacement(), displacement_, p);
   }
 
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
@@ -323,7 +323,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     double dt = 0.0;
     mfem::Vector p = pressure();
-    contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
+    contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
 
     std::cout << "Line 230" << std::endl;
 
@@ -524,7 +524,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
       // Perform a single update for the warm start evaluation.
       // Note: we use time_ to match the previous Jacobian evaluation point.
-      contact_.update(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p_blk);
+      contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p_blk);
 
       mfem::Vector r_blk(augmented_residual, 0, displacement_.space().TrueVSize());
       r_blk = res;
@@ -589,10 +589,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   }
 
   /// @brief Solve the Quasi-static Newton system
-  void quasiStaticAdjointSolve(double /*dt*/) override
+  void quasiStaticAdjointSolve(double dt) override
   {
     SLIC_ERROR_ROOT_IF(contact_.haveLagrangeMultipliers(),
                        "Lagrange multiplier contact does not currently support sensitivities/adjoints.");
+
+    contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_);
 
     auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
                                   acceleration_, *parameters_[parameter_indices].state...);
@@ -653,6 +655,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   /// @overload
   const FiniteElementDual& computeTimestepShapeSensitivity() override
   {
+    double dt = this->getCheckpointedTimestep(cycle_);
+    contact_.updateForcesAndJacobian(cycle_ + 1, time_end_step_, dt, BasePhysics::shapeDisplacement(), displacement_);
+
     auto drdshape =
         smith::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(BasePhysics::shapeDisplacement()),
                                             displacement_, acceleration_, *parameters_[parameter_indices].state...));
