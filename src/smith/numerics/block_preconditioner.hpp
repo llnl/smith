@@ -253,7 +253,8 @@ class BlockSchurPreconditioner : public mfem::Solver {
 
   mfem::Solver* subSolver(int i) const
   {
-    MFEM_VERIFY(i >= 0 && i < static_cast<int>(mfem_solvers_.size()), "BlockSchurPreconditioner::subSolver index out of range");
+    MFEM_VERIFY(i >= 0 && i < static_cast<int>(mfem_solvers_.size()),
+                "BlockSchurPreconditioner::subSolver index out of range");
     return mfem_solvers_[static_cast<size_t>(i)].get();
   }
 

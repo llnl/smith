@@ -114,31 +114,30 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
   auto flux = createFieldState(*graph, VectorSpace{}, physics_name + "_flux", mesh->tag());
   auto potential = createFieldState(*graph, Space{}, physics_name + "_potential", mesh->tag());
-  smith::FunctionalWeakForm<2, VectorSpace, smith::Parameters<VectorSpace, Space>> con_form("constitutive_eqn", mesh, space(flux),
-                                                                                           spaces({flux, potential}));
-  smith::FunctionalWeakForm<2, Space, smith::Parameters<VectorSpace, Space>> bal_form("balance_eqn", mesh, space(potential),
-                                                                                           spaces({flux, potential}));
+  smith::FunctionalWeakForm<2, VectorSpace, smith::Parameters<VectorSpace, Space>> con_form(
+      "constitutive_eqn", mesh, space(flux), spaces({flux, potential}));
+  smith::FunctionalWeakForm<2, Space, smith::Parameters<VectorSpace, Space>> bal_form(
+      "balance_eqn", mesh, space(potential), spaces({flux, potential}));
 
   con_form.addBodyIntegral(DependsOn<0, 1>{}, mesh->entireBodyName(),
-                          [](double /* t */, auto /* x */, auto SIGMA, auto U) {
-                            auto sigma = get<VALUE>(SIGMA);
-                            auto u = get<VALUE>(U);
-                            // Need to wrap u in a tensor to convert grad(test_function) to . div(test_function)
-                            using Scalar = decltype(u);
-                            smith::tensor<Scalar, 2, 2> u_{};
-                            u_[0][0] = u;
-                            u_[1][1] = u;
-                            return smith::tuple{sigma, -u_};
-                          });
+                           [](double /* t */, auto /* x */, auto SIGMA, auto U) {
+                             auto sigma = get<VALUE>(SIGMA);
+                             auto u = get<VALUE>(U);
+                             // Need to wrap u in a tensor to convert grad(test_function) to . div(test_function)
+                             using Scalar = decltype(u);
+                             smith::tensor<Scalar, 2, 2> u_{};
+                             u_[0][0] = u;
+                             u_[1][1] = u;
+                             return smith::tuple{sigma, -u_};
+                           });
 
-  bal_form.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(),
-                          [](double /* t */, auto X, auto SIGMA) {
-                            const auto& x = get<VALUE>(X);
-                            auto div_sigma = smith::tr(get<DERIVATIVE>(SIGMA));
-                            double pi = M_PI;
-                            auto f = 2.0 * pi * pi * sin(pi * x[0]) * sin(pi * x[1]);
-                            return smith::tuple{-f + div_sigma, smith::zero{}};
-                          });
+  bal_form.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [](double /* t */, auto X, auto SIGMA) {
+    const auto& x = get<VALUE>(X);
+    auto div_sigma = smith::tr(get<DERIVATIVE>(SIGMA));
+    double pi = M_PI;
+    auto f = 2.0 * pi * pi * sin(pi * x[0]) * sin(pi * x[1]);
+    return smith::tuple{-f + div_sigma, smith::zero{}};
+  });
   // u_exact = sin(M_PI * x(0)) * sin(M_PI * x(1));
   // sigma_exact
   // pi * cos(pi * x(0)) * sin(pi * x(1))
@@ -148,7 +147,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   auto potential_bc_manager = std::make_shared<smith::BoundaryConditionManager>(mesh->mfemParMesh());
 
   auto zero_bcs = std::make_shared<mfem::FunctionCoefficient>([](const mfem::Vector&) { return 0.0; });
-  potential_bc_manager->addEssential(std::set<int>{1,2,3,4}, zero_bcs, space(potential), 0);
+  potential_bc_manager->addEssential(std::set<int>{1, 2, 3, 4}, zero_bcs, space(potential), 0);
 
   // Block Preconditioner Options
   smith::LinearSolverOptions linear_options;
