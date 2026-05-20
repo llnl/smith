@@ -57,8 +57,14 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
 
   virtual ~BlockDiagonalPreconditioner();
 
+  /** @brief Return the number of sub-solvers owned by this preconditioner. */
   int numSubSolvers() const { return num_blocks_; }
 
+  /**
+   * @brief Access a sub-solver by index.
+   * @param i Sub-solver index in [0, numSubSolvers()).
+   * @return Pointer to the requested sub-solver (owned by this object).
+   */
   mfem::Solver* subSolver(int i) const
   {
     MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockDiagonalPreconditioner::subSolver index out of range");
@@ -137,8 +143,14 @@ class BlockTriangularPreconditioner : public mfem::Solver {
 
   virtual ~BlockTriangularPreconditioner();
 
+  /** @brief Return the number of sub-solvers owned by this preconditioner. */
   int numSubSolvers() const { return num_blocks_; }
 
+  /**
+   * @brief Access a sub-solver by index.
+   * @param i Sub-solver index in [0, numSubSolvers()).
+   * @return Pointer to the requested sub-solver (owned by this object).
+   */
   mfem::Solver* subSolver(int i) const
   {
     MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockTriangularPreconditioner::subSolver index out of range");
@@ -249,8 +261,14 @@ class BlockSchurPreconditioner : public mfem::Solver {
 
   virtual ~BlockSchurPreconditioner();
 
+  /** @brief Return the number of sub-solvers owned by this preconditioner. */
   int numSubSolvers() const { return static_cast<int>(mfem_solvers_.size()); }
 
+  /**
+   * @brief Access a sub-solver by index.
+   * @param i Sub-solver index in [0, numSubSolvers()).
+   * @return Pointer to the requested sub-solver (owned by this object).
+   */
   mfem::Solver* subSolver(int i) const
   {
     MFEM_VERIFY(i >= 0 && i < static_cast<int>(mfem_solvers_.size()),

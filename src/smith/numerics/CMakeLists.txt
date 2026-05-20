@@ -11,6 +11,7 @@ set(numerics_headers
     nonlinear_convergence.hpp
     odes.hpp
     solver_config.hpp
+    solver_with_preconditioner.hpp
     stdfunction_operator.hpp
     petsc_solvers.hpp
     trust_region_solver.hpp
