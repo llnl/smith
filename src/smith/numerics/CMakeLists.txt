@@ -8,6 +8,7 @@ add_subdirectory(functional)
 
 set(numerics_headers
     equation_solver.hpp
+    nonlinear_convergence.hpp
     odes.hpp
     solver_config.hpp
     stdfunction_operator.hpp
@@ -19,6 +20,7 @@ set(numerics_headers
 
 set(numerics_sources
     equation_solver.cpp
+    nonlinear_convergence.cpp
     trust_region_solver.cpp
     odes.cpp
     petsc_solvers.cpp

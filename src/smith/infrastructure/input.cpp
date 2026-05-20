@@ -235,8 +235,8 @@ mfem::Vector FromInlet<mfem::Vector>::operator()(const axom::inlet::Container& b
 smith::input::BoundaryConditionInputOptions FromInlet<smith::input::BoundaryConditionInputOptions>::operator()(
     const axom::inlet::Container& base)
 {
-  smith::input::BoundaryConditionInputOptions result{.attrs = {},
-                                                     .coef_opts = base.get<smith::input::CoefficientInputOptions>()};
+  smith::input::BoundaryConditionInputOptions result;
+  result.coef_opts = base.get<smith::input::CoefficientInputOptions>();
   // Build a set with just the values of the map
   auto bdr_attr_map = base["attrs"].get<std::unordered_map<int, int>>();
   for (const auto& [_, val] : bdr_attr_map) {
