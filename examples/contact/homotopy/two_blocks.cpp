@@ -29,14 +29,17 @@ using VectorSpace = smith::H1<disp_order, dim>;
 using DensitySpace = smith::L2<disp_order - 1>;
 
 using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
-using SolidWeakFormT = smith::SolidWeakForm<disp_order, dim, smith::Parameters<DensitySpace>>;
+using SolidWeakFormT =
+    smith::TimeDiscretizedWeakForm<dim, smith::H1<disp_order, dim>,
+                                   smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
+                                                     smith::H1<disp_order, dim>, DensitySpace>>;
 
 enum FIELD
 {
-  DISP = SolidWeakFormT::DISPLACEMENT,
-  VELO = SolidWeakFormT::VELOCITY,
-  ACCEL = SolidWeakFormT::ACCELERATION,
-  DENSITY = SolidWeakFormT::NUM_STATES
+  DISP = 0,
+  VELO = 1,
+  ACCEL = 2,
+  DENSITY = 3
 };
 
 /* Nonlinear problem of the form
@@ -81,74 +84,6 @@ class TiedContactProblem : public EqualityConstrainedHomotopyProblem {
   void fullDisplacement(const mfem::Vector& x, mfem::Vector& u);
   virtual ~TiedContactProblem();
 };
-
-class ParaviewWriter {
- public:
-  using StateVecs = std::vector<std::shared_ptr<smith::FiniteElementState>>;
-  using DualVecs = std::vector<std::shared_ptr<smith::FiniteElementDual>>;
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
-      : pv(std::move(pv_)), states(states_)
-  {
-  }
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_)
-  {
-  }
-
-  void write(int step, double time, const std::vector<smith::FiniteElementState const*>& current_states)
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
-
-    for (size_t n = 0; n < states.size(); ++n) {
-      auto& state = states[n];
-      *state = *current_states[n];
-      state->gridFunction();
-    }
-
-    pv->SetCycle(step);
-    pv->SetTime(time);
-    pv->Save();
-  }
-
- private:
-  std::unique_ptr<mfem::ParaViewDataCollection> pv;
-  StateVecs states;
-  StateVecs dual_states;
-};
-
-auto createParaviewOutput(const mfem::ParMesh& mesh, const std::vector<const smith::FiniteElementState*>& states,
-                          std::string output_name)
-{
-  if (output_name == "") {
-    output_name = "default";
-  }
-
-  ParaviewWriter::StateVecs output_states;
-  for (const auto& s : states) {
-    output_states.push_back(std::make_shared<smith::FiniteElementState>(s->space(), s->name()));
-  }
-
-  auto non_const_mesh = const_cast<mfem::ParMesh*>(&mesh);
-  auto paraview_dc = std::make_unique<mfem::ParaViewDataCollection>(output_name, non_const_mesh);
-  int max_order_in_fields = 0;
-
-  // Find the maximum polynomial order in the physics module's states
-  for (const auto& state : output_states) {
-    paraview_dc->RegisterField(state->name(), &state->gridFunction());
-    max_order_in_fields = std::max(max_order_in_fields, state->space().GetOrder(0));
-  }
-
-  // Set the options for the paraview output files
-  paraview_dc->SetLevelsOfDetail(max_order_in_fields);
-  paraview_dc->SetHighOrderOutput(true);
-  paraview_dc->SetDataFormat(mfem::VTKFormat::BINARY);
-  paraview_dc->SetCompression(true);
-
-  return ParaviewWriter(std::move(paraview_dc), output_states, {});
-}
 
 int main(int argc, char* argv[])
 {
@@ -227,7 +162,12 @@ int main(int argc, char* argv[])
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
-  solid_mechanics_weak_form->setMaterial(smith::DependsOn<0>{}, mesh->entireBodyName(), mat);
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto density_param) {
+        typename SolidMaterial::State state;
+        auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), density_param);
+        return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(density_param), pk_stress};
+      });
 
   // constant body force
   smith::tensor<double, dim> constant_force{};
@@ -236,9 +176,10 @@ int main(int argc, char* argv[])
   }
   constant_force[dim - 1] = -1.e-4;
 
-  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
-    return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
-  });
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [constant_force](auto /*t_info*/, auto X, auto... /*inputs*/) {
+        return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(X)};
+      });
 
   auto residual_state_ptrs = smith::getFieldPointers(states, params);
   auto contact_state_ptrs = smith::getFieldPointers(contact_states);
@@ -291,8 +232,8 @@ int main(int argc, char* argv[])
   SLIC_WARNING_ROOT_IF(!converged, "Homotopy solver did not converge");
 
   // visualize
-  auto writer =
-      createParaviewOutput(mesh->mfemParMesh(), smith::getConstFieldPointers(states), "two_block_tiedcontact_plot");
+  auto writer = smith::createParaviewWriter(mesh->mfemParMesh(), smith::getConstFieldPointers(states),
+                                            "two_block_tiedcontact_plot");
   if (visualize) {
     mfem::Vector u(states[FIELD::DISP].space().GetTrueVSize());
     u = problem.GetDisplacement(X0);
@@ -307,7 +248,7 @@ int main(int argc, char* argv[])
       for (int i = 0; i < iterates.Size(); i++) {
         u = problem.GetDisplacement(*iterates[i]);
         states[FIELD::DISP].Set(1.0, u);
-        writer.write((i + 1), static_cast<double>(i + 1), smith::getConstFieldPointers(states));
+        writer.write(static_cast<size_t>(i + 1), static_cast<double>(i + 1), smith::getConstFieldPointers(states));
       }
     }
   }

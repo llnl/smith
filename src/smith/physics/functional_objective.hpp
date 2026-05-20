@@ -75,6 +75,21 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
                                   mesh_->domain(body_name));
   }
 
+  /**
+   * @brief register a custom boundary integral calculation as part of the residual
+   *
+   * @tparam active_parameters a list of indices, describing which parameters to pass to the q-function
+   * @param boundary_name string specifying the boundary to integrate over
+   * @param qfunction a callable that returns a tuple of body-force and stress
+   */
+  template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name,
+                           const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    objective_->AddBoundaryIntegral(smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{},
+                                    qfunction, mesh_->domain(boundary_name));
+  }
+
   /// @overload
   virtual double evaluate(TimeInfo time_info, ConstFieldPtr shape_disp,
                           const std::vector<ConstFieldPtr>& fields) const override
