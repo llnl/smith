@@ -25,8 +25,7 @@
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/evaluate_objective.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
-#include "smith/differentiable_numerics/time_info_solid_materials.hpp"
-#include "smith/differentiable_numerics/time_info_thermo_mechanical_materials.hpp"
+#include "smith/differentiable_numerics/make_time_info_material.hpp"
 #include "smith/physics/functional_objective.hpp"
 #include "gretl/wang_checkpoint_strategy.hpp"
 
@@ -238,8 +237,8 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
                                            thermal_fields, couplingFields(solid_fields), param_fields);
 
   auto coupled_system = combineSystems(solid_system, thermal_system);
-  thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
-                                                                                           0.0025, 0.0,   0.05};
+  auto material = makeTimeInfoMaterial(
+      thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterial{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05});
   setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh_->entireBodyName());
 
   coupled_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(
@@ -307,8 +306,8 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
   coupled_solver->addSubsystemSolver({1}, buildNonlinearBlockSolver(thermal_nonlin_opts, thermal_lin_opts, *mesh_));
   auto coupled_system = combineSystems(coupled_solver, solid_system, thermal_system);
 
-  thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
-                                                                                           0.0025, 0.0,   0.05};
+  auto material = makeTimeInfoMaterial(
+      thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterial{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05});
   setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh_->entireBodyName());
 
   coupled_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(
@@ -385,7 +384,8 @@ TEST_F(ThermoMechanicsMeshFixture, StaggeredBucklingChallenge)
                                            thermal_fields, couplingFields(solid_fields));
 
   auto coupled_system = combineSystems(solid_system, thermal_system);
-  thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  auto material = makeTimeInfoMaterial(
+      thermomechanics::GreenSaintVenantThermoelasticMaterial{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05});
   setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid_system, thermal_system, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
@@ -413,7 +413,8 @@ TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
   auto thermal_system = buildThermalSystem(nullptr, ThermalOptions{}, thermal_fields, couplingFields(solid_fields));
 
   auto coupled_system = combineSystems(solver_ptr, solid_system, thermal_system);
-  thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  auto material = makeTimeInfoMaterial(
+      thermomechanics::GreenSaintVenantThermoelasticMaterial{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05});
   setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh_->entireBodyName());
 
   applyBucklingLoads(solid_system, thermal_system, kBucklingTraction, kBucklingBodyForce, kBucklingHeatSource);
@@ -438,7 +439,7 @@ TEST_F(ThermoMechanicsMeshFixture, CauchyStressOutput)
   constexpr double G = E / (2.0 * (1.0 + nu));
   constexpr double K = E / (3.0 * (1.0 - 2.0 * nu));
 
-  solid_system->setMaterial(solid_mechanics::TimeInfoNeoHookean{.density = 1.0, .K = K, .G = G},
+  solid_system->setMaterial(makeTimeInfoMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = K, .G = G}),
                             mesh_->entireBodyName());
 
   solid_system->setDisplacementBC(mesh_->domain("left"));

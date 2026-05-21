@@ -9,6 +9,7 @@ set(differentiable_numerics_test_depends smith_physics smith_differentiable_nume
 set(differentiable_numerics_test_source
     test_solver_convergence.cpp
     test_field_state.cpp
+    test_make_time_info_material.cpp
     test_solid_dynamics.cpp
     test_explicit_dynamics.cpp
     test_porous_heat_sink.cpp

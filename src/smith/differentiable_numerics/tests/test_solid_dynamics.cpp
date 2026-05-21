@@ -16,6 +16,8 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/functional_objective.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "smith/physics/materials/parameterized_solid_material.hpp"
+#include "smith/physics/materials/solid_material.hpp"
 
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/system_solver.hpp"
@@ -23,7 +25,7 @@
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
-#include "smith/differentiable_numerics/time_info_solid_materials.hpp"
+#include "smith/differentiable_numerics/make_time_info_material.hpp"
 
 namespace smith {
 
@@ -187,8 +189,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2.0 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = solid_mechanics::TimeInfoParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 1.0, .K0 = K, .G0 = G};
+  auto material = makeTimeInfoMaterial(solid_mechanics::ParameterizedNeoHookeanSolid{.density = 1.0, .K0 = K, .G0 = G});
 
   // Set parameters
   auto params = solid_system->field_store->getParameterFields();
@@ -285,7 +286,7 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2.0 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  solid_system->setMaterial(solid_mechanics::TimeInfoNeoHookean{.density = 1.0, .K = K, .G = G},
+  solid_system->setMaterial(makeTimeInfoMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = K, .G = G}),
                             mesh->entireBodyName());
 
   solid_system->addBodyForce(mesh->entireBodyName(),
@@ -359,8 +360,8 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  using MaterialType = solid_mechanics::TimeInfoParameterizedNeoHookeanSolid;
-  MaterialType material{.density = 10.0, .K0 = K, .G0 = G};
+  auto material =
+      makeTimeInfoMaterial(solid_mechanics::ParameterizedNeoHookeanSolid{.density = 10.0, .K0 = K, .G0 = G});
 
   solid_system->setMaterial(material, mesh->entireBodyName());
 
