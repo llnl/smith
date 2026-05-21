@@ -17,6 +17,7 @@ set(numerics_headers
     block_preconditioner.hpp
     deflation.hpp
     batched_matvec.hpp
+    bsr_operator.hpp
     )
 
 set(numerics_sources
@@ -27,6 +28,7 @@ set(numerics_sources
     block_preconditioner.cpp
     deflation.cpp
     batched_matvec.cpp
+    bsr_operator.cpp
     )
 
 set(numerics_depends smith_infrastructure smith_functional smith_boundary_conditions)

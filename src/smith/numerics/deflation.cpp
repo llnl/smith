@@ -13,6 +13,7 @@
 #include "_hypre_parcsr_mv.h"
 
 #include "smith/numerics/batched_matvec.hpp"
+#include "smith/numerics/bsr_operator.hpp"
 
 namespace smith {
 
@@ -163,11 +164,19 @@ void DeflationPreconditioner::packWMatrix()
 void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
 {
   if (!fes_) throw std::runtime_error("DeflationPreconditioner::SetOperator: attachFES not called");
-  const auto* hyp = dynamic_cast<const mfem::HypreParMatrix*>(&op);
+
+  const mfem::HypreParMatrix* hyp = dynamic_cast<const mfem::HypreParMatrix*>(&op);
   if (!hyp) {
-    throw std::runtime_error("DeflationPreconditioner::SetOperator requires HypreParMatrix");
+    if (const auto* bsr_op = dynamic_cast<const BSROperator*>(&op)) {
+      hyp = bsr_op->GetHypreMatrix();
+    }
+  }
+
+  if (!hyp) {
+    throw std::runtime_error("DeflationPreconditioner::SetOperator requires HypreParMatrix or BSROperator");
   }
   A_ = hyp;
+  op_for_mult_ = &op;
   height = op.Height();
   width = op.Width();
 
@@ -445,13 +454,13 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
     if (mult_tmp_.Size() != n) mult_tmp_.SetSize(n);
     z = 0.0;
     addCoarseCorrection(r, z);          // z = Π r
-    A_->Mult(z, mult_tmp_);
+    op_for_mult_->Mult(z, mult_tmp_);
     mfem::Vector r_mid(n);
     for (int i = 0; i < n; ++i) r_mid(i) = r(i) - mult_tmp_(i);
     mfem::Vector s_mid(n);
     smoother_->Mult(r_mid, s_mid);
     for (int i = 0; i < n; ++i) z(i) += s_mid(i);
-    A_->Mult(z, mult_tmp_);
+    op_for_mult_->Mult(z, mult_tmp_);
     mfem::Vector r_post(n);
     for (int i = 0; i < n; ++i) r_post(i) = r(i) - mult_tmp_(i);
     addCoarseCorrection(r_post, z);

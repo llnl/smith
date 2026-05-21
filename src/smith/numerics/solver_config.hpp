@@ -430,6 +430,12 @@ struct LinearSolverOptions {
 
   /// Debugging print level for the preconditioner
   int preconditioner_print_level = 0;
+
+  /// Toggle to enable conversion to Block Sparse Row (BSR) format for local SpMV
+  bool use_bsr_spmv = false;
+
+  /// BSR block size. Use 2 for 2D elasticity and 3 for 3D elasticity.
+  int bsr_block_size = 3;
 };
 // _linear_options_end
 

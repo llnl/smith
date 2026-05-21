@@ -20,6 +20,7 @@
 #include "smith/infrastructure/profiling.hpp"
 #include "smith/numerics/trust_region_solver.hpp"
 #include "smith/numerics/deflation.hpp"
+#include "smith/numerics/bsr_operator.hpp"
 #include "smith/infrastructure/logger.hpp"
 
 namespace smith {
@@ -349,6 +350,9 @@ class TrustRegion : public mfem::NewtonSolver {
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
+  /// optional optimized block sparse row operator
+  mutable std::unique_ptr<BSROperator> bsr_operator_;
+
  public:
   /// internal counter for hess-vecs
   mutable size_t num_hess_vecs = 0;
@@ -613,6 +617,15 @@ class TrustRegion : public mfem::NewtonSolver {
     if (nonlinear_options.force_monolithic) {
       auto* grad_blocked = dynamic_cast<mfem::BlockOperator*>(grad);
       if (grad_blocked) grad = buildMonolithicMatrix(*grad_blocked).release();
+    }
+
+    if (linear_options.use_bsr_spmv) {
+      if (auto* hypre_grad = dynamic_cast<mfem::HypreParMatrix*>(const_cast<mfem::Operator*>(grad))) {
+        bsr_operator_ = std::make_unique<smith::BSROperator>(hypre_grad, linear_options.bsr_block_size);
+        grad = bsr_operator_.get();
+      }
+    } else {
+      bsr_operator_.reset();
     }
   }
 

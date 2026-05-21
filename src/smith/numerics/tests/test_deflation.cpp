@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <memory>
+#include <cstdlib>
 
 #include "gtest/gtest.h"
 #include "mfem.hpp"
@@ -13,6 +14,7 @@
 #include "smith/numerics/deflation.hpp"
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
+#include "smith/numerics/bsr_operator.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 
 namespace {
@@ -340,7 +342,8 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
   a.FormLinearSystem(ess_tdofs, x_gf, b, A, X, B);
 
   auto runCG = [&](smith::Preconditioner pc, const char* label,
-                   smith::CoarseMode dmode = smith::CoarseMode::Additive) -> int {
+                   smith::CoarseMode dmode = smith::CoarseMode::Additive,
+                   bool use_bsr = false) -> int {
     smith::LinearSolverOptions opts;
     opts.linear_solver = smith::LinearSolver::CG;
     opts.preconditioner = pc;
@@ -349,6 +352,7 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
     opts.max_iterations = 10000;
     opts.print_level = 0;
     opts.deflation_fes = (pc == smith::Preconditioner::Deflation) ? &fes : nullptr;
+    opts.use_bsr_spmv = use_bsr;
 
     auto [lin_solver, prec] = smith::buildLinearSolverAndPreconditioner(opts, MPI_COMM_WORLD);
 
@@ -366,11 +370,18 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
     EXPECT_NE(iter, nullptr);
     if (!iter) return -1;
 
+    std::unique_ptr<smith::BSROperator> bsr_op;
+    mfem::Operator* op = &A;
+    if (use_bsr) {
+      bsr_op = std::make_unique<smith::BSROperator>(&A, 3);
+      op = bsr_op.get();
+    }
+
     // === TIMING BEGIN ===
     MPI_Barrier(MPI_COMM_WORLD);
     double t_setop = MPI_Wtime();
     // === TIMING END ===
-    iter->SetOperator(A);
+    iter->SetOperator(*op);
     // === TIMING BEGIN ===
     MPI_Barrier(MPI_COMM_WORLD);
     t_setop = MPI_Wtime() - t_setop;
@@ -426,6 +437,7 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
   int iters_jac = runCG(smith::Preconditioner::HypreJacobi, "Jacobi");
   int iters_amg = runCG(smith::Preconditioner::HypreAMG, "HypreAMG");
   int iters_def_add = runCG(smith::Preconditioner::Deflation, "Deflation_Add", smith::CoarseMode::Additive);
+  int iters_def_add_bsr = runCG(smith::Preconditioner::Deflation, "Deflation_Add_BSR", smith::CoarseMode::Additive, true);
   int iters_def_loc =
       runCG(smith::Preconditioner::Deflation, "Deflation_AddLocal", smith::CoarseMode::AdditiveLocal);
   int iters_def_sch =
@@ -435,10 +447,12 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
 
   if (my_rank == 0) {
     std::cout << "[Beam summary] ranks=" << n_ranks << " Jacobi=" << iters_jac << " AMG=" << iters_amg
-              << " Def_Add=" << iters_def_add << " Def_AddLocal=" << iters_def_loc
+              << " Def_Add=" << iters_def_add << " Def_Add_BSR=" << iters_def_add_bsr << " Def_AddLocal=" << iters_def_loc
               << " Def_Schwarz=" << iters_def_sch << " Def_Mult=" << iters_def_mul << "\n";
   }
   EXPECT_LT(iters_def_add, iters_jac) << "deflation should beat plain Jacobi";
+  EXPECT_LE(std::abs(iters_def_add_bsr - iters_def_add), 2)
+      << "BSR solver should keep the deflation iteration count essentially unchanged";
 }
 
 int main(int argc, char* argv[])

@@ -185,6 +185,7 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable std::vector<mfem::DenseMatrix> schwarz_neighbor_blocks_;
 
   const mfem::HypreParMatrix* A_ = nullptr;
+  const mfem::Operator* op_for_mult_ = nullptr;
 
   std::unique_ptr<mfem::HypreSmoother> smoother_;
   mfem::HypreSmoother::Type smoother_type_;
