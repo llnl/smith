@@ -14,14 +14,16 @@
 namespace smith {
 
 template <typename Material>
-struct TimeInfoMaterial : Material {
+struct TimeInfoMaterial {
   using State = typename Material::State;
+
+  Material material;  ///< Wrapped material.
+  double density;     ///< Density forwarded for solid mechanics inertial terms.
 
   template <typename StateType, typename GradUType, typename GradVType, typename... Args>
   SMITH_HOST_DEVICE auto operator()(const TimeInfo& /*t_info*/, StateType&& state, GradUType&& grad_u,
                                     const GradVType& /*grad_v*/, Args&&... args) const
   {
-    const Material& material = *this;
     return material(std::forward<StateType>(state), std::forward<GradUType>(grad_u), std::forward<Args>(args)...);
   }
 };
@@ -29,7 +31,8 @@ struct TimeInfoMaterial : Material {
 template <typename Material>
 TimeInfoMaterial<Material> makeTimeInfoMaterial(Material mat)
 {
-  return TimeInfoMaterial<Material>{std::move(mat)};
+  const double density = mat.density;
+  return TimeInfoMaterial<Material>{std::move(mat), density};
 }
 
 }  // namespace smith

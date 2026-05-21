@@ -21,7 +21,7 @@
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/thermal_system.hpp"
 #include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
-#include "smith/differentiable_numerics/time_info_thermo_mechanical_materials.hpp"
+#include "smith/differentiable_numerics/make_time_info_material.hpp"
 #include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/materials/green_saint_venant_thermoelastic.hpp"
@@ -79,8 +79,8 @@ int main(int argc, char* argv[])
 
   auto coupled_system = smith::combineSystems(solid_system, thermal_system);
 
-  smith::thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
-                                                                                     0.0025, 0.0,   0.05};
+  auto material = smith::makeTimeInfoMaterial(
+      smith::thermomechanics::GreenSaintVenantThermoelasticMaterial{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05});
   smith::setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh->entireBodyName());
   // _build_end
 

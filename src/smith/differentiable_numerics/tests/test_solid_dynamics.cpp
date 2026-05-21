@@ -189,12 +189,13 @@ TEST_F(SolidMechanicsMeshFixture, TransientConstantGravity)
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2.0 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  auto material = makeTimeInfoMaterial(solid_mechanics::ParameterizedNeoHookeanSolid{.density = 1.0, .K0 = K, .G0 = G});
+  solid_mechanics::ParameterizedNeoHookeanSolid material_base{.density = 1.0, .K0 = K, .G0 = G};
+  auto material = makeTimeInfoMaterial(material_base);
 
   // Set parameters
   auto params = solid_system->field_store->getParameterFields();
-  params[0].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.K0; });
-  params[1].get()->setFromFieldFunction([=](tensor<double, dim>) { return material.G0; });
+  params[0].get()->setFromFieldFunction([=](tensor<double, dim>) { return material_base.K0; });
+  params[1].get()->setFromFieldFunction([=](tensor<double, dim>) { return material_base.G0; });
 
   solid_system->setMaterial(material, mesh->entireBodyName());
 
@@ -360,8 +361,8 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
   double nu = 0.25;
   auto K = E / (3.0 * (1.0 - 2 * nu));
   auto G = E / (2.0 * (1.0 + nu));
-  auto material =
-      makeTimeInfoMaterial(solid_mechanics::ParameterizedNeoHookeanSolid{.density = 10.0, .K0 = K, .G0 = G});
+  solid_mechanics::ParameterizedNeoHookeanSolid material_base{.density = 10.0, .K0 = K, .G0 = G};
+  auto material = makeTimeInfoMaterial(material_base);
 
   solid_system->setMaterial(material, mesh->entireBodyName());
 
@@ -371,12 +372,12 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
 
   params[0].get()->setFromFieldFunction([=](tensor<double, dim>) {
     double scaling = 1.0;
-    return scaling * material.K0;
+    return scaling * material_base.K0;
   });
 
   params[1].get()->setFromFieldFunction([=](tensor<double, dim>) {
     double scaling = 1.0;
-    return scaling * material.G0;
+    return scaling * material_base.G0;
   });
 
   physics->resetStates();

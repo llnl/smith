@@ -28,6 +28,7 @@ TEST(TimeInfoMaterial, ForwardsStaticMaterial)
 
   EXPECT_EQ(material.density, 2.0);
   EXPECT_EQ(material(TimeInfo(10.0, 20.0), state, 1.0, 100.0, 3.0), 6.0);
+  EXPECT_EQ(material.material.density, 2.0);
 }
 
 }  // namespace smith

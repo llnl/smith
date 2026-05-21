@@ -23,11 +23,11 @@
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
-#include "smith/differentiable_numerics/time_info_solid_materials.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/differentiable_numerics/evaluate_objective.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
+#include "smith/physics/materials/solid_material.hpp"
 // _includes_end
 
 namespace {
