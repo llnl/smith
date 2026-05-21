@@ -83,6 +83,7 @@ struct is_physics_fields_impl : std::false_type {};
 template <int D, int O, typename R, typename... S>
 struct is_physics_fields_impl<PhysicsFields<D, O, R, S...>> : std::true_type {};
 
+/// True when T is a PhysicsFields pack.
 template <typename T>
 inline constexpr bool is_physics_fields_v = is_physics_fields_impl<std::decay_t<T>>::value;
 
