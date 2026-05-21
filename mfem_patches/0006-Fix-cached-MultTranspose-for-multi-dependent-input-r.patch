@@ -1,0 +1,150 @@
+From 83294ac1df1c7bcbafcbe56f8df75013435bb739 Mon Sep 17 00:00:00 2001
+From: Michael Tupek <mrtupek@gmail.com>
+Date: Sun, 17 May 2026 21:24:41 -0600
+Subject: [PATCH 6/6] Fix cached MultTranspose for multi-dependent-input
+ residuals
+
+Rewrite the transpose contraction in DerivativeApplyTranspose to
+process each dependent input independently: contract J^T for that
+input's cache slice, then immediately integrate to DOFs via
+map_quadrature_data_to_fields before moving to the next input.
+
+The previous implementation attempted to compute the full contraction
+into a single flat buffer and then slice it per-input for DOF mapping.
+This had two defects:
+1. Row-major cache indexing inconsistent with DerivativeSetup's
+   column-major write ordering.
+2. For multi-dependent-input cases (e.g. both Value<0> and Gradient<0>
+   depend on the same field), the Reshape call read overlapping memory
+   regions because the buffer was not partitioned per-input.
+
+The fix uses the same column-major cache_idx formula as DerivativeSetup
+and DerivativeApply, with an explicit ik_offset across outputs and
+m_offset across dependent inputs. Each input's contraction result is
+written to a reusable slice buffer (the front of result_at_qp) and
+integrated to DOFs immediately.
+
+Also removes the dead 1D sum-factorization branch in the direction
+interpolation, which referenced a nonexistent function.
+
+Fixes bug 13.
+---
+ .../local_qf/derivative_apply_transpose.hpp   | 64 +++++++++----------
+ 1 file changed, 30 insertions(+), 34 deletions(-)
+
+diff --git a/fem/dfem/backends/local_qf/derivative_apply_transpose.hpp b/fem/dfem/backends/local_qf/derivative_apply_transpose.hpp
+index 17e9acdc29..ee4490d83c 100644
+--- a/fem/dfem/backends/local_qf/derivative_apply_transpose.hpp
++++ b/fem/dfem/backends/local_qf/derivative_apply_transpose.hpp
+@@ -307,14 +307,7 @@ struct DerivativeApplyTranspose
+ 
+             if (use_sum_factorization_local)
+             {
+-               if (dimension_local == 1)
+-               {
+-                  map_field_to_quadrature_data_tensor_product_1d(
+-                     dir_qp_o, output_dtq_maps_local[o],
+-                     dir_o_e, get<o>(outputs_local),
+-                     ir_weights, scratch_shmem);
+-               }
+-               else if (dimension_local == 2)
++               if (dimension_local == 2)
+                {
+                   map_field_to_quadrature_data_tensor_product_2d(
+                      dir_qp_o, output_dtq_maps_local[o],
+@@ -344,27 +337,30 @@ struct DerivativeApplyTranspose
+          auto result_dof = Reshape(&ye_deriv(0, e), deriv_in_elem_sz_local / trial_vdim_local,
+                                    trial_vdim_local);
+ 
+-         // Contract J^T one dependent-input slice at a time into a compact
+-         // buffer, then map that slice back to the trial-space DOFs.
+-         int result_offset = 0;
++         // Process each dependent input independently: contract J^T for
++         // that input's slice, then immediately integrate to DOFs.
++         // transpose: result_s(j,m,q) = sum_{i,k} J(i,k,j,m+m_offset_s,q) * dir(i,k,q)
++         int m_offset = 0;
+          for_constexpr<ninputs>([&](auto s)
+          {
+             if (!input_is_dependent_local[s]) { return; }
+             const int input_vdim = get<s>(inputs_local).vdim;
+             const int trial_op_dim = input_size_on_qp_local[s] / input_vdim;
+-            const int slice_size = input_vdim * trial_op_dim;
+-            auto result_at_qp_slice =
+-               DeviceTensor<2>(shmem_r + result_at_qp_offset_local,
+-                               slice_size, num_qp_local);
++
++            // Use the front of result_at_qp as a per-input slice buffer
++            auto slice = DeviceTensor<2>(
++               &result_at_qp(0, 0),
++               trial_vdim_local * trial_op_dim, num_qp_local);
+ 
+             MFEM_FOREACH_THREAD(q, x, num_qp_local)
+             {
+-               for (int j = 0; j < input_vdim; j++)
++               for (int j = 0; j < trial_vdim_local; j++)
+                {
+                   for (int m = 0; m < trial_op_dim; m++)
+                   {
+                      real_t sum = 0.0;
+-                     int out_offset = 0;
++                     int ik_offset = 0;
++                     int res_offset = 0;
+                      for_constexpr<noutputs>([&](auto o)
+                      {
+                         const int test_vdim   = out_vdim_local[o];
+@@ -373,35 +369,35 @@ struct DerivativeApplyTranspose
+                         {
+                            for (int k = 0; k < test_op_dim; k++)
+                            {
+-                              const int cache_test_flat =
+-                                 out_offset + i * test_op_dim + k;
+-                              const int dir_test_flat =
+-                                 out_offset + i + test_vdim * k;
+-                              const int cache_idx =
+-                                 cache_test_flat
+-                                 * trial_vdim_local * total_trial_op_dim_local
+-                                 + j * total_trial_op_dim_local
+-                                 + (m + result_offset);
++                              const int cache_idx = ik_offset +
++                                 i + test_vdim * (
++                                    k + test_op_dim * (
++                                       j + trial_vdim_local * (
++                                          m + m_offset
++                                       )
++                                    )
++                                 );
+                               sum += cache_tensor(cache_idx, q, e)
+-                                     * dir_at_qp(dir_test_flat, q);
++                                     * dir_at_qp(res_offset + i + k * test_vdim, q);
+                            }
+                         }
+-                        out_offset += out_qp_size_local[o];
++                        ik_offset += test_vdim * test_op_dim * trial_vdim_local * total_trial_op_dim_local;
++                        res_offset += test_vdim * test_op_dim;
+                      });
+-                     result_at_qp_slice(j + input_vdim * m, q) = sum;
++                     slice(j + trial_vdim_local * m, q) = sum;
+                   }
+                }
+             }
+             MFEM_SYNC_THREAD;
+ 
+-            auto fhat = Reshape(&result_at_qp_slice(0, 0),
+-                                input_vdim, trial_op_dim, num_qp_local);
+-
++            auto fhat_s = Reshape(&slice(0, 0),
++                                  trial_vdim_local, trial_op_dim, num_qp_local);
+             map_quadrature_data_to_fields(
+-               result_dof, fhat, get<s>(inputs_local),
++               result_dof, fhat_s, get<s>(inputs_local),
+                input_dtq_maps_local[s],
+                scratch_shmem, dimension_local, use_sum_factorization_local);
+-            result_offset += trial_op_dim;
++
++            m_offset += trial_op_dim;
+          });
+ 
+       }, num_entities, thread_blocks, shmem_per_elem * sizeof(real_t),
+-- 
+2.39.5 (Apple Git-154)
+

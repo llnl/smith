@@ -1,0 +1,96 @@
+From a6b73cd642a796f3501c7125a460540773e79fd3 Mon Sep 17 00:00:00 2001
+From: Michael Tupek <mrtupek@gmail.com>
+Date: Sun, 17 May 2026 16:44:45 -0600
+Subject: [PATCH 4/6] Fix nfields loop bounds to use ctx.unionfds.size()
+
+Several loops in the LocalQFBackend derivative classes iterate up to
+the compile-time nfields (unique field ids in this integrator's tuples)
+when searching unionfds for trial/test field indices and when building
+union_to_infd / dummy_fields maps. When the DifferentiableOperator
+has more registered field descriptors than a given integrator references,
+nfields < ctx.unionfds.size() and the target field may not be found.
+
+In Release builds where MFEM_ASSERT is compiled out, this causes
+out-of-bounds access (e.g. ctx.unionfds[-1]) leading to segfaults.
+
+Change all affected loops from nfields to ctx.unionfds.size() in:
+- derivative_action.hpp (4 loops)
+- derivative_assemble.hpp (1 loop)
+- derivative_assemble_diagonal.hpp (1 loop)
+
+Fixes bug 2.
+---
+ fem/dfem/backends/local_qf/derivative_action.hpp          | 8 ++++----
+ fem/dfem/backends/local_qf/derivative_assemble.hpp        | 2 +-
+ .../backends/local_qf/derivative_assemble_diagonal.hpp    | 2 +-
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/fem/dfem/backends/local_qf/derivative_action.hpp b/fem/dfem/backends/local_qf/derivative_action.hpp
+index be3e43ee17..f6affd6e39 100644
+--- a/fem/dfem/backends/local_qf/derivative_action.hpp
++++ b/fem/dfem/backends/local_qf/derivative_action.hpp
+@@ -109,7 +109,7 @@ struct DerivativeAction
+ 
+       // Find direction field index
+       direction_field_idx = -1;
+-      for (size_t uf = 0; uf < nfields; uf++)
++      for (size_t uf = 0; uf < ctx.unionfds.size(); uf++)
+       {
+          if (static_cast<int>(ctx.unionfds[uf].id) == derivative_id)
+          {
+@@ -135,7 +135,7 @@ struct DerivativeAction
+       shmem_cache.SetSize(shmem_info.total_size);
+ 
+       union_to_infd.fill(SIZE_MAX);
+-      for (size_t uf = 0; uf < nfields; uf++)
++      for (size_t uf = 0; uf < ctx.unionfds.size(); uf++)
+       {
+          const auto id = ctx.unionfds[uf].id;
+          for (size_t i = 0; i < ctx.infds.size(); i++)
+@@ -145,7 +145,7 @@ struct DerivativeAction
+       }
+ 
+       dummy_fields.resize(nfields);
+-      for (size_t uf = 0; uf < nfields; uf++)
++      for (size_t uf = 0; uf < ctx.unionfds.size(); uf++)
+       {
+          if (union_to_infd[uf] != SIZE_MAX) { continue; }
+          const int elem_sz = shmem_info.field_sizes[uf];
+@@ -385,7 +385,7 @@ struct DerivativeAction
+                          num_entities);
+ 
+       std::array<DeviceTensor<2>, nfields> wrapped_fields_e;
+-      for (size_t uf = 0; uf < nfields; uf++)
++      for (size_t uf = 0; uf < ctx.unionfds.size(); uf++)
+       {
+          Vector *src = nullptr;
+          if (union_to_infd[uf] != SIZE_MAX) { src = xe[union_to_infd[uf]]; }
+diff --git a/fem/dfem/backends/local_qf/derivative_assemble.hpp b/fem/dfem/backends/local_qf/derivative_assemble.hpp
+index d1cba01f0a..04b9b14818 100644
+--- a/fem/dfem/backends/local_qf/derivative_assemble.hpp
++++ b/fem/dfem/backends/local_qf/derivative_assemble.hpp
+@@ -88,7 +88,7 @@ struct DerivativeAssemble
+       trial_field_idx = -1;
+       test_field_idx = -1;
+ 
+-      for (size_t uf = 0; uf < nfields; uf++)
++      for (size_t uf = 0; uf < ctx.unionfds.size(); uf++)
+       {
+          if (static_cast<int>(ctx.unionfds[uf].id) == derivative_id)
+          {
+diff --git a/fem/dfem/backends/local_qf/derivative_assemble_diagonal.hpp b/fem/dfem/backends/local_qf/derivative_assemble_diagonal.hpp
+index bd6931ea89..642b537a13 100644
+--- a/fem/dfem/backends/local_qf/derivative_assemble_diagonal.hpp
++++ b/fem/dfem/backends/local_qf/derivative_assemble_diagonal.hpp
+@@ -89,7 +89,7 @@ struct DerivativeAssembleDiagonal
+       trial_field_idx = -1;
+       test_field_idx = -1;
+ 
+-      for (size_t uf = 0; uf < nfields; uf++)
++      for (size_t uf = 0; uf < ctx.unionfds.size(); uf++)
+       {
+          if (static_cast<int>(ctx.unionfds[uf].id) == derivative_id)
+          {
+-- 
+2.39.5 (Apple Git-154)
+

@@ -1,0 +1,155 @@
+From 56e4f863d2b87e6fbec23855e676a98c0051b037 Mon Sep 17 00:00:00 2001
+From: Michael Tupek <mrtupek@gmail.com>
+Date: Sun, 17 May 2026 16:43:46 -0600
+Subject: [PATCH 2/6] Fix DerivativeOperator Mult/MultTranspose, height, and
+ AddBoundaryIntegrator
+
+DerivativeOperator::Mult and MultTranspose required BlockVector inputs even
+for single-output-field operators. Add single-Vector dispatch when
+outfds.size() == 1 so callers can pass plain Vectors directly.
+
+Compute Operator::height in AddIntegrator as the sum of output field
+T-DOF sizes. Previously height was left at 0 (the Operator default),
+breaking any caller that validates operator dimensions.
+
+Add backend_t template parameter to AddBoundaryIntegrator so callers
+can specify LocalQFBackend (or other backends) explicitly, matching
+the existing AddDomainIntegrator signature.
+
+Fixes bugs 4 and 7.
+---
+ fem/dfem/doperator.hpp | 67 ++++++++++++++++++++++++++++++++++--------
+ 1 file changed, 55 insertions(+), 12 deletions(-)
+
+diff --git a/fem/dfem/doperator.hpp b/fem/dfem/doperator.hpp
+index d87afd5623..d1d9393dc4 100644
+--- a/fem/dfem/doperator.hpp
++++ b/fem/dfem/doperator.hpp
+@@ -146,10 +146,17 @@ public:
+    /// direction_t on T-dofs.
+    void Mult(const Vector &x, Vector &y) const override
+    {
+-      MFEM_ASSERT(dynamic_cast<const BlockVector*>(&y),
+-                  "y needs to be a BlockVector");
+-      auto &by = static_cast<BlockVector &>(y);
+-      Mult(x, by);
++      if (outfds.size() == 1)
++      {
++         Mult<Vector>(x, y);
++      }
++      else
++      {
++         MFEM_ASSERT(dynamic_cast<const BlockVector*>(&y),
++                     "y needs to be a BlockVector");
++         auto &by = static_cast<BlockVector &>(y);
++         Mult(x, by);
++      }
+    };
+ 
+    template <typename vector_t>
+@@ -164,7 +171,21 @@ public:
+          f(infields_e, &direction_l, daction_e);
+       }
+       restriction_transpose<Entity::Element>(outfds, daction_e, daction_l);
+-      prolongation_transpose(outfds, daction_l, y);
++      if constexpr (std::is_same_v<vector_t, MultiVector>)
++      {
++         prolongation_transpose(outfds, daction_l, y);
++      }
++      else if constexpr (std::is_same_v<vector_t, BlockVector>)
++      {
++         prolongation_transpose(outfds, daction_l, y);
++      }
++      else
++      {
++         MFEM_ASSERT(outfds.size() == 1,
++                     "non-blocked vector passed to Mult, but "
++                     "operator has multiple output fields");
++         prolongation_transpose(outfds[0], *daction_l[0], y);
++      }
+    }
+ 
+    /// @brief Compute the transpose of the derivative operator on a given
+@@ -180,10 +201,17 @@ public:
+    /// direction_t on T-dofs in the input space (the "direction" field).
+    void MultTranspose(const Vector &direction_t, Vector &result_t) const override
+    {
+-      MFEM_ASSERT(dynamic_cast<const BlockVector*>(&direction_t),
+-                  "direction_t needs to be a BlockVector");
+-      const auto &bdir = static_cast<const BlockVector &>(direction_t);
+-      MultTranspose(bdir, result_t);
++      if (outfds.size() == 1)
++      {
++         MultTranspose<Vector, Vector>(direction_t, result_t);
++      }
++      else
++      {
++         MFEM_ASSERT(dynamic_cast<const BlockVector*>(&direction_t),
++                     "direction_t needs to be a BlockVector");
++         const auto &bdir = static_cast<const BlockVector &>(direction_t);
++         MultTranspose(bdir, result_t);
++      }
+    }
+ 
+    template <typename direction_t, typename result_t>
+@@ -204,10 +232,17 @@ public:
+             {
+                prolongation(outfds[i], direction_mv[i], dir_l_i);
+             }
++            else if constexpr (std::is_same_v<direction_t, BlockVector>)
++            {
++               prolongation(outfds[i], direction_mv.GetBlock(i), dir_l_i);
++            }
+             else
+             {
+-               const auto &bdir = static_cast<const BlockVector &>(direction_mv);
+-               prolongation(outfds[i], bdir.GetBlock(i), dir_l_i);
++               MFEM_ASSERT(outfds.size() == 1,
++                           "non-blocked vector passed to MultTranspose, but "
++                           "operator has multiple output fields");
++               prolongation(outfds[i], static_cast<const Vector &>(direction_mv),
++                            dir_l_i);
+             }
+             offset += l_size;
+          }
+@@ -498,6 +533,7 @@ public:
+    /// @param derivative_ids Derivatives to be made available for this
+    /// integrator.
+    template <
++      typename backend_t,
+       typename qfunc_t,
+       typename input_t,
+       typename output_t,
+@@ -609,6 +645,7 @@ void DifferentiableOperator::AddDomainIntegrator(
+ }
+ 
+ template <
++   typename backend_t,
+    typename qfunc_t,
+    typename input_t,
+    typename output_t,
+@@ -626,7 +663,7 @@ void DifferentiableOperator::AddBoundaryIntegrator(
+    {
+       MFEM_ABORT("AddBoundaryIntegrator on meshes with interior boundaries is not supported.");
+    }
+-   AddIntegrator<Entity::BoundaryElement>(
++   AddIntegrator<backend_t, Entity::BoundaryElement>(
+       qfunc, inputs, outputs, integration_rule, boundary_attributes, derivative_ids);
+ }
+ 
+@@ -751,6 +788,12 @@ void DifferentiableOperator::AddIntegrator(
+    residual_e.resize(outfds.size());
+    residual_l.resize(outfds.size());
+ 
++   height = 0;
++   for (const auto &outfd : outfds)
++   {
++      height += GetTrueVSize(outfd);
++   }
++
+    // TODO: Is this a hack?
+    width = GetTrueVSize(infds[0]);
+ 
+-- 
+2.39.5 (Apple Git-154)
+

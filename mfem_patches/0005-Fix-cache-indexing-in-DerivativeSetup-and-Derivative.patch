@@ -1,0 +1,242 @@
+From 4abfeff5f7a7a38050b1cf2cb41fa76e5e9c7b73 Mon Sep 17 00:00:00 2001
+From: Michael Tupek <mrtupek@gmail.com>
+Date: Sun, 17 May 2026 16:46:01 -0600
+Subject: [PATCH 5/6] Fix cache indexing in DerivativeSetup and DerivativeApply
+
+Reconcile the per-QP Jacobian cache layout between DerivativeSetup
+(which writes the cache) and DerivativeApply (which reads it). The
+original code used row-major indexing:
+
+  cache_idx = i * test_op_dim * trial_vdim * total_trial_op_dim
+            + k * trial_vdim * total_trial_op_dim
+            + j * total_trial_op_dim + (m + m_offset)
+
+This is inconsistent across setup/apply for multi-output integrators
+because ik_offset was not tracked across the noutputs loop. Switch to
+a column-major layout with an explicit ik_offset accumulator:
+
+  cache_idx = ik_offset
+            + i + test_vdim * (k + test_op_dim * (j + trial_vdim * (m + m_offset)))
+
+Also fix DerivativeApply to iterate over all outputs (for_constexpr
+over noutputs) rather than hardcoding test_vdim/test_op_dim from
+output 0 only. The residual write offset uses an explicit res_offset
+accumulator and column-major DOF ordering (i + k * test_vdim) to
+match the integration path. The DOF-mapping stage now reshapes from
+the correct offset in the residual buffer.
+
+Fixes bugs 1 and 12.
+---
+ fem/dfem/assemble.hpp                              | 24 ++++----
+ .../backends/local_qf/derivative_apply.hpp         | 16 ++++--
+ .../backends/local_qf/derivative_assemble.hpp      |  8 +--
+ .../backends/local_qf/derivative_setup.hpp         | 61 +++++++++++---------
+ 4 files changed, 61 insertions(+), 48 deletions(-)
+
+diff --git a/fem/dfem/assemble.hpp b/fem/dfem/assemble.hpp
+index be03eadac0..748fbb2d5d 100644
+--- a/fem/dfem/assemble.hpp
++++ b/fem/dfem/assemble.hpp
+@@ -54,10 +54,10 @@ MFEM_HOST_DEVICE void assemble_element_mat_t3d(
+ {
+    constexpr int dimension = 3;
+ 
+-   // [total_trial_op_dim, trial_vdim, test_op_dim, test_vdim, num_qp]
+-   const int test_vdim = qpdc.GetShape()[3];
+-   const int test_op_dim = qpdc.GetShape()[2];
+-   const int trial_vdim = qpdc.GetShape()[1];
++   // [test_vdim, test_op_dim, trial_vdim, total_trial_op_dim, num_qp]
++   const int test_vdim = qpdc.GetShape()[0];
++   const int test_op_dim = qpdc.GetShape()[1];
++   const int trial_vdim = qpdc.GetShape()[2];
+ 
+    // [num_test_dof, ...]
+    const auto num_test_dof = A.GetShape()[0];
+@@ -125,7 +125,7 @@ MFEM_HOST_DEVICE void assemble_element_mat_t3d(
+                                  {
+                                     for (int k = 0; k < test_op_dim; k++)
+                                     {
+-                                       const real_t f = qpdc(m + m_offset, j, k, i, q);
++                                       const real_t f = qpdc(i, k, j, m + m_offset, q);
+                                        fhat(i, k, q) += f * B(qx, 0, Jx) * B(qy, 0, Jy) * B(qz, 0, Jz);
+                                     }
+                                  }
+@@ -149,7 +149,7 @@ MFEM_HOST_DEVICE void assemble_element_mat_t3d(
+                                  {
+                                     for (int k = 0; k < test_op_dim; k++)
+                                     {
+-                                       const real_t f = qpdc(m + m_offset, j, k, i, q);
++                                       const real_t f = qpdc(i, k, j, m + m_offset, q);
+                                        if (m == 0)
+                                        {
+                                           fhat(i, k, q) += f * G(qx, 0, Jx) * B(qy, 0, Jy) * B(qz, 0, Jz);
+@@ -225,10 +225,10 @@ MFEM_HOST_DEVICE void assemble_element_mat_t2d(
+ {
+    constexpr int dimension = 2;
+ 
+-   // [total_trial_op_dim, trial_vdim, test_op_dim, test_vdim, num_qp]
+-   const int test_vdim = qpdc.GetShape()[3];
+-   const int test_op_dim = qpdc.GetShape()[2];
+-   const int trial_vdim = qpdc.GetShape()[1];
++   // [test_vdim, test_op_dim, trial_vdim, total_trial_op_dim, num_qp]
++   const int test_vdim = qpdc.GetShape()[0];
++   const int test_op_dim = qpdc.GetShape()[1];
++   const int trial_vdim = qpdc.GetShape()[2];
+ 
+    // [num_test_dof, ...]
+    const auto num_test_dof = A.GetShape()[0];
+@@ -288,7 +288,7 @@ MFEM_HOST_DEVICE void assemble_element_mat_t2d(
+                            {
+                               for (int k = 0; k < test_op_dim; k++)
+                               {
+-                                 const real_t f = qpdc(m + m_offset, j, k, i, q);
++                                 const real_t f = qpdc(i, k, j, m + m_offset, q);
+                                  fhat(i, k, q) += f * B(qx, 0, Jx) * B(qy, 0, Jy);
+                               }
+                            }
+@@ -309,7 +309,7 @@ MFEM_HOST_DEVICE void assemble_element_mat_t2d(
+                            {
+                               for (int k = 0; k < test_op_dim; k++)
+                               {
+-                                 const real_t f = qpdc(m + m_offset, j, k, i, q);
++                                 const real_t f = qpdc(i, k, j, m + m_offset, q);
+                                  if (m == 0)
+                                  {
+                                     fhat(i, k, q) += f * B(qx, 0, Jx) * G(qy, 0, Jy);
+diff --git a/fem/dfem/backends/local_qf/derivative_apply.hpp b/fem/dfem/backends/local_qf/derivative_apply.hpp
+index 88c40e8c1a..bdca6b55e2 100644
+--- a/fem/dfem/backends/local_qf/derivative_apply.hpp
++++ b/fem/dfem/backends/local_qf/derivative_apply.hpp
+@@ -328,11 +328,11 @@ struct DerivativeApply
+          // Contract cached Jacobian with direction for each output, storing
+          // results in a flat per-output block so that fhat has stride vdim*op_dim per qp.
+          real_t *resid_base = &residual_shmem(0, 0);
++         int ik_offset = 0;
+          for_constexpr<noutputs>([&](auto o)
+          {
+             const int test_vdim_o   = out_vdim_local[o];
+             const int test_op_dim_o = out_op_dim_local[o];
+-            const int out_offset_o  = out_offsets_local[o];
+             const int out_flat_o    = out_flat_offsets_local[o];
+ 
+             auto output_buf = Reshape(resid_base + out_flat_o, test_vdim_o,
+@@ -356,10 +356,15 @@ struct DerivativeApply
+ 
+                            for (int m = 0; m < trial_op_dim; m++)
+                            {
+-                              const int cache_idx =
+-                                 (out_offset_o + i * test_op_dim_o + k) * trial_vdim_local *
+-                                 total_trial_op_dim_local +
+-                                 j * total_trial_op_dim_local + (m + m_offset);
++                              // Access cache: qpdc(i, k, j, m + m_offset, q) - column-major index
++                              const int cache_idx = ik_offset +
++                                 i + test_vdim_o * (
++                                    k + test_op_dim_o * (
++                                       j + trial_vdim_local * (
++                                          m + m_offset
++                                       )
++                                    )
++                                 );
+ 
+                               const real_t dir_val = shadow_shmem[s](j + input_vdim * m, q);
+                               sum += cache_tensor(cache_idx, q, e) * dir_val;
+@@ -381,6 +386,7 @@ struct DerivativeApply
+             map_quadrature_data_to_fields(
+                y, output_buf, get<o>(outputs_local), output_dtq_maps_local[o],
+                scratch_shmem, dimension_local, use_sum_factorization_local);
++            ik_offset += test_vdim_o * test_op_dim_o * trial_vdim_local * total_trial_op_dim_local;
+          });
+       }, num_entities, thread_blocks, shmem_info.total_size, shmem_cache.ReadWrite());
+    }
+diff --git a/fem/dfem/backends/local_qf/derivative_assemble.hpp b/fem/dfem/backends/local_qf/derivative_assemble.hpp
+index c7c4910d35..1e69d2f8ab 100644
+--- a/fem/dfem/backends/local_qf/derivative_assemble.hpp
++++ b/fem/dfem/backends/local_qf/derivative_assemble.hpp
+@@ -265,10 +265,10 @@ struct DerivativeAssemble
+          auto Aee = Reshape(&Ae(0, 0, 0, 0, e), num_test_dof_local, test_vdim_local,
+                             num_trial_dof_local, trial_vdim_local);
+ 
+-         // Reshape to column-major [total_trial_op_dim, trial_vdim, test_op_dim, test_vdim, num_qp]
++         // Reshape to column-major [test_vdim, test_op_dim, trial_vdim, total_trial_op_dim, num_qp]
+          // matching the C-style storage order written by DerivativeSetup.
+-         auto qpdc = Reshape(&cache_tensor(0, 0, e), total_trial_op_dim_local,
+-                             trial_vdim_local, test_op_dim_local, test_vdim_local, num_qp_local);
++         auto qpdc = Reshape(&cache_tensor(0, 0, e), test_vdim_local,
++                             test_op_dim_local, trial_vdim_local, total_trial_op_dim_local, num_qp_local);
+ 
+          // Temporary storage for fhat
+          real_t *shmem_ptr = reinterpret_cast<real_t *>(shmem);
+diff --git a/fem/dfem/backends/local_qf/derivative_setup.hpp b/fem/dfem/backends/local_qf/derivative_setup.hpp
+index c85add77cd..fe14fcadb3 100644
+--- a/fem/dfem/backends/local_qf/derivative_setup.hpp
++++ b/fem/dfem/backends/local_qf/derivative_setup.hpp
+@@ -518,34 +518,39 @@ struct DerivativeSetup
+                      qfunc_local, input_shmem, shadow_shmem, residual_shmem,
+                      num_qp_local, q1d_local, dimension_local, use_sum_factorization_local);
+ 
+-                  // Store in cache: qpdc(i, k, j, m + m_offset, q)
+-                  for_constexpr<noutputs>([&](auto o)
+-                  {
+-                     const int test_vdim = out_vdim_local[o];
+-                     const int test_op_dim = out_op_dim_local[o];
+-
+-                     auto output_shmem = Reshape(&residual_shmem(0, 0), test_vdim, test_op_dim,
+-                                                 num_qp_local);
+-
+-                     MFEM_FOREACH_THREAD(q, x, num_qp_local)
+-                     {
+-                        for (int i = 0; i < test_vdim; i++)
+-                        {
+-                           for (int k = 0; k < test_op_dim; k++)
+-                           {
+-                              // qpdc(i, k, j, m + m_offset, q)
+-                              const int cache_idx =
+-                                 i * test_op_dim * trial_vdim * total_trial_op_dim +
+-                                 k * trial_vdim * total_trial_op_dim +
+-                                 j * total_trial_op_dim +
+-                                 (m + m_offset);
+-
+-                              cache_tensor(cache_idx, q, e) = output_shmem(i, k, q);
+-                           }
+-                        }
+-                     }
+-                     MFEM_SYNC_THREAD;
+-                  });
++                   // Store in cache: qpdc(i, k, j, m + m_offset, q)
++                   int ik_offset = 0;
++                   for_constexpr<noutputs>([&](auto o)
++                   {
++                      const int test_vdim = out_vdim_local[o];
++                      const int test_op_dim = out_op_dim_local[o];
++
++                      auto output_shmem = Reshape(&residual_shmem(0, 0), test_vdim, test_op_dim,
++                                                  num_qp_local);
++
++                      MFEM_FOREACH_THREAD(q, x, num_qp_local)
++                      {
++                         for (int i = 0; i < test_vdim; i++)
++                         {
++                            for (int k = 0; k < test_op_dim; k++)
++                            {
++                               // qpdc(i, k, j, m + m_offset, q) - column-major index
++                               const int cache_idx = ik_offset +
++                                  i + test_vdim * (
++                                     k + test_op_dim * (
++                                        j + trial_vdim * (
++                                           m + m_offset
++                                        )
++                                     )
++                                  );
++
++                               cache_tensor(cache_idx, q, e) = output_shmem(i, k, q);
++                            }
++                         }
++                      }
++                      MFEM_SYNC_THREAD;
++                      ik_offset += test_vdim * test_op_dim * trial_vdim * total_trial_op_dim;
++                   });
+                }
+                m_offset += trial_op_dim;
+             });
+-- 
+2.39.5 (Apple Git-154)
