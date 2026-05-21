@@ -45,19 +45,6 @@ inline void checkUnconstrainedReactions(const FiniteElementDual& reaction, const
       << "Reaction forces should be zero at non-Dirichlet DOFs. Max violation: " << max_unconstrained;
 }
 
-LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::CG,
-                                         .preconditioner = Preconditioner::HypreJacobi,
-                                         .relative_tol = 1e-11,
-                                         .absolute_tol = 1e-11,
-                                         .max_iterations = 10000,
-                                         .print_level = 0};
-
-NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
-                                            .relative_tol = 1.0e-10,
-                                            .absolute_tol = 1.0e-10,
-                                            .max_iterations = 500,
-                                            .print_level = 0};
-
 static constexpr int dim = 3;
 static constexpr int order = 1;
 
@@ -66,6 +53,19 @@ using VectorSpace = H1<order, dim>;
 using ScalarParameterSpace = L2<0>;
 
 struct SolidMechanicsMeshFixture : public testing::Test {
+  LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::CG,
+                                           .preconditioner = Preconditioner::HypreJacobi,
+                                           .relative_tol = 1e-11,
+                                           .absolute_tol = 1e-11,
+                                           .max_iterations = 10000,
+                                           .print_level = 0};
+
+  NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
+                                              .relative_tol = 1.0e-10,
+                                              .absolute_tol = 1.0e-10,
+                                              .max_iterations = 500,
+                                              .print_level = 0};
+
   double length = 1.0;
   double width = 0.04;
   int num_elements_x = 12;
@@ -331,7 +331,9 @@ TEST_F(SolidMechanicsMeshFixture, TransientFreefallWithConsistentBoundaryConditi
   EXPECT_NEAR(0.0, vector_error("freefall_acceleration_error", states[3], gravity), 1e-6);
 }
 
-auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh)
+auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<smith::Mesh> mesh,
+                                     const NonlinearSolverOptions& nonlinear_opts,
+                                     const LinearSolverOptions& linear_opts)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100, physics_name);
 
@@ -339,8 +341,7 @@ auto createSolidMechanicsBasePhysics(std::string physics_name, std::shared_ptr<s
                                               FieldType<ScalarParameterSpace>("shear"));
   auto solid_fields =
       registerSolidMechanicsFields<dim, order, ImplicitNewmarkSecondOrderTimeIntegrationRule>(field_store);
-  auto solver =
-      std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh));
+  auto solver = std::make_shared<SystemSolver>(buildNonlinearBlockSolver(nonlinear_opts, linear_opts, *mesh));
   auto solid_system = buildSolidMechanicsSystem(solver, SolidMechanicsOptions{}, solid_fields, param_fields);
 
   auto physics = makeDifferentiablePhysics(solid_system, physics_name);
@@ -386,7 +387,8 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
 {
   SMITH_MARK_FUNCTION;
   std::string physics_name = "solid";
-  auto [physics, shape_disp, initial_states, params, bcs] = createSolidMechanicsBasePhysics(physics_name, mesh);
+  auto [physics, shape_disp, initial_states, params, bcs] =
+      createSolidMechanicsBasePhysics(physics_name, mesh, solid_nonlinear_opts, solid_linear_options);
 
   auto pv_writer = smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), physics_name);
   pv_writer.write(0, physics->time(), physics->getFieldStatesAndParamStates());
@@ -465,7 +467,8 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 {
   SMITH_MARK_FUNCTION;
   std::string physics_name = "solid";
-  auto [physics, shape_disp, initial_states, params, bcs] = createSolidMechanicsBasePhysics(physics_name, mesh);
+  auto [physics, shape_disp, initial_states, params, bcs] =
+      createSolidMechanicsBasePhysics(physics_name, mesh, solid_nonlinear_opts, solid_linear_options);
 
   double qoi = integrateForward(*physics, num_steps_, dt_, physics_name + "_reactions");
   SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));
@@ -504,7 +507,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
 
   // 1. Calculate sensitivities using Gretl
   auto [physicsGretl, shape_dispG, initial_statesG, paramsG, bcsG] =
-      createSolidMechanicsBasePhysics(physics_name + "_gretl", mesh);
+      createSolidMechanicsBasePhysics(physics_name + "_gretl", mesh, solid_nonlinear_opts, solid_linear_options);
 
   // Forward pass
   for (size_t m = 0; m < num_steps_; ++m) {
@@ -520,7 +523,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
 
   // 2. Calculate sensitivities using BasePhysics manual adjoint
   auto [physicsBase, shape_dispB, initial_statesB, paramsB, bcsB] =
-      createSolidMechanicsBasePhysics(physics_name + "_base", mesh);
+      createSolidMechanicsBasePhysics(physics_name + "_base", mesh, solid_nonlinear_opts, solid_linear_options);
 
   // Forward pass
   double qoiB = integrateForward(*physicsBase, num_steps_, dt_, physics_name + "_base_reactions");

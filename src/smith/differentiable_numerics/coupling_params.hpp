@@ -49,12 +49,6 @@ struct PhysicsFields {
   }
 };
 
-template <typename T>
-struct is_physics_fields_arg : std::false_type {};
-
-template <int D, int O, typename R, typename... S>
-struct is_physics_fields_arg<PhysicsFields<D, O, R, S...>> : std::true_type {};
-
 /**
  * @brief Registered parameter-only field bundle.
  */
@@ -81,12 +75,24 @@ struct CouplingFields {
   std::tuple<PFs...> packs;  ///< The coupling packs.
 };
 
+namespace detail {
+
+template <typename T>
+struct is_physics_fields_impl : std::false_type {};
+
+template <int D, int O, typename R, typename... S>
+struct is_physics_fields_impl<PhysicsFields<D, O, R, S...>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_physics_fields_v = is_physics_fields_impl<std::decay_t<T>>::value;
+
+}  // namespace detail
+
 /// Helper to construct a CouplingFields bundle
 template <typename... PFs>
 auto couplingFields(const PFs&... pfs)
 {
-  static_assert((is_physics_fields_arg<std::decay_t<PFs>>::value && ...),
-                "couplingFields(...) only accepts PhysicsFields packs");
+  static_assert((detail::is_physics_fields_v<PFs> && ...), "couplingFields(...) only accepts PhysicsFields packs");
   return CouplingFields<PFs...>{std::make_tuple(pfs...)};
 }
 
@@ -105,16 +111,6 @@ auto registerParameterFields(const std::shared_ptr<FieldStore>& field_store, Fie
 }
 
 namespace detail {
-
-template <typename T>
-struct is_physics_fields_impl : std::false_type {};
-
-template <int D, int O, typename R, typename... S>
-struct is_physics_fields_impl<PhysicsFields<D, O, R, S...>> : std::true_type {};
-
-/// @brief True if T is a PhysicsFields type.
-template <typename T>
-inline constexpr bool is_physics_fields_v = is_physics_fields_impl<std::decay_t<T>>::value;
 
 template <typename T>
 struct is_parameter_pack_impl : std::false_type {};
