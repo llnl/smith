@@ -10,10 +10,12 @@ namespace smith {
 
 namespace {
 
+bool isDescentDirection(double directional_derivative) { return directional_derivative < 0.0; }
+
 void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd, double dd)
 {
-  const double deltadelta_m_zz = delta * delta - zz;
-  if (deltadelta_m_zz <= 0.0) return;
+  const double deltadelta_m_zz = std::max(delta * delta - zz, 0.0);
+  if (deltadelta_m_zz == 0.0) return;
   const double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
   z.Add(tau, d);
 }
@@ -28,6 +30,11 @@ std::vector<double> dotMany(const std::vector<DotPair>& pairs)
     products[i] = (*pairs[i].first) * (*pairs[i].second);
   }
   return products;
+}
+
+bool isDescentDirection(const mfem::Vector& direction, const mfem::Vector& residual, const DotManyFunction& dot_many)
+{
+  return isDescentDirection(dot_many({{&direction, &residual}})[0]);
 }
 
 void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
@@ -65,7 +72,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   double zz = 0.;
 
   // rPr = dot(rCurrent, Pr)
-  double rPr = dot_many({{&rCurrent, &Pr}, {&rCurrent, &Pr}})[0];
+  double rPr = dot_many({{&rCurrent, &Pr}})[0];
 
   for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
     H.Mult(d, Hd);
@@ -76,13 +83,9 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
     double zd = dots[2];
     double dd = dots[3];
 
-    if (descent_check > 0) {
-      d *= -1;
-      Hd *= -1;
+    if (!isDescentDirection(descent_check)) {
       results.interior_status = TrustRegionResults::Status::NonDescentDirection;
-      descent_check *= -1.0;
-      curvature *= -1.0;
-      zd *= -1.0;
+      return;
     }
 
     const double alphaCg = curvature != 0.0 ? rPr / curvature : 0.0;
@@ -99,6 +102,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
       return;
     }
 
+    // Alias Pr as temporary workspace 'zPred' to avoid allocation
     auto& zPred = Pr;
     zPred = z;
     zPred.Add(alphaCg, d);

@@ -44,18 +44,6 @@ double sumAbs(const mfem::Vector& x)
   return total;
 }
 
-void symmetrize(mfem::DenseMatrix& A)
-{
-  MFEM_VERIFY(A.Height() == A.Width(), "symmetrize requires square matrix");
-  for (int i = 0; i < A.Height(); ++i) {
-    for (int j = 0; j < i; ++j) {
-      const double value = 0.5 * (A(i, j) + A(j, i));
-      A(i, j) = value;
-      A(j, i) = value;
-    }
-  }
-}
-
 struct SubspaceProjections {
   mfem::DenseMatrix sAs;
   mfem::DenseMatrix ss;
@@ -80,7 +68,7 @@ void checkProjectionInputs(const std::vector<const mfem::Vector*>& states,
 
 SubspaceProjections globalSubspaceProjectionFromLocalInnerProducts(const std::vector<const mfem::Vector*>& states,
                                                                    const std::vector<const mfem::Vector*>& Astates,
-                                                                   const mfem::Vector& b)
+                                                                   const mfem::Vector& b, MPI_Comm comm)
 {
   const int n = static_cast<int>(states.size());
   const int triangular_size = n * (n + 1) / 2;
@@ -102,7 +90,7 @@ SubspaceProjections globalSubspaceProjectionFromLocalInnerProducts(const std::ve
   }
 
   MPI_Allreduce(local_projection_entries.data(), global_projection_entries.data(), buffer_size, MFEM_MPI_REAL_T,
-                MPI_SUM, MPI_COMM_WORLD);
+                MPI_SUM, comm);
 
   SubspaceProjections projections{mfem::DenseMatrix(n), mfem::DenseMatrix(n), mfem::Vector(n)};
   for (int i = 0; i < n; ++i) {
@@ -120,10 +108,11 @@ SubspaceProjections globalSubspaceProjectionFromLocalInnerProducts(const std::ve
 }
 
 SubspaceProjections projectSubspaceGlobally(const std::vector<const mfem::Vector*>& states,
-                                            const std::vector<const mfem::Vector*>& Astates, const mfem::Vector& b)
+                                            const std::vector<const mfem::Vector*>& Astates, const mfem::Vector& b,
+                                            MPI_Comm comm)
 {
   checkProjectionInputs(states, Astates, b);
-  return globalSubspaceProjectionFromLocalInnerProducts(states, Astates, b);
+  return globalSubspaceProjectionFromLocalInnerProducts(states, Astates, b, comm);
 }
 
 double quadraticEnergy(const mfem::DenseMatrix& A, const mfem::Vector& b, const mfem::Vector& x)
@@ -211,6 +200,17 @@ mfem::Vector projectWithTranspose(const mfem::DenseMatrix& A, const mfem::Vector
   return out;
 }
 
+mfem::Vector combineColumns(const mfem::DenseMatrix& basis, const mfem::Vector& coeffs)
+{
+  mfem::Vector out(basis.Height());
+  out = 0.0;
+  for (int i = 0; i < coeffs.Size(); ++i) {
+    const mfem::Vector vi = matrixColumn(basis, i);
+    out.Add(coeffs[i], vi);
+  }
+  return out;
+}
+
 mfem::Vector combineDirections(const std::vector<const mfem::Vector*>& states, const mfem::Vector& coeffs)
 {
   mfem::Vector out(*states[0]);
@@ -284,12 +284,7 @@ std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const CachedT
   const double minSig = sigs[0];
 
   if ((minSig >= eps) && (norm(bvOverSigs) <= delta)) {
-    mfem::Vector x = alloc_vector(b.Size());
-    x = 0.0;
-    for (int i = 0; i < b.Size(); ++i) {
-      const mfem::Vector vi = matrixColumn(V, i);
-      x.Add(bvOverSigs[i], vi);
-    }
+    mfem::Vector x = combineColumns(V, bvOverSigs);
     return std::make_pair(x, true);
   }
 
@@ -299,12 +294,7 @@ std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const CachedT
   for (int i = 0; i < sigs.Size(); ++i) bvOverSigs[i] = bv[i] / sigsPlusLam[i];
 
   if ((minSig < eps) && (norm(bvOverSigs) < delta)) {
-    mfem::Vector p = alloc_vector(b.Size());
-    p = 0.0;
-    for (int i = 0; i < b.Size(); ++i) {
-      const mfem::Vector vi = matrixColumn(V, i);
-      p.Add(bv[i], vi);
-    }
+    mfem::Vector p = combineColumns(V, bvOverSigs);
 
     const double pz = dot(p, leftMost);
     const double pp = dot(p, p);
@@ -349,12 +339,7 @@ std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const CachedT
 
   for (int i = 0; i < sigs.Size(); ++i) bvOverSigs[i] = bv[i] / sigsPlusLam[i];
 
-  mfem::Vector x = alloc_vector(b.Size());
-  x = 0.0;
-  for (int i = 0; i < b.Size(); ++i) {
-    const mfem::Vector vi = matrixColumn(V, i);
-    x.Add(bvOverSigs[i], vi);
-  }
+  mfem::Vector x = combineColumns(V, bvOverSigs);
 
   const double e1 = quadraticEnergy(A, b, x);
   mfem::Vector neg_x = alloc_vector(x.Size());
@@ -372,16 +357,16 @@ std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const CachedT
 /// @brief prepares reduced trust-region subspace data reusable across trust-region radius updates
 CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                         const std::vector<const mfem::Vector*>& A_directions,
-                                                        const mfem::Vector& b, int num_leftmost)
+                                                        const mfem::Vector& b, int num_leftmost, MPI_Comm comm)
 {
   SMITH_MARK_FUNCTION;
   CachedTrustRegionSubspaceProblem prepared;
   prepared.zero_solution = b;
   prepared.zero_solution = 0.0;
 
-  SubspaceProjections projections = projectSubspaceGlobally(directions, A_directions, b);
+  SubspaceProjections projections = projectSubspaceGlobally(directions, A_directions, b, comm);
   mfem::DenseMatrix& sAs = projections.sAs;
-  symmetrize(sAs);
+  sAs.Symmetrize();
 
   for (int i = 0; i < sAs.Height(); ++i) {
     for (int j = 0; j < sAs.Width(); ++j) {
@@ -392,7 +377,7 @@ CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const 
   }
 
   mfem::DenseMatrix& ss = projections.ss;
-  symmetrize(ss);
+  ss.Symmetrize();
 
   double trace_mag = 0.0;
   mfem::DenseMatrix T = orthonormalBasisTransform(ss, trace_mag);
@@ -403,7 +388,7 @@ CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const 
     throw TrustRegionException("No independent directions in MFEM subspace solve.");
   }
   prepared.projected_hessian = tripleProduct(T, sAs, T);
-  symmetrize(prepared.projected_hessian);
+  prepared.projected_hessian.Symmetrize();
 
   const mfem::Vector& sb = projections.sb;
   prepared.projected_rhs = projectWithTranspose(T, sb);
@@ -433,6 +418,9 @@ TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSu
   }
 
   auto [reduced_x, success] = solvePreparedExactTrustRegionProblem(prepared, delta);
+  if (!success) {
+    throw TrustRegionException("Trust-region subspace solve failed to converge.");
+  }
   const double energy = quadraticEnergy(prepared.projected_hessian, prepared.projected_rhs, reduced_x);
 
   const auto basis_ptrs = toPointers(prepared.basis);
@@ -442,23 +430,16 @@ TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSu
 
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
-                                               const mfem::Vector& b, double delta, int num_leftmost)
+                                               const mfem::Vector& b, double delta, int num_leftmost, MPI_Comm comm)
 {
-  return solvePreparedSubspaceProblem(prepareSubspaceProblem(directions, A_directions, b, num_leftmost), delta);
-}
-
-TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& directions,
-                                                   const std::vector<const mfem::Vector*>& A_directions,
-                                                   const mfem::Vector& b, double delta, int num_leftmost)
-{
-  return solvePreparedSubspaceProblem(prepareSubspaceProblem(directions, A_directions, b, num_leftmost), delta);
+  return solvePreparedSubspaceProblem(prepareSubspaceProblem(directions, A_directions, b, num_leftmost, comm), delta);
 }
 
 #else
 
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
-                                               const mfem::Vector& b, double delta, int num_leftmost)
+                                               const mfem::Vector& b, double delta, int num_leftmost, MPI_Comm)
 {
   throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
   return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
@@ -466,21 +447,12 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
 
 CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                         const std::vector<const mfem::Vector*>& A_directions,
-                                                        const mfem::Vector& b, int)
+                                                        const mfem::Vector& b, int, MPI_Comm)
 {
   throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
   CachedTrustRegionSubspaceProblem prepared;
   prepared.zero_solution = b;
   return prepared;
-}
-
-/// @brief report unavailable MFEM subspace solve when MFEM was built without LAPACK.
-TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>&,
-                                                   const std::vector<const mfem::Vector*>&, const mfem::Vector& b,
-                                                   double, int)
-{
-  throw TrustRegionException("MFEM trust-region subspace solve requires MFEM LAPACK support.");
-  return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
 }
 
 TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSubspaceProblem& prepared, double)

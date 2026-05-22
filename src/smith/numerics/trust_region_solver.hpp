@@ -75,16 +75,14 @@ double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm
 /// and their eigenvalues, and the predicted model energy change
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
-                                               const mfem::Vector& b, double delta, int num_leftmost);
-
-TrustRegionSubspaceResult solveSubspaceProblemMfem(const std::vector<const mfem::Vector*>& directions,
-                                                   const std::vector<const mfem::Vector*>& A_directions,
-                                                   const mfem::Vector& b, double delta, int num_leftmost);
+                                               const mfem::Vector& b, double delta, int num_leftmost,
+                                               MPI_Comm comm = MPI_COMM_WORLD);
 
 /// @brief prepares reduced trust-region subspace data reusable across trust-region radius updates
 CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                         const std::vector<const mfem::Vector*>& A_directions,
-                                                        const mfem::Vector& b, int num_leftmost);
+                                                        const mfem::Vector& b, int num_leftmost,
+                                                        MPI_Comm comm = MPI_COMM_WORLD);
 
 /// @brief solves cached reduced trust-region problem for given trust-region radius
 TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSubspaceProblem& prepared, double delta);

@@ -88,3 +88,18 @@ TEST(SteihaugTointCG, DetectsNegativeCurvature)
   EXPECT_NEAR(results.z.Norml2(), 2.0, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::NegativeCurvature);
 }
+
+TEST(SteihaugTointCG, DetectsDirectlyFlippedAscentDirection)
+{
+  mfem::Vector residual(2);
+  residual[0] = 1.0;
+  residual[1] = -2.0;
+
+  mfem::Vector descent_direction(residual);
+  descent_direction *= -1.0;
+  EXPECT_TRUE(smith::isDescentDirection(descent_direction, residual, smith::dotMany));
+
+  mfem::Vector ascent_direction(descent_direction);
+  ascent_direction *= -1.0;
+  EXPECT_FALSE(smith::isDescentDirection(ascent_direction, residual, smith::dotMany));
+}

@@ -133,6 +133,24 @@ ConvergenceStatus scalarConvergenceStatus(double residual_norm, double initial_n
   return status;
 }
 
+bool shouldUseSubspaceStep(int subspace_option, TrustRegionResults::Status status, double step_norm, double tr_size,
+                           int line_search_iter)
+{
+  const bool failed_or_indefinite = status == TrustRegionResults::Status::NonDescentDirection ||
+                                    status == TrustRegionResults::Status::NegativeCurvature ||
+                                    ((step_norm > (1.0 - 1.0e-6) * tr_size) && line_search_iter > 1);
+  const bool on_boundary = step_norm > (1.0 - 1.0e-6) * tr_size;
+  return ((subspace_option >= 1) && failed_or_indefinite) || ((subspace_option >= 2) && on_boundary) ||
+         (subspace_option >= 3);
+}
+
+enum class SubspaceStepStatus
+{
+  Unavailable,
+  Unchanged,
+  Replaced
+};
+
 }  // namespace
 
 /// @cond
@@ -460,7 +478,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   }
 
   /// build reusable subspace data for line-search retries
-  void prepareSubspaceProblemCache([[maybe_unused]] const std::vector<const mfem::Vector*>& ds,
+  bool prepareSubspaceProblemCache([[maybe_unused]] const std::vector<const mfem::Vector*>& ds,
                                    [[maybe_unused]] const std::vector<const mfem::Vector*>& Hds,
                                    [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] int num_leftmost,
                                    [[maybe_unused]] CachedTrustRegionSubspaceProblem& prepared_subspace) const
@@ -476,21 +494,25 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     b *= -1;
 
     try {
-      prepared_subspace = smith::prepareSubspaceProblem(directions, H_directions, b, num_leftmost);
+      prepared_subspace = smith::prepareSubspaceProblem(directions, H_directions, b, num_leftmost, GetComm());
     } catch (const std::exception& e) {
       if (print_level >= 1) {
-        mfem::out << "subspace solve failed with " << e.what() << std::endl;
+        mfem::out << "subspace preparation failed with " << e.what() << "; using dogleg fallback." << std::endl;
       }
-      return;
+      return false;
     }
+    return true;
+#else
+    return false;
 #endif
   }
 
   /// solve cached exact trust-region subspace problem for current trust-region size
   template <typename HessVecFunc>
-  void solvePreparedSubspaceProblem([[maybe_unused]] mfem::Vector& z, [[maybe_unused]] const HessVecFunc& hess_vec_func,
-                                    [[maybe_unused]] const CachedTrustRegionSubspaceProblem& prepared_subspace,
-                                    [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta) const
+  SubspaceStepStatus solvePreparedSubspaceProblem(
+      [[maybe_unused]] mfem::Vector& z, [[maybe_unused]] const HessVecFunc& hess_vec_func,
+      [[maybe_unused]] const CachedTrustRegionSubspaceProblem& prepared_subspace,
+      [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta) const
   {
 #ifdef MFEM_USE_LAPACK
     SMITH_MARK_FUNCTION;
@@ -502,9 +524,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           smith::solvePreparedSubspaceProblem(prepared_subspace, delta);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
-        mfem::out << "subspace solve failed with " << e.what() << std::endl;
+        mfem::out << "subspace solve failed with " << e.what() << "; using dogleg fallback." << std::endl;
       }
-      return;
+      return SubspaceStepStatus::Unavailable;
     }
 
     double base_energy = computeEnergy(g, hess_vec_func, z);
@@ -518,7 +540,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
     if (subspace_energy < base_energy) {
       z = sol;
+      return SubspaceStepStatus::Replaced;
     }
+    return SubspaceStepStatus::Unchanged;
+#else
+    return SubspaceStepStatus::Unavailable;
 #endif
   }
 
@@ -528,7 +554,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   {
     double dd = yy - 2 * zy + zz;
     double zd = zy - zz;
-    double tau = (std::sqrt((trSize * trSize - zz) * dd + zd * zd) - zd) / dd;
+    double boundary_gap = std::max(trSize * trSize - zz, 0.0);
+    if (boundary_gap == 0.0) return;
+    double tau = (std::sqrt(boundary_gap * dd + zd * zd) - zd) / dd;
     z.Add(-tau, z);
     z.Add(tau, y);
   }
@@ -578,6 +606,30 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   {
     auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
     steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda);
+  }
+
+  void fallbackToCauchyPoint(TrustRegionResults& results, const char* reason) const
+  {
+    if (print_level >= 2) {
+      mfem::out << reason << "; using cauchy point fallback." << std::endl;
+    }
+    results.d = results.cauchy_point;
+  }
+
+  bool isDescentStep(const mfem::Vector& step, const mfem::Vector& residual) const
+  {
+    auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
+    return smith::isDescentDirection(step, residual, dot_many_lambda);
+  }
+
+  template <typename HessVecFunc>
+  void computeHessianActions(const std::vector<const mfem::Vector*>& inputs, const std::vector<mfem::Vector*>& outputs,
+                             const HessVecFunc& hess_vec_func) const
+  {
+    MFEM_VERIFY(inputs.size() == outputs.size(), "Subspace Hessian-vector batch input/output size mismatch");
+    for (size_t i = 0; i < inputs.size(); ++i) {
+      hess_vec_func(*inputs[i], *outputs[i]);
+    }
   }
 
   /// assemble the jacobian
@@ -771,16 +823,13 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         ++lineSearchIter;
 
         doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
-        const bool check_subspace_boundary = subspace_option >= 1;
-        const double d_norm = check_subspace_boundary ? std::sqrt(Dot(trResults.d, trResults.d)) : 0.0;
-        bool use_with_option1 =
-            (subspace_option >= 1) && (trResults.interior_status == TrustRegionResults::Status::NonDescentDirection ||
-                                       trResults.interior_status == TrustRegionResults::Status::NegativeCurvature ||
-                                       ((d_norm > (1.0 - 1.0e-6) * tr_size) && lineSearchIter > 1));
-        bool use_with_option2 = (subspace_option >= 2) && (d_norm > (1.0 - 1.0e-6) * tr_size);
-        bool use_with_option3 = (subspace_option >= 3);
+        const double d_norm = subspace_option >= 1 ? std::sqrt(Dot(trResults.d, trResults.d)) : 0.0;
+        const bool use_subspace =
+            can_use_subspace_solver &&
+            shouldUseSubspaceStep(subspace_option, trResults.interior_status, d_norm, tr_size, lineSearchIter);
 
-        if (can_use_subspace_solver && (use_with_option1 || use_with_option2 || use_with_option3)) {
+        bool subspace_unavailable = false;
+        if (use_subspace) {
           if (!have_computed_Hvs) {
             have_computed_Hvs = true;
 
@@ -791,11 +840,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
               subspace_hess_outputs.push_back(&trResults.H_d_old);
             }
 
-            MFEM_VERIFY(subspace_hess_inputs.size() == subspace_hess_outputs.size(),
-                        "Subspace Hessian-vector batch input/output size mismatch");
-            for (size_t i = 0; i < subspace_hess_inputs.size(); ++i) {
-              hess_vec_func(*subspace_hess_inputs[i], *subspace_hess_outputs[i]);
-            }
+            computeHessianActions(subspace_hess_inputs, subspace_hess_outputs, hess_vec_func);
           }
 
           if (!have_computed_H_left_mosts) {
@@ -808,11 +853,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
               leftmost_inputs.push_back(left.get());
               leftmost_outputs.push_back(H_left_mosts.back().get());
             }
-            MFEM_VERIFY(leftmost_inputs.size() == leftmost_outputs.size(),
-                        "Subspace Hessian-vector batch input/output size mismatch");
-            for (size_t i = 0; i < leftmost_inputs.size(); ++i) {
-              hess_vec_func(*leftmost_inputs[i], *leftmost_outputs[i]);
-            }
+            computeHessianActions(leftmost_inputs, leftmost_outputs, hess_vec_func);
           }
 
           if (!have_prepared_subspace) {
@@ -825,10 +866,20 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
               H_ds.push_back(&trResults.H_d_old);
             }
 
-            prepareSubspaceProblemCache(ds, H_ds, r, num_leftmost, prepared_subspace);
+            have_prepared_subspace = prepareSubspaceProblemCache(ds, H_ds, r, num_leftmost, prepared_subspace);
+            subspace_unavailable = !have_prepared_subspace;
           }
 
-          solvePreparedSubspaceProblem(trResults.d, hess_vec_func, prepared_subspace, r, tr_size);
+          if (have_prepared_subspace) {
+            const SubspaceStepStatus subspace_status =
+                solvePreparedSubspaceProblem(trResults.d, hess_vec_func, prepared_subspace, r, tr_size);
+            subspace_unavailable = subspace_status == SubspaceStepStatus::Unavailable;
+          }
+        }
+
+        if (subspace_unavailable || !isDescentStep(trResults.d, r)) {
+          fallbackToCauchyPoint(
+              trResults, subspace_unavailable ? "Subspace step unavailable" : "Fallback step is not a descent step");
         }
 
         static constexpr double roundOffTol = 0.0;  // 1e-14;

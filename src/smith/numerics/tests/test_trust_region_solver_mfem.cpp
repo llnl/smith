@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <limits>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -98,12 +99,63 @@ TEST(TrustRegionSubspaceMfem, SolveHandlesZeroDirection)
   const auto astates = applyDiagonalOperator(diag, states);
   const auto astate_ptrs = toPointers(astates);
 
-  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblemMfem(states, astate_ptrs, b, 0.25, 1);
+  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblem(states, astate_ptrs, b, 0.25, 1);
 
   EXPECT_LE(sol.Norml2(), 0.25 + 1.0e-12);
   EXPECT_FALSE(leftvecs.empty());
   EXPECT_EQ(leftvals.size(), 1);
   EXPECT_LT(energy, 0.0);
+}
+
+TEST(TrustRegionSubspaceMfem, SolveIndefiniteHardCaseUsesShiftedNewtonPoint)
+{
+  mfem::Vector e0(2);
+  mfem::Vector e1(2);
+  mfem::Vector Ae0(2);
+  mfem::Vector Ae1(2);
+  mfem::Vector b(2);
+
+  e0 = 0.0;
+  e1 = 0.0;
+  Ae0 = 0.0;
+  Ae1 = 0.0;
+  b = 0.0;
+
+  e0[0] = 1.0;
+  e1[1] = 1.0;
+  Ae0[0] = -1.0;
+  Ae1[1] = 2.0;
+  b[1] = 1.0;
+
+  const std::vector<const mfem::Vector*> states = {&e0, &e1};
+  const std::vector<const mfem::Vector*> astates = {&Ae0, &Ae1};
+
+  auto [sol, leftvecs, leftvals, energy] = smith::solveSubspaceProblem(states, astates, b, 1.0, 1);
+
+  EXPECT_NEAR(sol.Norml2(), 1.0, 1.0e-12);
+  EXPECT_NEAR(std::abs(sol[0]), std::sqrt(8.0 / 9.0), 1.0e-10);
+  EXPECT_NEAR(sol[1], 1.0 / 3.0, 1.0e-10);
+  EXPECT_EQ(leftvecs.size(), 1);
+  EXPECT_EQ(leftvals.size(), 1);
+  EXPECT_NEAR(leftvals[0], -1.0, 1.0e-12);
+  EXPECT_NEAR(energy, -2.0 / 3.0, 1.0e-10);
+}
+
+TEST(TrustRegionSubspaceMfem, SolveThrowsOnNanProjection)
+{
+  mfem::Vector state(2);
+  mfem::Vector astate(2);
+  mfem::Vector b(2);
+
+  state = 1.0;
+  astate = 1.0;
+  b = 0.0;
+  astate[1] = std::numeric_limits<double>::quiet_NaN();
+
+  const std::vector<const mfem::Vector*> states = {&state};
+  const std::vector<const mfem::Vector*> astates = {&astate};
+
+  EXPECT_THROW(smith::solveSubspaceProblem(states, astates, b, 1.0, 1), smith::TrustRegionException);
 }
 
 int main(int argc, char* argv[])
