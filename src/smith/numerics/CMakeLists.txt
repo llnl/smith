@@ -5,10 +5,10 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 add_subdirectory(functional)
-
 set(numerics_headers
     equation_solver.hpp
     steihaug_toint_cg.hpp
+    nonlinear_convergence.hpp
     odes.hpp
     solver_config.hpp
     stdfunction_operator.hpp
@@ -21,6 +21,7 @@ set(numerics_sources
     equation_solver.cpp
     steihaug_toint_cg.cpp
     mfem_trust_region_subspace.cpp
+    nonlinear_convergence.cpp
     odes.cpp
     petsc_solvers.cpp
     block_preconditioner.cpp
