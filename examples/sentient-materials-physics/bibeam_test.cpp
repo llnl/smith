@@ -189,10 +189,17 @@
      auto J = det(F);
      auto B = dot(F, transpose(F));
 
-     // set up viscoelastic function fn with one Prony term
+     // set up viscoelastic function fn with up to 3 Prony terms 
+     // should really take inputs as a vector and loop over vector size
      auto fn = 1.0;
      if (tau1 != 0.0) {
       fn = 1.-g1*(1.-exp(-time/tau1));
+     }
+     if (tau2 != 0.0) {
+      fn -= g2*(1.-exp(-time/tau2));
+     }
+     if (tau3 != 0.0) {
+      fn -= g3*(1.-exp(-time/tau3));
      }
      // calculate Kirchhoff stress
      auto TK = mu*fn*(B-I)+lam*log(J)*I;
@@ -204,9 +211,13 @@
  
    double density;
    double K;         ///< bulk modulus
-   double G;       ///< shear modulus
+   double G;         ///< shear modulus
    double g1;        ///< Prony series coefficient
    double tau1;      ///< viscoelastic time constant
+   double g2;        ///< Prony series coefficient
+   double tau2;      ///< viscoelastic time constant
+   double g3;        ///< Prony series coefficient
+   double tau3;      ///< viscoelastic time constant
    double dt;        ///< fixed dt
 
  };
@@ -302,6 +313,10 @@
      double h_G = 1.0;       // shear modulus, MPa
      double h_g1 = 0.0;      // Prony series coefficient
      double h_tau1 = 0.0;    // viscoelastic time constant
+     double h_g2 = 0.;      // Prony series coefficient
+     double h_tau2 = 0.0;   // viscoelastic time constant
+     double h_g3 = 0.;      // Prony series coefficient
+     double h_tau3 = 0.0;   // viscoelastic time constant
 
    // Units are standard FEBio: Mpa-mm-s
      double v_density = 1.0;
@@ -309,9 +324,13 @@
      double v_G = 1.4;       // shear modulus, MPa
      double v_g1 = 0.5;      // Prony series coefficient
      double v_tau1 = 10.0;   // viscoelastic time constant
+     double v_g2 = 0.;      // Prony series coefficient
+     double v_tau2 = 0.0;   // viscoelastic time constant
+     double v_g3 = 0.;      // Prony series coefficient
+     double v_tau3 = 0.0;   // viscoelastic time constant
 
-   Material mat_hyper{.density=h_density, .K=h_K, .G=h_G, .g1=h_g1, .tau1=h_tau1, .dt=dt};
-   Material mat_visco{.density=v_density, .K=v_K, .G=v_G, .g1=v_g1, .tau1=v_tau1, .dt=dt};
+   Material mat_hyper{.density=h_density, .K=h_K, .G=h_G, .g1=h_g1, .tau1=h_tau1, .g2=h_g2, .tau2=h_tau2, .g3=h_g3, .tau3=h_tau3, .dt=dt};
+   Material mat_visco{.density=v_density, .K=v_K, .G=v_G, .g1=v_g1, .tau1=v_tau1, .g2=v_g2, .tau2=v_tau2, .g3=v_g3, .tau3=v_tau3, .dt=dt};
   
    //Domain whole_mesh = EntireDomain(mesh);
    auto internal_states = solid_solver->createQuadratureDataBuffer(Material::State{}, mesh->domain("whole_mesh")); 
