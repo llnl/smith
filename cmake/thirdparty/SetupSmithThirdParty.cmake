@@ -698,19 +698,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
     endif()
 
-    # On Apple, Spack-built cmake configs embed literal -Wl,-rpath,... entries in
-    # INTERFACE_LINK_LIBRARIES. These duplicate CMake's own rpath management
-    # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings.
+    # Prevent unhelpful warnings by removing duplicate rpaths set in MFEM's config.mk MFEM_EXT_LIBS
     if(APPLE)
         foreach(_target ${_mfem_targets})
             if(TARGET ${_target})
-                get_target_property(_link_libs ${_target} INTERFACE_LINK_LIBRARIES)
-                if(_link_libs)
-                    list(FILTER _link_libs EXCLUDE REGEX "^-Wl,-rpath,")
-                    set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
-                endif()
+                get_target_property(_link_str ${_target} INTERFACE_LINK_LIBRARIES)
+                separate_arguments(_link_list UNIX_COMMAND "${_link_str}")
+                list(REMOVE_DUPLICATES _link_list)
+                set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_list}")
             endif()
         endforeach()
+        unset(_link_str)
         unset(_link_libs)
     endif()
     unset(_mfem_targets)
