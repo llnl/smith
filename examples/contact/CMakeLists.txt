@@ -4,14 +4,14 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(TRIBOL_FOUND AND STRUMPACK_DIR)
+if(TRIBOL_FOUND)
     set(CONTACT_EXAMPLES_SOURCES
         beam_bending.cpp
         ironing.cpp
         sphere.cpp
         twist.cpp
         ironing_2D.cpp
-        ironing_2D_circle.cpp
+        # ironing_2D_circle.cpp  # requires MeshBuilder::SemiCircularShell (not yet available)
         twisted_ironing_2D.cpp
         energy_mortar_hertzian_disp.cpp
         energy_mortar_hertzian_traction.cpp

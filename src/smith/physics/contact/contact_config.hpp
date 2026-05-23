@@ -52,6 +52,24 @@ enum class ContactJacobian
 };
 
 /**
+ * @brief Smoothing type for isoparametric integration bounds (EnergyMortar only)
+ */
+enum class BoundsSmoothing
+{
+  Hermite,  /**< C1 cubic Hermite ramp (identity in middle section) */
+  Quadratic /**< C1 quadratic ramp (slope 1/(1-del) in middle) */
+};
+
+/**
+ * @brief Penalty smoothing at the contact/separation transition (EnergyMortar only)
+ */
+enum class PenaltySmoothing
+{
+  Hard, /**< Hard clamp: p = k * max(-g, 0). C0 kink in Jacobian. */
+  Smooth /**< C1 quadratic ramp over [-del/2, +del/2]: penalty decays smoothly to zero. */
+};
+
+/**
  * @brief Stores the options for a contact pair
  */
 struct ContactOptions {
@@ -71,6 +89,15 @@ struct ContactOptions {
 
   /// The method to use for Jacobian calculations
   ContactJacobian jacobian = ContactJacobian::Approximate;
+
+  /// Integration bounds smoothing type (EnergyMortar only)
+  BoundsSmoothing bounds_smoothing = BoundsSmoothing::Quadratic;
+
+  /// Penalty smoothing at the contact/separation boundary (EnergyMortar only)
+  PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth;
+
+  /// Width of the smooth penalty transition band (EnergyMortar only, used when penalty_smoothing == Smooth)
+  double penalty_smoothing_del = 1.0e-5;
 };
 
 }  // namespace smith

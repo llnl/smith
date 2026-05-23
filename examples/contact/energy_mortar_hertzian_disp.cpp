@@ -84,20 +84,15 @@ int main(int argc, char* argv[])
       .absolute_tol              = 1.0e-8,
       .max_iterations            = 5000,
       .max_line_search_iterations = 10,
-      .print_level               = 1};
+      .print_level               = 3};
 
   smith::ContactOptions contact_options{
-      .method      = smith::ContactMethod::EnergyMortar,
-      .enforcement = smith::ContactEnforcement::Penalty,
-      .type        = smith::ContactType::Frictionless,
-      .penalty     = 30000.0,
-      .penalty2    = 0,
-      .jacobian    = smith::ContactJacobian::Exact};
-
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return 1;
-#endif
+      .method             = smith::ContactMethod::EnergyMortar,
+      .enforcement        = smith::ContactEnforcement::Penalty,
+      .type               = smith::ContactType::Frictionless,
+      .penalty            = 30000.0,
+      .penalty2           = 0,
+      .jacobian           = smith::ContactJacobian::Exact};
 
   // ── Solid mechanics solver ────────────────────────────────────────────
   smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>>
@@ -164,8 +159,8 @@ int main(int argc, char* argv[])
                                      contact_options);
 
   // ── Output setup ──────────────────────────────────────────────────────
-  const std::string visit_name = name + "_visit";
-  solid_solver.outputStateToDisk(visit_name);
+  const std::string paraview_name = name + "_paraview";
+  solid_solver.outputStateToDisk(paraview_name);
 
   // ── Complete setup and time-march ─────────────────────────────────────
   solid_solver.completeSetup();
@@ -183,7 +178,7 @@ int main(int argc, char* argv[])
   {
     solid_solver.advanceTimestep(dt);
 
-    solid_solver.outputStateToDisk(visit_name);
+    solid_solver.outputStateToDisk(paraview_name);
   }
 
   return 0;

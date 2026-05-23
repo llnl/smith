@@ -47,11 +47,9 @@ TEST_P(ContactTest, beam)
 
   auto mesh = std::make_shared<smith::Mesh>(buildMeshFromFile(filename), "beam_mesh", 1, 0);
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return;
-#endif
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
+                                      .preconditioner = Preconditioner::HypreJacobi,
+                                      .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                            .relative_tol = 1.0e-13,

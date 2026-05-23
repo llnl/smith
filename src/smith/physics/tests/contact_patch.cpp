@@ -65,23 +65,9 @@ TEST_P(ContactTest, patch)
   mesh->addDomainOfBoundaryElements("z0_face", smith::by_attr<dim>(3));
   mesh->addDomainOfBoundaryElements("zmax_face", smith::by_attr<dim>(6));
 
-  // TODO: investigate performance with Petsc
-  // #ifdef SMITH_USE_PETSC
-  //   LinearSolverOptions linear_options{
-  //       .linear_solver = LinearSolver::PetscGMRES,
-  //       .preconditioner = Preconditioner::Petsc,
-  //       .petsc_preconditioner = PetscPCType::HMG,
-  //       .absolute_tol = 1e-16,
-  //       .print_level = 1,
-  //   };
-  // #elif defined(MFEM_USE_STRUMPACK)
-#ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
-#else
-  LinearSolverOptions linear_options{};
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return;
-#endif
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
+                                      .preconditioner = Preconditioner::HypreJacobi,
+                                      .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                            .relative_tol = 1.0e-13,

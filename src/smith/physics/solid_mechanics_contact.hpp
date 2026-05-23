@@ -497,6 +497,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       // set AMGF subspace transfer operator
       amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_prolongation_.get()));
       // set the filteredsubspace solver component of AMGF
+#ifdef MFEM_USE_STRUMPACK
       // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
       int filter_solver_print_level = 0;
       filter_solver_ =
@@ -507,6 +508,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);
       SLIC_WARNING_ROOT_IF(!iterative_solver,
                            "AMGFContact should only be used as a preconditioner for an iterative solver");
+#else
+      SLIC_ERROR_ROOT("AMGF preconditioner requires STRUMPACK solver");
+#endif
     }
 
     if (use_warm_start_) {

@@ -187,6 +187,26 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     }
     mfem::Operator& assembled_gradient = oper->GetGradient(x);
     grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
+
+    if (nonlinear_options.print_level >= 3) {
+      auto* K = dynamic_cast<mfem::HypreParMatrix*>(grad);
+      if (K) {
+        hypre_ParCSRMatrix* Kh = static_cast<hypre_ParCSRMatrix*>(*K);
+        double K_norm;
+        hypre_ParCSRMatrixNormFro(Kh, &K_norm);
+
+        auto K_T = std::unique_ptr<mfem::HypreParMatrix>(K->Transpose());
+        K_T->Add(-1.0, *K);
+        (*K_T) *= 0.5;
+        hypre_ParCSRMatrix* Sh = static_cast<hypre_ParCSRMatrix*>(*K_T);
+        double skew_norm;
+        hypre_ParCSRMatrixNormFro(Sh, &skew_norm);
+
+        mfem::out << "  Jacobian symmetry check: ||K||_F = " << K_norm
+                   << ", ||skew(K)||_F = " << skew_norm
+                   << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0) << "\n";
+      }
+    }
   }
 
   /// set the preconditioner for the linear solver
@@ -743,6 +763,26 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     }
     mfem::Operator& assembled_gradient = oper->GetGradient(x);
     grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
+
+    if (nonlinear_options.print_level >= 3) {
+      auto* K = dynamic_cast<mfem::HypreParMatrix*>(grad);
+      if (K) {
+        hypre_ParCSRMatrix* Kh = static_cast<hypre_ParCSRMatrix*>(*K);
+        double K_norm;
+        hypre_ParCSRMatrixNormFro(Kh, &K_norm);
+
+        auto K_T = std::unique_ptr<mfem::HypreParMatrix>(K->Transpose());
+        K_T->Add(-1.0, *K);
+        (*K_T) *= 0.5;
+        hypre_ParCSRMatrix* Sh = static_cast<hypre_ParCSRMatrix*>(*K_T);
+        double skew_norm;
+        hypre_ParCSRMatrixNormFro(Sh, &skew_norm);
+
+        mfem::out << "  Jacobian symmetry check: ||K||_F = " << K_norm
+                   << ", ||skew(K)||_F = " << skew_norm
+                   << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0) << "\n";
+      }
+    }
   }
 
   /// evaluate the nonlinear residual
@@ -1132,6 +1172,7 @@ void EquationSolver::solve(mfem::Vector& x) const
   nonlin_solver_->Mult(zero, x);
 }
 
+#ifdef MFEM_USE_SUPERLU
 void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
 {
   SLIC_ERROR_ROOT_IF(!superlu_mat_, "Operator must be set prior to solving with SuperLU");
@@ -1139,6 +1180,7 @@ void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
   // Use the underlying MFEM-based solver and SuperLU matrix type to solve the system
   superlu_solver_.Mult(input, output);
 }
+#endif
 
 /**
  * @brief Build a monolithic HypreParMatrix from a BlockOperator.
@@ -1184,6 +1226,7 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
   return std::unique_ptr<mfem::HypreParMatrix>(mfem::HypreParMatrixFromBlocks(hypre_blocks));
 }
 
+#ifdef MFEM_USE_SUPERLU
 void SuperLUSolver::SetOperator(const mfem::Operator& op)
 {
   // Check if this is a block operator
@@ -1206,6 +1249,7 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
   width = op.Width();
   superlu_solver_.SetOperator(*superlu_mat_);
 }
+#endif
 
 #ifdef MFEM_USE_STRUMPACK
 
@@ -1303,7 +1347,7 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions 
   nonlinear_solver->SetRelTol(nonlinear_opts.relative_tol);
   nonlinear_solver->SetAbsTol(nonlinear_opts.absolute_tol);
   nonlinear_solver->SetMaxIter(nonlinear_opts.max_iterations);
-  nonlinear_solver->SetPrintLevel(nonlinear_opts.print_level);
+  nonlinear_solver->SetPrintLevel(std::min(nonlinear_opts.print_level, 2));
 
   // Iterative mode indicates we do not zero out the initial guess during the
   // nonlinear solver call. This is required as we apply the essential boundary
@@ -1318,10 +1362,12 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
 {
   auto preconditioner = buildPreconditioner(linear_opts, comm);
 
+#ifdef MFEM_USE_SUPERLU
   if (linear_opts.linear_solver == LinearSolver::SuperLU) {
     auto lin_solver = std::make_unique<SuperLUSolver>(linear_opts.print_level, comm);
     return {std::move(lin_solver), std::move(preconditioner)};
   }
+#endif
 
 #ifdef MFEM_USE_STRUMPACK
 

@@ -31,12 +31,9 @@ int main(int argc, char* argv[])
   std::string filename = SMITH_REPO_DIR "/data/meshes/ironing.mesh";
   std::shared_ptr<smith::Mesh> mesh = std::make_shared<smith::Mesh>(filename, "ironing_mesh", 2, 0);
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack, .print_level = 0};
-
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return 1;
-#endif
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
+                                              .preconditioner = smith::Preconditioner::HypreJacobi,
+                                              .print_level = 0};
 
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-13,

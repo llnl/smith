@@ -85,8 +85,9 @@ int main(int argc, char* argv[])
                                       .updateAttrib(1, 2)}),
       "square_ironing_mesh_" + name_postfix, 0, 0);
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,  // Strumpack,  // CG,
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
                                             .preconditioner = smith::Preconditioner::HypreAMG,
+                                            .max_iterations = 1000,
                                             .print_level = 0};
 
   mfem::VisItDataCollection visit_dc("contact_ironing_visit", &mesh->mfemParMesh());
@@ -94,18 +95,13 @@ int main(int argc, char* argv[])
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.Save();
 
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return 1;
-#endif
-
   smith::NonlinearSolverOptions nonlinear_options{
       .nonlin_solver = smith::NonlinearSolver::TrustRegion,  // NewtonLineSearch,  // TrustRegion,
       .relative_tol = 1.0e-8,
       .absolute_tol = 1.0e-10,
-      .max_iterations = 500,
+      .max_iterations = 1000,
       .max_line_search_iterations = 10,
-      .print_level = 1};
+      .print_level = 2};
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
@@ -167,8 +163,8 @@ int main(int argc, char* argv[])
   solid_solver.addContactInteraction(contact_interaction_id2, surface_1_boundary_attributes,
                                      surface_3_boundary_attributes, contact_options);
 
-  std::string visit_name = name + "_visit";
-  solid_solver.outputStateToDisk(visit_name);
+  std::string paraview_name = name + "_paraview";
+  solid_solver.outputStateToDisk(paraview_name);
 
   solid_solver.completeSetup();
 
@@ -182,7 +178,7 @@ int main(int argc, char* argv[])
     visit_dc.Save();
 
     // Output the sidre-based plot files
-    solid_solver.outputStateToDisk(visit_name);
+    solid_solver.outputStateToDisk(paraview_name);
   }
 
   return 0;

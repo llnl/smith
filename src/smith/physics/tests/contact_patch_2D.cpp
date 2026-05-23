@@ -30,14 +30,6 @@
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include <fenv.h>
-
-// static void enable_fpe() {
-//   // trap on invalid ops (NaN), divide-by-zero, and overflow
-//   feclearexcept(FE_ALL_EXCEPT);
-//   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-
-// }
 
 namespace smith {
 
@@ -80,23 +72,9 @@ TEST_P(ContactTest, patch)
   mesh->addDomainOfBoundaryElements("y0_faces", smith::by_attr<dim>(8));
   mesh->addDomainOfBoundaryElements("Ymax_face", smith::by_attr<dim>(9));
 
-  // TODO: investigate performance with Petsc
-  // #ifdef smith_USE_PETSC
-  //   LinearSolverOptions linear_options{
-  //       .linear_solver = LinearSolver::PetscGMRES,
-  //       .preconditioner = Preconditioner::Petsc,
-  //       .petsc_preconditioner = PetscPCType::HMG,
-  //       .absolute_tol = 1e-16,
-  //       .print_level = 1,
-  //   };
-  // #elif defined(MFEM_USE_STRUMPACK)
-#ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
-#else
-  LinearSolverOptions linear_options{};
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return;
-#endif
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
+                                      .preconditioner = Preconditioner::HypreJacobi,
+                                      .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::TrustRegion,
                                            .relative_tol = 1.0e-13,

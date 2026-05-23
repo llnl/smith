@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
                                       .updateAttrib(1, 2)}),
       "square_ironing_mesh_" + name_postfix, 0, 0);
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,  // Strumpack,  // CG,
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
                                             .preconditioner = smith::Preconditioner::HypreAMG,
                                             .print_level = 0};
 
@@ -93,11 +93,6 @@ int main(int argc, char* argv[])
 
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.Save();
-
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return 1;
-#endif
 
   smith::NonlinearSolverOptions nonlinear_options{
       .nonlin_solver = smith::NonlinearSolver::TrustRegion,  // NewtonLineSearch,  // TrustRegion,
@@ -173,8 +168,8 @@ int main(int argc, char* argv[])
   solid_solver.addContactInteraction(contact_interaction_id, surface_1_boundary_attributes,
                                      surface_2_boundary_attributes, contact_options);
 
-  std::string visit_name = name + "_visit";
-  solid_solver.outputStateToDisk(visit_name);
+  std::string paraview_name = name + "_paraview";
+  solid_solver.outputStateToDisk(paraview_name);
 
   solid_solver.completeSetup();
 
@@ -187,7 +182,7 @@ int main(int argc, char* argv[])
     visit_dc.SetTime((i + 1) * dt);
     visit_dc.Save();
     // Output the sidre-based plot files
-    solid_solver.outputStateToDisk(visit_name);
+    solid_solver.outputStateToDisk(paraview_name);
   }
 
   return 0;

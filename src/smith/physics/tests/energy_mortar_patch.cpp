@@ -30,14 +30,6 @@
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include <fenv.h>
-
-// static void enable_fpe() {
-//   // trap on invalid ops (NaN), divide-by-zero, and overflow
-//   feclearexcept(FE_ALL_EXCEPT);
-//   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-
-// }
 
 namespace smith {
 
@@ -80,24 +72,9 @@ TEST_P(ContactTest, patch)
   mesh->addDomainOfBoundaryElements("y0_faces", smith::by_attr<dim>(8));
   mesh->addDomainOfBoundaryElements("Ymax_face", smith::by_attr<dim>(9));
 
-  // TODO: investigate performance with Petsc
-  // #ifdef SERAC_USE_PETSC
-  //   LinearSolverOptions linear_options{
-  //       .linear_solver = LinearSolver::PetscGMRES,
-  //       .preconditioner = Preconditioner::Petsc,
-  //       .petsc_preconditioner = PetscPCType::HMG,
-  //       .absolute_tol = 1e-16,
-  //       .print_level = 1,
-  //   };
-  // #elif defined(MFEM_USE_STRUMPACK)
-#ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
-#else
   LinearSolverOptions linear_options{};
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return;
-#endif
-
+  linear_options.preconditioner = smith::Preconditioner::HypreJacobi;
+  linear_options.linear_solver = smith::LinearSolver::CG;
 
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                                   .relative_tol = 1.0e-8,
@@ -115,16 +92,11 @@ TEST_P(ContactTest, patch)
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
       {"bulk_mod", "shear_mod"});
 
-  //   SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
-  //                                              solid_mechanics::default_quasistatic_options, name, mesh);
-
   double K = 1000.0;
   double G = 10;
   solid_mechanics::NeoHookean mat{1.0, K, G};
   solid_solver.setMaterial(mat, mesh->entireBody());
 
-  // Define the function for the initial displacement and boundary condition
-  // constexpr int dim = 2;
   auto applied_disp_function = [](tensor<double, dim>, auto) { return tensor<double, dim>{{0, -0.01}}; };
 
   // Define a boundary attribute set and specify initial / boundary conditions
@@ -144,24 +116,20 @@ TEST_P(ContactTest, patch)
   // Perform the quasi-static solve
   double dt = 1.0;
   solid_solver.advanceTimestep(dt);
-  // solid_solver.advanceTimestep(dt);
 
   // Output the sidre-based plot files
   solid_solver.outputStateToDisk(paraview_name);
 
   // Check the l2 norm of the displacement dofs
   auto c = (3.0 * K - 2.0 * G) / ((3.0 * K + 2 * G));
-  // auto c = 0.0;
   mfem::VectorFunctionCoefficient elasticity_sol_coeff(2, [c](const mfem::Vector& x, mfem::Vector& u) {
     u[0] = 0.005 * c * x[0];
     u[1] = -0.005 * x[1];
-    // u[2] = -0.5 * 0.01 * x[2];
   });
   mfem::ParFiniteElementSpace elasticity_fes(solid_solver.reactions().space());
   mfem::ParGridFunction elasticity_sol(&elasticity_fes);
   elasticity_sol.ProjectCoefficient(elasticity_sol_coeff);
 
-  // Set up test to only look at y component of error*********
   const mfem::ParFiniteElementSpace& u_space_const = solid_solver.displacement().space();
   auto& u_space = const_cast<mfem::ParFiniteElementSpace&>(u_space_const);
   mfem::ParGridFunction U_exact(&u_space);
@@ -189,7 +157,6 @@ TEST_P(ContactTest, patch)
     uy_num(i) = U_num(n * 1 + i);
   }
 
-  // Same thing for x forces.
   mfem::ParGridFunction ux_ex(&y_fes), ux_num(&y_fes);
 
   for (int i = 0; i < n; ++i) {
@@ -212,17 +179,14 @@ TEST_P(ContactTest, patch)
 
   std::cout << "check = " << std::abs(L2_err_vec * L2_err_vec - (L2_err_x * L2_err_x + L2_err_y * L2_err_y)) << "\n";
 }
-/// Instantiate patch tests with penalty enforcement and exact Jacobian.
 INSTANTIATE_TEST_SUITE_P(tribol, ContactTest,
                          testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact,
-                                                         "penalty_approxJ")));
-// std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact, "penalty_exactJ")));
+                                                         "penalty_exactJ")));
 
 }  // namespace smith
 
 int main(int argc, char* argv[])
 {
-  // enable_fpe();
   testing::InitGoogleTest(&argc, argv);
   smith::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();

@@ -72,7 +72,9 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
   if (getContactOptions().method == ContactMethod::EnergyMortar) {
     contact_opts_.enforcement = ContactEnforcement::NotRequired;
     tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
-    // contact_opts_.type = ContactType::TiedNormal;
+    tribol::setMfemEnergyMortarOptions(
+        interaction_id, static_cast<int>(contact_opts_.bounds_smoothing),
+        static_cast<int>(contact_opts_.penalty_smoothing), contact_opts_.penalty_smoothing_del);
   }
 
   // set up Tribol to compute exact Jacobian if requested

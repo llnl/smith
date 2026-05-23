@@ -252,10 +252,15 @@ auto nonlinear_solvers = testing::Values(
 );
 
 /**
- * @brief Linear solvers to test. Always includes LinearSolver::CG, LinearSolver::GMRES, and LinearSolver::SuperLU.
+ * @brief Linear solvers to test. Always includes LinearSolver::CG, LinearSolver::GMRES.
+ * If MFEM_USE_SUPERLU is set, adds LinearSolver::SuperLU.
  * If MFEM_USE_PETSC and SMITH_USE_PETSC are set, adds LinearSolver::PetscCG and LinearSolver::PetscGMRES.
  */
-auto linear_solvers = testing::Values(LinearSolver::CG, LinearSolver::GMRES, LinearSolver::SuperLU
+auto linear_solvers = testing::Values(LinearSolver::CG, LinearSolver::GMRES
+#ifdef MFEM_USE_SUPERLU
+                                      ,
+                                      LinearSolver::SuperLU
+#endif
 #ifdef SMITH_USE_PETSC
                                       ,
                                       LinearSolver::PetscCG, LinearSolver::PetscGMRES

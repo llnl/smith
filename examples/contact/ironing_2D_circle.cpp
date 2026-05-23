@@ -87,7 +87,7 @@ int main(int argc, char* argv[])
       "ironing_2D_mesh_" + name_postfix, 0, 0);
   mesh->mfemParMesh().CheckElementOrientation(true);
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,  // Strumpack,  // CG,
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
                                             .preconditioner = smith::Preconditioner::HypreAMG,
                                             .print_level = 0};
 
@@ -95,11 +95,6 @@ int main(int argc, char* argv[])
 
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.Save();
-
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return 1;
-#endif
 
   smith::NonlinearSolverOptions nonlinear_options{
       .nonlin_solver = smith::NonlinearSolver::TrustRegion,  // NewtonLineSearch,  // TrustRegion,

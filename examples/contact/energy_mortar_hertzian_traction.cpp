@@ -107,11 +107,6 @@ int main(int argc, char* argv[])
                                         .penalty2 = 0,
                                         .jacobian = smith::ContactJacobian::Exact};
 
-#ifndef MFEM_USE_STRUMPACK
-  SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
-  return 1;
-#endif
-
   // ── Solid mechanics solver ────────────────────────────────────────────
   smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
