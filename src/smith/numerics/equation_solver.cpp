@@ -1060,7 +1060,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
               0;  // zero this output so it doesn't look like the linesearch is doing cg iterations
         }
 
-        if (!willAccept && print_level >= 1) {
+        if (!willAccept && print_level >= 3) {
           auto* K = dynamic_cast<mfem::HypreParMatrix*>(grad);
           if (K) {
             hypre_ParCSRMatrix* Kh = static_cast<hypre_ParCSRMatrix*>(*K);
