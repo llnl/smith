@@ -1060,6 +1060,27 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
               0;  // zero this output so it doesn't look like the linesearch is doing cg iterations
         }
 
+        if (!willAccept && print_level >= 1) {
+          auto* K = dynamic_cast<mfem::HypreParMatrix*>(grad);
+          if (K) {
+            hypre_ParCSRMatrix* Kh = static_cast<hypre_ParCSRMatrix*>(*K);
+            double K_norm;
+            hypre_ParCSRMatrixNormFro(Kh, &K_norm);
+
+            auto K_T = std::unique_ptr<mfem::HypreParMatrix>(K->Transpose());
+            K_T->Add(-1.0, *K);
+            (*K_T) *= 0.5;
+            hypre_ParCSRMatrix* Sh = static_cast<hypre_ParCSRMatrix*>(*K_T);
+            double skew_norm;
+            hypre_ParCSRMatrixNormFro(Sh, &skew_norm);
+
+            mfem::out << "  Rejected step symmetry check: ||K||_F = " << K_norm
+                       << ", ||skew(K)||_F = " << skew_norm
+                       << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0)
+                       << ", rho = " << rho << "\n";
+          }
+        }
+
         if (willAccept) {
           trResults.d_old = trResults.d;
           X = x_pred;

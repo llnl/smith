@@ -73,8 +73,12 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     contact_opts_.enforcement = ContactEnforcement::NotRequired;
     tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
     tribol::setMfemEnergyMortarOptions(
-        interaction_id, static_cast<int>(contact_opts_.bounds_smoothing),
-        static_cast<int>(contact_opts_.penalty_smoothing), contact_opts_.penalty_smoothing_del);
+        interaction_id,
+        static_cast<tribol::SmoothingType>(contact_opts_.bounds_smoothing),
+        static_cast<tribol::PenaltySmoothing>(contact_opts_.penalty_smoothing),
+        contact_opts_.penalty_smoothing_del);
+    // F2 monotonic pair set disabled for now — re-enable when ready to test
+    // tribol::setMfemUseBaselineUnion(interaction_id, true);
   }
 
   // set up Tribol to compute exact Jacobian if requested

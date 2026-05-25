@@ -75,6 +75,15 @@ class ContactData {
                              const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts);
 
   /**
+   * @brief Snapshot current contact pairs as baseline for the upcoming load step
+   *
+   * Call once per load step on converged geometry, before Newton iterations begin.
+   * On load-step bisection/retry, call again to re-seed from the converged state.
+   * Requires baseline union mode to be enabled on the contact interactions.
+   */
+  void beginLoadStep();
+
+  /**
    * @brief Updates the contact geometry and gap data
    *
    * @param cycle The current simulation cycle
