@@ -33,7 +33,7 @@
 
 namespace smith {
 
-class ContactTest : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string>> {};
+class ContactTest : public testing::TestWithParam<std::tuple<ContactMethod, std::string>> {};
 /// @brief Patch test for smoothed mortar contact with configurable enforcement and Jacobian type.
 TEST_P(ContactTest, patch)
 {
@@ -44,7 +44,7 @@ TEST_P(ContactTest, patch)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string name = "contact_patch_" + std::get<2>(GetParam());
+  std::string name = "contact_patch_" + std::get<1>(GetParam());
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -82,7 +82,7 @@ TEST_P(ContactTest, patch)
                                                   .max_iterations = 500,
                                                   .print_level = 1};
 
-  smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
+  smith::ContactOptions contact_options{.method = std::get<0>(GetParam()),
                                         .enforcement = smith::ContactEnforcement::Penalty,
                                         .type = smith::ContactType::Frictionless,
                                         .penalty = 100000,
@@ -180,8 +180,8 @@ TEST_P(ContactTest, patch)
   std::cout << "check = " << std::abs(L2_err_vec * L2_err_vec - (L2_err_x * L2_err_x + L2_err_y * L2_err_y)) << "\n";
 }
 INSTANTIATE_TEST_SUITE_P(tribol, ContactTest,
-                         testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Exact,
-                                                         "penalty_exactJ")));
+                         testing::Values(std::make_tuple(ContactMethod::EnergyMortar, "energy_mortar"),
+                                         std::make_tuple(ContactMethod::EnergyAreaPenalty, "energy_area_penalty")));
 
 }  // namespace smith
 

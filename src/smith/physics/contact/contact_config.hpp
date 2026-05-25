@@ -19,8 +19,9 @@ namespace smith {
  */
 enum class ContactMethod
 {
-  SingleMortar, /**< Puso and Laursen 2004 */
-  EnergyMortar
+  SingleMortar,     /**< Puso and Laursen 2004 */
+  EnergyMortar,     /**< Energy-based mortar (g_tilde/A formulation) */
+  EnergyAreaPenalty  /**< Energy-based area-integrated penalty (k/2 * integral H(gn)^2 dA) */
 };
 
 /**
