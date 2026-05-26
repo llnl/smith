@@ -68,9 +68,9 @@ FiniteElementVector::FiniteElementVector(FiniteElementVector&& input_vector)
 
 FiniteElementVector& FiniteElementVector::operator=(const mfem::HypreParVector& rhs)
 {
-  SLIC_ERROR_IF(Size() != rhs.Size(),
-                axom::fmt::format("Finite element vector of size '{}' assigned to a HypreParVector of size '{}'",
-                                  Size(), rhs.Size()));
+  SLIC_ERROR_IF(
+      Size() != rhs.Size(),
+      std::format("Finite element vector of size '{}' assigned to a HypreParVector of size '{}'", Size(), rhs.Size()));
 
   HypreParVector::operator=(rhs);
   return *this;
@@ -86,9 +86,9 @@ FiniteElementVector& FiniteElementVector::operator=(const FiniteElementVector& r
 {
   SLIC_ERROR_IF(!sameFiniteElementSpace(*space_, *rhs.space_), "Finite element vectors have different spaces");
 
-  SLIC_ERROR_IF(Size() != rhs.Size(),
-                axom::fmt::format("Finite element vector of size '{}' assigned to a HypreParVector of size '{}'",
-                                  Size(), rhs.Size()));
+  SLIC_ERROR_IF(
+      Size() != rhs.Size(),
+      std::format("Finite element vector of size '{}' assigned to a HypreParVector of size '{}'", Size(), rhs.Size()));
 
   HypreParVector::operator=(rhs);
 
@@ -143,10 +143,9 @@ double min(const FiniteElementVector& fe_vector)
 
 double innerProduct(const FiniteElementVector& v1, const FiniteElementVector& v2)
 {
-  SLIC_ERROR_IF(
-      v1.Size() != v2.Size(),
-      axom::fmt::format("Finite element vector of size '{}' can not inner product with another vector of size '{}'",
-                        v1.Size(), v2.Size()));
+  SLIC_ERROR_IF(v1.Size() != v2.Size(),
+                std::format("Finite element vector of size '{}' can not inner product with another vector of size '{}'",
+                            v1.Size(), v2.Size()));
   SLIC_ERROR_IF(v1.comm() != v2.comm(),
                 "Cannot compute inner products between finite element vectors with different mpi communicators");
   SLIC_ERROR_IF(!sameFiniteElementSpace(v1.space(), v2.space()),

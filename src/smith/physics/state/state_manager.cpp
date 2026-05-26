@@ -118,14 +118,14 @@ void StateManager::initialize(axom::sidre::DataStore& ds, const std::string& out
 FiniteElementDual& StateManager::shapeDisplacementDual(const std::string& mesh_tag)
 {
   SLIC_ERROR_ROOT_IF(shape_displacement_duals_.count(mesh_tag) == 0,
-                     axom::fmt::format("No shape displacement dual exists on mesh named '{}'", mesh_tag));
+                     std::format("No shape displacement dual exists on mesh named '{}'", mesh_tag));
   return *shape_displacement_duals_[mesh_tag];
 }
 
 FiniteElementState& StateManager::shapeDisplacement(const std::string& mesh_tag)
 {
   SLIC_ERROR_ROOT_IF(shape_displacements_.count(mesh_tag) == 0,
-                     axom::fmt::format("No shape displacement exists on mesh named '{}'", mesh_tag));
+                     std::format("No shape displacement exists on mesh named '{}'", mesh_tag));
   return *shape_displacements_[mesh_tag];
 }
 
@@ -134,7 +134,7 @@ void StateManager::storeState(FiniteElementState& state)
   SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
   auto mesh_tag = collectionID(&state.mesh());
   SLIC_ERROR_ROOT_IF(hasState(state.name()),
-                     axom::fmt::format("StateManager already contains a state named '{}'", state.name()));
+                     std::format("StateManager already contains a state named '{}'", state.name()));
   auto& datacoll = datacolls_.at(mesh_tag);
   const std::string name = state.name();
   mfem::ParGridFunction* grid_function;
@@ -142,8 +142,7 @@ void StateManager::storeState(FiniteElementState& state)
     grid_function = datacoll.GetParField(name);
     state.setFromGridFunction(*grid_function);
   } else {
-    SLIC_ERROR_ROOT_IF(datacoll.HasField(name),
-                       axom::fmt::format("StateManager already given a field named '{0}'", name));
+    SLIC_ERROR_ROOT_IF(datacoll.HasField(name), std::format("StateManager already given a field named '{0}'", name));
 
     // Create a new grid function with unallocated data. This will be managed by sidre.
     grid_function = new mfem::ParGridFunction(&state.space(), static_cast<double*>(nullptr));
@@ -158,9 +157,8 @@ FiniteElementState StateManager::newState(const mfem::ParFiniteElementSpace& spa
   std::string mesh_tag = collectionID(space.GetParMesh());
 
   SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
-  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
-  SLIC_ERROR_ROOT_IF(hasState(state_name),
-                     axom::fmt::format("StateManager already contains a state named '{}'", state_name));
+  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag '{}' not found in the data store", mesh_tag));
+  SLIC_ERROR_ROOT_IF(hasState(state_name), std::format("StateManager already contains a state named '{}'", state_name));
   auto state = FiniteElementState(space, state_name);
   storeState(state);
   return state;
@@ -171,7 +169,7 @@ void StateManager::storeDual(FiniteElementDual& dual)
   SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
   auto mesh_tag = collectionID(&dual.mesh());
   SLIC_ERROR_ROOT_IF(hasDual(dual.name()),
-                     axom::fmt::format("StateManager already contains a state named '{}'", dual.name()));
+                     std::format("StateManager already contains a state named '{}'", dual.name()));
   auto& datacoll = datacolls_.at(mesh_tag);
   const std::string name = dual.name();
   mfem::ParGridFunction* grid_function;
@@ -180,8 +178,7 @@ void StateManager::storeDual(FiniteElementDual& dual)
     std::unique_ptr<mfem::HypreParVector> true_dofs(grid_function->GetTrueDofs());
     dual = *true_dofs;
   } else {
-    SLIC_ERROR_ROOT_IF(datacoll.HasField(name),
-                       axom::fmt::format("StateManager already given a field named '{0}'", name));
+    SLIC_ERROR_ROOT_IF(datacoll.HasField(name), std::format("StateManager already given a field named '{0}'", name));
 
     // Create a new grid function with unallocated data. This will be managed by sidre.
     grid_function = new mfem::ParGridFunction(&dual.space(), static_cast<double*>(nullptr));
@@ -196,9 +193,8 @@ FiniteElementDual StateManager::newDual(const mfem::ParFiniteElementSpace& space
   std::string mesh_tag = collectionID(space.GetParMesh());
 
   SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
-  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
-  SLIC_ERROR_ROOT_IF(hasDual(dual_name),
-                     axom::fmt::format("StateManager already contains a dual named '{}'", dual_name));
+  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag '{}' not found in the data store", mesh_tag));
+  SLIC_ERROR_ROOT_IF(hasDual(dual_name), std::format("StateManager already contains a dual named '{}'", dual_name));
   auto dual = FiniteElementDual(space, dual_name);
   storeDual(dual);
   return dual;
@@ -208,7 +204,7 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
 {
   SMITH_MARK_FUNCTION;
   SLIC_ERROR_ROOT_IF(!ds_, "Smith's data store was not initialized - call StateManager::initialize first");
-  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag '{}' not found in the data store", mesh_tag));
+  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag '{}' not found in the data store", mesh_tag));
 
   // copy data to host (if needed; HostRead() does nothing if host data is up-to-date)
   for (auto& state : named_states_) {
@@ -221,7 +217,7 @@ void StateManager::save(const double t, const int cycle, const std::string& mesh
   auto& datacoll = datacolls_.at(mesh_tag);
   std::string file_path = axom::utilities::filesystem::joinPath(datacoll.GetPrefixPath(), datacoll.GetCollectionName());
   SLIC_INFO_ROOT(
-      axom::fmt::format("Saving data collection at time: '{}' and cycle: '{}' to path: '{}'", t, cycle, file_path));
+      std::format("Saving data collection at time: '{}' and cycle: '{}' to path: '{}'", t, cycle, file_path));
 
   datacoll.SetTime(t);
   datacoll.SetCycle(cycle);
@@ -265,8 +261,8 @@ void StateManager::constructShapeFields(const std::string& mesh_tag)
     shape_displacements_[mesh_tag] =
         std::make_unique<FiniteElementState>(new_mesh, SHAPE_DIM_3, mesh_tag + "_shape_displacement");
   } else {
-    SLIC_ERROR_ROOT(axom::fmt::format("Mesh of dimension {} given, only dimensions 2 or 3 are available in Smith.",
-                                      new_mesh.Dimension()));
+    SLIC_ERROR_ROOT(std::format("Mesh of dimension {} given, only dimensions 2 or 3 are available in Smith.",
+                                new_mesh.Dimension()));
   }
 
   storeState(*shape_displacements_[mesh_tag]);
@@ -286,7 +282,7 @@ void StateManager::constructShapeFields(const std::string& mesh_tag)
 
 mfem::ParMesh& StateManager::mesh(const std::string& mesh_tag)
 {
-  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
+  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
   auto mesh = datacolls_.at(mesh_tag).GetMesh();
   SLIC_ERROR_ROOT_IF(!mesh, "The datacollection does not contain a mesh object");
   return static_cast<mfem::ParMesh&>(*mesh);
@@ -305,13 +301,13 @@ std::string StateManager::collectionID(const mfem::ParMesh* pmesh)
 
 int StateManager::cycle(std::string mesh_tag)
 {
-  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
+  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
   return datacolls_.at(mesh_tag).GetCycle();
 }
 
 double StateManager::time(std::string mesh_tag)
 {
-  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), axom::fmt::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
+  SLIC_ERROR_ROOT_IF(!hasMesh(mesh_tag), std::format("Mesh tag \"{}\" not found in the data store", mesh_tag));
   return datacolls_.at(mesh_tag).GetTime();
 }
 

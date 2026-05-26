@@ -428,7 +428,7 @@ Integral MakeInteriorFaceIntegral(const Domain& domain, const lambda_type& qf, s
 {
   FunctionSignature<s> signature;
 
-  SLIC_ERROR_IF(domain.type_ != Domain::Type::InteriorFaces,
+  SLIC_ERROR_IF(domain.type_ != Domain::Type::InteriorBoundaryElements,
                 "Error: trying to evaluate a boundary integral over a non-boundary domain of integration");
 
   Integral integral(domain, argument_indices);

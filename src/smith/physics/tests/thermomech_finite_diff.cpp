@@ -68,7 +68,7 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SMITH_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
-  std::string mesh_tag("mesh");
+  std::string mesh_tag = MESHTAG;
 
   auto mesh =
       std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
@@ -238,8 +238,8 @@ void FiniteDifferenceParameter(LoadingType load, size_t sensitivity_parameter_in
     double dqoi_dparam = dqoi_dparam_1 + dqoi_dparam_2;
 
     // See if these are similar
-    SLIC_INFO(axom::fmt::format("dqoi_dparam: {}", dqoi_dparam));
-    SLIC_INFO(axom::fmt::format("sensitivity: {}", sensitivity(i)));
+    SLIC_INFO(std::format("dqoi_dparam: {}", dqoi_dparam));
+    SLIC_INFO(std::format("sensitivity: {}", sensitivity(i)));
     double relative_error = (sensitivity(i) - dqoi_dparam) / std::max(dqoi_dparam, 1.0e-2);
     EXPECT_NEAR(relative_error, 0.0, 5.0e-4);
   }
@@ -281,7 +281,7 @@ void FiniteDifferenceShapeTest(LoadingType load)
 
   // Construct the appropriate dimension mesh and give it to the data store
   std::string filename = SMITH_REPO_DIR "/data/meshes/patch2D_tris_and_quads.mesh";
-  std::string mesh_tag("mesh");
+  std::string mesh_tag = MESHTAG;
   auto mesh =
       std::make_shared<smith::Mesh>(buildMeshFromFile(filename), mesh_tag, serial_refinement, parallel_refinement);
 
@@ -433,8 +433,8 @@ void FiniteDifferenceShapeTest(LoadingType load)
     double dqoi_dshape = dqoi_dshape_1 + dqoi_dshape_2;
 
     // See if these are similar
-    SLIC_INFO(axom::fmt::format("dqoi_dshape: {}", dqoi_dshape));
-    SLIC_INFO(axom::fmt::format("sensitivity: {}", sensitivity(i)));
+    SLIC_INFO(std::format("dqoi_dshape: {}", dqoi_dshape));
+    SLIC_INFO(std::format("sensitivity: {}", sensitivity(i)));
     double relative_error = (sensitivity(i) - dqoi_dshape) / std::max(dqoi_dshape, 1.0e-2);
     EXPECT_NEAR(relative_error, 0.0, 5.0e-4);
   }

@@ -107,6 +107,68 @@ std::unique_ptr<mfem::BlockOperator> ContactInteraction::jacobian() const
   return tribol::getMfemBlockJacobian(getInteractionId());
 }
 
+std::unique_ptr<mfem::BlockOperator> ContactInteraction::jacobianContribution() const
+{
+  const int disp_size = current_coords_.ParFESpace()->GetTrueVSize();
+  const int pressure_size = numPressureDofs();
+
+  auto offsets = mfem::Array<int>({0, disp_size, disp_size + pressure_size});
+  auto out = std::make_unique<mfem::BlockOperator>(offsets);
+  out->owns_blocks = true;
+
+  auto interaction_J = jacobian();
+  interaction_J->owns_blocks = false;  // manage block ownership explicitly
+
+  std::unique_ptr<mfem::HypreParMatrix> dfdx;
+  if (!interaction_J->IsZeroBlock(0, 0)) {
+    auto* block_0_0 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
+    SLIC_ERROR_ROOT_IF(!block_0_0, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+    dfdx.reset(block_0_0);
+  }
+
+  if (!interaction_J->IsZeroBlock(1, 0) && !interaction_J->IsZeroBlock(0, 1)) {
+    auto* dgdu = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(1, 0));
+    auto* dfdp = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 1));
+    SLIC_ERROR_ROOT_IF(!dgdu, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+    SLIC_ERROR_ROOT_IF(!dfdp, "Only HypreParMatrix constraint matrix blocks are currently supported.");
+
+    // zero out rows and cols not in the active set
+    auto inactive_dofs = inactiveDofs();
+    dgdu->EliminateRows(inactive_dofs);
+    auto dfdp_elim = std::unique_ptr<mfem::HypreParMatrix>(dfdp->EliminateCols(inactive_dofs));
+
+    if (getContactOptions().enforcement == ContactEnforcement::Penalty) {
+      std::unique_ptr<mfem::HypreParMatrix> BTB(mfem::ParMult(dfdp, dgdu, true));
+      delete &interaction_J->GetBlock(1, 0);
+      delete &interaction_J->GetBlock(0, 1);
+
+      if (!dfdx) {
+        mfem::Vector penalty(disp_size);
+        penalty = getContactOptions().penalty;
+        BTB->ScaleRows(penalty);
+        dfdx = std::move(BTB);
+      } else {
+        dfdx.reset(mfem::Add(1.0, *dfdx, getContactOptions().penalty, *BTB));
+      }
+    } else  // ContactEnforcement::LagrangeMultiplier
+    {
+      out->SetBlock(1, 0, dgdu);
+      out->SetBlock(0, 1, dfdp);
+    }
+  }
+
+  if (dfdx) {
+    out->SetBlock(0, 0, dfdx.release());
+  }
+
+  // Smith builds the merged (1,1) inactive-dof identity itself; discard any Tribol-provided (1,1) block.
+  if (!interaction_J->IsZeroBlock(1, 1)) {
+    delete &interaction_J->GetBlock(1, 1);
+  }
+
+  return out;
+}
+
 int ContactInteraction::numPressureDofs() const
 {
   return getContactOptions().enforcement == ContactEnforcement::LagrangeMultiplier

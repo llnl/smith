@@ -81,7 +81,7 @@ class Thermomechanics : public BasePhysics {
                cycle, time)
   {
     SLIC_ERROR_ROOT_IF(mfemParMesh().Dimension() != dim,
-                       axom::fmt::format("Compile time dimension and runtime mesh dimension mismatch"));
+                       std::format("Compile time dimension and runtime mesh dimension mismatch"));
 
     states_.push_back(&thermal_.temperature());
     states_.push_back(&solid_.velocity());
@@ -168,8 +168,8 @@ class Thermomechanics : public BasePhysics {
       return thermal_.temperature();
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("State '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                                      state_name, name_));
+    SLIC_ERROR_ROOT(
+        std::format("State '{}' requested from solid mechanics module '{}', but it doesn't exist", state_name, name_));
     return solid_.displacement();
   }
 
@@ -196,9 +196,9 @@ class Thermomechanics : public BasePhysics {
       return;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format(
-        "setState for state named '{}' requested from thermomechanics module '{}', but it doesn't exist", state_name,
-        name_));
+    SLIC_ERROR_ROOT(
+        std::format("setState for state named '{}' requested from thermomechanics module '{}', but it doesn't exist",
+                    state_name, name_));
   }
 
   /**
@@ -225,8 +225,8 @@ class Thermomechanics : public BasePhysics {
       return thermal_.adjoint("temperature");
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                                      state_name, name_));
+    SLIC_ERROR_ROOT(std::format("Adjoint '{}' requested from solid mechanics module '{}', but it doesn't exist",
+                                state_name, name_));
     return solid_.displacement();
   }
 

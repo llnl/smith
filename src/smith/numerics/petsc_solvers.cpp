@@ -306,6 +306,7 @@ void PetscPCSolver::SetOperator(const mfem::Operator& op)
   PetscCallAbort(GetComm(), MatCreateVecs(A22, &zero, nullptr));
   PetscCallAbort(GetComm(), VecSet(zero, 0));
   PetscCallAbort(GetComm(), MatDiagonalSet(A22, zero, ADD_VALUES));
+  PetscCallAbort(GetComm(), VecDestroy(&zero));
   if (delete_pA) {
     delete pA;
   }
@@ -666,6 +667,23 @@ PetscKSPSolver::PetscKSPSolver(const mfem::HypreParMatrix& A, KSPType ksp_type, 
   Customize();
 }
 
+PetscKSPSolver::~PetscKSPSolver()
+{
+  if (pA_) {
+    delete pA_;
+  }
+  if (X) {
+    delete X;
+  }
+  if (B) {
+    delete B;
+  }
+
+  pA_ = nullptr;
+  X = nullptr;
+  B = nullptr;
+}
+
 void PetscKSPSolver::SetTolerances()
 {
   PetscCallAbort(GetComm(), KSPSetTolerances(*this, rel_tol, abs_tol, PETSC_DEFAULT, max_iter));
@@ -744,7 +762,7 @@ void PetscKSPSolver::SetOperator(const mfem::Operator& op)
   MatType type;
   MatGetType(*pA, &type);
   PetscCallAbort(GetComm(), PetscObjectTypeCompare(*pA, MATNEST, &is_nest));
-  SLIC_DEBUG_ROOT(axom::fmt::format("PetscKSPSolver::SetOperator(...) - Mat type: {}", type));
+  SLIC_DEBUG_ROOT(std::format("PetscKSPSolver::SetOperator(...) - Mat type: {}", type));
 
   PetscObjectTypeCompare(*pA, MATNEST, &is_nest);
   SLIC_DEBUG_ROOT_IF(is_nest, "Using MATNEST");
@@ -823,7 +841,7 @@ PetscErrorCode linesearchPreCheckBackoffOnNan(SNESLineSearch linesearch, Vec X, 
     if (!PetscIsInfOrNanScalar(fty)) {
       if (monitor) {
         PetscCall(PetscViewerASCIIAddTab(monitor, linesearch_obj->tablevel));
-        auto msg = axom::fmt::format("    Line search: dot(F,Y) = {}, no back-off steps needed", fty);
+        auto msg = std::format("    Line search: dot(F,Y) = {}, no back-off steps needed", fty);
         PetscCall(PetscViewerASCIIPrintf(monitor, "%s\n", msg.c_str()));
         PetscCall(PetscViewerASCIISubtractTab(monitor, linesearch_obj->tablevel));
       }
@@ -833,9 +851,8 @@ PetscErrorCode linesearchPreCheckBackoffOnNan(SNESLineSearch linesearch, Vec X, 
     if (lambda < min_lambda) {
       if (monitor) {
         PetscCall(PetscViewerASCIIAddTab(monitor, linesearch_obj->tablevel));
-        auto msg =
-            axom::fmt::format("    Line search: step size too small ({} < {}) after {} failures, exiting recovery",
-                              lambda, min_lambda, num_failures);
+        auto msg = std::format("    Line search: step size too small ({} < {}) after {} failures, exiting recovery",
+                               lambda, min_lambda, num_failures);
         PetscCall(PetscViewerASCIIPrintf(monitor, "%s\n", msg.c_str()));
         PetscCall(PetscViewerASCIISubtractTab(monitor, linesearch_obj->tablevel));
       }
@@ -843,7 +860,7 @@ PetscErrorCode linesearchPreCheckBackoffOnNan(SNESLineSearch linesearch, Vec X, 
     }
     if (monitor) {
       PetscCall(PetscViewerASCIIAddTab(monitor, linesearch_obj->tablevel));
-      auto msg = axom::fmt::format(
+      auto msg = std::format(
           "    Line search: dot(F,Y) = {}, scaling back step size to {} ({} of a maximum {} back-off steps)", fty,
           lambda, num_failures, max_failures);
       PetscCall(PetscViewerASCIIPrintf(monitor, "%s\n", msg.c_str()));

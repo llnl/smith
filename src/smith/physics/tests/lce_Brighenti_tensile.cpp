@@ -5,11 +5,11 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
+#include <format>
 #include <memory>
 #include <string>
 
 #include "gtest/gtest.h"
-#include "axom/fmt.hpp"
 #include "mpi.h"
 #include "mfem.hpp"
 
@@ -182,12 +182,12 @@ TEST(LiquidCrystalElastomer, Brighenti)
   // Perform remaining quasi-static solve
   for (int i = 0; i < (num_steps + 1); i++) {
     SLIC_INFO_ROOT(
-        axom::fmt::format("\n\n............................"
-                          "\n... Entering time step: {}"
-                          "\n............................\n"
-                          "\n... At time: {} \n... And with a tension load of: {} ( {} `%` of max)"
-                          "\n... And with uniform temperature of: {}\n",
-                          i + 1, t, loadVal, loadVal / maxLoadVal * 100, initial_temperature));
+        std::format("\n\n............................"
+                    "\n... Entering time step: {}"
+                    "\n............................\n"
+                    "\n... At time: {} \n... And with a tension load of: {} ( {} `%` of max)"
+                    "\n... And with uniform temperature of: {}\n",
+                    i + 1, t, loadVal, loadVal / maxLoadVal * 100, initial_temperature));
 
     // solve problem with current parameters
     solid_solver.advanceTimestep(dt);
@@ -212,11 +212,11 @@ TEST(LiquidCrystalElastomer, Brighenti)
       MPI_Allreduce(&lclDispYmax, &gblDispYmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 
       SLIC_INFO_ROOT(
-          axom::fmt::format("\n... Max Y displacement: {}"
-                            "\n... The QoIVal is: {}"
-                            "\n... The top surface current area is: {}"
-                            "\n... The vertical displacement integrated over the top surface is: {}",
-                            gblDispYmax, current_qoi, current_area, current_qoi / current_area));
+          std::format("\n... Max Y displacement: {}"
+                      "\n... The QoIVal is: {}"
+                      "\n... The top surface current area is: {}"
+                      "\n... The vertical displacement integrated over the top surface is: {}",
+                      gblDispYmax, current_qoi, current_area, current_qoi / current_area));
     }
 
     SLIC_ERROR_ROOT_IF(std::isnan(gblDispYmax), "... Solution blew up... Check boundary and initial conditions.");

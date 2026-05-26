@@ -162,7 +162,7 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
   {
     SLIC_ERROR_ROOT_IF(
         mfemParMesh().Dimension() != dim,
-        axom::fmt::format("Compile time class dimension template parameter and runtime mesh dimension do not match"));
+        std::format("Compile time class dimension template parameter and runtime mesh dimension do not match"));
 
     SLIC_ERROR_ROOT_IF(
         !nonlin_solver_,
@@ -194,8 +194,8 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(parameter_space) != parameter_names.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(parameter_space), parameter_names.size()));
+        std::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
+                    sizeof...(parameter_space), parameter_names.size()));
 
     if constexpr (sizeof...(parameter_space) > 0) {
       tuple<parameter_space...> types{};
@@ -599,8 +599,8 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
       return temperature_rate_;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("State '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                                      state_name, name_));
+    SLIC_ERROR_ROOT(
+        std::format("State '{}' requested from solid mechanics module '{}', but it doesn't exist", state_name, name_));
     return temperature_;
   }
 
@@ -623,9 +623,9 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
       return;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format(
-        "setState for state named '{}' requested from heat transfer module '{}', but it doesn't exist", state_name,
-        name_));
+    SLIC_ERROR_ROOT(
+        std::format("setState for state named '{}' requested from heat transfer module '{}', but it doesn't exist",
+                    state_name, name_));
   }
 
   /**
@@ -684,8 +684,8 @@ class HeatTransfer<order, dim, Parameters<parameter_space...>, std::integer_sequ
       return adjoint_temperature_;
     }
 
-    SLIC_ERROR_ROOT(axom::fmt::format("Adjoint '{}' requested from solid mechanics module '{}', but it doesn't exist",
-                                      state_name, name_));
+    SLIC_ERROR_ROOT(std::format("Adjoint '{}' requested from solid mechanics module '{}', but it doesn't exist",
+                                state_name, name_));
     return adjoint_temperature_;
   }
 

@@ -166,8 +166,8 @@ TEST(SolidMechanics, FiniteDifferenceParameter)
     double dqoi_dbulk = adjoint_load_form(ddisp_dbulk);
 
     // See if these are similar
-    SLIC_INFO(axom::fmt::format("dqoi_dbulk: {}", dqoi_dbulk));
-    SLIC_INFO(axom::fmt::format("sensitivity: {}", sensitivity(i)));
+    SLIC_INFO(std::format("dqoi_dbulk: {}", dqoi_dbulk));
+    SLIC_INFO(std::format("sensitivity: {}", sensitivity(i)));
     double relative_error = (sensitivity(i) - dqoi_dbulk) / std::max(dqoi_dbulk, 1.0e-2);
     EXPECT_NEAR(relative_error, 0.0, 5.0e-4);
   }
@@ -309,8 +309,8 @@ void finite_difference_shape_test(LoadingType load)
     double dqoi_dshape = adjoint_load_form(ddisp_dshape);
 
     // See if these are similar
-    SLIC_INFO(axom::fmt::format("dqoi_dshape: {}", dqoi_dshape));
-    SLIC_INFO(axom::fmt::format("sensitivity: {}", sensitivity(i)));
+    SLIC_INFO(std::format("dqoi_dshape: {}", dqoi_dshape));
+    SLIC_INFO(std::format("sensitivity: {}", sensitivity(i)));
     EXPECT_NEAR((sensitivity(i) - dqoi_dshape) / std::max(dqoi_dshape, 1.0e-3), 0.0, 1.0e-4);
   }
 }

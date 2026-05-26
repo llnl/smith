@@ -219,7 +219,7 @@ int order_of_convergence(smith::TimestepMethod m)
   if (m == smith::TimestepMethod::CentralDifference) return 2;
   if (m == smith::TimestepMethod::FoxGoodwin) return 2;
 
-  SLIC_ERROR(axom::fmt::format("Unsupported smith::TimestepMethod {0}", static_cast<int>(m)));
+  SLIC_ERROR(std::format("Unsupported smith::TimestepMethod {0}", static_cast<int>(m)));
   return 0;
 }
 
@@ -247,7 +247,7 @@ int which_kind_of_ode(smith::TimestepMethod m)
   if (m == smith::TimestepMethod::CentralDifference) return 2;
   if (m == smith::TimestepMethod::FoxGoodwin) return 2;
 
-  SLIC_ERROR(axom::fmt::format("Unsupported smith::TimestepMethod {0}", static_cast<int>(m)));
+  SLIC_ERROR(std::format("Unsupported smith::TimestepMethod {0}", static_cast<int>(m)));
   return 0;
 }
 
@@ -553,9 +553,9 @@ TEST_P(FirstOrderODESuite, All)
                       first_order_ode_test(nsteps[o] * 2, type, constraint, timestepper, enforcement),
                       first_order_ode_test(nsteps[o] * 4, type, constraint, timestepper, enforcement)};
 
-  std::string message = axom::fmt::format("running first order test({0}, {1}, {2}, {3}), errors: ({4}, {5}, {6})",
-                                          to_string(type), to_string(constraint), to_string(timestepper),
-                                          to_string(enforcement), errors[0], errors[1], errors[2]);
+  std::string message = std::format("running first order test({0}, {1}, {2}, {3}), errors: ({4}, {5}, {6})",
+                                    to_string(type), to_string(constraint), to_string(timestepper),
+                                    to_string(enforcement), errors[0], errors[1], errors[2]);
   SLIC_INFO(message);
 
   // this tolerance is pretty loose, since some some of the
@@ -624,9 +624,9 @@ TEST_P(SecondOrderODESuite, All)
                         second_order_ode_test(60, type, constraint, timestepper, enforcement),
                         second_order_ode_test(120, type, constraint, timestepper, enforcement)};
 
-    std::string message = axom::fmt::format("running second order test({0}, {1}, {2}, {3}), errors: ({4}, {5}, {6})",
-                                            to_string(type), to_string(constraint), to_string(timestepper),
-                                            to_string(enforcement), errors[0], errors[1], errors[2]);
+    std::string message = std::format("running second order test({0}, {1}, {2}, {3}), errors: ({4}, {5}, {6})",
+                                      to_string(type), to_string(constraint), to_string(timestepper),
+                                      to_string(enforcement), errors[0], errors[1], errors[2]);
 
     SLIC_INFO(message);
 

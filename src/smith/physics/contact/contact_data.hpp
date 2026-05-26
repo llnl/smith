@@ -12,11 +12,11 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
-#include <optional>
-#include <functional>
 
 #include "mfem.hpp"
 
@@ -67,6 +67,9 @@ class ContactData {
    * @param bdry_attr_surf1 MFEM boundary attributes for the first (mortar) surface
    * @param bdry_attr_surf2 MFEM boundary attributes for the second (nonmortar) surface
    * @param contact_opts Defines contact method, enforcement, type, and penalty
+   *
+   * @note Interaction ids must be unique across the entire executable: Tribol uses @p interaction_id as the unique key
+   * for its coupling schemes, so reusing an id (even across different ContactData instances) is an error.
    */
   void addContactInteraction(int interaction_id, const std::set<int>& bdry_attr_surf1,
                              const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts);
@@ -275,6 +278,8 @@ class ContactData {
 
   /**
    * @brief The contact boundary condition information
+   *
+   * @note The order of this vector defines the ordering used for merged pressure/Jacobian offsets.
    */
   std::vector<ContactInteraction> interactions_;
 #endif

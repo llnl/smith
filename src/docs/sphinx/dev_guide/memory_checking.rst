@@ -52,7 +52,7 @@ Helpful options:
 
   * ``fast_unwind_on_malloc=0``: This improves Asan's stack tracing ability but also greatly slows
     down the run
-  * ``exitcode=0``: This stops Asan from returning a a non-zero exit code from your executable
+  * ``exitcode=0``: This stops Asan from returning a non-zero exit code from your executable
     (defaults to 23) (``LSAN_OPTIONS``)
     
     

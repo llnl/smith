@@ -128,7 +128,7 @@ class Constraint {
       [[maybe_unused]] int direction, [[maybe_unused]] bool update_fields = true,
       [[maybe_unused]] bool fresh_derivative = true) const
   {
-    SLIC_ERROR_ROOT(axom::fmt::format("Base class must override residual_contribution_jacobian before usage"));
+    SLIC_ERROR_ROOT(std::format("Base class must override residual_contribution_jacobian before usage"));
     std::unique_ptr<mfem::HypreParMatrix> res_contr_jacobian = nullptr;
     return res_contr_jacobian;
   };

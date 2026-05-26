@@ -9,17 +9,18 @@ using namespace mfem;
 using namespace smith;
 
 // ----------- Parameter Structs ------------
-
 struct BlockPrecTestParams {
   enum class BlockPattern
   {
     Diagonal2x2,
-    Lower2x2
+    Lower2x2,
+    Full2x2
   };
   enum class PrecKind
   {
     Diagonal,
-    Triangular
+    Triangular,
+    Schur
   };
   enum class SolverBackend
   {
@@ -30,6 +31,7 @@ struct BlockPrecTestParams {
   BlockPattern pattern;
   PrecKind prec_kind;
   smith::BlockTriangularType tri_type;  // Only for triangular
+  smith::BlockSchurType schur_type;     // Only for Schur
   std::string name;
   double rel_tol;
   SolverBackend backend;
@@ -108,6 +110,16 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
     C = c.ParallelAssemble();
     J.SetBlock(1, 0, C);
   }
+  if (params.pattern == BlockPrecTestParams::BlockPattern::Full2x2) {
+    // Build mass matrix for off-diagonals
+    ParBilinearForm c(&fes);
+    c.AddDomainIntegrator(new MassIntegrator(one));
+    c.Assemble();
+    c.Finalize();
+    C = c.ParallelAssemble();
+    J.SetBlock(1, 0, C);
+    J.SetBlock(0, 1, C);
+  }
 
   // Build solver array
   std::vector<std::unique_ptr<Solver>> block_solvers;
@@ -130,9 +142,14 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
   std::unique_ptr<Solver> P;
   if (params.prec_kind == BlockPrecTestParams::PrecKind::Diagonal) {
     P = std::make_unique<smith::BlockDiagonalPreconditioner>(block_offsets, std::move(block_solvers));
-  } else {
+  } else if (params.prec_kind == BlockPrecTestParams::PrecKind::Triangular) {
     P = std::make_unique<smith::BlockTriangularPreconditioner>(block_offsets, std::move(block_solvers),
                                                                params.tri_type);
+  } else {
+    P = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets, std::move(block_solvers), params.schur_type,
+                                                          smith::SchurApproxType::A22Only);
+    // P = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets, std::move(block_solvers),
+    // params.schur_type);
   }
   P->SetOperator(J);
 
@@ -158,14 +175,18 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
 INSTANTIATE_TEST_SUITE_P(
     BlockPreconditionerTests, BlockPreconditionerParamTest,
     ::testing::Values(
-        // BlockDiagonalPreconditioner + HypreBoomerAMG on [A 0; 0 A]
         BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Diagonal2x2, BlockPrecTestParams::PrecKind::Diagonal,
                             smith::BlockTriangularType::Lower,  // unused for diagonal
-                            "Diag_HypreBoomerAMG", 1e-1, BlockPrecTestParams::SolverBackend::HypreBoomerAMG},
+                            smith::BlockSchurType::Full, "Diag_HypreBoomerAMG", 1e-1,
+                            BlockPrecTestParams::SolverBackend::HypreBoomerAMG},
         // BlockTriangularPreconditioner + HypreBoomerAMG on [A 0; C A]
         BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Lower2x2, BlockPrecTestParams::PrecKind::Triangular,
-                            smith::BlockTriangularType::Lower, "TriLower_HypreBoomerAMG", 1e-1,
-                            BlockPrecTestParams::SolverBackend::HypreBoomerAMG}),
+                            smith::BlockTriangularType::Lower, smith::BlockSchurType::Full, "TriLower_HypreBoomerAMG",
+                            1e-1, BlockPrecTestParams::SolverBackend::HypreBoomerAMG},
+        // BlockSchurPreconditioner + HypreBoomerAMG on [A C; C A]
+        BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Full2x2, BlockPrecTestParams::PrecKind::Schur,
+                            smith::BlockTriangularType::Lower, smith::BlockSchurType::Full, "SchurFull_HypreBoomerAMG",
+                            1e-1, BlockPrecTestParams::SolverBackend::HypreBoomerAMG}),
     [](const ::testing::TestParamInfo<BlockPrecTestParams>& param_info) { return param_info.param.name; });
 
 #ifdef MFEM_USE_STRUMPACK
@@ -174,11 +195,23 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::Values(
         // BlockDiagonalPreconditioner + Strumpack on [A 0; 0 A]
         BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Diagonal2x2, BlockPrecTestParams::PrecKind::Diagonal,
-                            smith::BlockTriangularType::Lower, "Diag_Strumpack", 1e-10,
+                            smith::BlockTriangularType::Lower, smith::BlockSchurType::Full, "Diag_Strumpack", 1e-10,
                             BlockPrecTestParams::SolverBackend::Strumpack},
         // BlockTriangularPreconditioner + Strumpack on [A 0; C A]
         BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Lower2x2, BlockPrecTestParams::PrecKind::Triangular,
-                            smith::BlockTriangularType::Lower, "TriLower_Strumpack", 1e-10,
+                            smith::BlockTriangularType::Lower, smith::BlockSchurType::Full, "TriLower_Strumpack", 1e-10,
+                            BlockPrecTestParams::SolverBackend::Strumpack},
+        // BlockSchurPreconditioner + Strumpack on [A C; C A]
+        BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Full2x2, BlockPrecTestParams::PrecKind::Schur,
+                            smith::BlockTriangularType::Lower, smith::BlockSchurType::Full, "SchurFull_Strumpack", 1e-1,
+                            BlockPrecTestParams::SolverBackend::Strumpack},
+        // BlockSchurPreconditioner + Strumpack on [A C; C A]
+        BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Full2x2, BlockPrecTestParams::PrecKind::Schur,
+                            smith::BlockTriangularType::Lower, smith::BlockSchurType::Diagonal,
+                            "SchurDiagonal_Strumpack", 0.5, BlockPrecTestParams::SolverBackend::Strumpack},
+        // BlockDiagonalPreconditioner + Strumpack on [A C; C A]
+        BlockPrecTestParams{BlockPrecTestParams::BlockPattern::Full2x2, BlockPrecTestParams::PrecKind::Diagonal,
+                            smith::BlockTriangularType::Lower, smith::BlockSchurType::Full, "DiagFull_Strumpack", 0.5,
                             BlockPrecTestParams::SolverBackend::Strumpack}),
     [](const ::testing::TestParamInfo<BlockPrecTestParams>& param_info) { return param_info.param.name; });
 #endif

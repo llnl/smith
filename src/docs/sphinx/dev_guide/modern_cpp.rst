@@ -7,7 +7,7 @@
 Frequently Used Modern C++ Features
 ===================================
 
-Smith currently uses C++17.  Several modern C++ features and library components are used heavily throughout Smith.
+Smith currently uses C++20.  Several modern C++ features and library components are used heavily throughout Smith.
 
 Smart pointers are used to avoid directly using ``operator new`` and ``operator delete`` except when absolutely necessary.
 ``std::unique_ptr<T>`` is used to denote **exclusive** ownership of a pointer to ``T`` - see `this article <https://www.drdobbs.com/cpp/c11-uniqueptr/240002708>`__ for more info.

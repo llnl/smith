@@ -6,9 +6,9 @@
 
 #include "smith/physics/mesh.hpp"
 
+#include <format>
 #include <utility>
 
-#include <axom/fmt.hpp>
 #include <axom/slic.hpp>
 
 #include "smith/physics/state/state_manager.hpp"
@@ -82,13 +82,13 @@ void Mesh::createDomains()
 {
   domains_.insert({entireBodyName(), smith::EntireDomain(*mfem_mesh_)});
   domains_.insert({entireBoundaryName(), smith::EntireBoundary(*mfem_mesh_)});
-  domains_.insert({internalBoundaryName(), smith::InteriorFaces(*mfem_mesh_)});
+  domains_.insert({internalBoundaryName(), smith::EntireInteriorBoundary(*mfem_mesh_)});
 }
 
 void Mesh::errorIfDomainExists(const std::string& domain_name) const
 {
   SLIC_ERROR_IF(domains_.find(domain_name) != domains_.end(),
-                axom::fmt::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
+                std::format("A domain named {0} already exists in mesh with tag {1}", domain_name, mesh_tag_));
 }
 
 smith::Domain& Mesh::entireBody() const { return domain(entireBodyName()); }
@@ -107,7 +107,7 @@ void Mesh::insertDomain(const std::string& domain_name, const Domain& domain)
 smith::Domain& Mesh::domain(const std::string& domain_name) const
 {
   SLIC_ERROR_IF(domains_.find(domain_name) == domains_.end(),
-                axom::fmt::format("Could not find domain named {0} in mesh with tag {1}", domain_name, mesh_tag_));
+                std::format("Could not find domain named {0} in mesh with tag {1}", domain_name, mesh_tag_));
   return domains_.at(domain_name);
 }
 
@@ -124,6 +124,22 @@ smith::Domain& Mesh::addDomainOfBoundaryElements(const std::string& domain_name,
 {
   errorIfDomainExists(domain_name);
   domains_.emplace(domain_name, Domain::ofBoundaryElements(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
+smith::Domain& Mesh::addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                         std::function<bool(std::vector<vec2>, int)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofInteriorBoundaryElements(*mfem_mesh_, func));
+  return domain(domain_name);
+}
+
+smith::Domain& Mesh::addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                         std::function<bool(std::vector<vec3>, int)> func)
+{
+  errorIfDomainExists(domain_name);
+  domains_.emplace(domain_name, Domain::ofInteriorBoundaryElements(*mfem_mesh_, func));
   return domain(domain_name);
 }
 

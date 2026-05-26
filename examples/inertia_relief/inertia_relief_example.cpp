@@ -13,6 +13,8 @@
  * The example problem solved is an inertia relief problem.
  */
 
+#include <format>
+
 #include "smith/smith.hpp"
 
 #include "mfem.hpp"
@@ -301,8 +303,8 @@ int main(int argc, char* argv[])
   SLIC_ERROR_ROOT_IF(!converged, "Homotopy solver did not converge");
   double displacement_norm = mfem::GlobalLpNorm(2, displacement_sol.Norml2(), MPI_COMM_WORLD);
   double multiplier_norm = mfem::GlobalLpNorm(2, multiplier_sol.Norml2(), MPI_COMM_WORLD);
-  SLIC_INFO_ROOT(axom::fmt::format("||displacement|| = {}", displacement_norm));
-  SLIC_INFO_ROOT(axom::fmt::format("||multiplier|| = {}", multiplier_norm));
+  SLIC_INFO_ROOT(std::format("||displacement|| = {}", displacement_norm));
+  SLIC_INFO_ROOT(std::format("||multiplier|| = {}", multiplier_norm));
   auto adjoint = problem.GetOptimizationVariable();
   auto adjoint_load = problem.GetOptimizationVariable();
   adjoint = 0.0;

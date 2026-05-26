@@ -103,7 +103,7 @@ mfem::Mesh buildCylinderMesh(int radial_refinement, int elements_lengthwise, dou
  * @param[in] total_angle the angle in radians over which to generate the portion of an extruded cylinder
  * @param[in] sectors the number of starting sectors in the hollow cylinder
  *
- * @return A unique_ptr containing the constructed mesh
+ * @return The constructed mesh
  */
 mfem::Mesh buildHollowCylinderMesh(int radial_refinement, int elements_lengthwise, double inner_radius,
                                    double outer_radius, double height, double total_angle = M_PI, int sectors = 8);

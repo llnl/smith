@@ -68,9 +68,9 @@ auto get_opts(smith::NonlinearSolver nonlinearSolver, smith::LinearSolver linear
                                                .print_level = 1};
 
   SLIC_INFO_ROOT("================================================================================");
-  SLIC_INFO_ROOT(axom::fmt::format("Nonlinear Solver = {}", smith::nonlinearName(nonlinearSolver)));
-  SLIC_INFO_ROOT(axom::fmt::format("Linear Solver    = {}", smith::linearName(linearSolver)));
-  SLIC_INFO_ROOT(axom::fmt::format("Preconditioner   = {}", smith::preconditionerName(preconditioner)));
+  SLIC_INFO_ROOT(std::format("Nonlinear Solver = {}", smith::nonlinearName(nonlinearSolver)));
+  SLIC_INFO_ROOT(std::format("Linear Solver    = {}", smith::linearName(linearSolver)));
+  SLIC_INFO_ROOT(std::format("Preconditioner   = {}", smith::preconditionerName(preconditioner)));
   SLIC_INFO_ROOT("================================================================================");
 
   switch (nonlinearSolver) {

@@ -266,15 +266,15 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   reaction_squared.data_store().back_prop();
 
   for (auto s : initial_states) {
-    SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", s.get()->name(), s.get()->Norml2(), s.get_dual()->Norml2()));
+    SLIC_INFO_ROOT(std::format("{} {} {}", s.get()->name(), s.get()->Norml2(), s.get_dual()->Norml2()));
   }
 
-  SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", shape_disp.get()->name(), shape_disp.get()->Norml2(),
-                                   shape_disp.get_dual()->Norml2()));
+  SLIC_INFO_ROOT(
+      std::format("{} {} {}", shape_disp.get()->name(), shape_disp.get()->Norml2(), shape_disp.get_dual()->Norml2()));
 
   for (size_t p = 0; p < params.size(); ++p) {
-    SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", params[p].get()->name(), params[p].get()->Norml2(),
-                                     params[p].get_dual()->Norml2()));
+    SLIC_INFO_ROOT(
+        std::format("{} {} {}", params[p].get()->name(), params[p].get()->Norml2(), params[p].get_dual()->Norml2()));
   }
 }
 
@@ -320,7 +320,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
   auto [physics, shape_disp, initial_states, params] = createSolidMechanicsBasePhysics(physics_name, mesh);
 
   double qoi = integrateForward(physics, num_steps_, dt_);
-  SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));
+  SLIC_INFO_ROOT(std::format("{}", qoi));
 
   size_t num_params = physics->parameterNames().size();
 
@@ -334,14 +334,13 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 
   auto state_sensitivities = physics->computeInitialConditionSensitivity();
   for (auto name_and_state_sensitivity : state_sensitivities) {
-    SLIC_INFO_ROOT(
-        axom::fmt::format("{} {}", name_and_state_sensitivity.first, name_and_state_sensitivity.second.Norml2()));
+    SLIC_INFO_ROOT(std::format("{} {}", name_and_state_sensitivity.first, name_and_state_sensitivity.second.Norml2()));
   }
 
-  SLIC_INFO_ROOT(axom::fmt::format("{} {}", shape_sensitivity.name(), shape_sensitivity.Norml2()));
+  SLIC_INFO_ROOT(std::format("{} {}", shape_sensitivity.name(), shape_sensitivity.Norml2()));
 
   for (size_t p = 0; p < num_params; ++p) {
-    SLIC_INFO_ROOT(axom::fmt::format("{} {}", parameter_sensitivities[p].name(), parameter_sensitivities[p].Norml2()));
+    SLIC_INFO_ROOT(std::format("{} {}", parameter_sensitivities[p].name(), parameter_sensitivities[p].Norml2()));
   }
 }
 

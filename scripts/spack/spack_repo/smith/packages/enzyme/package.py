@@ -9,7 +9,7 @@ import os
 
 class Enzyme(BuiltinEnzyme):
     # Add newer enzyme versions not added to Spack package repo
-    version("0.0.249", commit="c3c973213c604028762dfbb30cf9f8ec9c83fc38")
+    version("0.0.256", commit="cecf349285fa42b45ef24735b1c0617f1105077d")
 
     @property
     def llvm_prefix(self):

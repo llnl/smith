@@ -200,7 +200,7 @@ struct ParameterizedJ2Nonlinear {
   {
     using std::exp;
     return sigma_sat - (sigma_sat - sigma_y) * exp(-accumulated_plastic_strain / strain_constant);
-  };
+  }
 };
 
 }  // namespace smith::solid_mechanics

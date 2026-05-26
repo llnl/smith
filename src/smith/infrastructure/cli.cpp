@@ -107,7 +107,7 @@ std::string cliValueToString(int value) { return std::to_string(value); }
 void printGiven(std::unordered_map<std::string, std::string>& cli_opts)
 {
   // Add header
-  std::string optsMsg = axom::fmt::format("\n{:*^80}\n", "Command Line Options");
+  std::string optsMsg = std::format("\n{:*^80}\n", "Command Line Options");
 
   // Create options map
   // clang-format off
@@ -124,12 +124,12 @@ void printGiven(std::unordered_map<std::string, std::string>& cli_opts)
   for (auto output_pair : opts_output_map) {
     auto search = cli_opts.find(output_pair.first);
     if (search != cli_opts.end()) {
-      optsMsg += axom::fmt::format("{0}: {1}\n", output_pair.second, detail::cliValueToString(search->second));
+      optsMsg += std::format("{0}: {1}\n", output_pair.second, detail::cliValueToString(search->second));
     }
   }
 
   // Add footer
-  optsMsg += axom::fmt::format("{:*^80}\n", "*");
+  optsMsg += std::format("{:*^80}\n", "*");
 
   SLIC_INFO_ROOT(optsMsg);
   smith::logger::flush();

@@ -62,7 +62,7 @@ std::string findMeshFilePath(const std::string& mesh_path, const std::string& in
   }
 
   // Failed to find mesh file
-  std::string msg = axom::fmt::format("Input file: Given mesh file does not exist: '{0}'", mesh_path);
+  std::string msg = std::format("Input file: Given mesh file does not exist: '{0}'", mesh_path);
   SLIC_ERROR_ROOT(msg);
   return "";
 }

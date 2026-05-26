@@ -60,5 +60,5 @@ if (ENABLE_HIP)
 endif()
 
 enable_testing()
-add_test(NAME    smith_example 
+add_test(NAME    smith_example
          COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ./smith_example)

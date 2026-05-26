@@ -6,13 +6,13 @@ spack:
 
   toolchains:
     clang_19:
-    - spec: '%c=llvm'
+    - spec: '%c=llvm@19'
       when: '%c'
-    - spec: '%cxx=llvm'
+    - spec: '%cxx=llvm@19'
       when: '%cxx'
-    - spec: '%fortran=gcc'
+    - spec: '%fortran=gcc@15'
       when: '%fortran'
-    - spec: '%openmpi@5.0.8.clang_19'
+    - spec: '%openmpi@5.0.9.clang_19'
       when: '%mpi'
 
 
@@ -54,7 +54,7 @@ spack:
     openmpi:
       buildable: false
       externals:
-      - spec: openmpi@5.0.8.clang_19
+      - spec: openmpi@5.0.9.clang_19
         prefix: /opt/homebrew
     openblas:
       buildable: false

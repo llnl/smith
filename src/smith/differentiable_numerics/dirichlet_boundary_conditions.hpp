@@ -42,8 +42,8 @@ class DirichletBoundaryConditions {
     int field_dim = space_.GetVDim();
     for (auto component : components) {
       SLIC_ERROR_IF(component >= field_dim || component < 0,
-                    axom::fmt::format("Trying to set boundary conditions on a field with dim {}, using component {}",
-                                      field_dim, component));
+                    std::format("Trying to set boundary conditions on a field with dim {}, using component {}",
+                                field_dim, component));
       auto mfem_coefficient_function = [applied_displacement, component](const mfem::Vector& X_mfem, double t) {
         auto X = make_tensor<spatial_dim>([&X_mfem](int k) { return X_mfem[k]; });
         return applied_displacement(t, X)[component];

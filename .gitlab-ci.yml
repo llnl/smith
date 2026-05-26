@@ -24,6 +24,7 @@ variables:
 stages:
   - src
   - tpl
+  - asan
   - examples
   - benchmarks
   - comparison
@@ -35,6 +36,7 @@ stages:
   rules:
     - if: $SMITH_CI_WORKFLOW_TYPE != "examples" &&
           $SMITH_CI_WORKFLOW_TYPE != "tpl" &&
+          $SMITH_CI_WORKFLOW_TYPE != "asan" &&
           $SMITH_CI_WORKFLOW_TYPE != "benchmarks" &&
           $SMITH_CI_WORKFLOW_TYPE != "comparison"
 
@@ -49,6 +51,12 @@ stages:
   stage: tpl
   rules:
     - if: $SMITH_CI_WORKFLOW_TYPE == "tpl"
+
+# Run asan build as a nightly scheduled pipeline
+.asan_workflow:
+  stage: asan
+  rules:
+    - if: $SMITH_CI_WORKFLOW_TYPE == "asan"
 
 # Run benchmarks build as a weekly scheduled pipeline
 # or, run benchmarks and save them in tmp location for comparison

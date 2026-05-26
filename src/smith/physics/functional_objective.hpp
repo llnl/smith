@@ -47,8 +47,8 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
 
     SLIC_ERROR_ROOT_IF(
         sizeof...(InputSpaces) != input_mfem_spaces.size(),
-        axom::fmt::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
-                          sizeof...(InputSpaces), input_mfem_spaces.size()));
+        std::format("{} parameter spaces given in the template argument but {} parameter names were supplied.",
+                    sizeof...(InputSpaces), input_mfem_spaces.size()));
 
     if constexpr (sizeof...(InputSpaces) > 0) {
       for_constexpr<sizeof...(InputSpaces)>([&](auto i) { mfem_spaces[i] = input_mfem_spaces[i]; });
@@ -118,7 +118,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
                          const std::vector<ConstFieldPtr>& fs) const
   {
     return (*objective_)(time, *shape_disp, *fs[i]...);
-  };
+  }
 
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
   template <int... i>
@@ -128,10 +128,10 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
     using JacFuncType = std::function<decltype((*objective_)(DifferentiateWRT<1>{}, time, *shape_disp, *fs[i]...))(
         double, ConstFieldPtr, const std::vector<ConstFieldPtr>&)>;
     return std::array<JacFuncType, sizeof...(i)>{
-        [=](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
+        [this](double _time, ConstFieldPtr _shape_disp, const std::vector<ConstFieldPtr>& _fs) {
           return (*objective_)(DifferentiateWRT<i + 1>{}, _time, *_shape_disp, *_fs[i]...);
         }...};
-  };
+  }
 
   /// @brief timestep, this needs to be held here and modified for rate dependent applications.
   mutable double dt_ = std::numeric_limits<double>::max();

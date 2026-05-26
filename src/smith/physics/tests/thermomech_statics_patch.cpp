@@ -218,24 +218,24 @@ class ManufacturedSolution {
     tm.setDisplacementBCs(disp_ebc_func, disp_ess_bdr);
 
     // natural BCs
-    auto flux = [=](auto X, auto n0, auto /* time */, auto /* T */) {
+    auto flux = [this, &material](auto X, auto n0, auto /* time */, auto /* T */) {
       typename MaterialType::State state{};
 
-      auto theta = evalT(get<0>(X));
-      auto dtheta_dX = gradT(get<0>(X));
-      auto du_dX = gradU(get<0>(X));
+      auto theta = this->evalT(get<0>(X));
+      auto dtheta_dX = this->gradT(get<0>(X));
+      auto du_dX = this->gradU(get<0>(X));
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       return dot(heat_flux, n0);
     };
     tm.setFluxBCs(flux, tm.mesh().entireBoundary());
 
-    auto traction = [=](auto X, auto n0, auto /* time */) {
+    auto traction = [this, &material](auto X, auto n0, auto /* time */) {
       typename MaterialType::State state{};
 
-      auto theta = evalT(get_value(X));
-      auto dtheta_dX = gradT(get_value(X));
-      auto du_dX = gradU(get_value(X));
+      auto theta = this->evalT(get_value(X));
+      auto dtheta_dX = this->gradT(get_value(X));
+      auto du_dX = this->gradU(get_value(X));
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       return dot(stress, n0);
@@ -243,14 +243,14 @@ class ManufacturedSolution {
     tm.setTraction(traction, tm.mesh().entireBoundary());
 
     // Forcing functions
-    auto heat_source = [=](auto X, auto /* time */, auto /* T */, auto /* dTdX*/) {
+    auto heat_source = [this, &material](auto X, auto /* time */, auto /* T */, auto /* dTdX*/) {
       typename MaterialType::State state{};
 
       auto X_val_temp = get<0>(X);
       auto X_val = get_value(X_val_temp);
-      auto theta = evalT(X_val);
-      auto dtheta_dX = gradT(make_dual(X_val));
-      auto du_dX = gradU(X_val);
+      auto theta = this->evalT(X_val);
+      auto dtheta_dX = this->gradT(make_dual(X_val));
+      auto du_dX = this->gradU(X_val);
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       auto dFluxdX = get_gradient(heat_flux);
@@ -259,13 +259,13 @@ class ManufacturedSolution {
     };
     tm.setSource(heat_source, tm.mesh().entireBody());
 
-    auto body_force = [=](auto X, auto /* time */) {
+    auto body_force = [this, &material](auto X, auto /* time */) {
       typename MaterialType::State state{};
 
       auto X_val = get_value(X);
-      auto theta = evalT(make_dual(X_val));
-      auto dtheta_dX = gradT(X_val);
-      auto du_dX = gradU(make_dual(X_val));
+      auto theta = this->evalT(make_dual(X_val));
+      auto dtheta_dX = this->gradT(X_val);
+      auto du_dX = this->gradU(make_dual(X_val));
 
       auto [stress, heat_accumulation, internal_heat_source, heat_flux] = material(state, du_dX, theta, dtheta_dX);
       auto dPdX = get_gradient(stress);

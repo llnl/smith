@@ -107,6 +107,18 @@ class Mesh {
   smith::Domain& addDomainOfBoundaryElements(const std::string& domain_name,
                                              std::function<bool(std::vector<vec2>, int)> func);
 
+  /// @brief create domain of 3D internal boundary elements with specified name
+  /// The second argument is a function taking a std::vector<vec3> corresponding
+  /// to the nodal coordinates of the boundary element as well as an integer corresponding to the attribute id
+  smith::Domain& addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                     std::function<bool(std::vector<vec3>, int)> func);
+
+  /// @brief create domain of 2D internal boundary elements with specified name
+  /// The second argument is a function taking a std::vector<vec2> corresponding
+  /// to the nodal coordinates of the boundary element as well as an integer corresponding to the attribute id
+  smith::Domain& addDomainOfInternalBoundaryElements(const std::string& domain_name,
+                                                     std::function<bool(std::vector<vec2>, int)> func);
+
   /// @brief create domain of 3D elements with specified name
   /// The second argument is a function taking a std::vector<vec3> corresponding
   /// to the nodal coordinates of the element as well as an integer corresponding to the attribute id

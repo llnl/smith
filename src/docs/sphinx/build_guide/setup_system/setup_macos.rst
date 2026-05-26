@@ -51,16 +51,16 @@ This is also useful for a few additional packages:
 
 
 Given that Homebrew can only install CMake version 4.0 and it breaks some TPL builds (e.g. metis), its recommended to install an older version of CMake
-manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.23/cmake-3.23.5-macos-universal.dmg>`_. After installing
-CMake 3.23, you will need to specify the path in the Spack environment like so:
+manually. You can do this by downloading from `CMake's official archive <https://cmake.org/files/v3.30/cmake-3.30.9-macos-universal.dmg>`_. After installing
+CMake 3.30, you will need to specify the path in the Spack environment like so:
 
 .. code-block:: yaml
 
     cmake:
-      version: [3.23.5]
+      version: [3.30.9]
       buildable: false
       externals:
-      - spec: cmake@3.23.5
+      - spec: cmake@3.30.9
         prefix: /Applications/CMake.app/Contents
 
 Optionally, you can install the developer tools via ``pip``. This step is only required if you wish to use Smith's developer tools.

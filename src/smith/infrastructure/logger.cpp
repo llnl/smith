@@ -81,7 +81,7 @@ bool initialize(MPI_Comm comm)
   slic::setAbortOnError(true);
   slic::setAbortOnWarning(false);
 
-  std::string msg = axom::fmt::format("Logger activated: '{0}'", loggerName);
+  std::string msg = std::format("Logger activated: '{0}'", loggerName);
   SLIC_INFO_ROOT(msg);
   smith::logger::flush();
 
