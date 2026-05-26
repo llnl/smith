@@ -1327,7 +1327,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   FiniteElementDual computeTimestepSensitivity(size_t parameter_field) override
   {
     SLIC_ASSERT_MSG(parameter_field < sizeof...(parameter_indices),
-                    axom::fmt::format("Invalid parameter index '{}' requested for sensitivity."));
+                    axom::fmt::format("Invalid parameter index '{}' requested for sensitivity.", parameter_field));
 
     auto drdparam = smith::get<DERIVATIVE>(d_residual_d_[parameter_field](time_end_step_));
     auto drdparam_mat = assemble(drdparam);

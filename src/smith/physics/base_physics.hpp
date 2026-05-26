@@ -465,6 +465,8 @@ class BasePhysics {
    */
   virtual void saveSummary(axom::sidre::DataStore& datastore, const double t) const;
 
+  virtual double relativeVelocityIncrement() const { return 0.0; }
+  
   /**
    * @brief Destroy the Base Solver object
    */

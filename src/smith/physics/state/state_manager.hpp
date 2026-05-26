@@ -162,19 +162,18 @@ class StateManager {
 
           // Verify size correctness
           auto verify_size = [](axom::sidre::Group* group, axom::IndexType value, const std::string& view_name,
-                                const std::string& err_msg) {
+                                const std::string& quantity_name) {
             SLIC_ERROR_IF(
                 !group->hasView(view_name),
                 axom::fmt::format("Loaded Sidre Datastore does not have value '{}' for Quadrature Data.", view_name));
             auto prev_value = group->getView(view_name)->getData<axom::IndexType>();
-            SLIC_ERROR_IF(value != prev_value, axom::fmt::format(err_msg, value, prev_value));
+            SLIC_ERROR_IF(value != prev_value,
+                          axom::fmt::format("Current {} '{}' does not match value in restart '{}'.", quantity_name,
+                                            value, prev_value));
           };
-          verify_size(geom_group, num_states, "num_states",
-                      "Current number of Quadrature Data States '{}' does not match value in restart '{}'.");
-          verify_size(geom_group, state_size, "state_size",
-                      "Current size of Quadrature Data State '{}' does not match value in restart '{}'.");
-          verify_size(geom_group, total_size, "total_size",
-                      "Current total size of Quadrature Data States '{}' does not match value in restart '{}'.");
+          verify_size(geom_group, num_states, "num_states", "number of Quadrature Data States");
+          verify_size(geom_group, state_size, "state_size", "size of Quadrature Data State");
+          verify_size(geom_group, total_size, "total_size", "total size of Quadrature Data States");
 
           // Tell Sidre where the external array is
           SLIC_ERROR_ROOT_IF(!geom_group->hasView("states"),

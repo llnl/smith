@@ -158,6 +158,20 @@ public:
 
   }
 
+  /**
+   * @brief Remove all stored lag states from the stencil.
+   *
+   * This resets the stencil to its empty state while preserving the configured
+   * capacity. It is primarily used when restarting a multistep solve from its
+   * initial condition so that no history from a previous run is reused.
+   */
+  void
+  clear() {
+
+    buffer_.clear();
+
+  }
+
 private:
 
   /// @brief Discrete temporal support (newest → oldest) for a multistep method.
