@@ -162,9 +162,6 @@ TEST_P(ContactFiniteDiff, patch)
     merged_sol.SetVector(u, 0);
     merged_sol.SetVector(pressure, u.Size());
     mfem::Vector f(merged_sol.Size());
-    f = 0.0;
-    oper->Mult(merged_sol, f);
-    auto* J_op = &oper->GetGradient(merged_sol);
     mfem::Vector u_dot(merged_sol.Size());
     u_dot = 0.0;
     // wiggle displacement (col = j)
@@ -174,6 +171,9 @@ TEST_P(ContactFiniteDiff, patch)
         ++dof_ct;
         continue;
       }
+      f = 0.0;
+      oper->Mult(merged_sol, f);
+      auto* J_op = &oper->GetGradient(merged_sol);
       u_dot[j] = 1.0;
       mfem::Vector J_exact(merged_sol.Size());
       J_exact = 0.0;
@@ -205,6 +205,10 @@ TEST_P(ContactFiniteDiff, patch)
       }
     }
     std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
+
+    // Restore the contact state after the finite-difference probes before advancing the timestep.
+    f = 0.0;
+    oper->Mult(merged_sol, f);
 
     solid_solver.advanceTimestep(dt);
   }
