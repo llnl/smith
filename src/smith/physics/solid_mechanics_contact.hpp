@@ -412,8 +412,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   /// @brief Solve the Quasi-static Newton system
   void quasiStaticSolve(double dt) override
   {
-    contact_.beginLoadStep();
-
     // warm start must be called prior to the time update so that the previous Jacobians can be used consistently
     // throughout. warm start for contact needs to include the previous stiffness terms associated with contact
     // otherwise the system will interpenetrate instantly on warm-starting.

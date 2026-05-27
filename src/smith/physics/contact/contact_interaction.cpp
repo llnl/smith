@@ -81,7 +81,6 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
         static_cast<tribol::SmoothingType>(contact_opts_.bounds_smoothing),
         static_cast<tribol::PenaltySmoothing>(contact_opts_.penalty_smoothing),
         contact_opts_.penalty_smoothing_del);
-    tribol::setMfemUseBaselineUnion(interaction_id, true);
   }
 
   // set up Tribol to compute exact Jacobian if requested
@@ -262,8 +261,8 @@ tribol::ContactMethod ContactInteraction::getMethod() const
       return tribol::SINGLE_MORTAR;
     case ContactMethod::EnergyMortar:
       return tribol::ENERGY_MORTAR;
-    case ContactMethod::EnergyAreaPenalty:
-      return tribol::ENERGY_AREA_PENALTY;
+    //case ContactMethod::EnergyAreaPenalty:
+    //  return tribol::ENERGY_AREA_PENALTY;
     default:
       SLIC_ERROR_ROOT("Unsupported contact method.");
       // return something so we don't get an error

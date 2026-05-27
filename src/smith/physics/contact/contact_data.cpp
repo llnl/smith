@@ -82,11 +82,6 @@ void ContactData::reset()
   }
 }
 
-void ContactData::beginLoadStep()
-{
-  tribol::snapshotMfemBaselinePairs();
-}
-
 void ContactData::updateGeometry(int cycle, double time, double& dt,
                                  std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
                                  std::optional<std::reference_wrapper<const mfem::Vector>> u, bool eval_jacobian)
@@ -475,8 +470,6 @@ void ContactData::addContactInteraction([[maybe_unused]] int interaction_id,
 {
   SLIC_WARNING_ROOT("Smith built without Tribol support. No contact interaction will be added.");
 }
-
-void ContactData::beginLoadStep() {}
 
 void ContactData::updateGeometry([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
                                  [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
