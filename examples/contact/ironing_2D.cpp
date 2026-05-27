@@ -87,8 +87,8 @@ int main(int argc, char* argv[])
       "square_ironing_mesh_" + name_postfix, 0, 0);
 
   smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
-                                            .preconditioner = smith::Preconditioner::HypreJacobi, //AMG,
-                                            .max_iterations = 10000,
+                                            .preconditioner = smith::Preconditioner::HypreJacobi, // Jacobi, //AMG,
+                                            .max_iterations = 500,
                                             .print_level = 0};
 
   mfem::VisItDataCollection visit_dc("contact_ironing_visit", &mesh->mfemParMesh());
@@ -98,17 +98,18 @@ int main(int argc, char* argv[])
   smith::NonlinearSolverOptions nonlinear_options{
       .nonlin_solver = smith::NonlinearSolver::TrustRegion,  // NewtonLineSearch,  // TrustRegion,
       .relative_tol = 1.0e-8,
-      .absolute_tol = 1.0e-9,
-      .max_iterations = 10000,
+      .absolute_tol = 1.0e-7,
+      .max_iterations = 15000,
       .max_line_search_iterations = 10,
-      .print_level = 3};
+      .print_level = 2};
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyAreaPenalty, //EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
                                         .type = smith::ContactType::Frictionless,
                                         .penalty = 80000.0,
                                         .penalty2 = 0,
-                                        .jacobian = smith::ContactJacobian::Exact};
+                                        .jacobian = smith::ContactJacobian::Exact,
+                                        .penalty_smoothing_del = 1e-5};
 
   smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,

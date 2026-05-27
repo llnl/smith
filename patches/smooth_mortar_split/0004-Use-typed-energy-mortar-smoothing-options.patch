@@ -1,0 +1,219 @@
+From 2c8f3c204443aae5542f6155f189332458925df6 Mon Sep 17 00:00:00 2001
+From: Michael Tupek <mrtupek@gmail.com>
+Date: Tue, 26 May 2026 20:28:23 -0600
+Subject: [PATCH 3/3] Use typed energy mortar smoothing options
+
+---
+ src/tribol/interface/mfem_tribol.cpp          |  4 +--
+ src/tribol/interface/mfem_tribol.hpp          |  9 ++++---
+ src/tribol/mesh/MfemData.hpp                  |  5 ++--
+ .../physics/ContactFormulationFactory.cpp     | 27 +++++++------------
+ src/tribol/physics/EnergyMortarAdapter.cpp    | 16 +++--------
+ src/tribol/physics/EnergyMortarAdapter.hpp    | 14 ++++------
+ 6 files changed, 27 insertions(+), 48 deletions(-)
+
+diff --git a/src/tribol/interface/mfem_tribol.cpp b/src/tribol/interface/mfem_tribol.cpp
+index aa62e7c..050f436 100644
+--- a/src/tribol/interface/mfem_tribol.cpp
++++ b/src/tribol/interface/mfem_tribol.cpp
+@@ -384,8 +384,8 @@ void setMfemKinematicConstantPenalty( IndexT cs_id, RealT mesh1_penalty, RealT m
+   cs->getMfemMeshData()->SetMesh2KinematicConstantPenalty( mesh2_penalty );
+ }
+ 
+-void setMfemEnergyMortarOptions( IndexT cs_id, int smoothing_type,
+-                                  int penalty_smoothing, double penalty_smoothing_del )
++void setMfemEnergyMortarOptions( IndexT cs_id, SmoothingType smoothing_type,
++                                  PenaltySmoothing penalty_smoothing, double penalty_smoothing_del )
+ {
+   auto cs = CouplingSchemeManager::getInstance().findData( cs_id );
+   SLIC_ERROR_ROOT_IF(
+diff --git a/src/tribol/interface/mfem_tribol.hpp b/src/tribol/interface/mfem_tribol.hpp
+index 6ff74cc..5a80b72 100644
+--- a/src/tribol/interface/mfem_tribol.hpp
++++ b/src/tribol/interface/mfem_tribol.hpp
+@@ -7,6 +7,7 @@
+ #define SRC_TRIBOL_INTERFACE_MFEM_TRIBOL_HPP_
+ 
+ #include "tribol/config.hpp"
++#include "tribol/physics/EnergyMortarTypes.hpp"
+ 
+ #ifdef BUILD_REDECOMP
+ 
+@@ -106,12 +107,12 @@ void setMfemKinematicConstantPenalty( IndexT cs_id, RealT mesh1_penalty, RealT m
+  * @brief Set energy mortar smoothing options
+  *
+  * @param cs_id The ID of the coupling scheme
+- * @param smoothing_type 0 = Hermite, 1 = Quadratic (isoparametric bounds smoothing)
+- * @param penalty_smoothing 0 = Hard, 1 = Smooth (penalty gap smoothing)
++ * @param smoothing_type SmoothingType::Hermite or SmoothingType::Quadratic
++ * @param penalty_smoothing PenaltySmoothing::Hard or PenaltySmoothing::Smooth
+  * @param penalty_smoothing_del Smoothing width for smooth penalty transition
+  */
+-void setMfemEnergyMortarOptions( IndexT cs_id, int smoothing_type,
+-                                  int penalty_smoothing, double penalty_smoothing_del );
++void setMfemEnergyMortarOptions( IndexT cs_id, SmoothingType smoothing_type,
++                                  PenaltySmoothing penalty_smoothing, double penalty_smoothing_del );
+ 
+ /**
+  * @brief Clears existing penalty data and sets kinematic element penalty
+diff --git a/src/tribol/mesh/MfemData.hpp b/src/tribol/mesh/MfemData.hpp
+index 9650d7f..e75d2b7 100644
+--- a/src/tribol/mesh/MfemData.hpp
++++ b/src/tribol/mesh/MfemData.hpp
+@@ -8,6 +8,7 @@
+ 
+ // Tribol config include
+ #include "tribol/config.hpp"
++#include "tribol/physics/EnergyMortarTypes.hpp"
+ 
+ #ifdef BUILD_REDECOMP
+ 
+@@ -824,8 +825,8 @@ class MfemMeshData {
+   const RealT* GetMesh2KinematicConstantPenalty() const { return kinematic_constant_penalty_2_.get(); }
+ 
+   struct EnergyMortarOptions {
+-    int smoothing_type = 1;           // 0 = Hermite, 1 = Quadratic
+-    int penalty_smoothing = 1;        // 0 = Hard, 1 = Smooth
++    SmoothingType smoothing_type = SmoothingType::Quadratic;
++    PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth;
+     double penalty_smoothing_del = 1.0e-3;
+   };
+ 
+diff --git a/src/tribol/physics/ContactFormulationFactory.cpp b/src/tribol/physics/ContactFormulationFactory.cpp
+index c3a9c94..a77c830 100644
+--- a/src/tribol/physics/ContactFormulationFactory.cpp
++++ b/src/tribol/physics/ContactFormulationFactory.cpp
+@@ -18,32 +18,23 @@ std::unique_ptr<ContactFormulation> createContactFormulation( CouplingScheme* cs
+   }
+ 
+   if ( cs->getContactMethod() == ENERGY_MORTAR ) {
+-    // Default parameters for now, or extract from CouplingScheme if available
+-    double k = 1000.0;
+-    double delta = 0.1;
+-    int N = 3;
+-    bool enzyme_quadrature = true;
+-    SmoothingType smoothing_type = SmoothingType::Quadratic;
+-    PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth;
+-    double penalty_smoothing_del = 1.0e-3;
++    EnergyMortarOptions opts;
+     // ENERGY_MORTAR supports a penalty-style mode driven by the kinematic penalty parameters, even if the coupling
+     // scheme is registered with LM enforcement (which is often done to enable submesh/pressure infrastructure).
+     const auto& penalty_opts = cs->getEnforcementOptions().penalty_options;
+     // TODO: Figure out how contact formulations interact with coupling scheme duplication (SRW)
+-    bool use_penalty_ = penalty_opts.kinematic_calc_set;
++    bool use_penalty = penalty_opts.kinematic_calc_set;
+ 
+ #if defined( TRIBOL_USE_ENZYME ) && defined( BUILD_REDECOMP )
+     if ( cs->hasMfemData() ) {
+-      // Attempt to get penalty from MfemMeshData if available
+       auto* k_ptr = cs->getMfemMeshData()->GetMesh1KinematicConstantPenalty();
+       if ( k_ptr ) {
+-        k = *k_ptr;
++        opts.k = *k_ptr;
+       }
+-      auto* em_opts = cs->getMfemMeshData()->GetEnergyMortarOptions();
+-      if ( em_opts ) {
+-        smoothing_type = em_opts->smoothing_type == 0 ? SmoothingType::Hermite : SmoothingType::Quadratic;
+-        penalty_smoothing = em_opts->penalty_smoothing == 0 ? PenaltySmoothing::Hard : PenaltySmoothing::Smooth;
+-        penalty_smoothing_del = em_opts->penalty_smoothing_del;
++      if ( auto* em_opts = cs->getMfemMeshData()->GetEnergyMortarOptions() ) {
++        opts.smoothing_type = em_opts->smoothing_type;
++        opts.penalty_smoothing = em_opts->penalty_smoothing;
++        opts.penalty_smoothing_del = em_opts->penalty_smoothing_del;
+       }
+     }
+ 
+@@ -52,8 +43,8 @@ std::unique_ptr<ContactFormulation> createContactFormulation( CouplingScheme* cs
+     SLIC_ERROR_ROOT_IF( !cs->hasMfemJacobianData(), "ENERGY_MORTAR requires MFEM Jacobian data." );
+ 
+     return std::make_unique<EnergyMortarAdapter>(
+-        *cs->getMfemMeshData(), *cs->getMfemSubmeshData(), *cs->getMfemJacobianData(), cs->getMesh1(), cs->getMesh2(), k,
+-        delta, N, enzyme_quadrature, use_penalty_, smoothing_type, penalty_smoothing, penalty_smoothing_del );
++        *cs->getMfemMeshData(), *cs->getMfemSubmeshData(), *cs->getMfemJacobianData(), cs->getMesh1(), cs->getMesh2(),
++        opts, use_penalty );
+ #else
+     SLIC_ERROR_ROOT( "ENERGY_MORTAR requires Enzyme and redecomp to be built." );
+     return nullptr;
+diff --git a/src/tribol/physics/EnergyMortarAdapter.cpp b/src/tribol/physics/EnergyMortarAdapter.cpp
+index 8313499..ba1cca0 100644
+--- a/src/tribol/physics/EnergyMortarAdapter.cpp
++++ b/src/tribol/physics/EnergyMortarAdapter.cpp
+@@ -13,11 +13,8 @@ namespace tribol {
+ #ifdef TRIBOL_USE_ENZYME
+ 
+ EnergyMortarAdapter::EnergyMortarAdapter( MfemMeshData& mesh_data, MfemSubmeshData& submesh_data,
+-                                          MfemJacobianData& jac_data, MeshData& mesh1, MeshData& mesh2, double k,
+-                                          double delta, int N, bool enzyme_quadrature, bool use_penalty,
+-                                          SmoothingType smoothing_type,
+-                                          PenaltySmoothing penalty_smoothing,
+-                                          double penalty_smoothing_del )
++                                          MfemJacobianData& jac_data, MeshData& mesh1, MeshData& mesh2,
++                                          const EnergyMortarOptions& opts, bool use_penalty )
+     // NOTE: mesh1 maps to mesh2_ and mesh2 maps to mesh1_. This is to keep consistent with mesh1_ being non-mortar and
+     // mesh2_ being mortar as is typical in the literature, but different from Tribol convention.
+     : use_penalty_( use_penalty ),
+@@ -32,14 +29,7 @@ EnergyMortarAdapter::EnergyMortarAdapter( MfemMeshData& mesh_data, MfemSubmeshDa
+                         "ENERGY_MORTAR requires 2D meshes." );
+   }
+ 
+-  params_.k = k;
+-  params_.del = delta;
+-  params_.N = N;
+-  params_.enzyme_quadrature = enzyme_quadrature;
+-  params_.smoothing_type = smoothing_type;
+-  params_.penalty_smoothing = penalty_smoothing;
+-  params_.penalty_smoothing_del = penalty_smoothing_del;
+-
++  params_ = opts;
+   evaluator_ = std::make_unique<EnergyMortarCalculator>( params_ );
+ 
+   // Allocate the (pressure) true-dof vector early so host code can set it via tribol::getMfemTDofPressure() after the
+diff --git a/src/tribol/physics/EnergyMortarAdapter.hpp b/src/tribol/physics/EnergyMortarAdapter.hpp
+index 96113b7..82fd959 100644
+--- a/src/tribol/physics/EnergyMortarAdapter.hpp
++++ b/src/tribol/physics/EnergyMortarAdapter.hpp
+@@ -40,10 +40,7 @@ class EnergyMortarAdapter : public ContactFormulation {
+    * @param jac_data MFEM Jacobian transfer data
+    * @param mesh1 First Tribol mesh (see note below)
+    * @param mesh2 Second Tribol mesh (see note below)
+-   * @param k Penalty stiffness
+-   * @param delta Smoothing length
+-   * @param N Quadrature order
+-   * @param enzyme_quadrature If true, use Enzyme-assisted quadrature
++   * @param opts Energy mortar options (penalty, smoothing, quadrature)
+    * @param use_penalty If true, interpret the dual field as pressure; otherwise interpret it as a Lagrange multiplier
+    * vector (LM mode)
+    *
+@@ -52,10 +49,8 @@ class EnergyMortarAdapter : public ContactFormulation {
+    * relative to the order of the meshes provided here.
+    */
+   EnergyMortarAdapter( MfemMeshData& mesh_data, MfemSubmeshData& submesh_data, MfemJacobianData& jac_data,
+-                       MeshData& mesh1, MeshData& mesh2, double k, double delta, int N, bool enzyme_quadrature,
+-                       bool use_penalty = true, SmoothingType smoothing_type = SmoothingType::Quadratic,
+-                       PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth,
+-                       double penalty_smoothing_del = 1.0e-3 );
++                       MeshData& mesh1, MeshData& mesh2, const EnergyMortarOptions& opts,
++                       bool use_penalty = true );
+ 
+   /**
+    * @brief Default destructor
+@@ -252,7 +247,7 @@ class EnergyMortarAdapter : public ContactFormulation {
+   /**
+    * @brief Contact parameters (penalty, smoothing, quadrature)
+    */
+-  ContactParams params_;
++  EnergyMortarOptions params_;
+ 
+   /**
+    * @brief Evaluator implementing ENERGY_MORTAR element-level computations
+@@ -361,6 +356,7 @@ class EnergyMortarAdapter : public ContactFormulation {
+    */
+   shared::ParSparseMat computeDfDxSecondDerivativesPenalty( const mfem::GridFunction& redecomp_coeff_gt,
+                                                             const mfem::GridFunction& redecomp_coeff_A );
++
+ };
+ 
+ #endif  // TRIBOL_USE_ENZYME
+-- 
+2.39.5 (Apple Git-154)
+
