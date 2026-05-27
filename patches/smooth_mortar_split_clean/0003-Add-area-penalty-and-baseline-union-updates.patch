@@ -1,0 +1,939 @@
+From 001d329079524ed0a3516d4919c47b37dcb2532c Mon Sep 17 00:00:00 2001
+From: Codex <codex@example.com>
+Date: Wed, 27 May 2026 12:20:00 -0600
+Subject: [PATCH] Add area-penalty formulation and baseline-union updates
+
+---
+ src/tests/CMakeLists.txt                      |   1 +
+ ...tribol_finite_diff_energy_area_penalty.cpp |  95 ++++++++
+ src/tribol/CMakeLists.txt                     |   4 +
+ src/tribol/common/Parameters.hpp              |   5 +-
+ src/tribol/interface/mfem_tribol.cpp          |  37 ++-
+ src/tribol/interface/mfem_tribol.hpp          |   4 +
+ src/tribol/mesh/CouplingScheme.cpp            |  37 ++-
+ src/tribol/mesh/CouplingScheme.hpp            |  12 +-
+ .../physics/ContactFormulationFactory.cpp     |  30 +++
+ src/tribol/physics/EnergyAreaPenalty.cpp      | 215 ++++++++++++++++++
+ src/tribol/physics/EnergyAreaPenalty.hpp      |  27 +++
+ .../physics/EnergyAreaPenaltyAdapter.cpp      | 159 +++++++++++++
+ .../physics/EnergyAreaPenaltyAdapter.hpp      |  59 +++++
+ src/tribol/physics/EnergyMortar.cpp           |   6 +-
+ 14 files changed, 676 insertions(+), 15 deletions(-)
+ create mode 100644 src/tests/tribol_finite_diff_energy_area_penalty.cpp
+ create mode 100644 src/tribol/physics/EnergyAreaPenalty.cpp
+ create mode 100644 src/tribol/physics/EnergyAreaPenalty.hpp
+ create mode 100644 src/tribol/physics/EnergyAreaPenaltyAdapter.cpp
+ create mode 100644 src/tribol/physics/EnergyAreaPenaltyAdapter.hpp
+
+diff --git a/src/tests/CMakeLists.txt b/src/tests/CMakeLists.txt
+index 20164e5..e1e4e12 100644
+--- a/src/tests/CMakeLists.txt
++++ b/src/tests/CMakeLists.txt
+@@ -210,6 +210,7 @@ if( TRIBOL_USE_ENZYME )
+       tribol_energy_mortar_patch.cpp
+       tribol_energy_mortar_patch_LM.cpp
+       tribol_finite_diff_energy_mortar.cpp
++      tribol_finite_diff_energy_area_penalty.cpp
+       )
+ 
+   set(combined_test_depends tribol gtest)
+diff --git a/src/tests/tribol_finite_diff_energy_area_penalty.cpp b/src/tests/tribol_finite_diff_energy_area_penalty.cpp
+new file mode 100644
+index 0000000..2539410
+--- /dev/null
++++ b/src/tests/tribol_finite_diff_energy_area_penalty.cpp
+@@ -0,0 +1,95 @@
++// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and
++// other Tribol Project Developers. See the top-level LICENSE file for details.
++//
++// SPDX-License-Identifier: (MIT)
++
++#include <array>
++#include <vector>
++
++#include <gtest/gtest.h>
++
++#include "tribol/config.hpp"
++#include "tribol/mesh/MeshData.hpp"
++#include "tribol/mesh/InterfacePairs.hpp"
++#include "tribol/physics/EnergyAreaPenalty.hpp"
++
++namespace tribol {
++
++#ifdef TRIBOL_USE_ENZYME
++
++TEST( EnergyAreaPenaltyGradientCheck, EnergyFDvsAD )
++{
++  RealT x1[2] = { 0.0, 1.0 };
++  RealT y1[2] = { 0.0, 0.0 };
++  IndexT conn1[2] = { 1, 0 };
++  MeshData mesh1( 0, 1, 2, conn1, LINEAR_EDGE, x1, y1, nullptr, MemorySpace::Host );
++
++  RealT x2[2] = { 0.2, 0.8 };
++  RealT y2[2] = { 0.5, 0.5 };
++  IndexT conn2[2] = { 0, 1 };
++  MeshData mesh2( 1, 1, 2, conn2, LINEAR_EDGE, x2, y2, nullptr, MemorySpace::Host );
++
++  InterfacePair pair( 0, 0 );
++
++  EnergyMortarOptions opts;
++  opts.del = 0.1;
++  opts.k = 1.0;
++  opts.N = 3;
++  opts.enzyme_quadrature = true;
++  opts.penalty_smoothing = PenaltySmoothing::Smooth;
++  opts.penalty_smoothing_del = 1.0e-3;
++
++  EnergyAreaPenaltyCalculator calc( opts );
++
++  double dE_dx_ad[8];
++  calc.grad_energy( pair, mesh1.getView(), mesh2.getView(), dE_dx_ad );
++
++  const double eps = 1.0e-7;
++  double dE_dx_fd[8];
++  auto A_conn = mesh1.getView().getConnectivity()( 0 );
++  auto B_conn = mesh2.getView().getConnectivity()( 0 );
++
++  std::vector<RealT> x1_orig( x1, x1 + mesh1.numberOfNodes() );
++  std::vector<RealT> y1_orig( y1, y1 + mesh1.numberOfNodes() );
++  std::vector<RealT> x2_orig( x2, x2 + mesh2.numberOfNodes() );
++  std::vector<RealT> y2_orig( y2, y2 + mesh2.numberOfNodes() );
++
++  auto eval = [&]( const std::array<double, 8>& du ) -> double {
++    auto xx1 = x1_orig;
++    auto yy1 = y1_orig;
++    auto xx2 = x2_orig;
++    auto yy2 = y2_orig;
++
++    xx1[A_conn[0]] += du[0];
++    yy1[A_conn[0]] += du[1];
++    xx1[A_conn[1]] += du[2];
++    yy1[A_conn[1]] += du[3];
++    xx2[B_conn[0]] += du[4];
++    yy2[B_conn[0]] += du[5];
++    xx2[B_conn[1]] += du[6];
++    yy2[B_conn[1]] += du[7];
++
++    mesh1.setPosition( xx1.data(), yy1.data(), nullptr );
++    mesh2.setPosition( xx2.data(), yy2.data(), nullptr );
++    double E = calc.compute_energy( pair, mesh1.getView(), mesh2.getView() );
++    mesh1.setPosition( x1_orig.data(), y1_orig.data(), nullptr );
++    mesh2.setPosition( x2_orig.data(), y2_orig.data(), nullptr );
++    return E;
++  };
++
++  for ( int d = 0; d < 8; ++d ) {
++    std::array<double, 8> up = {};
++    std::array<double, 8> um = {};
++    up[d] = eps;
++    um[d] = -eps;
++    dE_dx_fd[d] = ( eval( up ) - eval( um ) ) / ( 2.0 * eps );
++  }
++
++  for ( int d = 0; d < 8; ++d ) {
++    EXPECT_NEAR( dE_dx_fd[d], dE_dx_ad[d], 1.0e-5 );
++  }
++}
++
++#endif
++
++}  // namespace tribol
+diff --git a/src/tribol/CMakeLists.txt b/src/tribol/CMakeLists.txt
+index e80278a..17964fa 100644
+--- a/src/tribol/CMakeLists.txt
++++ b/src/tribol/CMakeLists.txt
+@@ -46,6 +46,8 @@ set(tribol_headers
+     physics/EnergyMortarTypes.hpp
+     physics/EnergyMortar.hpp
+     physics/EnergyMortarAdapter.hpp
++    physics/EnergyAreaPenalty.hpp
++    physics/EnergyAreaPenaltyAdapter.hpp
+     physics/Physics.hpp
+ 
+     search/InterfacePairFinder.hpp
+@@ -83,6 +85,8 @@ set(tribol_sources
+     physics/Mortar.cpp
+     physics/EnergyMortar.cpp
+     physics/EnergyMortarAdapter.cpp
++    physics/EnergyAreaPenalty.cpp
++    physics/EnergyAreaPenaltyAdapter.cpp
+     physics/Physics.cpp
+      
+     search/InterfacePairFinder.cpp
+diff --git a/src/tribol/common/Parameters.hpp b/src/tribol/common/Parameters.hpp
+index 6bb5236..5874821 100644
+--- a/src/tribol/common/Parameters.hpp
++++ b/src/tribol/common/Parameters.hpp
+@@ -117,8 +117,9 @@ enum ContactMethod  // all mortar methods go first
+   SINGLE_MORTAR,   ///! Single mortar per Puso 2003
+   ALIGNED_MORTAR,  ///! Aligned mortar to be used with ContactCase = NO_SLIDING
+   MORTAR_WEIGHTS,  ///! Method that only returns mortar weights per single mortar method
+-  ENERGY_MORTAR,   ///! Energy-based mortar method
+-  COMMON_PLANE,    ///! Common plane method, currently with single integration point
++  ENERGY_MORTAR,        ///! Energy-based mortar method
++  ENERGY_AREA_PENALTY,  ///! Energy-based area-integrated penalty method
++  COMMON_PLANE,         ///! Common plane method, currently with single integration point
+   NUM_CONTACT_METHODS
+ };
+ 
+diff --git a/src/tribol/interface/mfem_tribol.cpp b/src/tribol/interface/mfem_tribol.cpp
+index c9cf45d..4094d96 100644
+--- a/src/tribol/interface/mfem_tribol.cpp
++++ b/src/tribol/interface/mfem_tribol.cpp
+@@ -295,7 +295,8 @@ void registerMfemCouplingScheme( IndexT cs_id, int mesh_id_1, int mesh_id_2, con
+   // Set data required for use with Lagrange multiplier enforcement option.
+   // Coupling scheme validity will be checked later, but here some initial
+   // data is created/initialized for use with LMs.
+-  if ( enforcement_method == LAGRANGE_MULTIPLIER || contact_method == ENERGY_MORTAR ) {
++  if ( enforcement_method == LAGRANGE_MULTIPLIER || contact_method == ENERGY_MORTAR ||
++       contact_method == ENERGY_AREA_PENALTY ) {
+     std::unique_ptr<mfem::FiniteElementCollection> pressure_fec = std::make_unique<mfem::H1_FECollection>(
+         current_coords.FESpace()->FEColl()->GetOrder(), mesh.SpaceDimension() );
+     int pressure_vdim = 0;
+@@ -325,7 +326,7 @@ void registerMfemCouplingScheme( IndexT cs_id, int mesh_id_1, int mesh_id_2, con
+     if ( ( lm_options.enforcement_option_set &&
+            ( lm_options.eval_mode == ImplicitEvalMode::MORTAR_JACOBIAN ||
+              lm_options.eval_mode == ImplicitEvalMode::MORTAR_RESIDUAL_JACOBIAN ) ) ||
+-         contact_method == ENERGY_MORTAR ) {
++         contact_method == ENERGY_MORTAR || contact_method == ENERGY_AREA_PENALTY ) {
+       // create matrix transfer operator between redecomp and
+       // parent/parent-linked boundary submesh
+       cs.setMfemJacobianData( std::make_unique<MfemJacobianData>( *mfem_data, *cs.getMfemSubmeshData() ) );
+@@ -403,6 +404,26 @@ void setMfemEnergyMortarOptions( IndexT cs_id, SmoothingType smoothing_type,
+   cs->getMfemMeshData()->SetEnergyMortarOptions( opts );
+ }
+ 
++void setMfemUseBaselineUnion( IndexT cs_id, bool use_baseline )
++{
++  auto cs = CouplingSchemeManager::getInstance().findData( cs_id );
++  SLIC_ERROR_ROOT_IF(
++      !cs, axom::fmt::format( "Coupling scheme cs_id={0} does not exist. Call tribol::registerMfemCouplingScheme() "
++                              "to create a coupling scheme with this cs_id.",
++                              cs_id ) );
++  cs->setUseBaselineUnion( use_baseline );
++}
++
++void snapshotMfemBaselinePairs()
++{
++  for ( auto& cs_pair : CouplingSchemeManager::getInstance() ) {
++    auto& cs = cs_pair.second;
++    if ( cs.useBaselineUnion() ) {
++      cs.resetBaselineForLoadStep();
++    }
++  }
++}
++
+ void setMfemViscousDampingCoeff( IndexT cs_id, RealT mesh1_coeff, RealT mesh2_coeff )
+ {
+   auto cs = CouplingSchemeManager::getInstance().findData( cs_id );
+@@ -804,10 +825,12 @@ void updateMfemParallelDecomposition( int n_ranks, bool force_new_redecomp )
+         registerNodalReferenceCoords( mesh_ids[1], xref_ptrs[0], xref_ptrs[1], xref_ptrs[2] );
+       }
+       // TODO: consider redesign where a specific method isn't checked and just the enforcement method is checked
+-      if ( cs.getEnforcementMethod() == LAGRANGE_MULTIPLIER || cs.getContactMethod() == ENERGY_MORTAR ) {
++      if ( cs.getEnforcementMethod() == LAGRANGE_MULTIPLIER || cs.getContactMethod() == ENERGY_MORTAR ||
++           cs.getContactMethod() == ENERGY_AREA_PENALTY ) {
+         SLIC_ERROR_ROOT_IF( cs.getContactModel() != FRICTIONLESS, "Only frictionless contact is supported." );
+-        SLIC_ERROR_ROOT_IF( cs.getContactMethod() != SINGLE_MORTAR && cs.getContactMethod() != ENERGY_MORTAR,
+-                            "Only single mortar or ENERGY_MORTAR contact is supported." );
++        SLIC_ERROR_ROOT_IF( cs.getContactMethod() != SINGLE_MORTAR && cs.getContactMethod() != ENERGY_MORTAR &&
++                                cs.getContactMethod() != ENERGY_AREA_PENALTY,
++                            "Only single mortar, ENERGY_MORTAR, or ENERGY_AREA_PENALTY contact is supported." );
+         auto submesh_data = cs.getMfemSubmeshData();
+         // updates submesh-native grid functions and transfer operators on
+         // the new redecomp mesh
+@@ -816,7 +839,9 @@ void updateMfemParallelDecomposition( int n_ranks, bool force_new_redecomp )
+         registerMortarGaps( mesh_ids[1], g_ptrs[0] );
+         auto p_ptrs = submesh_data->GetRedecompPressurePtrs();
+         registerMortarPressures( mesh_ids[1], p_ptrs[0] );
+-        if ( ( cs.hasMfemJacobianData() || cs.getContactMethod() == ENERGY_MORTAR ) && new_redecomp ) {
++        if ( ( cs.hasMfemJacobianData() || cs.getContactMethod() == ENERGY_MORTAR ||
++               cs.getContactMethod() == ENERGY_AREA_PENALTY ) &&
++             new_redecomp ) {
+           // updates Jacobian transfer operator for new redecomp mesh
+           cs.getMfemJacobianData()->UpdateJacobianXfer();
+         }
+diff --git a/src/tribol/interface/mfem_tribol.hpp b/src/tribol/interface/mfem_tribol.hpp
+index 65b4542..40f2c05 100644
+--- a/src/tribol/interface/mfem_tribol.hpp
++++ b/src/tribol/interface/mfem_tribol.hpp
+@@ -106,6 +106,10 @@ void setMfemKinematicConstantPenalty( IndexT cs_id, RealT mesh1_penalty, RealT m
+ void setMfemEnergyMortarOptions( IndexT cs_id, SmoothingType smoothing_type,
+                                  PenaltySmoothing penalty_smoothing, double penalty_smoothing_del );
+ 
++void setMfemUseBaselineUnion( IndexT cs_id, bool use_baseline );
++
++void snapshotMfemBaselinePairs();
++
+ /**
+  * @brief Clears existing penalty data and sets kinematic element penalty
+  *
+diff --git a/src/tribol/mesh/CouplingScheme.cpp b/src/tribol/mesh/CouplingScheme.cpp
+index 99fca09..e0a7016 100644
+--- a/src/tribol/mesh/CouplingScheme.cpp
++++ b/src/tribol/mesh/CouplingScheme.cpp
+@@ -7,6 +7,8 @@
+ 
+ // C++ includes
+ #include <cmath>
++#include <cstdint>
++#include <unordered_set>
+ 
+ // MFEM includes
+ #include "mfem.hpp"
+@@ -1025,11 +1027,42 @@ void CouplingScheme::performBinning()
+   return;
+ }
+ 
++//------------------------------------------------------------------------------
++void CouplingScheme::resetBaselineForLoadStep()
++{
++  m_baseline_pairs = ArrayT<InterfacePair>( 0, 0, m_allocator_id );
++  m_baseline_needs_snapshot = true;
++}
++
+ //------------------------------------------------------------------------------
+ int CouplingScheme::apply( int cycle, RealT t, RealT& dt )
+ {
+   if ( m_formulation_impl ) {
+-    if ( m_interface_pairs.size() > 0 ) {
++    if ( m_use_baseline_union && m_baseline_needs_snapshot && m_interface_pairs.size() > 0 ) {
++      m_baseline_pairs = ArrayT<InterfacePair>( m_interface_pairs );
++      m_baseline_needs_snapshot = false;
++    }
++    if ( m_use_baseline_union ) {
++      std::unordered_set<std::uint64_t> seen;
++      ArrayT<InterfacePair> merged( 0, 0, m_allocator_id );
++      merged.reserve( m_baseline_pairs.size() + m_interface_pairs.size() );
++      for ( IndexT i = 0; i < m_baseline_pairs.size(); ++i ) {
++        auto& p = m_baseline_pairs[i];
++        std::uint64_t key = ( static_cast<std::uint64_t>( p.m_element_id1 ) << 32 ) |
++                            static_cast<std::uint64_t>( p.m_element_id2 );
++        seen.insert( key );
++        merged.emplace_back( p.m_element_id1, p.m_element_id2, p.m_is_contact_candidate );
++      }
++      for ( IndexT i = 0; i < m_interface_pairs.size(); ++i ) {
++        auto& p = m_interface_pairs[i];
++        std::uint64_t key = ( static_cast<std::uint64_t>( p.m_element_id1 ) << 32 ) |
++                            static_cast<std::uint64_t>( p.m_element_id2 );
++        if ( seen.find( key ) == seen.end() ) {
++          merged.emplace_back( p.m_element_id1, p.m_element_id2, p.m_is_contact_candidate );
++        }
++      }
++      m_formulation_impl->setInterfacePairs( std::move( merged ), 0 );
++    } else if ( m_interface_pairs.size() > 0 ) {
+       m_formulation_impl->setInterfacePairs( std::move( m_interface_pairs ), 0 );
+     }
+     m_formulation_impl->updateNodalGaps();
+@@ -1156,7 +1189,7 @@ int CouplingScheme::apply( int cycle, RealT t, RealT& dt )
+ //------------------------------------------------------------------------------
+ bool CouplingScheme::init()
+ {
+-  if ( m_contactMethod == ENERGY_MORTAR ) {
++  if ( m_contactMethod == ENERGY_MORTAR || m_contactMethod == ENERGY_AREA_PENALTY ) {
+     // these calls still need to be made to set mesh pointers and allocator id
+     if ( !setMeshPointers() || checkExecutionModeData() != 0 ) {
+       // TODO: consider design; should these checks be specific to a contact formulation or are they specific to
+diff --git a/src/tribol/mesh/CouplingScheme.hpp b/src/tribol/mesh/CouplingScheme.hpp
+index df8ec88..47aaa45 100644
+--- a/src/tribol/mesh/CouplingScheme.hpp
++++ b/src/tribol/mesh/CouplingScheme.hpp
+@@ -504,6 +504,12 @@ class CouplingScheme {
+   /// @overload
+   const ArrayT<InterfacePair>& getInterfacePairs() const { return m_interface_pairs; }
+ 
++  void setUseBaselineUnion( bool use ) { m_use_baseline_union = use; }
++
++  bool useBaselineUnion() const { return m_use_baseline_union; }
++
++  void resetBaselineForLoadStep();
++
+   /**
+    * @brief Get the number of active pairs on the coupling scheme
+    *
+@@ -953,6 +959,9 @@ class CouplingScheme {
+   std::unique_ptr<ContactFormulation> m_formulation_impl;  ///< Polymorphic contact formulation implementation
+ 
+   ArrayT<InterfacePair> m_interface_pairs;  ///< List of interface pairs
++  ArrayT<InterfacePair> m_baseline_pairs;
++  bool m_use_baseline_union = false;
++  bool m_baseline_needs_snapshot = true;
+ 
+   CompGeom m_cg_pairs;  ///< Computational geometry container object
+ 
+@@ -1062,8 +1071,7 @@ TRIBOL_HOST_DEVICE inline RealT CouplingScheme::Viewer::getGapTol( int fid1, int
+ //------------------------------------------------------------------------------
+ TRIBOL_HOST_DEVICE inline bool CouplingScheme::Viewer::pruneMethodFacePair( const IndexT fid1, const IndexT fid2 ) const
+ {
+-  if ( m_contact_method == ENERGY_MORTAR ) {
+-    // TODO: Clarify why  ENERGY_MORTAR doesn't prune method face pairs
++  if ( m_contact_method == ENERGY_MORTAR || m_contact_method == ENERGY_AREA_PENALTY ) {
+     return false;
+   }
+ 
+diff --git a/src/tribol/physics/ContactFormulationFactory.cpp b/src/tribol/physics/ContactFormulationFactory.cpp
+index 92f1089..9d0c7ea 100644
+--- a/src/tribol/physics/ContactFormulationFactory.cpp
++++ b/src/tribol/physics/ContactFormulationFactory.cpp
+@@ -5,6 +5,7 @@
+ 
+ #include "tribol/physics/ContactFormulationFactory.hpp"
+ #include "tribol/physics/EnergyMortarAdapter.hpp"
++#include "tribol/physics/EnergyAreaPenaltyAdapter.hpp"
+ #include "tribol/mesh/CouplingScheme.hpp"
+ #include "tribol/common/Parameters.hpp"
+ 
+@@ -51,6 +52,35 @@ std::unique_ptr<ContactFormulation> createContactFormulation( CouplingScheme* cs
+ #endif
+   }
+ 
++  if ( cs->getContactMethod() == ENERGY_AREA_PENALTY ) {
++    EnergyMortarOptions opts;
++
++#if defined( TRIBOL_USE_ENZYME ) && defined( BUILD_REDECOMP )
++    if ( cs->hasMfemData() ) {
++      auto* k_ptr = cs->getMfemMeshData()->GetMesh1KinematicConstantPenalty();
++      if ( k_ptr ) {
++        opts.k = *k_ptr;
++      }
++      if ( auto* em_opts = cs->getMfemMeshData()->GetEnergyMortarOptions() ) {
++        opts.smoothing_type = em_opts->smoothing_type;
++        opts.penalty_smoothing = em_opts->penalty_smoothing;
++        opts.penalty_smoothing_del = em_opts->penalty_smoothing_del;
++      }
++    }
++
++    SLIC_ERROR_ROOT_IF( !cs->hasMfemData(), "ENERGY_AREA_PENALTY requires MFEM mesh data." );
++    SLIC_ERROR_ROOT_IF( !cs->hasMfemSubmeshData(), "ENERGY_AREA_PENALTY requires MFEM submesh data." );
++    SLIC_ERROR_ROOT_IF( !cs->hasMfemJacobianData(), "ENERGY_AREA_PENALTY requires MFEM Jacobian data." );
++
++    return std::make_unique<EnergyAreaPenaltyAdapter>( *cs->getMfemMeshData(), *cs->getMfemSubmeshData(),
++                                                       *cs->getMfemJacobianData(), cs->getMesh1(), cs->getMesh2(),
++                                                       opts );
++#else
++    SLIC_ERROR_ROOT( "ENERGY_AREA_PENALTY requires Enzyme and redecomp to be built." );
++    return nullptr;
++#endif
++  }
++
+   return nullptr;
+ }
+ 
+diff --git a/src/tribol/physics/EnergyAreaPenalty.cpp b/src/tribol/physics/EnergyAreaPenalty.cpp
+new file mode 100644
+index 0000000..f289de5
+--- /dev/null
++++ b/src/tribol/physics/EnergyAreaPenalty.cpp
+@@ -0,0 +1,215 @@
++#include "tribol/physics/EnergyAreaPenalty.hpp"
++
++#include "tribol/common/Enzyme.hpp"
++
++#include <cmath>
++
++namespace tribol {
++
++#ifdef TRIBOL_USE_ENZYME
++
++namespace {
++
++struct KernelParams {
++  int N = 3;
++  double del = 0.1;
++  SmoothingType smoothing_type = SmoothingType::Quadratic;
++  double penalty_smoothing_del = 1.0e-3;
++  PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth;
++};
++
++inline void find_normal( const double* coord1, const double* coord2, double* normal )
++{
++  double dx = coord2[0] - coord1[0];
++  double dy = coord2[1] - coord1[1];
++  double len = std::sqrt( dy * dy + dx * dx );
++  dx /= len;
++  dy /= len;
++  normal[0] = dy;
++  normal[1] = -dx;
++}
++
++inline void iso_map( const double* coord1, const double* coord2, double xi, double* mapped_coord )
++{
++  double N1 = 0.5 - xi;
++  double N2 = 0.5 + xi;
++  mapped_coord[0] = N1 * coord1[0] + N2 * coord2[0];
++  mapped_coord[1] = N1 * coord1[1] + N2 * coord2[1];
++}
++
++inline void find_intersection( const double* A0, const double* A1, const double* p, const double* nB,
++                               double* intersection )
++{
++  const double tA[2] = { A1[0] - A0[0], A1[1] - A0[1] };
++  const double d[2] = { p[0] - A0[0], p[1] - A0[1] };
++
++  const double nlen = std::sqrt( nB[0] * nB[0] + nB[1] * nB[1] );
++  if ( nlen < 1e-14 ) {
++    intersection[0] = p[0];
++    intersection[1] = p[1];
++    return;
++  }
++  const double n[2] = { nB[0] / nlen, nB[1] / nlen };
++  const double det = tA[0] * n[1] - tA[1] * n[0];
++  if ( std::abs( det ) < 1e-12 ) {
++    intersection[0] = p[0];
++    intersection[1] = p[1];
++    return;
++  }
++
++  const double inv_det = 1.0 / det;
++  double alpha = ( d[0] * n[1] - d[1] * n[0] ) * inv_det;
++  intersection[0] = A0[0] + alpha * tA[0];
++  intersection[1] = A0[1] + alpha * tA[1];
++}
++
++inline void get_projections( const double* A0, const double* A1, const double* B0, const double* B1, double* projections )
++{
++  double nB[2] = { 0.0, 0.0 };
++  find_normal( B0, B1, nB );
++
++  const double dxA = A1[0] - A0[0];
++  const double dyA = A1[1] - A0[1];
++  const double len2A = dxA * dxA + dyA * dyA;
++
++  const double* B_endpoints[2] = { B0, B1 };
++  for ( int i = 0; i < 2; ++i ) {
++    double q[2] = { 0.0, 0.0 };
++    find_intersection( A0, A1, B_endpoints[i], nB, q );
++    const double alphaA = ( ( q[0] - A0[0] ) * dxA + ( q[1] - A0[1] ) * dyA ) / len2A;
++    projections[i] = alphaA - 0.5;
++  }
++}
++
++inline double energy_kernel( const double* x, const KernelParams& kp )
++{
++  const double A0[2] = { x[0], x[1] };
++  const double A1[2] = { x[2], x[3] };
++  const double B0[2] = { x[4], x[5] };
++  const double B1[2] = { x[6], x[7] };
++
++  double projs[2] = { 0.0, 0.0 };
++  get_projections( A0, A1, B0, B1, projs );
++  const std::array<double, 2> projections = { projs[0], projs[1] };
++  const auto bounds = ContactSmoothing::bounds_from_projections( projections, kp.del );
++  const auto xi_bounds = ContactSmoothing::smooth_bounds( bounds, kp.del, kp.smoothing_type );
++  const auto qp = EnergyMortarCalculator::compute_quadrature( xi_bounds, kp.N );
++
++  const double J = std::sqrt( ( A1[0] - A0[0] ) * ( A1[0] - A0[0] ) + ( A1[1] - A0[1] ) * ( A1[1] - A0[1] ) );
++
++  double nB[2];
++  find_normal( B0, B1, nB );
++  double nA[2];
++  find_normal( A0, A1, nA );
++  const double dot = nB[0] * nA[0] + nB[1] * nA[1];
++  const double eta = ( dot < 0.0 ) ? -dot * dot : 0.0;
++
++  double E = 0.0;
++  for ( int i = 0; i < kp.N; ++i ) {
++    const double xiA = qp.qp[i];
++    const double w = qp.w[i];
++
++    double x1[2];
++    iso_map( A0, A1, xiA, x1 );
++    double x2[2];
++    find_intersection( B0, B1, x1, nB, x2 );
++
++    const double dx = x1[0] - x2[0];
++    const double dy = x1[1] - x2[1];
++    const double gn = -( dx * nB[0] + dy * nB[1] );
++    const double g = gn * eta;
++
++    const auto ramp = ContactSmoothing::penalty_ramp( g, kp.penalty_smoothing_del, kp.penalty_smoothing );
++    E += 0.5 * w * ramp.value * ramp.value * J;
++  }
++
++  return E;
++}
++
++static void energy_kernel_wrapper( const double* x, const KernelParams* kp, double* out ) { *out = energy_kernel( x, *kp ); }
++
++static void grad_energy_kernel( const double* x, const KernelParams* kp, double* dE_dx )
++{
++  double dx[8] = { 0.0 };
++  double out = 0.0;
++  double dout = 1.0;
++  __enzyme_autodiff<void>( (void*)energy_kernel_wrapper, enzyme_dup, x, dx, enzyme_const, (const void*)kp, enzyme_dup,
++                           &out, &dout );
++  for ( int i = 0; i < 8; ++i ) {
++    dE_dx[i] = dx[i];
++  }
++}
++
++static void hessian_energy_kernel( const double* x, const KernelParams* kp, double* H )
++{
++  for ( int col = 0; col < 8; ++col ) {
++    double dx[8] = { 0.0 };
++    dx[col] = 1.0;
++    double grad[8] = { 0.0 };
++    double dgrad[8] = { 0.0 };
++    __enzyme_fwddiff<void>( (void*)grad_energy_kernel, enzyme_dup, x, dx, enzyme_const, (const void*)kp, enzyme_dup,
++                            grad, dgrad );
++    for ( int row = 0; row < 8; ++row ) {
++      H[row * 8 + col] = dgrad[row];
++    }
++  }
++}
++
++inline void endpoints( const MeshData::Viewer& mesh, int elem_id, double P0[2], double P1[2] )
++{
++  double P0_P1[4];
++  mesh.getFaceCoords( elem_id, P0_P1 );
++  P0[0] = P0_P1[0];
++  P0[1] = P0_P1[1];
++  P1[0] = P0_P1[2];
++  P1[1] = P0_P1[3];
++}
++
++inline KernelParams make_kernel_params( const EnergyMortarOptions& opts )
++{
++  KernelParams kp;
++  kp.N = opts.N;
++  kp.del = opts.del;
++  kp.smoothing_type = opts.smoothing_type;
++  kp.penalty_smoothing_del = opts.penalty_smoothing_del;
++  kp.penalty_smoothing = opts.penalty_smoothing;
++  return kp;
++}
++
++}  // namespace
++
++double EnergyAreaPenaltyCalculator::compute_energy( const InterfacePair& pair, const MeshData::Viewer& mesh1,
++                                                    const MeshData::Viewer& mesh2 ) const
++{
++  double A0[2], A1[2], B0[2], B1[2];
++  endpoints( mesh1, pair.m_element_id1, A0, A1 );
++  endpoints( mesh2, pair.m_element_id2, B0, B1 );
++  const double x[8] = { A0[0], A0[1], A1[0], A1[1], B0[0], B0[1], B1[0], B1[1] };
++  return energy_kernel( x, make_kernel_params( opts_ ) );
++}
++
++void EnergyAreaPenaltyCalculator::grad_energy( const InterfacePair& pair, const MeshData::Viewer& mesh1,
++                                               const MeshData::Viewer& mesh2, double dE_dx[8] ) const
++{
++  double A0[2], A1[2], B0[2], B1[2];
++  endpoints( mesh1, pair.m_element_id1, A0, A1 );
++  endpoints( mesh2, pair.m_element_id2, B0, B1 );
++  const double x[8] = { A0[0], A0[1], A1[0], A1[1], B0[0], B0[1], B1[0], B1[1] };
++  const auto kp = make_kernel_params( opts_ );
++  grad_energy_kernel( x, &kp, dE_dx );
++}
++
++void EnergyAreaPenaltyCalculator::hessian_energy( const InterfacePair& pair, const MeshData::Viewer& mesh1,
++                                                  const MeshData::Viewer& mesh2, double d2E_dx2[64] ) const
++{
++  double A0[2], A1[2], B0[2], B1[2];
++  endpoints( mesh1, pair.m_element_id1, A0, A1 );
++  endpoints( mesh2, pair.m_element_id2, B0, B1 );
++  const double x[8] = { A0[0], A0[1], A1[0], A1[1], B0[0], B0[1], B1[0], B1[1] };
++  const auto kp = make_kernel_params( opts_ );
++  hessian_energy_kernel( x, &kp, d2E_dx2 );
++}
++
++#endif
++
++}  // namespace tribol
+diff --git a/src/tribol/physics/EnergyAreaPenalty.hpp b/src/tribol/physics/EnergyAreaPenalty.hpp
+new file mode 100644
+index 0000000..45c919c
+--- /dev/null
++++ b/src/tribol/physics/EnergyAreaPenalty.hpp
+@@ -0,0 +1,27 @@
++#pragma once
++
++#include "tribol/config.hpp"
++#include "tribol/physics/EnergyMortar.hpp"
++
++namespace tribol {
++
++#ifdef TRIBOL_USE_ENZYME
++
++class EnergyAreaPenaltyCalculator {
++ public:
++  explicit EnergyAreaPenaltyCalculator( const EnergyMortarOptions& opts ) : opts_( opts ) {}
++
++  double compute_energy( const InterfacePair& pair, const MeshData::Viewer& mesh1,
++                         const MeshData::Viewer& mesh2 ) const;
++  void grad_energy( const InterfacePair& pair, const MeshData::Viewer& mesh1,
++                    const MeshData::Viewer& mesh2, double dE_dx[8] ) const;
++  void hessian_energy( const InterfacePair& pair, const MeshData::Viewer& mesh1,
++                       const MeshData::Viewer& mesh2, double d2E_dx2[64] ) const;
++
++ private:
++  EnergyMortarOptions opts_;
++};
++
++#endif
++
++}  // namespace tribol
+diff --git a/src/tribol/physics/EnergyAreaPenaltyAdapter.cpp b/src/tribol/physics/EnergyAreaPenaltyAdapter.cpp
+new file mode 100644
+index 0000000..43bf9c4
+--- /dev/null
++++ b/src/tribol/physics/EnergyAreaPenaltyAdapter.cpp
+@@ -0,0 +1,159 @@
++#include "tribol/physics/EnergyAreaPenaltyAdapter.hpp"
++
++#include <axom/slic/interface/slic_macros.hpp>
++
++namespace tribol {
++
++#ifdef TRIBOL_USE_ENZYME
++
++EnergyAreaPenaltyAdapter::EnergyAreaPenaltyAdapter( MfemMeshData& mesh_data, MfemSubmeshData& submesh_data,
++                                                    MfemJacobianData& jac_data, MeshData& mesh1, MeshData& mesh2,
++                                                    const EnergyMortarOptions& opts )
++    : mesh_data_( mesh_data ),
++      submesh_data_( submesh_data ),
++      jac_data_( jac_data ),
++      mesh1_( &mesh2 ),
++      mesh2_( &mesh1 ),
++      params_( opts )
++{
++  if ( mesh1.numberOfNodes() > 0 && mesh2.numberOfNodes() > 0 ) {
++    SLIC_ERROR_ROOT_IF( mesh1.spatialDimension() != 2 || mesh2.spatialDimension() != 2,
++                        "ENERGY_AREA_PENALTY requires 2D meshes." );
++  }
++
++  evaluator_ = std::make_unique<EnergyAreaPenaltyCalculator>( params_ );
++  pressure_vec_ = shared::ParVector( const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
++  pressure_vec_.fill( 0.0 );
++  gap_vec_ = shared::ParVector( const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
++  gap_vec_.fill( 0.0 );
++}
++
++void EnergyAreaPenaltyAdapter::updateMeshes( MeshData& mesh1, MeshData& mesh2 )
++{
++  mesh1_ = &mesh2;
++  mesh2_ = &mesh1;
++}
++
++void EnergyAreaPenaltyAdapter::setInterfacePairs( ArrayT<InterfacePair>&& pairs, int /*check_level*/ ) { pairs_ = std::move( pairs ); }
++
++void EnergyAreaPenaltyAdapter::updateIntegrationRule() {}
++
++void EnergyAreaPenaltyAdapter::updateNodalGaps()
++{
++  SLIC_ERROR_ROOT_IF( mesh1_ == nullptr || mesh2_ == nullptr, "ENERGY_AREA_PENALTY meshes not set." );
++  auto mesh1_view = mesh1_->getView();
++  auto mesh2_view = mesh2_->getView();
++
++  energy_ = 0.0;
++  auto* fes = const_cast<mfem::FiniteElementSpace*>( mesh_data_.GetRedecompResponse().FESpace() );
++  mfem::GridFunction redecomp_force( fes );
++  redecomp_force = 0.0;
++  double* data = redecomp_force.HostWrite();
++
++  for ( const auto& pair : pairs_ ) {
++    InterfacePair flipped_pair( pair.m_element_id2, pair.m_element_id1 );
++    const auto elem1 = static_cast<int>( flipped_pair.m_element_id1 );
++    const auto elem2 = static_cast<int>( flipped_pair.m_element_id2 );
++
++    energy_ += params_.k * evaluator_->compute_energy( flipped_pair, mesh1_view, mesh2_view );
++
++    double dE_dx[8];
++    evaluator_->grad_energy( flipped_pair, mesh1_view, mesh2_view, dE_dx );
++
++    auto nm_conn = mesh1_view.getConnectivity()( elem1 );
++    auto m_conn = mesh2_view.getConnectivity()( elem2 );
++
++    data[fes->DofToVDof( nm_conn[0], 0 )] += params_.k * dE_dx[0];
++    data[fes->DofToVDof( nm_conn[0], 1 )] += params_.k * dE_dx[1];
++    data[fes->DofToVDof( nm_conn[1], 0 )] += params_.k * dE_dx[2];
++    data[fes->DofToVDof( nm_conn[1], 1 )] += params_.k * dE_dx[3];
++    data[fes->DofToVDof( m_conn[0], 0 )] += params_.k * dE_dx[4];
++    data[fes->DofToVDof( m_conn[0], 1 )] += params_.k * dE_dx[5];
++    data[fes->DofToVDof( m_conn[1], 0 )] += params_.k * dE_dx[6];
++    data[fes->DofToVDof( m_conn[1], 1 )] += params_.k * dE_dx[7];
++  }
++
++  auto* parent_fes = const_cast<mfem::ParFiniteElementSpace*>( mesh_data_.GetParentCoords().ParFESpace() );
++  mfem::Vector parent_response( parent_fes->GetVSize() );
++  parent_response = 0.0;
++  mesh_data_.GetParentRedecompTransfer().RedecompToParent( redecomp_force, parent_response );
++
++  force_vec_ = shared::ParVector( parent_fes );
++  force_vec_.fill( 0.0 );
++  parent_fes->GetProlongationMatrix()->MultTranspose( parent_response, force_vec_.get() );
++}
++
++void EnergyAreaPenaltyAdapter::updateNodalForces()
++{
++  SLIC_ERROR_ROOT_IF( mesh1_ == nullptr || mesh2_ == nullptr, "ENERGY_AREA_PENALTY meshes not set." );
++  auto mesh1_view = mesh1_->getView();
++  auto mesh2_view = mesh2_->getView();
++
++  const bool use_lor = ( mesh_data_.GetLORMesh() != nullptr );
++  const auto& displacement_surface_fes = use_lor ? *mesh_data_.GetLORMeshFESpace() : mesh_data_.GetSubmeshFESpace();
++  const auto& displacement_redecomp_fes = *mesh_data_.GetRedecompResponse().FESpace();
++  const auto& mortar_elem_map = mesh_data_.GetElemMap1();
++  const auto& nonmortar_elem_map = mesh_data_.GetElemMap2();
++
++  PackedPairJacobianContribs df_nm_nm( displacement_surface_fes, displacement_surface_fes, displacement_redecomp_fes,
++                                       displacement_redecomp_fes, nonmortar_elem_map, nonmortar_elem_map );
++  PackedPairJacobianContribs df_nm_m( displacement_surface_fes, displacement_surface_fes, displacement_redecomp_fes,
++                                      displacement_redecomp_fes, nonmortar_elem_map, mortar_elem_map );
++  PackedPairJacobianContribs df_m_nm( displacement_surface_fes, displacement_surface_fes, displacement_redecomp_fes,
++                                      displacement_redecomp_fes, mortar_elem_map, nonmortar_elem_map );
++  PackedPairJacobianContribs df_m_m( displacement_surface_fes, displacement_surface_fes, displacement_redecomp_fes,
++                                     displacement_redecomp_fes, mortar_elem_map, mortar_elem_map );
++
++  df_nm_nm.reserve( pairs_.size(), 16 );
++  df_nm_m.reserve( pairs_.size(), 16 );
++  df_m_nm.reserve( pairs_.size(), 16 );
++  df_m_m.reserve( pairs_.size(), 16 );
++
++  const int node_idx[8] = { 0, 2, 1, 3, 4, 6, 5, 7 };
++
++  for ( const auto& pair : pairs_ ) {
++    InterfacePair flipped_pair( pair.m_element_id2, pair.m_element_id1 );
++    const auto elem1 = static_cast<int>( flipped_pair.m_element_id1 );
++    const auto elem2 = static_cast<int>( flipped_pair.m_element_id2 );
++
++    double d2E_dx2[64];
++    evaluator_->hessian_energy( flipped_pair, mesh1_view, mesh2_view, d2E_dx2 );
++
++    double df_dx_blocks[2][2][16];
++    for ( int i = 0; i < 2; ++i ) {
++      for ( int j = 0; j < 2; ++j ) {
++        for ( int k = 0; k < 4; ++k ) {
++          for ( int l = 0; l < 4; ++l ) {
++            const auto idx = node_idx[l + i * 4] * 8 + node_idx[k + j * 4];
++            df_dx_blocks[i][j][l + k * 4] = params_.k * d2E_dx2[idx];
++          }
++        }
++      }
++    }
++
++    df_nm_nm.append( elem1, elem1, df_dx_blocks[0][0], 16 );
++    df_nm_m.append( elem1, elem2, df_dx_blocks[0][1], 16 );
++    df_m_nm.append( elem2, elem1, df_dx_blocks[1][0], 16 );
++    df_m_m.append( elem2, elem2, df_dx_blocks[1][1], 16 );
++  }
++
++  std::vector<PackedPairJacobianContribs> df_contribs;
++  df_contribs.reserve( 4 );
++  df_contribs.push_back( std::move( df_nm_nm ) );
++  df_contribs.push_back( std::move( df_nm_m ) );
++  df_contribs.push_back( std::move( df_m_nm ) );
++  df_contribs.push_back( std::move( df_m_m ) );
++  df_dx_ = jac_data_.GetMfemJacobian( mesh_data_.GetParentCoords().ParFESpace(),
++                                      mesh_data_.GetParentCoords().ParFESpace(), df_contribs );
++}
++
++RealT EnergyAreaPenaltyAdapter::computeTimeStep() { return 1.0; }
++
++std::unique_ptr<mfem::HypreParMatrix> EnergyAreaPenaltyAdapter::getMfemDfDx() const
++{
++  return std::unique_ptr<mfem::HypreParMatrix>( df_dx_.release() );
++}
++
++#endif
++
++}  // namespace tribol
+diff --git a/src/tribol/physics/EnergyAreaPenaltyAdapter.hpp b/src/tribol/physics/EnergyAreaPenaltyAdapter.hpp
+new file mode 100644
+index 0000000..7f17550
+--- /dev/null
++++ b/src/tribol/physics/EnergyAreaPenaltyAdapter.hpp
+@@ -0,0 +1,59 @@
++#pragma once
++
++#include "tribol/config.hpp"
++#include "tribol/physics/ContactFormulation.hpp"
++#include "tribol/physics/EnergyAreaPenalty.hpp"
++#include "tribol/mesh/MfemData.hpp"
++
++#include "mfem.hpp"
++
++namespace tribol {
++
++#ifdef TRIBOL_USE_ENZYME
++
++class EnergyAreaPenaltyAdapter : public ContactFormulation {
++ public:
++  EnergyAreaPenaltyAdapter( MfemMeshData& mesh_data, MfemSubmeshData& submesh_data, MfemJacobianData& jac_data,
++                            MeshData& mesh1, MeshData& mesh2, const EnergyMortarOptions& opts );
++
++  ~EnergyAreaPenaltyAdapter() override = default;
++
++  void setInterfacePairs( ArrayT<InterfacePair>&& pairs, int check_level ) override;
++  void updateIntegrationRule() override;
++  void updateNodalGaps() override;
++  void updateNodalForces() override;
++  RealT computeTimeStep() override;
++  RealT getEnergy() const override { return energy_; }
++  void updateMeshes( MeshData& mesh1, MeshData& mesh2 ) override;
++
++#ifdef BUILD_REDECOMP
++  const mfem::HypreParVector& getMfemForce() const override { return force_vec_.get(); }
++  const mfem::HypreParVector& getMfemGap() const override { return gap_vec_.get(); }
++  mfem::HypreParVector& getMfemPressure() override { return pressure_vec_.get(); }
++  std::unique_ptr<mfem::HypreParMatrix> getMfemDfDx() const override;
++  std::unique_ptr<mfem::HypreParMatrix> getMfemDgDx() const override { return nullptr; }
++  std::unique_ptr<mfem::HypreParMatrix> getMfemDfDp() const override { return nullptr; }
++#endif
++
++ private:
++  MfemMeshData& mesh_data_;
++  MfemSubmeshData& submesh_data_;
++  MfemJacobianData& jac_data_;
++
++  MeshData* mesh1_ = nullptr;
++  MeshData* mesh2_ = nullptr;
++
++  EnergyMortarOptions params_;
++  std::unique_ptr<EnergyAreaPenaltyCalculator> evaluator_;
++  ArrayT<InterfacePair> pairs_;
++
++  RealT energy_ = 0.0;
++  shared::ParVector force_vec_;
++  shared::ParVector gap_vec_;
++  shared::ParVector pressure_vec_;
++  mutable shared::ParSparseMat df_dx_;
++};
++
++#endif
++
++}  // namespace tribol
+diff --git a/src/tribol/physics/EnergyMortar.cpp b/src/tribol/physics/EnergyMortar.cpp
+index d6e425b..2b4b7b6 100644
+--- a/src/tribol/physics/EnergyMortar.cpp
++++ b/src/tribol/physics/EnergyMortar.cpp
+@@ -233,7 +233,7 @@ void gtilde_kernel( const double* x, Gparams* gp, double* g_tilde_out, double* A
+   find_normal( A0, A1, nA );
+ 
+   double dot = nB[0] * nA[0] + nB[1] * nA[1];
+-  double eta = dot;
++  double eta = ( dot < 0.0 ) ? -dot * dot : 0.0;
+ 
+   double g1 = 0.0, g2 = 0.0;
+   double AI_1 = 0.0, AI_2 = 0.0;
+@@ -297,7 +297,7 @@ void gtilde_kernel_quad( const double* x, const Gparams* gp, double* g_tilde_out
+   double nA[2];
+   find_normal( A0, A1, nA );
+   double dot = nB[0] * nA[0] + nB[1] * nA[1];
+-  double eta = dot;
++  double eta = ( dot < 0.0 ) ? -dot * dot : 0.0;
+ 
+   double g1 = 0.0, g2 = 0.0;
+   double AI_1 = 0.0, AI_2 = 0.0;
+@@ -664,7 +664,7 @@ double EnergyMortarCalculator::compute_weighted_normal_gap( const InterfacePair&
+ 
+   double gn = -( dx * nB[0] + dy * nB[1] );
+   double dot = nB[0] * nA[0] + nB[1] * nA[1];
+-  double eta = ( dot < 0 ) ? dot : 0.0;
++  double eta = ( dot < 0.0 ) ? -dot * dot : 0.0;
+ 
+   return gn * eta;
+ }
+-- 
+2.39.5 (Apple Git-154)
+
