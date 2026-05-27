@@ -261,8 +261,8 @@ tribol::ContactMethod ContactInteraction::getMethod() const
       return tribol::SINGLE_MORTAR;
     case ContactMethod::EnergyMortar:
       return tribol::ENERGY_MORTAR;
-    //case ContactMethod::EnergyAreaPenalty:
-    //  return tribol::ENERGY_AREA_PENALTY;
+    case ContactMethod::EnergyAreaPenalty:
+      return tribol::ENERGY_AREA_PENALTY;
     default:
       SLIC_ERROR_ROOT("Unsupported contact method.");
       // return something so we don't get an error
