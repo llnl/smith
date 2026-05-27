@@ -1,0 +1,1897 @@
+From 3de13808f824a00012df3eed16ed5ba2cacbee8a Mon Sep 17 00:00:00 2001
+From: Michael Tupek <mrtupek@gmail.com>
+Date: Sat, 23 May 2026 16:01:07 -0600
+Subject: [PATCH] Some adjustments to the smoothed mortar implementation, also,
+ pull out parts into inlined functions that enzyme can treat correctly.
+
+---
+ src/tests/CMakeLists.txt                      |   1 +
+ src/tests/tribol_energy_mortar_smoothing.cpp  | 584 ++++++++++++++++++
+ src/tribol/interface/mfem_tribol.cpp          |  18 +
+ src/tribol/interface/mfem_tribol.hpp          |  11 +
+ src/tribol/mesh/MfemData.hpp                  |  15 +
+ .../physics/ContactFormulationFactory.cpp     |  15 +-
+ src/tribol/physics/EnergyMortar.cpp           | 214 ++++---
+ src/tribol/physics/EnergyMortar.hpp           | 296 ++++++++-
+ src/tribol/physics/EnergyMortarAdapter.cpp    | 220 +++++--
+ src/tribol/physics/EnergyMortarAdapter.hpp    |  64 +-
+ 10 files changed, 1267 insertions(+), 171 deletions(-)
+ create mode 100644 src/tests/tribol_energy_mortar_smoothing.cpp
+
+diff --git a/src/tests/CMakeLists.txt b/src/tests/CMakeLists.txt
+index 20164e5..44e40d5 100644
+--- a/src/tests/CMakeLists.txt
++++ b/src/tests/CMakeLists.txt
+@@ -210,6 +210,7 @@ if( TRIBOL_USE_ENZYME )
+       tribol_energy_mortar_patch.cpp
+       tribol_energy_mortar_patch_LM.cpp
+       tribol_finite_diff_energy_mortar.cpp
++      tribol_energy_mortar_smoothing.cpp
+       )
+ 
+   set(combined_test_depends tribol gtest)
+diff --git a/src/tests/tribol_energy_mortar_smoothing.cpp b/src/tests/tribol_energy_mortar_smoothing.cpp
+new file mode 100644
+index 0000000..a8db710
+--- /dev/null
++++ b/src/tests/tribol_energy_mortar_smoothing.cpp
+@@ -0,0 +1,584 @@
++// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and
++// other Tribol Project Developers. See the top-level LICENSE file for details.
++//
++// SPDX-License-Identifier: (MIT)
++
++#include <cmath>
++#include <array>
++#include <vector>
++#include <limits>
++
++#include <gtest/gtest.h>
++
++#include "tribol/config.hpp"
++#include "tribol/common/Enzyme.hpp"
++#include "tribol/physics/EnergyMortar.hpp"
++#include "tribol/common/Parameters.hpp"
++#include "tribol/mesh/MeshData.hpp"
++#include "tribol/mesh/InterfacePairs.hpp"
++
++#include "axom/slic.hpp"
++
++namespace tribol {
++
++#ifdef TRIBOL_USE_ENZYME
++
++namespace {
++
++enum class KernelOutputForTest
++{
++  GTILDE1,
++  GTILDE2
++};
++
++template <KernelOutputForTest Output>
++void varying_quadrature_kernel_output( const double* x, double* out )
++{
++  double g_tilde[2];
++  double area[2];
++  energy_mortar_varying_quadrature_kernel( x, 0.1, 3, SmoothingType::Hermite, g_tilde, area );
++  *out = Output == KernelOutputForTest::GTILDE1 ? g_tilde[0] : g_tilde[1];
++}
++
++template <KernelOutputForTest Output>
++void fixed_quadrature_kernel_output( const double* x, const Gparams* gp, double* out )
++{
++  double g_tilde[2];
++  double area[2];
++  energy_mortar_fixed_quadrature_kernel( x, *gp, g_tilde, area );
++  *out = Output == KernelOutputForTest::GTILDE1 ? g_tilde[0] : g_tilde[1];
++}
++
++template <KernelOutputForTest Output>
++void varying_quadrature_kernel_gradient( const double* x, double* grad )
++{
++  double dx[8] = { 0.0 };
++  double out = 0.0;
++  double dout = 1.0;
++  __enzyme_autodiff<void>( (void*)varying_quadrature_kernel_output<Output>, enzyme_dup, x, dx, enzyme_dup, &out,
++                           &dout );
++  for ( int i = 0; i < 8; ++i ) {
++    grad[i] = dx[i];
++  }
++}
++
++template <KernelOutputForTest Output>
++void fixed_quadrature_kernel_gradient( const double* x, const Gparams* gp, double* grad )
++{
++  double dx[8] = { 0.0 };
++  double out = 0.0;
++  double dout = 1.0;
++  __enzyme_autodiff<void>( (void*)fixed_quadrature_kernel_output<Output>, enzyme_dup, x, dx, enzyme_const,
++                           (const void*)gp, enzyme_dup, &out, &dout );
++  for ( int i = 0; i < 8; ++i ) {
++    grad[i] = dx[i];
++  }
++}
++
++template <KernelOutputForTest Output>
++void compute_varying_quadrature_hessian( const double x[8], double H[64] )
++{
++  for ( int col = 0; col < 8; ++col ) {
++    double dx[8] = { 0.0 };
++    dx[col] = 1.0;
++    double grad[8] = { 0.0 };
++    double dgrad[8] = { 0.0 };
++    __enzyme_fwddiff<void>( (void*)varying_quadrature_kernel_gradient<Output>, enzyme_dup, x, dx, enzyme_dup, grad,
++                            dgrad );
++    for ( int row = 0; row < 8; ++row ) {
++      H[row * 8 + col] = dgrad[row];
++    }
++  }
++}
++
++template <KernelOutputForTest Output>
++void compute_fixed_quadrature_hessian( const double x[8], const Gparams& gp, double H[64] )
++{
++  for ( int col = 0; col < 8; ++col ) {
++    double dx[8] = { 0.0 };
++    dx[col] = 1.0;
++    double grad[8] = { 0.0 };
++    double dgrad[8] = { 0.0 };
++    __enzyme_fwddiff<void>( (void*)fixed_quadrature_kernel_gradient<Output>, enzyme_dup, x, dx, enzyme_const,
++                            (const void*)&gp, enzyme_dup, grad, dgrad );
++    for ( int row = 0; row < 8; ++row ) {
++      H[row * 8 + col] = dgrad[row];
++    }
++  }
++}
++
++std::pair<double, double> hessian_norms( const double H[64] )
++{
++  double norm_sq = 0.0;
++  double skew_sq = 0.0;
++  for ( int i = 0; i < 8; ++i ) {
++    for ( int j = 0; j < 8; ++j ) {
++      const double value = H[i * 8 + j];
++      norm_sq += value * value;
++      const double skew = 0.5 * ( value - H[j * 8 + i] );
++      skew_sq += skew * skew;
++    }
++  }
++  return { std::sqrt( norm_sq ), std::sqrt( skew_sq ) };
++}
++
++}  // namespace
++
++// ============================================================================
++// smooth_bounds tests
++// ============================================================================
++
++class SmoothBoundsTest : public testing::TestWithParam<SmoothingType> {};
++
++TEST_P( SmoothBoundsTest, OutputInRange )
++{
++  const auto type = GetParam();
++  const std::vector<double> del_values = { 0.01, 0.05, 0.1, 0.2, 0.4 };
++
++  for ( double del : del_values ) {
++    for ( int k = -20; k <= 20; ++k ) {
++      double xi = k * 0.1;  // spans [-2, 2]
++      std::array<double, 2> bounds = { xi, xi };
++      auto result = ContactSmoothing::smooth_bounds( bounds, del, type );
++      EXPECT_GE( result[0], -0.5 )
++          << "del=" << del << " xi=" << xi << " type=" << static_cast<int>( type );
++      EXPECT_LE( result[0], 0.5 )
++          << "del=" << del << " xi=" << xi << " type=" << static_cast<int>( type );
++    }
++  }
++}
++
++TEST_P( SmoothBoundsTest, Monotonicity )
++{
++  const auto type = GetParam();
++  const std::vector<double> del_values = { 0.01, 0.05, 0.1, 0.2 };
++
++  for ( double del : del_values ) {
++    double prev = -1.0;
++    for ( int k = 0; k <= 1000; ++k ) {
++      double xi = -0.5 + k * ( 1.0 / 1000.0 );
++      std::array<double, 2> bounds = { xi, xi };
++      auto result = ContactSmoothing::smooth_bounds( bounds, del, type );
++      EXPECT_GE( result[0], prev - 1e-15 )
++          << "Non-monotone at del=" << del << " xi=" << xi << " type=" << static_cast<int>( type );
++      prev = result[0];
++    }
++  }
++}
++
++TEST_P( SmoothBoundsTest, EndpointValues )
++{
++  const auto type = GetParam();
++  const double del = 0.1;
++  const double tol = 1e-14;
++
++  // f(0) = 0 in shifted coords => f(-0.5) = -0.5 in unshifted
++  std::array<double, 2> bounds_min = { -0.5, -0.5 };
++  auto result_min = ContactSmoothing::smooth_bounds( bounds_min, del, type );
++  EXPECT_NEAR( result_min[0], -0.5, tol );
++
++  // f(1) = 1 in shifted coords => f(0.5) = 0.5 in unshifted
++  std::array<double, 2> bounds_max = { 0.5, 0.5 };
++  auto result_max = ContactSmoothing::smooth_bounds( bounds_max, del, type );
++  EXPECT_NEAR( result_max[0], 0.5, tol );
++}
++
++TEST_P( SmoothBoundsTest, ProjectionBoundsClampToElement )
++{
++  const double del = 0.1;
++
++  auto left_separated =
++      ContactSmoothing::bounds_from_projections( { -0.8, -0.7 }, del );
++  EXPECT_NEAR( left_separated[0], -0.5, 1e-14 );
++  EXPECT_NEAR( left_separated[1], -0.5, 1e-14 );
++
++  auto right_separated =
++      ContactSmoothing::bounds_from_projections( { 0.7, 0.8 }, del );
++  EXPECT_NEAR( right_separated[0], 0.5, 1e-14 );
++  EXPECT_NEAR( right_separated[1], 0.5, 1e-14 );
++
++  auto crossing =
++      ContactSmoothing::bounds_from_projections( { -0.7, 0.2 }, del );
++  EXPECT_NEAR( crossing[0], -0.5, 1e-14 );
++  EXPECT_NEAR( crossing[1], 0.2, 1e-14 );
++}
++
++TEST_P( SmoothBoundsTest, C1ContinuityAtJunctions )
++{
++  const auto type = GetParam();
++  const std::vector<double> del_values = { 0.05, 0.1, 0.2 };
++  const double h = 1e-7;
++
++  for ( double del : del_values ) {
++    // Check derivative continuity at xi = -0.5 + del (left junction)
++    // and xi = 0.5 - del (right junction) in unshifted coords
++    std::vector<double> junctions = { -0.5 + del, 0.5 - del };
++
++    for ( double xi_j : junctions ) {
++      std::array<double, 2> bp = { xi_j + h, xi_j + h };
++      std::array<double, 2> bm = { xi_j - h, xi_j - h };
++      auto rp = ContactSmoothing::smooth_bounds( bp, del, type );
++      auto rm = ContactSmoothing::smooth_bounds( bm, del, type );
++
++      double deriv_fwd = ( rp[0] - ContactSmoothing::smooth_bounds( { xi_j, xi_j }, del, type )[0] ) / h;
++      double deriv_bwd =
++          ( ContactSmoothing::smooth_bounds( { xi_j, xi_j }, del, type )[0] - rm[0] ) / h;
++
++      EXPECT_NEAR( deriv_fwd, deriv_bwd, 1e-4 )
++          << "C1 break at xi=" << xi_j << " del=" << del << " type=" << static_cast<int>( type )
++          << " fwd=" << deriv_fwd << " bwd=" << deriv_bwd;
++    }
++  }
++}
++
++TEST_P( SmoothBoundsTest, ZeroDerivativeAtEndpoints )
++{
++  const auto type = GetParam();
++  const double del = 0.1;
++  const double h = 1e-8;
++
++  // f'(0) = 0 in shifted coords => f'(-0.5) = 0 in unshifted
++  std::array<double, 2> b0 = { -0.5, -0.5 };
++  std::array<double, 2> b0h = { -0.5 + h, -0.5 + h };
++  auto r0 = ContactSmoothing::smooth_bounds( b0, del, type );
++  auto r0h = ContactSmoothing::smooth_bounds( b0h, del, type );
++  double deriv_left = ( r0h[0] - r0[0] ) / h;
++  EXPECT_NEAR( deriv_left, 0.0, 1e-5 ) << "f'(0) != 0 for type=" << static_cast<int>( type );
++
++  // f'(1) = 0 in shifted coords => f'(0.5) = 0 in unshifted
++  std::array<double, 2> b1 = { 0.5, 0.5 };
++  std::array<double, 2> b1m = { 0.5 - h, 0.5 - h };
++  auto r1 = ContactSmoothing::smooth_bounds( b1, del, type );
++  auto r1m = ContactSmoothing::smooth_bounds( b1m, del, type );
++  double deriv_right = ( r1[0] - r1m[0] ) / h;
++  EXPECT_NEAR( deriv_right, 0.0, 1e-5 ) << "f'(1) != 0 for type=" << static_cast<int>( type );
++}
++
++INSTANTIATE_TEST_SUITE_P( SmoothingTypes, SmoothBoundsTest,
++                          testing::Values( SmoothingType::Hermite, SmoothingType::Quadratic ),
++                          []( const testing::TestParamInfo<SmoothingType>& info ) {
++                            return info.param == SmoothingType::Hermite ? "Hermite" : "Quadratic";
++                          } );
++
++// ============================================================================
++// penalty ramp tests
++// ============================================================================
++
++TEST( PenaltyRampTest, SmoothRampMatchesHardOutsideTransition )
++{
++  const double del = 0.1;
++
++  auto full_contact = ContactSmoothing::penalty_ramp( -2.0 * del, del, PenaltySmoothing::Smooth );
++  EXPECT_NEAR( full_contact.value, -2.0 * del, 1e-14 );
++  EXPECT_NEAR( full_contact.first_derivative, 1.0, 1e-14 );
++  EXPECT_NEAR( full_contact.second_derivative, 0.0, 1e-14 );
++
++  auto separated = ContactSmoothing::penalty_ramp( del, del, PenaltySmoothing::Smooth );
++  EXPECT_NEAR( separated.value, 0.0, 1e-14 );
++  EXPECT_NEAR( separated.first_derivative, 0.0, 1e-14 );
++  EXPECT_NEAR( separated.second_derivative, 0.0, 1e-14 );
++}
++
++TEST( PenaltyRampTest, SmoothRampIsC1AtTransitionEndpoints )
++{
++  const double del = 0.1;
++  const double d2 = 0.5 * del;
++
++  // Left junction: g = -del/2.  H = g, H' = 1.
++  auto left = ContactSmoothing::penalty_ramp( -d2, del, PenaltySmoothing::Smooth );
++  EXPECT_NEAR( left.value, -d2, 1e-14 );
++  EXPECT_NEAR( left.first_derivative, 1.0, 1e-14 );
++
++  // Right junction: g = +del/2.  H = 0, H' = 0.
++  auto right = ContactSmoothing::penalty_ramp( d2, del, PenaltySmoothing::Smooth );
++  EXPECT_NEAR( right.value, 0.0, 1e-14 );
++  EXPECT_NEAR( right.first_derivative, 0.0, 1e-14 );
++
++  // H'' is constant -1/del inside the band.
++  auto mid = ContactSmoothing::penalty_ramp( 0.0, del, PenaltySmoothing::Smooth );
++  EXPECT_NEAR( mid.second_derivative, -1.0 / del, 1e-14 );
++}
++
++TEST( PenaltyRampTest, SmoothRampDerivativesMatchFiniteDifference )
++{
++  const double del = 0.1;
++  const double h = 1e-6;
++  for ( double g : { -0.04, -0.02, 0.0, 0.02, 0.04 } ) {
++    auto ramp = ContactSmoothing::penalty_ramp( g, del, PenaltySmoothing::Smooth );
++    auto plus = ContactSmoothing::penalty_ramp( g + h, del, PenaltySmoothing::Smooth );
++    auto minus = ContactSmoothing::penalty_ramp( g - h, del, PenaltySmoothing::Smooth );
++
++    const double fd_first = ( plus.value - minus.value ) / ( 2.0 * h );
++    const double fd_second = ( plus.first_derivative - minus.first_derivative ) / ( 2.0 * h );
++    EXPECT_NEAR( ramp.first_derivative, fd_first, 1e-8 ) << "g=" << g;
++    EXPECT_NEAR( ramp.second_derivative, fd_second, 1e-7 ) << "g=" << g;
++  }
++}
++
++// ============================================================================
++// Local Enzyme kernel tests
++// ============================================================================
++
++TEST( VaryingQuadratureKernelTest, FixedQuadratureHessianIsSymmetric )
++{
++  const double x[8] = { 0.0, 0.0, 1.0, 0.0, 0.14, 0.12, 0.92, 0.18 };
++  const auto qp = EnergyMortarCalculator::compute_quadrature( { -0.42, 0.36 }, 3 );
++  Gparams gp;
++  for ( std::size_t i = 0; i < qp.qp.size(); ++i ) {
++    gp.qp[i] = qp.qp[i];
++    gp.w[i] = qp.w[i];
++  }
++
++  double H[64];
++  compute_fixed_quadrature_hessian<KernelOutputForTest::GTILDE1>( x, gp, H );
++  auto [norm1, skew1] = hessian_norms( H );
++  ASSERT_GT( norm1, 0.0 );
++  EXPECT_LT( skew1 / norm1, 1.0e-12 );
++
++  compute_fixed_quadrature_hessian<KernelOutputForTest::GTILDE2>( x, gp, H );
++  auto [norm2, skew2] = hessian_norms( H );
++  ASSERT_GT( norm2, 0.0 );
++  EXPECT_LT( skew2 / norm2, 1.0e-12 );
++}
++
++TEST( VaryingQuadratureKernelTest, VaryingQuadratureHessianDriverProducesFiniteValues )
++{
++  const double x[8] = { 0.0, 0.0, 1.0, 0.0, -0.08, 0.12, 0.26, 0.18 };
++
++  double H[64];
++  compute_varying_quadrature_hessian<KernelOutputForTest::GTILDE1>( x, H );
++  auto [norm1, skew1] = hessian_norms( H );
++  EXPECT_TRUE( std::isfinite( norm1 ) );
++  EXPECT_TRUE( std::isfinite( skew1 ) );
++  EXPECT_GT( norm1, 0.0 );
++
++  compute_varying_quadrature_hessian<KernelOutputForTest::GTILDE2>( x, H );
++  auto [norm2, skew2] = hessian_norms( H );
++  EXPECT_TRUE( std::isfinite( norm2 ) );
++  EXPECT_TRUE( std::isfinite( skew2 ) );
++  EXPECT_GT( norm2, 0.0 );
++}
++
++TEST( VaryingQuadratureKernelTest, DISABLED_VaryingQuadratureHessianIsSymmetric )
++{
++  const double x[8] = { 0.0, 0.0, 1.0, 0.0, -0.08, 0.12, 0.26, 0.18 };
++
++  double H[64];
++  compute_varying_quadrature_hessian<KernelOutputForTest::GTILDE1>( x, H );
++  auto [norm1, skew1] = hessian_norms( H );
++  ASSERT_GT( norm1, 0.0 );
++  EXPECT_LT( skew1 / norm1, 1.0e-12 );
++
++  compute_varying_quadrature_hessian<KernelOutputForTest::GTILDE2>( x, H );
++  auto [norm2, skew2] = hessian_norms( H );
++  ASSERT_GT( norm2, 0.0 );
++  EXPECT_LT( skew2 / norm2, 1.0e-12 );
++}
++
++// ============================================================================
++// Vanishing overlap tests
++// ============================================================================
++
++class VanishingOverlapTest : public testing::TestWithParam<SmoothingType> {};
++
++TEST_P( VanishingOverlapTest, GtildeAndAreaScaleTogether )
++{
++  // Two parallel edges. Edge A: (0,0)->(1,0). Edge B slides rightward
++  // from full overlap toward separation. Gap is 0.1 in y.
++
++  const auto type = GetParam();
++  ContactParams params;
++  params.del = 0.1;
++  params.k = 1.0;
++  params.N = 3;
++  params.enzyme_quadrature = true;
++  params.smoothing_type = type;
++
++  EnergyMortarCalculator evaluator( params );
++
++  // Edge A: (0,0) -> (1,0) — nonmortar
++  RealT x1[2] = { 0.0, 1.0 };
++  RealT y1[2] = { 0.0, 0.0 };
++  IndexT conn1[2] = { 1, 0 };  // reversed so nA points upward
++  MeshData mesh1( 0, 1, 2, conn1, LINEAR_EDGE, x1, y1, nullptr, MemorySpace::Host );
++
++  // Edge B: slides rightward
++  RealT x2[2] = { 0.0, 0.0 };
++  RealT y2[2] = { 0.1, 0.1 };
++  IndexT conn2[2] = { 0, 1 };
++  MeshData mesh2( 1, 1, 2, conn2, LINEAR_EDGE, x2, y2, nullptr, MemorySpace::Host );
++
++  InterfacePair pair( 0, 0 );
++
++  std::vector<double> offsets = { 0.0, 0.3, 0.5, 0.7, 0.85, 0.95, 0.99, 1.0 };
++
++  for ( double offset : offsets ) {
++    x2[0] = offset;
++    x2[1] = offset + 0.2;  // B is always 0.2 wide
++    mesh2.setPosition( x2, y2, nullptr );
++
++    double gtilde[2] = { 0.0 };
++    double area[2] = { 0.0 };
++    evaluator.compute_gtilde_and_area( pair, mesh1.getView(), mesh2.getView(), gtilde, area );
++
++    double total_gtilde = gtilde[0] + gtilde[1];
++    double total_area = area[0] + area[1];
++
++    // Area should always be non-negative
++    EXPECT_GE( area[0], -1e-15 ) << "Negative area[0] at offset=" << offset;
++    EXPECT_GE( area[1], -1e-15 ) << "Negative area[1] at offset=" << offset;
++    EXPECT_GE( total_area, -1e-15 ) << "Negative total area at offset=" << offset;
++
++    // When there is meaningful overlap, g_tilde/A should be bounded
++    if ( total_area > 1e-10 ) {
++      double ratio = total_gtilde / total_area;
++      EXPECT_FALSE( std::isnan( ratio ) ) << "NaN ratio at offset=" << offset;
++      EXPECT_FALSE( std::isinf( ratio ) ) << "Inf ratio at offset=" << offset;
++      EXPECT_LT( std::abs( ratio ), 10.0 ) << "Ratio blew up at offset=" << offset;
++    }
++
++    // As overlap vanishes, both g_tilde and A should approach zero
++    if ( offset >= 1.0 ) {
++      EXPECT_NEAR( total_area, 0.0, 1e-10 ) << "Area not zero when B is past A";
++      EXPECT_NEAR( total_gtilde, 0.0, 1e-10 ) << "g_tilde not zero when B is past A";
++    }
++  }
++}
++
++// Disabled until this test uses the same fixed-quadrature path for the finite
++// difference and analytic derivative. The current finite difference recomputes
++// geometry-dependent quadrature, so it does not isolate grad_gtilde.
++TEST_P( VanishingOverlapTest, DISABLED_GradientConsistency )
++{
++  // Verify that Enzyme gradients of g_tilde match finite differences
++  // at various overlap levels.
++  const auto type = GetParam();
++  ContactParams params;
++  params.del = 0.1;
++  params.k = 1.0;
++  params.N = 3;
++  params.enzyme_quadrature = true;
++  params.smoothing_type = type;
++
++  EnergyMortarCalculator evaluator( params );
++
++  // Edge A: (0,0) -> (1,0)
++  RealT x1_orig[2] = { 0.0, 1.0 };
++  RealT y1_orig[2] = { 0.0, 0.0 };
++  IndexT conn1[2] = { 1, 0 };
++  MeshData mesh1( 0, 1, 2, conn1, LINEAR_EDGE, x1_orig, y1_orig, nullptr, MemorySpace::Host );
++
++  InterfacePair pair( 0, 0 );
++
++  std::vector<double> left_positions = { 0.0, 0.5, 0.8, 0.95 };
++
++  for ( double left : left_positions ) {
++    RealT x2[2] = { left, left + 0.2 };
++    RealT y2[2] = { 0.1, 0.1 };
++    IndexT conn2[2] = { 0, 1 };
++    MeshData mesh2( 1, 1, 2, conn2, LINEAR_EDGE, x2, y2, nullptr, MemorySpace::Host );
++
++    // Analytical gradients
++    double dgt1_dx[8] = { 0.0 };
++    double dgt2_dx[8] = { 0.0 };
++    evaluator.grad_gtilde( pair, mesh1.getView(), mesh2.getView(), dgt1_dx, dgt2_dx );
++
++    // Finite-difference gradients.
++    // grad_gtilde returns derivatives in the order [A0x, A0y, A1x, A1y, B0x, B0y, B1x, B1y]
++    // where A0/A1 and B0/B1 follow the connectivity (not the raw array index).
++    const double eps = 1e-7;
++    double fd_g1[8] = { 0.0 };
++    double fd_g2[8] = { 0.0 };
++
++    // Perturb mesh1 nodes in connectivity order (A0 = conn1[0], A1 = conn1[1])
++    for ( int ci = 0; ci < 2; ++ci ) {
++      int node = conn1[ci];
++      for ( int dim = 0; dim < 2; ++dim ) {
++        int dof_idx = ci * 2 + dim;
++        RealT x1p[2] = { x1_orig[0], x1_orig[1] };
++        RealT y1p[2] = { y1_orig[0], y1_orig[1] };
++        RealT x1m[2] = { x1_orig[0], x1_orig[1] };
++        RealT y1m[2] = { y1_orig[0], y1_orig[1] };
++
++        if ( dim == 0 ) {
++          x1p[node] += eps;
++          x1m[node] -= eps;
++        } else {
++          y1p[node] += eps;
++          y1m[node] -= eps;
++        }
++
++        mesh1.setPosition( x1p, y1p, nullptr );
++        double gtp[2], ap[2];
++        evaluator.compute_gtilde_and_area( pair, mesh1.getView(), mesh2.getView(), gtp, ap );
++
++        mesh1.setPosition( x1m, y1m, nullptr );
++        double gtm[2], am[2];
++        evaluator.compute_gtilde_and_area( pair, mesh1.getView(), mesh2.getView(), gtm, am );
++
++        mesh1.setPosition( x1_orig, y1_orig, nullptr );
++
++        fd_g1[dof_idx] = ( gtp[0] - gtm[0] ) / ( 2.0 * eps );
++        fd_g2[dof_idx] = ( gtp[1] - gtm[1] ) / ( 2.0 * eps );
++      }
++    }
++
++    // Perturb mesh2 nodes in connectivity order (B0 = conn2[0], B1 = conn2[1])
++    RealT x2_orig[2] = { x2[0], x2[1] };
++    RealT y2_orig[2] = { y2[0], y2[1] };
++    for ( int ci = 0; ci < 2; ++ci ) {
++      int node = conn2[ci];
++      for ( int dim = 0; dim < 2; ++dim ) {
++        int dof_idx = 4 + ci * 2 + dim;
++        RealT x2p[2] = { x2_orig[0], x2_orig[1] };
++        RealT y2p[2] = { y2_orig[0], y2_orig[1] };
++        RealT x2m[2] = { x2_orig[0], x2_orig[1] };
++        RealT y2m[2] = { y2_orig[0], y2_orig[1] };
++
++        if ( dim == 0 ) {
++          x2p[node] += eps;
++          x2m[node] -= eps;
++        } else {
++          y2p[node] += eps;
++          y2m[node] -= eps;
++        }
++
++        mesh2.setPosition( x2p, y2p, nullptr );
++        double gtp[2], ap[2];
++        evaluator.compute_gtilde_and_area( pair, mesh1.getView(), mesh2.getView(), gtp, ap );
++
++        mesh2.setPosition( x2m, y2m, nullptr );
++        double gtm[2], am[2];
++        evaluator.compute_gtilde_and_area( pair, mesh1.getView(), mesh2.getView(), gtm, am );
++
++        mesh2.setPosition( x2_orig, y2_orig, nullptr );
++
++        fd_g1[dof_idx] = ( gtp[0] - gtm[0] ) / ( 2.0 * eps );
++        fd_g2[dof_idx] = ( gtp[1] - gtm[1] ) / ( 2.0 * eps );
++      }
++    }
++
++    const double tol = 1e-4;
++    for ( int i = 0; i < 8; ++i ) {
++      EXPECT_NEAR( fd_g1[i], dgt1_dx[i], tol )
++          << "g1 grad mismatch at dof " << i << " left=" << left
++          << " type=" << static_cast<int>( type )
++          << " FD=" << fd_g1[i] << " AD=" << dgt1_dx[i];
++
++      EXPECT_NEAR( fd_g2[i], dgt2_dx[i], tol )
++          << "g2 grad mismatch at dof " << i << " left=" << left
++          << " type=" << static_cast<int>( type )
++          << " FD=" << fd_g2[i] << " AD=" << dgt2_dx[i];
++    }
++  }
++}
++
++INSTANTIATE_TEST_SUITE_P( SmoothingTypes, VanishingOverlapTest,
++                          testing::Values( SmoothingType::Hermite, SmoothingType::Quadratic ),
++                          []( const testing::TestParamInfo<SmoothingType>& info ) {
++                            return info.param == SmoothingType::Hermite ? "Hermite" : "Quadratic";
++                          } );
++
++#endif  // TRIBOL_USE_ENZYME
++
++}  // namespace tribol
+diff --git a/src/tribol/interface/mfem_tribol.cpp b/src/tribol/interface/mfem_tribol.cpp
+index 513f099..aa62e7c 100644
+--- a/src/tribol/interface/mfem_tribol.cpp
++++ b/src/tribol/interface/mfem_tribol.cpp
+@@ -384,6 +384,24 @@ void setMfemKinematicConstantPenalty( IndexT cs_id, RealT mesh1_penalty, RealT m
+   cs->getMfemMeshData()->SetMesh2KinematicConstantPenalty( mesh2_penalty );
+ }
+ 
++void setMfemEnergyMortarOptions( IndexT cs_id, int smoothing_type,
++                                  int penalty_smoothing, double penalty_smoothing_del )
++{
++  auto cs = CouplingSchemeManager::getInstance().findData( cs_id );
++  SLIC_ERROR_ROOT_IF(
++      !cs, axom::fmt::format( "Coupling scheme cs_id={0} does not exist. Call tribol::registerMfemCouplingScheme() "
++                              "to create a coupling scheme with this cs_id.",
++                              cs_id ) );
++  SLIC_ERROR_ROOT_IF( !cs->hasMfemData(),
++                      "Coupling scheme does not contain MFEM data. "
++                      "Create the coupling scheme using registerMfemCouplingScheme() to set energy mortar options." );
++  MfemMeshData::EnergyMortarOptions opts;
++  opts.smoothing_type = smoothing_type;
++  opts.penalty_smoothing = penalty_smoothing;
++  opts.penalty_smoothing_del = penalty_smoothing_del;
++  cs->getMfemMeshData()->SetEnergyMortarOptions( opts );
++}
++
+ void setMfemViscousDampingCoeff( IndexT cs_id, RealT mesh1_coeff, RealT mesh2_coeff )
+ {
+   auto cs = CouplingSchemeManager::getInstance().findData( cs_id );
+diff --git a/src/tribol/interface/mfem_tribol.hpp b/src/tribol/interface/mfem_tribol.hpp
+index 7ffc233..6ff74cc 100644
+--- a/src/tribol/interface/mfem_tribol.hpp
++++ b/src/tribol/interface/mfem_tribol.hpp
+@@ -102,6 +102,17 @@ void setMfemRedecompTriggerDisplacement( IndexT cs_id, RealT val );
+  */
+ void setMfemKinematicConstantPenalty( IndexT cs_id, RealT mesh1_penalty, RealT mesh2_penalty );
+ 
++/**
++ * @brief Set energy mortar smoothing options
++ *
++ * @param cs_id The ID of the coupling scheme
++ * @param smoothing_type 0 = Hermite, 1 = Quadratic (isoparametric bounds smoothing)
++ * @param penalty_smoothing 0 = Hard, 1 = Smooth (penalty gap smoothing)
++ * @param penalty_smoothing_del Smoothing width for smooth penalty transition
++ */
++void setMfemEnergyMortarOptions( IndexT cs_id, int smoothing_type,
++                                  int penalty_smoothing, double penalty_smoothing_del );
++
+ /**
+  * @brief Clears existing penalty data and sets kinematic element penalty
+  *
+diff --git a/src/tribol/mesh/MfemData.hpp b/src/tribol/mesh/MfemData.hpp
+index 1cc044f..9650d7f 100644
+--- a/src/tribol/mesh/MfemData.hpp
++++ b/src/tribol/mesh/MfemData.hpp
+@@ -823,6 +823,19 @@ class MfemMeshData {
+    */
+   const RealT* GetMesh2KinematicConstantPenalty() const { return kinematic_constant_penalty_2_.get(); }
+ 
++  struct EnergyMortarOptions {
++    int smoothing_type = 1;           // 0 = Hermite, 1 = Quadratic
++    int penalty_smoothing = 1;        // 0 = Hard, 1 = Smooth
++    double penalty_smoothing_del = 1.0e-3;
++  };
++
++  void SetEnergyMortarOptions( const EnergyMortarOptions& opts )
++  {
++    energy_mortar_opts_ = std::make_unique<EnergyMortarOptions>( opts );
++  }
++
++  const EnergyMortarOptions* GetEnergyMortarOptions() const { return energy_mortar_opts_.get(); }
++
+   /**
+    * @brief Sets the kinematic penalty scale for the first registered Tribol mesh
+    *
+@@ -1302,6 +1315,8 @@ class MfemMeshData {
+    */
+   std::unique_ptr<RealT> kinematic_constant_penalty_1_;
+ 
++  std::unique_ptr<EnergyMortarOptions> energy_mortar_opts_;
++
+   /**
+    * @brief Kinematic constant contact penalty for the second Tribol registered mesh
+    */
+diff --git a/src/tribol/physics/ContactFormulationFactory.cpp b/src/tribol/physics/ContactFormulationFactory.cpp
+index d4df1ba..c3a9c94 100644
+--- a/src/tribol/physics/ContactFormulationFactory.cpp
++++ b/src/tribol/physics/ContactFormulationFactory.cpp
+@@ -23,6 +23,9 @@ std::unique_ptr<ContactFormulation> createContactFormulation( CouplingScheme* cs
+     double delta = 0.1;
+     int N = 3;
+     bool enzyme_quadrature = true;
++    SmoothingType smoothing_type = SmoothingType::Quadratic;
++    PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth;
++    double penalty_smoothing_del = 1.0e-3;
+     // ENERGY_MORTAR supports a penalty-style mode driven by the kinematic penalty parameters, even if the coupling
+     // scheme is registered with LM enforcement (which is often done to enable submesh/pressure infrastructure).
+     const auto& penalty_opts = cs->getEnforcementOptions().penalty_options;
+@@ -36,15 +39,21 @@ std::unique_ptr<ContactFormulation> createContactFormulation( CouplingScheme* cs
+       if ( k_ptr ) {
+         k = *k_ptr;
+       }
++      auto* em_opts = cs->getMfemMeshData()->GetEnergyMortarOptions();
++      if ( em_opts ) {
++        smoothing_type = em_opts->smoothing_type == 0 ? SmoothingType::Hermite : SmoothingType::Quadratic;
++        penalty_smoothing = em_opts->penalty_smoothing == 0 ? PenaltySmoothing::Hard : PenaltySmoothing::Smooth;
++        penalty_smoothing_del = em_opts->penalty_smoothing_del;
++      }
+     }
+ 
+     SLIC_ERROR_ROOT_IF( !cs->hasMfemData(), "ENERGY_MORTAR requires MFEM mesh data." );
+     SLIC_ERROR_ROOT_IF( !cs->hasMfemSubmeshData(), "ENERGY_MORTAR requires MFEM submesh data." );
+     SLIC_ERROR_ROOT_IF( !cs->hasMfemJacobianData(), "ENERGY_MORTAR requires MFEM Jacobian data." );
+ 
+-    return std::make_unique<EnergyMortarAdapter>( *cs->getMfemMeshData(), *cs->getMfemSubmeshData(),
+-                                                  *cs->getMfemJacobianData(), cs->getMesh1(), cs->getMesh2(), k, delta,
+-                                                  N, enzyme_quadrature, use_penalty_ );
++    return std::make_unique<EnergyMortarAdapter>(
++        *cs->getMfemMeshData(), *cs->getMfemSubmeshData(), *cs->getMfemJacobianData(), cs->getMesh1(), cs->getMesh2(), k,
++        delta, N, enzyme_quadrature, use_penalty_, smoothing_type, penalty_smoothing, penalty_smoothing_del );
+ #else
+     SLIC_ERROR_ROOT( "ENERGY_MORTAR requires Enzyme and redecomp to be built." );
+     return nullptr;
+diff --git a/src/tribol/physics/EnergyMortar.cpp b/src/tribol/physics/EnergyMortar.cpp
+index 9c91aaa..a3b0b49 100644
+--- a/src/tribol/physics/EnergyMortar.cpp
++++ b/src/tribol/physics/EnergyMortar.cpp
+@@ -27,8 +27,18 @@ namespace {
+ struct KernelParams {
+   int N = 3;         // No. of quadrature points
+   double del = 0.1;  // Smoothing parameter
++  SmoothingType smoothing_type = SmoothingType::Hermite;
+ };
+ 
++KernelParams make_kernel_params( const ContactParams& p )
++{
++  KernelParams kp;
++  kp.N = p.N;
++  kp.del = p.del;
++  kp.smoothing_type = p.smoothing_type;
++  return kp;
++}
++
+ // Compute a unit normal vector for the line segment from coord1 to coord2
+ void find_normal( const double* coord1, const double* coord2, double* normal )
+ {
+@@ -233,8 +243,7 @@ void gtilde_kernel( const double* x, Gparams* gp, double* g_tilde_out, double* A
+ 
+   // Only keep the contribution when the edge normals oppose each other.
+   double dot = nB[0] * nA[0] + nB[1] * nA[1];
+-  // double eta = ( dot < 0 ) ? dot : 0.0; //Normal smoothing
+-  double eta = dot;
++  double eta = ( dot < 0.0 ) ? dot : 0.0;
+ 
+   double g1 = 0.0, g2 = 0.0;
+   double AI_1 = 0.0, AI_2 = 0.0;
+@@ -299,8 +308,7 @@ void gtilde_kernel_quad( const double* x, const Gparams* gp, double* g_tilde_out
+   find_normal( A0, A1, nA );
+   // Only keep the contribution when the edge normals oppose each other.
+   double dot = nB[0] * nA[0] + nB[1] * nA[1];
+-  // double eta = ( dot < 0 ) ? dot : 0.0;
+-  double eta = dot;
++  double eta = ( dot < 0.0 ) ? dot : 0.0;
+ 
+   double g1 = 0.0, g2 = 0.0;
+   double AI_1 = 0.0, AI_2 = 0.0;
+@@ -390,39 +398,13 @@ void grad_kernel( const double* x, const Gparams* gp, double* dout_du )
+ 
+ // Wrap the varying-quadrature kernel as a scalar-valued function for Enzyme.
+ template <KernelOutput Output>
+-static void kernel_out_enzyme( const double* x, double* out )
++static void kernel_out_enzyme( const double* x, const void* kp_void, double* out )
+ {
+-  KernelParams kp;
+-  // x stores the two endpoints of edge A followed by the two endpoints of edge B.
+-  double A0[2], A1[2], B0[2], B1[2];
+-  A0[0] = x[0];
+-  A0[1] = x[1];
+-  A1[0] = x[2];
+-  A1[1] = x[3];
+-  B0[0] = x[4];
+-  B0[1] = x[5];
+-  B1[0] = x[6];
+-  B1[1] = x[7];
+-
+-  double projs[2] = { 0 };
+-  get_projections( A0, A1, B0, B1, projs );
+-  std::array<double, 2> projections = { projs[0], projs[1] };
+-
+-  // Recompute the integration bounds and quadrature from the current geometry.
+-  auto bounds = ContactSmoothing::bounds_from_projections( projections, kp.del );
+-  auto xi_bounds = ContactSmoothing::smooth_bounds( bounds, kp.del );
+-
+-  auto qp = EnergyMortarCalculator::compute_quadrature( xi_bounds, kp.N );
+-
+-  Gparams gp;
+-  for ( std::size_t i = 0; i < qp.qp.size(); ++i ) {
+-    gp.qp[i] = qp.qp[i];
+-    gp.w[i] = qp.w[i];
+-  }
++  const auto* kp = static_cast<const KernelParams*>( kp_void );
+ 
+   double gt[2];
+   double A_out[2];
+-  gtilde_kernel( x, &gp, gt, A_out );
++  energy_mortar_varying_quadrature_kernel( x, kp->del, kp->N, kp->smoothing_type, gt, A_out );
+ 
+   // Extract the requested scalar output for differentiation.
+   if constexpr ( Output == KernelOutput::GTILDE1 )
+@@ -437,14 +419,15 @@ static void kernel_out_enzyme( const double* x, double* out )
+ 
+ // Differentiate the selected varying-quadrature scalar kernel with respect to the 8 endpoint coordinates.
+ template <KernelOutput Output>
+-void grad_kernel_enzyme( const double* x, double* dout_du )
++void grad_kernel_enzyme( const double* x, const KernelParams* kp, double* dout_du )
+ {
+   double dx[8] = { 0.0 };
+   double out = 0.0;
+   double dout = 1.0;
+ 
+   // Seed the scalar output with 1.0 so Enzyme accumulates dOutput/dx into dx.
+-  __enzyme_autodiff<void>( (void*)kernel_out_enzyme<Output>, enzyme_dup, x, dx, enzyme_dup, &out, &dout );
++  __enzyme_autodiff<void>( (void*)kernel_out_enzyme<Output>, enzyme_dup, x, dx, enzyme_const, (const void*)kp,
++                           enzyme_dup, &out, &dout );
+ 
+   for ( int i = 0; i < 8; ++i ) {
+     dout_du[i] = dx[i];
+@@ -453,7 +436,7 @@ void grad_kernel_enzyme( const double* x, double* dout_du )
+ 
+ // Compute the Hessian of the selected varying-quadrature scalar kernel.
+ template <KernelOutput Output>
+-void d2_kernel( const double* x, double* H )
++void d2_kernel( const double* x, const KernelParams* kp, double* H )
+ {
+   for ( int col = 0; col < 8; ++col ) {
+     double dx[8] = { 0.0 };
+@@ -463,7 +446,8 @@ void d2_kernel( const double* x, double* H )
+     double dgrad[8] = { 0.0 };
+ 
+     // Differentiate the gradient in coordinate direction col to form one Hessian column.
+-    __enzyme_fwddiff<void>( (void*)grad_kernel_enzyme<Output>, enzyme_dup, x, dx, enzyme_dup, grad, dgrad );
++    __enzyme_fwddiff<void>( (void*)grad_kernel_enzyme<Output>, enzyme_dup, x, dx, enzyme_const, (const void*)kp,
++                            enzyme_dup, grad, dgrad );
+ 
+     for ( int row = 0; row < 8; ++row ) H[row * 8 + col] = dgrad[row];
+   }
+@@ -502,7 +486,7 @@ Gparams EnergyMortarCalculator::construct_gparams( const InterfacePair& pair, co
+   // Build the smoothed integration bounds from the projection of edge B onto edge A.
+   auto projs = EnergyMortarCalculator::compute_projection_bounds( pair, mesh1, mesh2 );
+   auto bounds = smoother_.bounds_from_projections( projs, p_.del );
+-  auto smooth_bounds = smoother_.smooth_bounds( bounds, p_.del );
++  auto smooth_bounds = smoother_.smooth_bounds( bounds, p_.del, p_.smoothing_type );
+ 
+   auto qp = EnergyMortarCalculator::compute_quadrature( smooth_bounds, p_.N );
+ 
+@@ -549,67 +533,114 @@ std::array<double, 2> EnergyMortarCalculator::projections( const InterfacePair&
+   return { projs[0], projs[1] };
+ }
+ 
+-// Clamp the projection interval to the local smoothing support around edge A.
++// Clamp the projection interval to the local element support [-0.5, 0.5].
+ std::array<double, 2> ContactSmoothing::bounds_from_projections( const std::array<double, 2>& proj, double del )
+ {
+   double xi_min = std::min( proj[0], proj[1] );
+   double xi_max = std::max( proj[0], proj[1] );
++  const double xi_lo = -0.5;
++  const double xi_hi = 0.5;
+ 
+-  // Limit the integration interval to the extended range [-0.5 - del, 0.5 + del].
+-  if ( xi_max < -0.5 - del ) {
+-    xi_max = -0.5 - del;
++  if ( xi_max < xi_lo ) {
++    xi_max = xi_lo;
+   }
+-  if ( xi_min > 0.5 + del ) {
+-    xi_min = 0.5 + del;
++  if ( xi_min > xi_hi ) {
++    xi_min = xi_hi;
+   }
+-  if ( xi_min < -0.5 - del ) {
+-    xi_min = -0.5 - del;
++  if ( xi_min < xi_lo ) {
++    xi_min = xi_lo;
+   }
+-  if ( xi_max > 0.5 + del ) {
+-    xi_max = 0.5 + del;
++  if ( xi_max > xi_hi ) {
++    xi_max = xi_hi;
+   }
+ 
+   return { xi_min, xi_max };
+ }
+ 
+-// Smooth the integration bounds using a C1 ramp near the ends of edge A.
+-// Specific too the smoothing techniques in EnergyMortar. This smooths the
+-// Bounds of intergration by applying a quadratic ramping function near the ends of the paramteric
+-// space. The smooth region/length is defined by the input del. The returned 'bounds' is the new bounds
+-// of intergation that result after the quadratic ramping has been applied.
+-std::array<double, 2> ContactSmoothing::smooth_bounds( const std::array<double, 2>& bounds, double del )
++// Smooth the integration bounds using C1 ramps near the ends of edge A.
++// Bounds are restricted to [0, 1] (shifted parametric space) so that shape functions
++// remain non-negative and tributary areas cannot go negative.
++//
++// Hermite (cubic): f(0)=0, f'(0)=0, f(del)=del, f'(del)=1.
++//   Slope varies within ramp (peaks at 4/3), identity in middle.
++//
++// Quadratic: f(0)=0, f'(0)=0, f(del)=del/(2(1-del)), f'(del)=1/(1-del).
++//   Linear section has constant slope 1/(1-del), mapping [0,1] onto [0,1].
++std::array<double, 2> ContactSmoothing::smooth_bounds( const std::array<double, 2>& bounds, double del,
++                                                       SmoothingType type )
+ {
+   std::array<double, 2> smooth_bounds;
+   for ( int i = 0; i < 2; ++i ) {
+-    double xi = 0.0;
+-    double xi_hat = 0.0;
+-
+-    // Shift from the local coordinate interval [-0.5, 0.5] to [0, 1].
+-    xi = bounds[i] + 0.5;
+-    if ( del == 0.0 ) {
+-      xi_hat = xi;
+-    } else {
+-      // Apply quadratic ramps near the endpoints and leave the interior unchanged.
+-      if ( 0.0 - del <= xi && xi <= del ) {
+-        xi_hat = ( 1.0 / ( 4 * del ) ) * ( xi * xi ) + 0.5 * xi + del / 4.0;
+-      } else if ( ( 1.0 - del ) <= xi && xi <= 1.0 + del ) {
+-        double b = -1.0 / ( 4.0 * del );
+-        double c = 0.5 + 1.0 / ( 2.0 * del );
+-        double d = 1.0 - del + ( 1.0 / ( 4.0 * del ) ) * pow( 1.0 - del, 2 ) - 0.5 * ( 1.0 - del ) -
+-                   ( 1.0 - del ) / ( 2.0 * del );
+-
+-        xi_hat = b * xi * xi + c * xi + d;
+-      } else if ( del <= xi && xi <= ( 1.0 - del ) ) {
+-        xi_hat = xi;
++    // Shift from [-0.5, 0.5] to [0, 1].
++    double xi = bounds[i] + 0.5;
++    xi = std::max( 0.0, std::min( 1.0, xi ) );
++
++    double xi_hat = xi;
++    if ( del > 0.0 && del < 0.5 ) {
++      if ( type == SmoothingType::Hermite ) {
++        if ( xi <= del ) {
++          // Cubic Hermite: f(0)=0, f'(0)=0, f(del)=del, f'(del)=1
++          double t = xi / del;
++          xi_hat = del * t * t * ( 2.0 - t );
++        } else if ( xi >= 1.0 - del ) {
++          // Cubic Hermite: f(1-del)=1-del, f'(1-del)=1, f(1)=1, f'(1)=0
++          double s = ( 1.0 - xi ) / del;
++          xi_hat = 1.0 - del * s * s * ( 2.0 - s );
++        }
++      } else {
++        // Quadratic ramp with adjusted linear slope 1/(1-del).
++        double a = 1.0 / ( 2.0 * del * ( 1.0 - del ) );
++        double m = 1.0 / ( 1.0 - del );
++        if ( xi <= del ) {
++          xi_hat = a * xi * xi;
++        } else if ( xi >= 1.0 - del ) {
++          xi_hat = 1.0 - a * ( 1.0 - xi ) * ( 1.0 - xi );
++        } else {
++          xi_hat = m * xi - del * 0.5 * m;
++        }
+       }
+     }
+-    // Shift the smoothed coordinate back to [-0.5, 0.5].
++
++    if constexpr ( energy_mortar_debug_level >= 1 ) {
++      assert( xi_hat >= 0.0 && "smooth_bounds: xi_hat below 0" );
++      assert( xi_hat <= 1.0 && "smooth_bounds: xi_hat above 1" );
++    }
++
++    // Shift back to [-0.5, 0.5].
+     smooth_bounds[i] = xi_hat - 0.5;
+   }
+ 
++  if constexpr ( energy_mortar_debug_level >= 1 ) {
++    assert( smooth_bounds[0] >= -0.5 && smooth_bounds[0] <= 0.5 && "smooth_bounds: output[0] out of range" );
++    assert( smooth_bounds[1] >= -0.5 && smooth_bounds[1] <= 0.5 && "smooth_bounds: output[1] out of range" );
++  }
++
+   return smooth_bounds;
+ }
+ 
++PenaltyRamp ContactSmoothing::penalty_ramp( double g, double del, PenaltySmoothing type )
++{
++  if ( type == PenaltySmoothing::Hard ) {
++    return g < 0.0 ? PenaltyRamp{ g, 1.0, 0.0 } : PenaltyRamp{ 0.0, 0.0, 0.0 };
++  }
++
++  // C1 quadratic ramp centered on g=0, support [-del/2, +del/2].
++  // H(g) = -(g - del/2)^2 / (2*del) in the band.
++  // Starts before contact onset, joins H=g tangentially at g=-del/2.
++  const double d2 = 0.5 * del;
++
++  if ( g >= d2 ) {
++    return { 0.0, 0.0, 0.0 };
++  }
++
++  if ( del <= 0.0 || g <= -d2 ) {
++    return { g, 1.0, 0.0 };
++  }
++
++  const double shifted = g - d2;
++  return { -shifted * shifted / ( 2.0 * del ), -shifted / del, -1.0 / del };
++}
++
+ // Build a three-point Gauss-Legendre quadrature rule over the local integration bounds.
+ QuadPoints EnergyMortarCalculator::compute_quadrature( const std::array<double, 2>& xi_bounds, int N )
+ {
+@@ -681,7 +712,7 @@ NodalContactData EnergyMortarCalculator::compute_nodal_contact_data( const Inter
+ 
+   // Build the smoothed integration interval from the projection bounds.
+   auto bounds = smoother_.bounds_from_projections( projs, p_.del );
+-  auto smooth_bounds = smoother_.smooth_bounds( bounds, p_.del );
++  auto smooth_bounds = smoother_.smooth_bounds( bounds, p_.del, p_.smoothing_type );
+ 
+   auto qp = compute_quadrature( smooth_bounds, p_.N );
+ 
+@@ -696,6 +727,12 @@ NodalContactData EnergyMortarCalculator::compute_nodal_contact_data( const Inter
+     double N1 = 0.5 - xiA;
+     double N2 = 0.5 + xiA;
+ 
++    if constexpr ( energy_mortar_debug_level >= 1 ) {
++      assert( N1 >= -1e-14 && "shape function N1 negative at quadrature point" );
++      assert( N2 >= -1e-14 && "shape function N2 negative at quadrature point" );
++      assert( xiA >= -0.5 - 1e-14 && xiA <= 0.5 + 1e-14 && "quadrature point outside element" );
++    }
++
+     // Evaluate the weighted gap at the current quadrature point on edge A.
+     double gn = compute_weighted_normal_gap( pair, mesh1, mesh2, xiA );
+     double gn_active = gn;
+@@ -709,6 +746,11 @@ NodalContactData EnergyMortarCalculator::compute_nodal_contact_data( const Inter
+ 
+   NodalContactData contact_data;
+ 
++  if constexpr ( energy_mortar_debug_level >= 1 ) {
++    assert( AI_1 >= 0.0 && "compute_nodal_contact_data: negative tributary area node 1" );
++    assert( AI_2 >= 0.0 && "compute_nodal_contact_data: negative tributary area node 2" );
++  }
++
+   contact_data.AI = { AI_1, AI_2 };
+   contact_data.g_tilde = { g_tilde1, g_tilde2 };
+ 
+@@ -753,8 +795,9 @@ void EnergyMortarCalculator::grad_gtilde( const InterfacePair& pair, const MeshD
+ 
+   } else {
+     // Differentiate through the geometry-dependent quadrature construction.
+-    grad_kernel_enzyme<KernelOutput::GTILDE1>( x, dg1_du );
+-    grad_kernel_enzyme<KernelOutput::GTILDE2>( x, dg2_du );
++    const auto kp = make_kernel_params( p_ );
++    grad_kernel_enzyme<KernelOutput::GTILDE1>( x, &kp, dg1_du );
++    grad_kernel_enzyme<KernelOutput::GTILDE2>( x, &kp, dg2_du );
+   }
+ 
+   for ( int i = 0; i < 8; ++i ) {
+@@ -785,8 +828,9 @@ void EnergyMortarCalculator::grad_trib_area( const InterfacePair& pair, const Me
+     grad_kernel<KernelOutput::A2>( x, &gp, dA2_dx );
+   } else {
+     // Differentiate through the geometry-dependent quadrature construction.
+-    grad_kernel_enzyme<KernelOutput::A1>( x, dA1_dx );
+-    grad_kernel_enzyme<KernelOutput::A2>( x, dA2_dx );
++    const auto kp = make_kernel_params( p_ );
++    grad_kernel_enzyme<KernelOutput::A1>( x, &kp, dA1_dx );
++    grad_kernel_enzyme<KernelOutput::A2>( x, &kp, dA2_dx );
+   }
+ }
+ 
+@@ -816,8 +860,9 @@ void EnergyMortarCalculator::d2_g2tilde( const InterfacePair& pair, const MeshDa
+ 
+   } else {
+     // Differentiate through the geometry-dependent quadrature construction.
+-    d2_kernel<KernelOutput::GTILDE1>( x, d2g1_d2u );
+-    d2_kernel<KernelOutput::GTILDE2>( x, d2g2_d2u );
++    const auto kp = make_kernel_params( p_ );
++    d2_kernel<KernelOutput::GTILDE1>( x, &kp, d2g1_d2u );
++    d2_kernel<KernelOutput::GTILDE2>( x, &kp, d2g2_d2u );
+   }
+ 
+   for ( int i = 0; i < 64; ++i ) {
+@@ -852,8 +897,9 @@ void EnergyMortarCalculator::compute_d2A_d2u( const InterfacePair& pair, const M
+     d2_kernel_quad<KernelOutput::A2>( x, &gp, d2A2_d2u );
+   } else {
+     // Differentiate through the geometry-dependent quadrature construction.
+-    d2_kernel<KernelOutput::A1>( x, d2A1_d2u );
+-    d2_kernel<KernelOutput::A2>( x, d2A2_d2u );
++    const auto kp = make_kernel_params( p_ );
++    d2_kernel<KernelOutput::A1>( x, &kp, d2A1_d2u );
++    d2_kernel<KernelOutput::A2>( x, &kp, d2A2_d2u );
+   }
+ 
+   for ( int i = 0; i < 64; ++i ) {
+diff --git a/src/tribol/physics/EnergyMortar.hpp b/src/tribol/physics/EnergyMortar.hpp
+index 61e5e57..914a2b1 100644
+--- a/src/tribol/physics/EnergyMortar.hpp
++++ b/src/tribol/physics/EnergyMortar.hpp
+@@ -1,6 +1,9 @@
+ #pragma once
+ #include <vector>
+ #include <array>
++#include <cassert>
++#include <cmath>
++#include <algorithm>
+ 
+ #include "tribol/config.hpp"
+ 
+@@ -11,17 +14,35 @@ namespace tribol {
+ 
+ #ifdef TRIBOL_USE_ENZYME
+ 
++// 0 = no asserts, 1 = cheap asserts, 2 = expensive asserts (FD checks, etc.)
++constexpr int energy_mortar_debug_level = 1;
++
+ // EnergyMortar uses a 3-point Gauss-Legendre quad rule
+ struct QuadPoints {
+   std::array<double, 3> qp;  // qp locations
+   std::array<double, 3> w;   // weights
+ };
+ 
++enum class SmoothingType
++{
++  Hermite,   // C1 cubic Hermite ramp. Slope varies within ramp (peaks at 4/3).
++  Quadratic  // C1 quadratic ramp. Linear section has slope 1/(1-del) != 1.
++};
++
++enum class PenaltySmoothing
++{
++  Hard,  // Hard clamp: p = k * max(-g, 0). C0 kink in Jacobian at g = 0.
++  Smooth // C1 quadratic ramp over [-del/2, +del/2]: penalty decays smoothly to zero.
++};
++
+ struct ContactParams {
+   double del;              // Smoothing Parameter
+   double k;                // Penalty
+   int N;                   // Quadrature Points
+   bool enzyme_quadrature;  // Determines how enzyming is performed (default = True)
++  SmoothingType smoothing_type = SmoothingType::Quadratic;
++  PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth;
++  double penalty_smoothing_del = 1.0e-3;
+ };
+ 
+ // Weighted gap and trib area
+@@ -67,25 +88,290 @@ struct Gparams {
+   std::array<double, 3> w;
+ };
+ 
++/// Evaluate the fixed-quadrature gap/area kernel for a local edge-pair coordinate vector.
++///
++/// `x` stores `[A0x, A0y, A1x, A1y, B0x, B0y, B1x, B1y]`.
++void energy_mortar_fixed_quadrature_kernel( const double x[8], const Gparams& gp, double g_tilde[2], double area[2] );
++
++/// Evaluate the geometry-dependent quadrature gap/area kernel for a local edge-pair coordinate vector.
++///
++/// `x` stores `[A0x, A0y, A1x, A1y, B0x, B0y, B1x, B1y]`. This function recomputes projection bounds, applies contact
++/// smoothing, constructs quadrature, then evaluates the same gap/area kernel as the element path.
++void energy_mortar_varying_quadrature_kernel( const double x[8], double del, int N, SmoothingType smoothing_type,
++                                              double g_tilde[2], double area[2] );
++
++namespace energy_mortar_kernel_detail {
++
++inline void find_normal( const double* coord1, const double* coord2, double* normal )
++{
++  double dx = coord2[0] - coord1[0];
++  double dy = coord2[1] - coord1[1];
++  const double len = std::sqrt( dy * dy + dx * dx );
++  dx /= len;
++  dy /= len;
++  normal[0] = dy;
++  normal[1] = -dx;
++}
++
++inline void iso_map( const double* coord1, const double* coord2, double xi, double* mapped_coord )
++{
++  const double N1 = 0.5 - xi;
++  const double N2 = 0.5 + xi;
++  mapped_coord[0] = N1 * coord1[0] + N2 * coord2[0];
++  mapped_coord[1] = N1 * coord1[1] + N2 * coord2[1];
++}
++
++inline void find_intersection( const double* A0, const double* A1, const double* p, const double* nB,
++                               double* intersection )
++{
++  const double tA[2] = { A1[0] - A0[0], A1[1] - A0[1] };
++  const double d[2] = { p[0] - A0[0], p[1] - A0[1] };
++  const double nlen = std::sqrt( nB[0] * nB[0] + nB[1] * nB[1] );
++  if ( nlen < 1e-14 ) {
++    intersection[0] = p[0];
++    intersection[1] = p[1];
++    return;
++  }
++  const double n[2] = { nB[0] / nlen, nB[1] / nlen };
++  const double det = tA[0] * n[1] - tA[1] * n[0];
++  if ( std::abs( det ) < 1e-12 ) {
++    intersection[0] = p[0];
++    intersection[1] = p[1];
++    return;
++  }
++  const double alpha = ( d[0] * n[1] - d[1] * n[0] ) / det;
++  intersection[0] = A0[0] + alpha * tA[0];
++  intersection[1] = A0[1] + alpha * tA[1];
++}
++
++inline void get_projections( const double* A0, const double* A1, const double* B0, const double* B1,
++                             double* projections )
++{
++  double nB[2];
++  find_normal( B0, B1, nB );
++
++  const double dxA = A1[0] - A0[0];
++  const double dyA = A1[1] - A0[1];
++  const double len2A = dxA * dxA + dyA * dyA;
++  const double* B_endpoints[2] = { B0, B1 };
++
++  double xis[2];
++  for ( int i = 0; i < 2; ++i ) {
++    double q[2];
++    find_intersection( A0, A1, B_endpoints[i], nB, q );
++    const double alphaA = ( ( q[0] - A0[0] ) * dxA + ( q[1] - A0[1] ) * dyA ) / len2A;
++    xis[i] = alphaA - 0.5;
++  }
++
++  projections[0] = std::min( xis[0], xis[1] );
++  projections[1] = std::max( xis[0], xis[1] );
++}
++
++inline std::array<double, 2> bounds_from_projections( const std::array<double, 2>& proj, double del )
++{
++  double xi_min = std::min( proj[0], proj[1] );
++  double xi_max = std::max( proj[0], proj[1] );
++  const double xi_lo = -0.5;
++  const double xi_hi = 0.5;
++
++  if ( xi_max < xi_lo ) {
++    xi_max = xi_lo;
++  }
++  if ( xi_min > xi_hi ) {
++    xi_min = xi_hi;
++  }
++  if ( xi_min < xi_lo ) {
++    xi_min = xi_lo;
++  }
++  if ( xi_max > xi_hi ) {
++    xi_max = xi_hi;
++  }
++
++  return { xi_min, xi_max };
++}
++
++inline std::array<double, 2> smooth_bounds( const std::array<double, 2>& bounds, double del, SmoothingType type )
++{
++  std::array<double, 2> smooth_bounds;
++  for ( int i = 0; i < 2; ++i ) {
++    double xi = bounds[i] + 0.5;
++    xi = std::max( 0.0, std::min( 1.0, xi ) );
++
++    double xi_hat = xi;
++    if ( del > 0.0 && del < 0.5 ) {
++      if ( type == SmoothingType::Hermite ) {
++        if ( xi <= del ) {
++          const double t = xi / del;
++          xi_hat = del * t * t * ( 2.0 - t );
++        } else if ( xi >= 1.0 - del ) {
++          const double s = ( 1.0 - xi ) / del;
++          xi_hat = 1.0 - del * s * s * ( 2.0 - s );
++        }
++      } else {
++        const double a = 1.0 / ( 2.0 * del * ( 1.0 - del ) );
++        const double m = 1.0 / ( 1.0 - del );
++        if ( xi <= del ) {
++          xi_hat = a * xi * xi;
++        } else if ( xi >= 1.0 - del ) {
++          xi_hat = 1.0 - a * ( 1.0 - xi ) * ( 1.0 - xi );
++        } else {
++          xi_hat = m * xi - del * 0.5 * m;
++        }
++      }
++    }
++    smooth_bounds[i] = xi_hat - 0.5;
++  }
++  return smooth_bounds;
++}
++
++inline QuadPoints compute_quadrature( const std::array<double, 2>& xi_bounds, int N )
++{
++  QuadPoints out;
++  std::array<double, 3> qpoints = { 0.0, 0.0, 0.0 };
++  std::array<double, 3> weights = { 0.0, 0.0, 0.0 };
++
++  if ( N == 1 ) {
++    qpoints[0] = 0.0;
++    weights[0] = 2.0;
++  } else if ( N == 2 ) {
++    const double a = 1.0 / std::sqrt( 3.0 );
++    qpoints[0] = -a;
++    qpoints[1] = a;
++    weights[0] = 1.0;
++    weights[1] = 1.0;
++  } else {
++    const double a = std::sqrt( 3.0 / 5.0 );
++    qpoints[0] = -a;
++    qpoints[1] = 0.0;
++    qpoints[2] = a;
++    weights[0] = 5.0 / 9.0;
++    weights[1] = 8.0 / 9.0;
++    weights[2] = 5.0 / 9.0;
++  }
++
++  const double xi_min = xi_bounds[0];
++  const double xi_max = xi_bounds[1];
++  const double J = 0.5 * ( xi_max - xi_min );
++  for ( int i = 0; i < N; ++i ) {
++    out.qp[i] = 0.5 * ( xi_max - xi_min ) * qpoints[i] + 0.5 * ( xi_max + xi_min );
++    out.w[i] = weights[i] * J;
++  }
++  return out;
++}
++
++inline void gap_area_kernel( const double* x, const Gparams& gp, double* g_tilde_out, double* A_out )
++{
++  const double A0[2] = { x[0], x[1] };
++  const double A1[2] = { x[2], x[3] };
++  const double B0[2] = { x[4], x[5] };
++  const double B1[2] = { x[6], x[7] };
++
++  const double J = std::sqrt( ( A1[0] - A0[0] ) * ( A1[0] - A0[0] ) +
++                              ( A1[1] - A0[1] ) * ( A1[1] - A0[1] ) );
++  const double J_ref = J;
++
++  double nB[2];
++  find_normal( B0, B1, nB );
++  double nA[2];
++  find_normal( A0, A1, nA );
++  const double dot = nB[0] * nA[0] + nB[1] * nA[1];
++  const double eta = ( dot < 0.0 ) ? dot : 0.0;
++
++  double g1 = 0.0;
++  double g2 = 0.0;
++  double AI_1 = 0.0;
++  double AI_2 = 0.0;
++
++  for ( int i = 0; i < 3; ++i ) {
++    const double xiA = gp.qp[i];
++    const double w = gp.w[i];
++    const double N1 = 0.5 - xiA;
++    const double N2 = 0.5 + xiA;
++
++    double x1[2];
++    iso_map( A0, A1, xiA, x1 );
++    double x2[2];
++    find_intersection( B0, B1, x1, nB, x2 );
++
++    const double dx = x1[0] - x2[0];
++    const double dy = x1[1] - x2[1];
++    const double gn = -( dx * nB[0] + dy * nB[1] );
++    const double g = gn * eta;
++
++    g1 += w * N1 * g * J;
++    g2 += w * N2 * g * J;
++    AI_1 += w * N1 * J_ref;
++    AI_2 += w * N2 * J_ref;
++  }
++
++  g_tilde_out[0] = g1;
++  g_tilde_out[1] = g2;
++  A_out[0] = AI_1;
++  A_out[1] = AI_2;
++}
++
++}  // namespace energy_mortar_kernel_detail
++
++inline void energy_mortar_fixed_quadrature_kernel( const double x[8], const Gparams& gp, double g_tilde[2],
++                                                   double area[2] )
++{
++  energy_mortar_kernel_detail::gap_area_kernel( x, gp, g_tilde, area );
++}
++
++inline void energy_mortar_varying_quadrature_kernel( const double x[8], double del, int N,
++                                                     SmoothingType smoothing_type, double g_tilde[2],
++                                                     double area[2] )
++{
++  const double A0[2] = { x[0], x[1] };
++  const double A1[2] = { x[2], x[3] };
++  const double B0[2] = { x[4], x[5] };
++  const double B1[2] = { x[6], x[7] };
++
++  double projs[2] = { 0.0, 0.0 };
++  energy_mortar_kernel_detail::get_projections( A0, A1, B0, B1, projs );
++  const std::array<double, 2> projections = { projs[0], projs[1] };
++  const auto bounds = energy_mortar_kernel_detail::bounds_from_projections( projections, del );
++  const auto xi_bounds = energy_mortar_kernel_detail::smooth_bounds( bounds, del, smoothing_type );
++  const auto qp = energy_mortar_kernel_detail::compute_quadrature( xi_bounds, N );
++
++  Gparams gp;
++  for ( std::size_t i = 0; i < qp.qp.size(); ++i ) {
++    gp.qp[i] = qp.qp[i];
++    gp.w[i] = qp.w[i];
++  }
++
++  energy_mortar_kernel_detail::gap_area_kernel( x, gp, g_tilde, area );
++}
++
++struct PenaltyRamp {
++  double value;
++  double first_derivative;
++  double second_derivative;
++};
++
+ /// Provides smoothing operations for the Energy Mortar contact formulation.
+ ///
+ /// This class stores the contact parameters and provides helper routines for
+ /// constructing smoothed integration bounds from projected overlap intervals.
+ class ContactSmoothing {
+  public:
+-  /// Clamp the projected overlap interval to the extended smoothing support.
++  /// Clamp the projected overlap interval to the selected smoothing support.
+   ///
+   /// The input `proj` contains the local projection bounds of edge B onto edge A.
+-  /// The returned interval is restricted to the extended local range
+-  /// `[-0.5 - del, 0.5 + del]`.
+-  static std::array<double, 2> bounds_from_projections( const std::array<double, 2>& proj, double del );
++  /// Inside restricts to `[-0.5, 0.5]`; Outside restricts to `[-0.5-del, 0.5+del]`.
++  static std::array<double, 2> bounds_from_projections(
++      const std::array<double, 2>& proj, double del );
+ 
+   /// Smooth the integration bounds using the smoothing length `del`.
+   ///
+   /// The returned bounds are obtained by applying the endpoint smoothing map to
+   /// the clamped integration interval. When `del = 0`, the bounds are returned
+   /// without smoothing.
+-  static std::array<double, 2> smooth_bounds( const std::array<double, 2>& bounds, double del );
++  static std::array<double, 2> smooth_bounds( const std::array<double, 2>& bounds, double del,
++                                               SmoothingType type = SmoothingType::Hermite );
++
++  /// Evaluate the penalty ramp H(g), H'(g), and H''(g).
++  static PenaltyRamp penalty_ramp( double g, double del, PenaltySmoothing type = PenaltySmoothing::Hard );
+ };
+ 
+ /// Evaluates Energy Mortar contact quantities for a single interface pair.
+diff --git a/src/tribol/physics/EnergyMortarAdapter.cpp b/src/tribol/physics/EnergyMortarAdapter.cpp
+index bfce246..8313499 100644
+--- a/src/tribol/physics/EnergyMortarAdapter.cpp
++++ b/src/tribol/physics/EnergyMortarAdapter.cpp
+@@ -4,6 +4,7 @@
+ // SPDX-License-Identifier: (MIT)
+ 
+ #include "tribol/physics/EnergyMortarAdapter.hpp"
++#include <cmath>
+ #include <axom/slic/interface/slic_macros.hpp>
+ #include "tribol/mesh/MfemData.hpp"
+ 
+@@ -13,7 +14,10 @@ namespace tribol {
+ 
+ EnergyMortarAdapter::EnergyMortarAdapter( MfemMeshData& mesh_data, MfemSubmeshData& submesh_data,
+                                           MfemJacobianData& jac_data, MeshData& mesh1, MeshData& mesh2, double k,
+-                                          double delta, int N, bool enzyme_quadrature, bool use_penalty )
++                                          double delta, int N, bool enzyme_quadrature, bool use_penalty,
++                                          SmoothingType smoothing_type,
++                                          PenaltySmoothing penalty_smoothing,
++                                          double penalty_smoothing_del )
+     // NOTE: mesh1 maps to mesh2_ and mesh2 maps to mesh1_. This is to keep consistent with mesh1_ being non-mortar and
+     // mesh2_ being mortar as is typical in the literature, but different from Tribol convention.
+     : use_penalty_( use_penalty ),
+@@ -32,6 +36,9 @@ EnergyMortarAdapter::EnergyMortarAdapter( MfemMeshData& mesh_data, MfemSubmeshDa
+   params_.del = delta;
+   params_.N = N;
+   params_.enzyme_quadrature = enzyme_quadrature;
++  params_.smoothing_type = smoothing_type;
++  params_.penalty_smoothing = penalty_smoothing;
++  params_.penalty_smoothing_del = penalty_smoothing_del;
+ 
+   evaluator_ = std::make_unique<EnergyMortarCalculator>( params_ );
+ 
+@@ -118,6 +125,11 @@ void EnergyMortarAdapter::updateNodalGaps()
+ 
+     evaluator_->compute_gtilde_and_area( flipped_pair, mesh1_view, mesh2_view, g_tilde_elem, A_elem );
+ 
++    if constexpr ( tribol::energy_mortar_debug_level >= 1 ) {
++      assert( A_elem[0] >= -1e-14 && "per-pair tributary area[0] is negative" );
++      assert( A_elem[1] >= -1e-14 && "per-pair tributary area[1] is negative" );
++    }
++
+     if ( A_elem[0] <= 0.0 && A_elem[1] <= 0.0 ) {
+       continue;
+     }
+@@ -170,24 +182,57 @@ void EnergyMortarAdapter::updateNodalGaps()
+   g_tilde_vec_.fill( 0.0 );
+   P_submesh.MultTranspose( g_tilde_linear_form, g_tilde_vec_.get() );
+ 
+-  mfem::Array<int> rows_to_elim;
+-  if ( !tied_contact_ && use_penalty_ ) {
+-    rows_to_elim.Reserve( g_tilde_vec_.size() );
+-    for ( int i{ 0 }; i < g_tilde_vec_.size(); ++i ) {
+-      if ( g_tilde_vec_[i] > 0.0 ) {
+-        g_tilde_vec_[i] = 0.0;
+-        rows_to_elim.push_back( i );
+-      }
+-    }
+-  }
+-
+   mfem::ParLinearForm A_linear_form( const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
+   submesh_data_.GetPressureTransfer().RedecompToSubmesh( redecomp_area, A_linear_form );
+   A_vec_ = shared::ParVector( const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
+   A_vec_.fill( 0.0 );
+   P_submesh.MultTranspose( A_linear_form, A_vec_.get() );
+ 
+-  gap_vec_ = g_tilde_vec_.divide( A_vec_, area_tol_ );
++  // Identify rows to eliminate: nodes with non-positive area have no contact
++  // contribution.  For non-tied penalty contact with Hard penalty smoothing,
++  // also eliminate nodes with positive g_tilde (opening gap).
++  mfem::Array<int> rows_to_elim;
++  rows_to_elim.Reserve( g_tilde_vec_.size() );
++  for ( int i{ 0 }; i < g_tilde_vec_.size(); ++i ) {
++    if ( A_vec_[i] <= 0.0 ) {
++      g_tilde_vec_[i] = 0.0;
++      A_vec_[i] = 0.0;
++      rows_to_elim.push_back( i );
++    } else if ( !tied_contact_ && use_penalty_ && params_.penalty_smoothing == PenaltySmoothing::Hard &&
++                g_tilde_vec_[i] > 0.0 ) {
++      g_tilde_vec_[i] = 0.0;
++      rows_to_elim.push_back( i );
++    }
++  }
++
++  // Regularized area: A_reg = A + eps prevents 1/A blow-up near separation
++  // while leaving the solution unchanged when A >> eps.
++  A_reg_vec_ = shared::ParVector( A_vec_ );
++  for ( int i{ 0 }; i < A_reg_vec_.size(); ++i ) {
++    A_reg_vec_[i] += area_reg_;
++  }
++
++  gap_vec_ = g_tilde_vec_.divide( A_reg_vec_, area_tol_ );
++
++  // Compute the penalty ramp H(g), H'(g), H''(g) per node.
++  gap_orig_vec_ = shared::ParVector( gap_vec_ );
++  h_prime_vec_ = shared::ParVector( gap_vec_ );
++  h_double_prime_vec_ = shared::ParVector( gap_vec_ );
++
++  const bool apply_penalty_ramp = !tied_contact_ && use_penalty_;
++  const double del = params_.penalty_smoothing_del;
++
++  for ( int i{ 0 }; i < gap_vec_.size(); ++i ) {
++    if ( apply_penalty_ramp && params_.penalty_smoothing == PenaltySmoothing::Smooth ) {
++      const auto ramp = ContactSmoothing::penalty_ramp( gap_orig_vec_[i], del, params_.penalty_smoothing );
++      gap_vec_[i] = ramp.value;
++      h_prime_vec_[i] = ramp.first_derivative;
++      h_double_prime_vec_[i] = ramp.second_derivative;
++    } else {
++      h_prime_vec_[i] = 1.0;
++      h_double_prime_vec_[i] = 0.0;
++    }
++  }
+ 
+   // Move gap and area derivatives to (pressure true-dof rows, displacement true-dof cols)
+   std::vector<PackedPairJacobianContribs> dg_contribs;
+@@ -196,9 +241,7 @@ void EnergyMortarAdapter::updateNodalGaps()
+   dg_contribs.push_back( std::move( dg_lm_m ) );
+   dg_tilde_dx_ = jac_data_.GetMfemJacobian( &submesh_data_.GetSubmeshFESpace(),
+                                             mesh_data_.GetParentCoords().ParFESpace(), dg_contribs );
+-  if ( !tied_contact_ && use_penalty_ ) {
+-    // technically, we should do this on all the vectors/matrices below, but it looks like the mutliplication operators
+-    // below will zero them out anyway
++  if ( rows_to_elim.Size() > 0 ) {
+     dg_tilde_dx_.eliminateRows( rows_to_elim );
+   }
+ 
+@@ -215,7 +258,7 @@ void EnergyMortarAdapter::updateNodalForces()
+   // NOTE: user should have called updateNodalGaps() with updated coords before calling this
+ 
+   if ( use_penalty_ ) {
+-    // Penalty mode: p = k * (g_tilde / A)
++    // Penalty mode: p = k * H(g) where g = g_tilde / A_reg, H is the penalty ramp
+     pressure_vec_ = params_.k * gap_vec_;
+   } else {
+     // LM mode: pressure_vec_ is treated as the Lagrange multiplier vector (lambda)
+@@ -244,60 +287,103 @@ void EnergyMortarAdapter::updateNodalForces()
+   }
+ 
+   // ---------------------------------------------------------------------------
+-  // Penalty mode: force and Jacobian include pressure/area coupling terms
++  // Penalty mode with generic penalty ramp H(g).
++  //
++  // Energy:  E = k * H(g) * g_tilde   (per node, g = g_tilde / A_reg)
++  //
++  // Smoothed gap:   h  = H(g)      = gap_vec_
++  // Original gap:   g  = g_orig    = gap_orig_vec_
++  // Ramp deriv:     h' = H'(g)     = h_prime_vec_
++  // Ramp 2nd deriv: h''= H''(g)    = h_double_prime_vec_
++  //
++  // Pressure: p = k * h
++  //
++  // dp/dx = k * h' / A_reg * (Gt - g * A')   [chain rule through H(g)]
++  //
++  // Force: f = p * Gt + g_tilde * dp/dx
++  //          = k*(h + h'*g) * Gt - k*h'*g² * A'
++  //
++  // Jacobian (RAP terms from d(dp/dx diagonal)/dx):
++  //   rap(Gt, diag(k*g*h''/A), Gt)                          [new: zero for Hard]
++  //   - rap(Gt, diag(k*g*(h'+g*h'')/A), A')
++  //   - rap(A', diag(k*g*(h'+g*h'')/A), Gt)
++  //   + rap(A', diag(k*g²*(2h'+g*h'')/A), A')
++  //   + dp_dx^T * Gt + Gt^T * dp_dx
++  //
++  // Second derivatives:
++  //   k*(h + h'*g) * d²g_tilde/dx²  -  k*h'*g² * d²A/dx²
+   // ---------------------------------------------------------------------------
+-  auto k_over_a = params_.k * A_vec_.inverse( area_tol_ );
+-  auto p_over_a = pressure_vec_.divide( A_vec_, area_tol_ );
++  auto A_reg_inv = A_reg_vec_.inverse( area_tol_ );
+ 
++  // dp/dx = k * h' / A_reg * (Gt - g_orig * A')
+   shared::ParSparseMat dp_dx( dg_tilde_dx_.get() );
+-  dp_dx->ScaleRows( k_over_a.get() );
+-  shared::ParSparseMat dp_dx_temp( dA_dx_.get() );
+-  dp_dx_temp->ScaleRows( p_over_a.get() );
+-  dp_dx -= dp_dx_temp;
++  shared::ParSparseMat g_dA( dA_dx_.get() );
++  g_dA->ScaleRows( gap_orig_vec_.get() );
++  dp_dx -= g_dA;
++  auto kh_prime_over_a_reg = params_.k * h_prime_vec_.multiply( A_reg_inv );
++  dp_dx->ScaleRows( kh_prime_over_a_reg.get() );
+ 
+   force_vec_ = ( pressure_vec_ * dg_tilde_dx_ ) + ( g_tilde_vec_ * dp_dx );
+ 
+-  // TODO (EBC): Move transfer path-specific logic out of this file
+-  mfem::GridFunction redecomp_pressure( submesh_data_.GetRedecompGap() );
+-  mfem::ParGridFunction submesh_pressure(
+-      const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
+-  submesh_pressure.SetFromTrueDofs( pressure_vec_.get() );
+-  submesh_data_.GetPressureTransfer().SubmeshToRedecomp( submesh_pressure, redecomp_pressure );
++  // Transfer per-node second-derivative coefficients to redecomp
++  //   coeff_gt = k * (h + h'*g)  =  k * alpha
++  //   coeff_A  = -k * h' * g²
++  auto alpha = gap_vec_ + h_prime_vec_.multiply( gap_orig_vec_ );
++  auto coeff_gt_vec = params_.k * alpha;
++  auto coeff_A_vec = -params_.k * h_prime_vec_.multiply( gap_orig_vec_ ).multiplyInPlace( gap_orig_vec_ );
+ 
+-  mfem::GridFunction redecomp_g_tilde( submesh_data_.GetRedecompGap() );
+-  mfem::ParGridFunction submesh_g_tilde(
++  mfem::GridFunction redecomp_coeff_gt( submesh_data_.GetRedecompGap() );
++  mfem::ParGridFunction submesh_coeff_gt(
+       const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
+-  submesh_g_tilde.SetFromTrueDofs( g_tilde_vec_.get() );
+-  submesh_data_.GetPressureTransfer().SubmeshToRedecomp( submesh_g_tilde, redecomp_g_tilde );
++  submesh_coeff_gt.SetFromTrueDofs( coeff_gt_vec.get() );
++  submesh_data_.GetPressureTransfer().SubmeshToRedecomp( submesh_coeff_gt, redecomp_coeff_gt );
+ 
+-  mfem::GridFunction redecomp_A( submesh_data_.GetRedecompGap() );
+-  mfem::ParGridFunction submesh_A( const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
+-  submesh_A.SetFromTrueDofs( A_vec_.get() );
+-  submesh_data_.GetPressureTransfer().SubmeshToRedecomp( submesh_A, redecomp_A );
+-
+-  df_dx_ = computeDfDxSecondDerivativesPenalty( redecomp_pressure, redecomp_g_tilde, redecomp_A );
++  mfem::GridFunction redecomp_coeff_A( submesh_data_.GetRedecompGap() );
++  mfem::ParGridFunction submesh_coeff_A(
++      const_cast<mfem::ParFiniteElementSpace*>( &submesh_data_.GetSubmeshFESpace() ) );
++  submesh_coeff_A.SetFromTrueDofs( coeff_A_vec.get() );
++  submesh_data_.GetPressureTransfer().SubmeshToRedecomp( submesh_coeff_A, redecomp_coeff_A );
+ 
+-  auto pg2_over_asq = ( 2.0 * pressure_vec_ )
+-                          .multiplyInPlace( g_tilde_vec_ )
+-                          .divideInPlace( A_vec_, area_tol_ )
+-                          .divideInPlace( A_vec_, area_tol_ );
++  df_dx_ = computeDfDxSecondDerivativesPenalty( redecomp_coeff_gt, redecomp_coeff_A );
+ 
++  // RAP Jacobian cross terms
+   auto& submesh_fes = submesh_data_.GetSubmeshFESpace();
+-  auto p_over_a_diag = shared::ParSparseMat::diagonalMatrix( submesh_fes.GetComm(), submesh_fes.GlobalTrueVSize(),
+-                                                             submesh_fes.GetTrueDofOffsets(), p_over_a.get() );
+-  auto pg2_over_asq_diag = shared::ParSparseMat::diagonalMatrix( submesh_fes.GetComm(), submesh_fes.GlobalTrueVSize(),
+-                                                                 submesh_fes.GetTrueDofOffsets(), pg2_over_asq.get() );
+-
+-  df_dx_ -= shared::ParSparseMat::rap( dg_tilde_dx_, p_over_a_diag, dA_dx_ );
+-  df_dx_ -= shared::ParSparseMat::rap( dA_dx_, p_over_a_diag, dg_tilde_dx_ );
+-  df_dx_ += shared::ParSparseMat::rap( dA_dx_, pg2_over_asq_diag, dg_tilde_dx_ );
+-  df_dx_ += dp_dx.transpose() * dg_tilde_dx_;
+-  df_dx_ += dg_tilde_dx_.transpose() * dp_dx;
++
++  // d1 = k * g * h'' / A_reg  (for Gt-Gt term, zero in Hard/full-contact)
++  auto d1_vec = params_.k * gap_orig_vec_.multiply( h_double_prime_vec_ ).divideInPlace( A_reg_vec_, area_tol_ );
++  // d2 = k * g * (h' + g*h'') / A_reg  (for Gt-A' cross terms)
++  auto h_prime_plus_g_h_double_prime = h_prime_vec_ + gap_orig_vec_.multiply( h_double_prime_vec_ );
++  auto d2_vec = params_.k * gap_orig_vec_.multiply( h_prime_plus_g_h_double_prime ).divideInPlace( A_reg_vec_, area_tol_ );
++  // d4 = k * g² * (2h' + g*h'') / A_reg  (for A'-A' term)
++  auto two_h_prime_plus_g_h_double_prime = 2.0 * h_prime_vec_ + gap_orig_vec_.multiply( h_double_prime_vec_ );
++  auto g_sq = gap_orig_vec_.multiply( gap_orig_vec_ );
++  auto d4_vec = params_.k * g_sq.multiplyInPlace( two_h_prime_plus_g_h_double_prime )
++                    .divideInPlace( A_reg_vec_, area_tol_ );
++
++  auto d1_diag = shared::ParSparseMat::diagonalMatrix( submesh_fes.GetComm(), submesh_fes.GlobalTrueVSize(),
++                                                        submesh_fes.GetTrueDofOffsets(), d1_vec.get() );
++  auto d2_diag = shared::ParSparseMat::diagonalMatrix( submesh_fes.GetComm(), submesh_fes.GlobalTrueVSize(),
++                                                        submesh_fes.GetTrueDofOffsets(), d2_vec.get() );
++  auto d4_diag = shared::ParSparseMat::diagonalMatrix( submesh_fes.GetComm(), submesh_fes.GlobalTrueVSize(),
++                                                        submesh_fes.GetTrueDofOffsets(), d4_vec.get() );
++
++  auto rap_gg = shared::ParSparseMat::rap( dg_tilde_dx_, d1_diag, dg_tilde_dx_ );
++  auto rap_ga = shared::ParSparseMat::rap( dg_tilde_dx_, d2_diag, dA_dx_ );
++  auto rap_ag = shared::ParSparseMat::rap( dA_dx_, d2_diag, dg_tilde_dx_ );
++  auto rap_aa = shared::ParSparseMat::rap( dA_dx_, d4_diag, dA_dx_ );
++  auto dp_g = dp_dx.transpose() * dg_tilde_dx_;
++  auto g_dp = dg_tilde_dx_.transpose() * dp_dx;
++
++  df_dx_ += rap_gg;
++  df_dx_ -= rap_ga;
++  df_dx_ -= rap_ag;
++  df_dx_ += rap_aa;
++  df_dx_ += dp_g;
++  df_dx_ += g_dp;
+ }
+ 
+ RealT EnergyMortarAdapter::computeTimeStep()
+ {
+-  SLIC_INFO_ROOT( "computeTimestep() not implemented for EnergyMortar" );
+   // TODO: implement timestep calculation
+   return 1.0;
+ }
+@@ -349,7 +435,7 @@ shared::ParSparseMat EnergyMortarAdapter::computeDfDxSecondDerivativesLM( const
+       for ( int j{ 0 }; j < 2; ++j ) {
+         for ( int k{ 0 }; k < 4; ++k ) {
+           for ( int l{ 0 }; l < 4; ++l ) {
+-            const auto idx = node_idx[l + i * 4] + node_idx[k + j * 4] * 8;
++            const auto idx = node_idx[l + i * 4] * 8 + node_idx[k + j * 4];
+             df_dx_blocks[i][j][l + k * 4] = lambda1 * d2g_dx2_node1[idx] + lambda2 * d2g_dx2_node2[idx];
+           }
+         }
+@@ -373,8 +459,7 @@ shared::ParSparseMat EnergyMortarAdapter::computeDfDxSecondDerivativesLM( const
+ }
+ 
+ shared::ParSparseMat EnergyMortarAdapter::computeDfDxSecondDerivativesPenalty(
+-    const mfem::GridFunction& redecomp_pressure, const mfem::GridFunction& redecomp_g_tilde,
+-    const mfem::GridFunction& redecomp_A )
++    const mfem::GridFunction& redecomp_coeff_gt, const mfem::GridFunction& redecomp_coeff_A )
+ {
+   const bool use_lor = ( mesh_data_.GetLORMesh() != nullptr );
+   const auto& displacement_surface_fes = use_lor ? *mesh_data_.GetLORMeshFESpace() : mesh_data_.GetSubmeshFESpace();
+@@ -409,16 +494,16 @@ shared::ParSparseMat EnergyMortarAdapter::computeDfDxSecondDerivativesPenalty(
+     const auto node12 = mesh1_view.getConnectivity()( elem1, 1 );
+     const auto elem2 = static_cast<int>( flipped_pair.m_element_id2 );
+ 
+-    const RealT pressure1 = 2.0 * redecomp_pressure( node11 );
+-    const RealT pressure2 = 2.0 * redecomp_pressure( node12 );
++    const RealT cgt1 = redecomp_coeff_gt( node11 );
++    const RealT cgt2 = redecomp_coeff_gt( node12 );
+ 
+-    if ( pressure1 == 0.0 && pressure2 == 0.0 ) {
++    const RealT cA1 = redecomp_coeff_A( node11 );
++    const RealT cA2 = redecomp_coeff_A( node12 );
++
++    if ( cgt1 == 0.0 && cgt2 == 0.0 && cA1 == 0.0 && cA2 == 0.0 ) {
+       continue;
+     }
+ 
+-    const RealT g_p_ainv1 = -redecomp_g_tilde( node11 ) * redecomp_pressure( node11 ) / redecomp_A( node11 );
+-    const RealT g_p_ainv2 = -redecomp_g_tilde( node12 ) * redecomp_pressure( node12 ) / redecomp_A( node12 );
+-
+     double d2g_dx2_node1[64];
+     double d2g_dx2_node2[64];
+     evaluator_->d2_g2tilde( flipped_pair, mesh1_view, mesh2_view, d2g_dx2_node1, d2g_dx2_node2 );
+@@ -432,9 +517,10 @@ shared::ParSparseMat EnergyMortarAdapter::computeDfDxSecondDerivativesPenalty(
+       for ( int j{ 0 }; j < 2; ++j ) {
+         for ( int k{ 0 }; k < 4; ++k ) {
+           for ( int l{ 0 }; l < 4; ++l ) {
+-            const auto idx = node_idx[l + i * 4] + node_idx[k + j * 4] * 8;
+-            df_dx_blocks[i][j][l + k * 4] = pressure1 * d2g_dx2_node1[idx] + pressure2 * d2g_dx2_node2[idx] +
+-                                            g_p_ainv1 * d2A_dx2_node1[idx] + g_p_ainv2 * d2A_dx2_node2[idx];
++            const auto idx = node_idx[l + i * 4] * 8 + node_idx[k + j * 4];
++            const double value = cgt1 * d2g_dx2_node1[idx] + cgt2 * d2g_dx2_node2[idx] +
++                                 cA1 * d2A_dx2_node1[idx] + cA2 * d2A_dx2_node2[idx];
++            df_dx_blocks[i][j][l + k * 4] = value;
+           }
+         }
+       }
+diff --git a/src/tribol/physics/EnergyMortarAdapter.hpp b/src/tribol/physics/EnergyMortarAdapter.hpp
+index 54a97a4..96113b7 100644
+--- a/src/tribol/physics/EnergyMortarAdapter.hpp
++++ b/src/tribol/physics/EnergyMortarAdapter.hpp
+@@ -53,7 +53,9 @@ class EnergyMortarAdapter : public ContactFormulation {
+    */
+   EnergyMortarAdapter( MfemMeshData& mesh_data, MfemSubmeshData& submesh_data, MfemJacobianData& jac_data,
+                        MeshData& mesh1, MeshData& mesh2, double k, double delta, int N, bool enzyme_quadrature,
+-                       bool use_penalty = true );
++                       bool use_penalty = true, SmoothingType smoothing_type = SmoothingType::Quadratic,
++                       PenaltySmoothing penalty_smoothing = PenaltySmoothing::Smooth,
++                       double penalty_smoothing_del = 1.0e-3 );
+ 
+   /**
+    * @brief Default destructor
+@@ -190,9 +192,23 @@ class EnergyMortarAdapter : public ContactFormulation {
+   bool use_penalty_;
+ 
+   /**
+-   * @brief Tolerance used to avoid division by zero for area-weighted quantities
++   * @brief Tolerance used to avoid division by zero for area-weighted quantities.
++   *
++   * Set to zero so that the division is never silently skipped.  Instead, nodes
++   * with non-positive area are identified and their rows are eliminated from
++   * g_tilde, dg_tilde_dx, and all downstream force / Jacobian quantities.
++   */
++  double area_tol_{ 0.0 };
++
++  /**
++   * @brief Small positive regularization added to the tributary area before
++   * division.
++   *
++   * The penalty Jacobian has 1/A and 1/A^2 terms that blow up as the overlap
++   * area vanishes.  Adding a small constant eps to A caps these at O(1/eps)
++   * without perturbing the solution when A >> eps.
+    */
+-  double area_tol_{ 1.0e-14 };
++  double area_reg_{ 1.0e-10 };
+ 
+   /**
+    * @brief If true, treat contact as tied (no opening) for gap filtering logic
+@@ -263,10 +279,34 @@ class EnergyMortarAdapter : public ContactFormulation {
+   shared::ParVector A_vec_;
+ 
+   /**
+-   * @brief Normalized gap vector g = g_tilde / A on the dual (pressure) true-dofs
++   * @brief Regularized area A_reg = A + area_reg_ used for all 1/A operations
++   */
++  shared::ParVector A_reg_vec_;
++
++  /**
++   * @brief Normalized gap vector g = g_tilde / A_reg on the dual (pressure) true-dofs.
++   *        In smooth penalty mode, this is the SMOOTHED gap H(g).
+    */
+   shared::ParVector gap_vec_;
+ 
++  /**
++   * @brief Original (unsmoothed) normalized gap g = g_tilde / A_reg.
++   *        Populated only in smooth penalty mode; aliased to gap_vec_ otherwise.
++   */
++  shared::ParVector gap_orig_vec_;
++
++  /**
++   * @brief First derivative H'(g) of the penalty ramp at each node.
++   *        1.0 in full contact, 0.0 in separation, smooth transition in between.
++   */
++  shared::ParVector h_prime_vec_;
++
++  /**
++   * @brief Second derivative H''(g) of the penalty ramp at each node.
++   *        0.0 outside the transition band [-del, 0].
++   */
++  shared::ParVector h_double_prime_vec_;
++
+   /**
+    * @brief Derivative d(g_tilde)/dx as a (dual rows) x (parent displacement cols) matrix
+    */
+@@ -310,17 +350,17 @@ class EnergyMortarAdapter : public ContactFormulation {
+   /**
+    * @brief Assemble the penalty second-derivative df/dx contribution
+    *
+-   * Assembles the second-derivative penalty contribution:
+-   * `p · d²(g_tilde)/dx² - (g_tilde p / A) · d²A/dx²`.
++   * Assembles `coeff_gt[i] · d²(g_tilde)/dx² + coeff_A[i] · d²A/dx²` per node.
++   *
++   * For unsmoothed penalty:  coeff_gt = 2p,  coeff_A = -k·g².
++   * For smooth penalty with ramp H(g): coeff_gt = k·(H+H'g),  coeff_A = -k·H'·g².
+    *
+-   * @param redecomp_pressure Pressure field on the redecomp mesh
+-   * @param redecomp_g_tilde g_tilde on the redecomp mesh
+-   * @param redecomp_A Area weighting A on the redecomp mesh
++   * @param redecomp_coeff_gt  Per-node coefficient for d²(g_tilde)/dx² on the redecomp mesh
++   * @param redecomp_coeff_A   Per-node coefficient for d²A/dx² on the redecomp mesh
+    * @return Assembled df/dx contribution on parent true-dofs
+    */
+-  shared::ParSparseMat computeDfDxSecondDerivativesPenalty( const mfem::GridFunction& redecomp_pressure,
+-                                                            const mfem::GridFunction& redecomp_g_tilde,
+-                                                            const mfem::GridFunction& redecomp_A );
++  shared::ParSparseMat computeDfDxSecondDerivativesPenalty( const mfem::GridFunction& redecomp_coeff_gt,
++                                                            const mfem::GridFunction& redecomp_coeff_A );
+ };
+ 
+ #endif  // TRIBOL_USE_ENZYME
+-- 
+2.39.5 (Apple Git-154)
+
