@@ -17,13 +17,13 @@ template <int dim, typename HardeningType>
 class DifferentiableJ2SmallStrain {
  public:
   DifferentiableJ2SmallStrain(HardeningType hardeningModel, double youngsModulus, double poissonsRatio,
-                              double hardeningModulus, double density)
-      : hardening(hardeningModel), E(youngsModulus), nu(poissonsRatio), Hk(hardeningModulus), rho(density)
+                              double hardeningModulus, double density, double returnMapTol = 1e-10)
+      : hardening(hardeningModel), E(youngsModulus), nu(poissonsRatio), Hk(hardeningModulus), rho(density), tol(returnMapTol)
   {}
 
   /** @brief calculate the first Piola stress, given the displacement gradient and previous staggered solve material state */
   template <typename T1, typename T2, typename T3>
-  SMITH_HOST_DEVICE auto firstPiolaStress(const tensor<T1, dim, dim>& du_dX, const tensor<T2, dim, dim>& Fp,
+  SMITH_HOST_DEVICE auto firstPiolaStress(double /* dt */, const tensor<T1, dim, dim>& du_dX, const tensor<T2, dim, dim>& Fp,
                                           const T3& /* epsilon_p */) const
   {
     constexpr auto I = Identity<dim>();
@@ -38,7 +38,6 @@ class DifferentiableJ2SmallStrain {
   }
 
   /** @brief calculate the plastic deformation gradient */
-  // Hanyu : combine plasticDeformGrad and plasticStrain
   template <typename T1, typename T2, typename T3>
   SMITH_HOST_DEVICE auto plasticDeformGrad(double dt, const tensor<T1, dim, dim>& Fp_old,
                                            const T2& epsilon_dot, const tensor<T3, dim, dim>& du_dX) const
@@ -71,7 +70,9 @@ class DifferentiableJ2SmallStrain {
     auto eta = s - sigma_b;
     auto q = sqrt(1.5) * norm(eta);
 
-    return q / dt - (3.0 * G + Hk) * epsilon_dot - this->hardening(epsilon_p, epsilon_dot) / dt;
+    auto epsilon_dot_predict = q / dt - (3.0 * G + Hk) * epsilon_dot - this->hardening(epsilon_p, epsilon_dot) / dt;
+    auto non_negativity = epsilon_dot_predict >= tol * hardening.sigma_y;
+    return epsilon_dot_predict * non_negativity;
   }
 
  private:
@@ -80,31 +81,32 @@ class DifferentiableJ2SmallStrain {
   double nu;                ///< Poisson's ratio
   double Hk;                ///< Kinematic hardening modulus
   double rho;               ///< Mass density
+  double tol;
 };
 
 smith::LinearSolverOptions primal_lin_opts{.linear_solver = smith::LinearSolver::CG,
                                            .preconditioner = smith::Preconditioner::HypreAMG,
-                                           .relative_tol = 1e-12,
-                                           .absolute_tol = 1e-12,
+                                           .relative_tol = 1e-15,
+                                           .absolute_tol = 1e-15,
                                            .max_iterations = 200,
                                            .print_level = 0};
 
 smith::NonlinearSolverOptions primal_nonlin_opts{.nonlin_solver = NonlinearSolver::Newton,
-                                                 .relative_tol = 1.0e-12,
-                                                 .absolute_tol = 1.0e-12,
+                                                 .relative_tol = 1e-9,
+                                                 .absolute_tol = 1e-10,
                                                  .max_iterations = 25,
                                                  .print_level = 2};
 
-smith::LinearSolverOptions state_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
-                                          .preconditioner = smith::Preconditioner::HypreAMG,
+smith::LinearSolverOptions state_lin_opts{.linear_solver = smith::LinearSolver::CG,
+                                          .preconditioner = smith::Preconditioner::HypreJacobi,
                                           .relative_tol = 1e-10,
                                           .absolute_tol = 1e-10,
                                           .max_iterations = 200,
                                           .print_level = 0};
 
 smith::NonlinearSolverOptions state_nonlin_opts{.nonlin_solver = NonlinearSolver::Newton,
-                                                .relative_tol = 1.0e-10,
-                                                .absolute_tol = 1.0e-10,
+                                                .relative_tol = 1e-7,
+                                                .absolute_tol = 1e-8,
                                                 .max_iterations = 25,
                                                 .print_level = 2};
 
@@ -112,7 +114,7 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
 {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  int serial_refinement = 0;
+  int serial_refinement = 1;
   int parallel_refinement = 0;
 
   static constexpr int dim = 3;
@@ -126,16 +128,19 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
   auto mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(filename), meshtag, serial_refinement,
                                             parallel_refinement);
 
-  auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(10);
+  auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(50);
   auto primal_block_solver = buildNonlinearBlockSolver(primal_nonlin_opts, primal_lin_opts, *mesh);
-  auto state_block_solver = buildNonlinearBlockSolver(state_nonlin_opts, state_lin_opts, *mesh);
+  auto strain_block_solver = buildNonlinearBlockSolver(state_nonlin_opts, state_lin_opts, *mesh);
+  auto defgrad_block_solver = buildNonlinearBlockSolver(state_nonlin_opts, state_lin_opts, *mesh);
+
   staggered_coupled_solver->addSubsystemSolver({0}, primal_block_solver);
-  staggered_coupled_solver->addSubsystemSolver({1, 2}, state_block_solver);
+  staggered_coupled_solver->addSubsystemSolver({2}, strain_block_solver);
+  staggered_coupled_solver->addSubsystemSolver({1}, defgrad_block_solver);
 
   auto plastic_mechanics_system = buildPlasticMechanicsSystem<dim, order>(mesh, staggered_coupled_solver);
 
   using Hardening = solid_mechanics::LinearHardening;
-  Hardening hardening{.sigma_y = 500.0, .Hi = 0.0, .eta = 0.5};
+  Hardening hardening{.sigma_y = 40.0, .Hi = 50.0, .eta = 0.0};
   DifferentiableJ2SmallStrain<dim, Hardening> mat(hardening, 1e+4, 0.25, 5.0, 1.0);
 
   plastic_mechanics_system.setMaterial(mesh->entireBodyName(), mat);
@@ -164,7 +169,7 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
   pv_writer.write(0, 0.0, states);
 
   std::vector<ReactionState> reactions;
-  for (size_t step = 0; step < 1; ++step) {
+  for (size_t step = 0; step < 10; ++step) {
     std::tie(states, reactions) =
         plastic_mechanics_system.advancer->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;

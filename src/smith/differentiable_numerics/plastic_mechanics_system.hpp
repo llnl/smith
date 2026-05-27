@@ -40,18 +40,18 @@ struct PlasticMechanicsSystem : public SystemBase {
   /// @brief using for SolidWeakFormType with inputs [u^{n+1, k+1}, Fp^{n+1, k}, epsilon_p^{n+1, k}]
   using SolidWeakFormType = TimeDiscretizedWeakForm<
       dim, H1<disp_order, dim>,
-      Parameters<H1<disp_order, dim>, L2<disp_order - 1, dim * dim>, L2<disp_order - 1>, parameter_space...>>;
+      Parameters<H1<disp_order, dim>, L2<disp_order, dim * dim>, L2<disp_order>, parameter_space...>>;
 
   /// @brief using for PlasticDeformWeakFormType with inputs [Fp^{n+1, k+1}, Fp^n, epsilon_p^{n+1, k+1}, epsilon_p^n, u^{n+1, k+1}]
   using PlasticDeformWeakFormType = TimeDiscretizedWeakForm<
-      dim, L2<disp_order - 1, dim * dim>,
-      Parameters<L2<disp_order - 1, dim * dim>, L2<disp_order - 1, dim * dim>, L2<disp_order - 1>,
-                 L2<disp_order - 1>, H1<disp_order, dim>, parameter_space...>>;
+      dim, L2<disp_order, dim * dim>,
+      Parameters<L2<disp_order, dim * dim>, L2<disp_order, dim * dim>, L2<disp_order>,
+                 L2<disp_order>, H1<disp_order, dim>, parameter_space...>>;
 
   /// @brief using for PlasticStrainWeakFormType with inputs [epsilon_p^{n+1, k+1}, epsilon_p^n, Fp^{n+1, k+1}, Fp^n, u^{n+1, k+1}]
   using PlasticStrainWeakFormType = TimeDiscretizedWeakForm<
-      dim, L2<disp_order - 1>,
-      Parameters<L2<disp_order - 1>, L2<disp_order - 1>, L2<disp_order - 1, dim * dim>, L2<disp_order - 1, dim * dim>,
+      dim, L2<disp_order>,
+      Parameters<L2<disp_order>, L2<disp_order>, L2<disp_order, dim * dim>, L2<disp_order, dim * dim>,
                  H1<disp_order, dim>, parameter_space...>>;
 
   // Primary weak forms
@@ -141,12 +141,12 @@ struct PlasticMechanicsSystem : public SystemBase {
   void setMaterial(const std::string& domain_name, const MaterialType& mat)
   {
     solid_weak_form->addBodyIntegral(domain_name,
-        [&](auto /* t_info */, auto /* X */, auto u, auto Fp, auto epsilon_p, auto... params) {
+        [&](auto t_info, auto /* X */, auto u, auto Fp, auto epsilon_p, auto... params) {
               auto du_dX = get<DERIVATIVE>(u);
               auto Fp_tensor = this->recoverTensor(get<VALUE>(Fp));
-              auto epsilon_pval = get<DERIVATIVE>(epsilon_p);
+              auto dt = t_info.dt();
 
-              auto P = mat.firstPiolaStress(du_dX, Fp_tensor, epsilon_pval, params...);
+              auto P = mat.firstPiolaStress(dt, du_dX, Fp_tensor, get<VALUE>(epsilon_p), params...);
 
               return tuple{zero{}, P};
             });
@@ -177,13 +177,14 @@ struct PlasticMechanicsSystem : public SystemBase {
             });
 
     plastic_strain_weak_form->addBodyIntegral(domain_name,
-        [=, this](auto t_info, auto /* X */, auto epsilon_p, auto epsilon_p_old, auto /* Fp */, auto Fp_old, auto u) {
+        [=, this](auto t_info, auto /* X */, auto epsilon_p, auto epsilon_p_old, auto /* Fp */, auto Fp_old, auto u, auto... params) {
               auto du_dX = get<DERIVATIVE>(u);
               auto Fp_old_tensor = this->recoverTensor(get<VALUE>(Fp_old));
               auto [epsilon_current, epsilon_dot] = captured_strain_rule->interpolate(t_info, epsilon_p, epsilon_p_old);
               auto dt = t_info.dt();
 
-              return tuple(get<VALUE>(epsilon_dot) - mat.plasticStrain(dt, get<VALUE>(epsilon_current), get<VALUE>(epsilon_dot), Fp_old_tensor, du_dX), zero{});
+              auto epsilon_dot_predict = mat.plasticStrain(dt, get<VALUE>(epsilon_current), get<VALUE>(epsilon_dot), Fp_old_tensor, du_dX);
+              return tuple(get<VALUE>(epsilon_dot) - epsilon_dot_predict, zero{});
             });
   }
 };
@@ -216,12 +217,12 @@ PlasticMechanicsSystem<dim, disp_order, parameter_space...> buildPlasticMechanic
   auto disp_bc = field_store->addIndependent(disp_type, quasistatic_time_rule);
 
   // State variable fields
-  FieldType<L2<disp_order - 1, dim * dim>> plastic_defgrad_type(prefix("plastic_defgrad"));
+  FieldType<L2<disp_order, dim * dim>> plastic_defgrad_type(prefix("plastic_defgrad"));
   auto plastic_defgrad_bc = field_store->addIndependent(plastic_defgrad_type, backward_euler_time_rule);
   auto plastic_defgrad_old_type =
       field_store->addDependent(plastic_defgrad_type, FieldStore::TimeDerivative::VAL, prefix("plastic_defgrad_old"));
 
-  FieldType<L2<disp_order - 1>> plastic_strain_type(prefix("plastic_strain"));
+  FieldType<L2<disp_order>> plastic_strain_type(prefix("plastic_strain"));
   auto plastic_strain_bc = field_store->addIndependent(plastic_strain_type, backward_euler_time_rule);
   auto plastic_strain_old_type =
       field_store->addDependent(plastic_strain_type, FieldStore::TimeDerivative::VAL, prefix("plastic_strain_old"));
