@@ -325,11 +325,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     mfem::Vector p = pressure();
     contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
 
-    std::cout << "Line 230" << std::endl;
-
     SolidMechanicsBase::completeSetup();
-
-    std::cout << "Line 234" << std::endl;
   }
 
   /**
