@@ -1,0 +1,40 @@
+reset
+undo off
+
+# Unit square frame with a centered square hole.
+# Boundary/sideset IDs expected by the Smith example:
+#   1 -> bottom
+#   2 -> right
+#   3 -> top
+#   4 -> left
+#   5 -> interior square-hole boundary
+
+create surface rectangle width 1 height 1 zplane
+create surface rectangle width 0.8 height 0.8 zplane
+subtract body 2 from body 1
+compress all
+
+surface 1 scheme trimesh
+curve 1 2 3 4 interval 80
+curve 5 6 7 8 interval 64
+mesh surface 1
+
+block 1 add surface 1
+block 1 name "solid"
+
+sideset 1 add curve 1
+sideset 1 name "top"
+
+sideset 2 add curve 2
+sideset 2 name "left"
+
+sideset 3 add curve 3
+sideset 3 name "bottom"
+
+sideset 4 add curve 4
+sideset 4 name "right"
+
+sideset 5 add curve 5 6 7 8
+sideset 5 name "interior"
+
+export genesis "single_square_hole_frame.g" dimension 2 overwrite

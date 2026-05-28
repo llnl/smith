@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
       .max_line_search_iterations = 10,
       .print_level = 2};
 
-  smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar, //EnergyAreaPenalty, //EnergyMortar,
+  smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyAreaPenalty, //EnergyAreaPenalty, //EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
                                         .type = smith::ContactType::Frictionless,
                                         .penalty = 80000.0,

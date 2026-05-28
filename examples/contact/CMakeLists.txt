@@ -11,10 +11,11 @@ if(TRIBOL_FOUND)
         sphere.cpp
         twist.cpp
         ironing_2D.cpp
-        # ironing_2D_circle.cpp  # requires MeshBuilder::SemiCircularShell (not yet available)
+        #ironing_2D_circle.cpp
         twisted_ironing_2D.cpp
         energy_mortar_hertzian_disp.cpp
         energy_mortar_hertzian_traction.cpp
+        compress_with_square_hole_2D.cpp
     )
 
     foreach(filename ${CONTACT_EXAMPLES_SOURCES})
