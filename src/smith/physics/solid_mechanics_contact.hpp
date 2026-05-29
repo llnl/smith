@@ -364,20 +364,39 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       SolidMechanicsBase::setDualAdjointBcs({{"reactions", reaction_adjoint_load->second}});
     }
 
+    for (auto& [interaction_id, force_adjoint_bc] : contact_interaction_force_adjoint_bcs_) {
+      static_cast<void>(interaction_id);
+      *force_adjoint_bc = 0.0;
+    }
+
     for (const auto& [name, bc] : bcs) {
       if (name == "reactions") {
+        continue;
+      }
+
+      if (name == "contact_forces" || name == detail::addPrefix(this->name_, "contact_forces")) {
+        for (auto& [interaction_id, force_adjoint_bc] : contact_interaction_force_adjoint_bcs_) {
+          static_cast<void>(interaction_id);
+          force_adjoint_bc->Add(1.0, bc);
+        }
         continue;
       }
 
       const auto interaction_id = parseContactInteractionForceId(name);
       SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
                          std::format("Unknown dual adjoint BC '{}' for SolidMechanicsContact.", name));
+      if (!interaction_id.has_value()) {
+        continue;
+      }
 
       auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
       SLIC_ERROR_ROOT_IF(it == contact_interaction_force_adjoint_bcs_.end(),
                          std::format("No contact force adjoint BC registered for interaction_id={}", *interaction_id));
+      if (it == contact_interaction_force_adjoint_bcs_.end()) {
+        continue;
+      }
 
-      *it->second = bc;
+      it->second->Add(1.0, bc);
     }
   }
 

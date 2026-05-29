@@ -419,6 +419,50 @@ TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdj
   EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
 }
 
+TEST_F(ContactSensitivityFixture, AggregateContactForcesDualAdjointBcsMatchesEquivalentAdjointLoad)
+{
+  constexpr int contact_interaction_id = 0;
+
+  auto solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  FiniteElementState dJ_dF(solver->state("displacement").space(), "dJ_dF");
+  fillDirection(*solver, dJ_dF);
+
+  FiniteElementDual zero_load(solver->state("displacement").space(), "zero_load");
+  zero_load = 0.0;
+  solver->setAdjointLoad({{"displacement", zero_load}});
+  solver->setDualAdjointBcs({{"contact_forces", dJ_dF}});
+  solver->reverseAdjointTimestep();
+
+  FiniteElementState lambda_from_seed(solver->adjoint("displacement"));
+
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  const auto interaction_jacobian = solver->contactInteraction(contact_interaction_id).jacobianContribution();
+  auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+  SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+  FiniteElementDual equivalent_load(solver->state("displacement").space(), "equivalent_load");
+  equivalent_load = 0.0;
+  J00->MultTranspose(dJ_dF, equivalent_load);
+
+  solver->setAdjointLoad({{"displacement", equivalent_load}});
+  solver->reverseAdjointTimestep();
+
+  const auto& lambda_from_load = solver->adjoint("displacement");
+
+  FiniteElementState diff(lambda_from_seed);
+  diff.Add(-1.0, lambda_from_load);
+
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
