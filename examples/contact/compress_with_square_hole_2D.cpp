@@ -133,7 +133,8 @@ int main(int argc, char* argv[])
       .max_iterations = 2000,
       .max_line_search_iterations = 10,
       .print_level = 2,
-      .subspace_option = smith::SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY};
+       //, smith::SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY
+      };
 
   smith::LinearSolverOptions linear_options{
       .linear_solver = smith::LinearSolver::CG,
@@ -154,7 +155,7 @@ int main(int argc, char* argv[])
 
   smith::SolidMechanicsContact<p, dim> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
-      std::vector<std::string>{}, 0, 0, false, false);
+      std::vector<std::string>{}, 0, 0, false, true);
 
   SolidNeoHookeanMaterial solid_material{.density = 1000.0, .K = K_solid, .G = G_solid};
   solid_solver.setMaterial(solid_material, mesh->domain("solid"));
