@@ -53,23 +53,23 @@ int main(int argc, char* argv[])
   // Mesh options
   int serial_refinement = 0;
   int parallel_refinement = 0;
-  double dt = 0.1;
+  double dt = 0.25;
 
   // Solver options
   NonlinearSolverOptions nonlinear_options = solid_mechanics::default_nonlinear_options;
   nonlinear_options.nonlin_solver = smith::NonlinearSolver::TrustRegion;
-  nonlinear_options.relative_tol = 1e-6;
-  nonlinear_options.absolute_tol = 1e-10;
+  nonlinear_options.relative_tol = 1e-7;
+  nonlinear_options.absolute_tol = 1e-9;
   nonlinear_options.min_iterations = 1;
-  nonlinear_options.max_iterations = 500;
+  nonlinear_options.max_iterations = 1500;
   nonlinear_options.max_line_search_iterations = 20;
-  nonlinear_options.print_level = 1;
+  nonlinear_options.print_level = 2;
 
   LinearSolverOptions linear_options = solid_mechanics::default_linear_options;
   linear_options.linear_solver = smith::LinearSolver::CG;
   linear_options.preconditioner = smith::Preconditioner::HypreAMG;
   linear_options.relative_tol = 1e-8;
-  linear_options.absolute_tol = 1e-16;
+  linear_options.absolute_tol = 1e-12;
   linear_options.max_iterations = 2000;
 
   // Contact specific options
@@ -106,6 +106,19 @@ int main(int argc, char* argv[])
   app.add_option("--petsc-pc-type", linear_options.petsc_preconditioner,
                  "Petsc preconditioner (Index of enum smith::PetscPCType)")
       ->expected(0, 14);
+  app.add_option(
+         "--trust-subspace-option", nonlinear_options.subspace_option,
+         "When to use the trust-region subspace solver: 0 never, 1 indefinite, 2 indefinite or boundary, 3 always")
+      ->expected(0, 3);
+  app.add_option("--trust-num-leftmost", nonlinear_options.num_leftmost,
+                 "Number of leftmost eigenvectors to reuse between trust-region subspace solves")
+      ->check(axom::CLI::NonNegativeNumber);
+  app.add_option("--trust-num-previous-steps", nonlinear_options.num_previous_steps,
+                 "Number of previous accepted steps to include in trust-region subspace solves")
+      ->check(axom::CLI::NonNegativeNumber);
+  app.add_option("--trust-region-scaling", nonlinear_options.trust_region_scaling,
+                 "Initial trust-region radius scaling")
+      ->check(axom::CLI::PositiveNumber);
   app.add_option("--dt", dt, "Size of pseudo-time step pre-contact")->check(axom::CLI::PositiveNumber);
   // Contact options
   auto opt_contact =
@@ -186,7 +199,8 @@ int main(int argc, char* argv[])
   // Top of cylinder has prescribed displacement of magnitude in x-z direction
   auto compress = [&](const smith::tensor<double, dim>, double t) {
     smith::tensor<double, dim> u{};
-    u[0] = u[2] = -1.35 / std::sqrt(2.0) * t;
+    // u[0] =
+    u[2] = -1.35 / std::sqrt(2.0) * t;
     return u;
   };
   solid_solver->setDisplacementBCs(compress, mesh->domain("top"), Component::X + Component::Z);
@@ -203,6 +217,11 @@ int main(int argc, char* argv[])
   // Perform the quasi-static solve
   SLIC_INFO_ROOT(std::format("Running hollow cylinder bucking example with {} displacement dofs",
                              solid_solver->displacement().GlobalSize()));
+  SLIC_INFO_ROOT(
+      std::format("Trust-region subspace option = {}, num leftmost = {}, num previous steps = {}, "
+                  "radius scaling = {}",
+                  static_cast<int>(nonlinear_options.subspace_option), nonlinear_options.num_leftmost,
+                  nonlinear_options.num_previous_steps, nonlinear_options.trust_region_scaling));
   SLIC_INFO_ROOT("Starting pseudo-timestepping.");
   smith::logger::flush();
   while (solid_solver->time() < 1.0 && std::abs(solid_solver->time() - 1) > DBL_EPSILON) {
@@ -210,7 +229,7 @@ int main(int argc, char* argv[])
     smith::logger::flush();
 
     // Refine dt as contact starts
-    auto next_dt = solid_solver->time() < 0.65 ? dt : dt * 0.1;
+    auto next_dt = dt;  // solid_solver->time() < 0.65 ? dt : dt * 0.1;
     solid_solver->advanceTimestep(next_dt);
 
     // Output the sidre-based plot files
