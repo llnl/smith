@@ -11,7 +11,7 @@
 #include "smith/physics/mesh.hpp"
 
 #include "gretl/data_store.hpp"
-#include "smith/physics/solid_weak_form.hpp"
+#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/physics/functional_objective.hpp"
 
 #include "smith/differentiable_numerics/lumped_mass_explicit_newmark_state_advancer.hpp"
@@ -144,17 +144,25 @@ struct MeshFixture : public testing::Test {
     params_ = {density0};
     std::vector<smith::FieldState> states{disp, velo, accel};
 
-    auto solid_mechanics_residual = smith::create_solid_weak_form<disp_order, dim, DensitySpace>(
-        physics_name, mesh_, getConstFieldPointers(states), getConstFieldPointers(params_));
+    std::vector<const mfem::ParFiniteElementSpace*> trial_spaces = {&disp.get()->space(), &disp.get()->space(),
+                                                                    &disp.get()->space(), &density0.get()->space()};
+    auto solid_mechanics_residual = std::make_shared<smith::TimeDiscretizedWeakForm<
+        dim, VectorSpace, smith::Parameters<VectorSpace, VectorSpace, VectorSpace, DensitySpace>>>(
+        physics_name, mesh_, disp.get()->space(), trial_spaces);
 
     SolidMaterial mat;
     mat.density0 = density;
     mat.K = 1.0;
     mat.G = 0.5;
 
-    solid_mechanics_residual->setMaterial(smith::DependsOn<>{}, mesh_->entireBodyName(), mat);
+    solid_mechanics_residual->addBodyIntegral(
+        mesh_->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto /*density*/) {
+          typename SolidMaterial::State state;
+          auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u));
+          return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(), pk_stress};
+        });
 
-    solid_mechanics_residual->addBodySource(mesh_->entireBodyName(), [](auto /*time*/, auto X) {
+    solid_mechanics_residual->addBodySource(smith::DependsOn<>{}, mesh_->entireBodyName(), [](auto /*t_info*/, auto X) {
       auto b = 0.0 * X;
       b[1] = gravity;
       return b;

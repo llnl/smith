@@ -204,8 +204,7 @@ TEST(Deflation, TrustRegionHooks_RoundTrip)
   // supports across ranks, so v is fully captured by the rank-local W slice).
   int my_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-  mfem::Vector alpha_local(alpha_expected.GetData() + my_rank * defl.numLocalColumns(),
-                           defl.numLocalColumns());
+  mfem::Vector alpha_local(alpha_expected.GetData() + my_rank * defl.numLocalColumns(), defl.numLocalColumns());
   mfem::Vector v_reconstructed(v.Size());
   v_reconstructed = 0.0;
   defl.applyW(alpha_local, v_reconstructed);
@@ -225,8 +224,7 @@ TEST(Deflation, TrustRegionHooks_RoundTrip)
   defl.solveCoarse(c_local, alpha_got);
   ASSERT_EQ(alpha_got.Size(), alpha_expected.Size());
 
-  mfem::Vector alpha_got_local(alpha_got.GetData() + my_rank * defl.numLocalColumns(),
-                               defl.numLocalColumns());
+  mfem::Vector alpha_got_local(alpha_got.GetData() + my_rank * defl.numLocalColumns(), defl.numLocalColumns());
   mfem::Vector v_from_solve(v.Size());
   v_from_solve = 0.0;
   defl.applyW(alpha_got_local, v_from_solve);
@@ -341,8 +339,7 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
   mfem::Vector X, B;
   a.FormLinearSystem(ess_tdofs, x_gf, b, A, X, B);
 
-  auto runCG = [&](smith::Preconditioner pc, const char* label,
-                   smith::CoarseMode dmode = smith::CoarseMode::Additive,
+  auto runCG = [&](smith::Preconditioner pc, const char* label, smith::CoarseMode dmode = smith::CoarseMode::Additive,
                    bool use_bsr = false) -> int {
     smith::LinearSolverOptions opts;
     opts.linear_solver = smith::LinearSolver::CG;
@@ -413,12 +410,13 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
     MPI_Allreduce(&n_ess_local, &n_ess_global, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     if (my_rank == 0) {
       std::cout << "[Beam " << label << "] ranks=" << n_ranks << " dofs=" << fes.GlobalTrueVSize()
-                << " ess_tdofs=" << n_ess_global
-                << " iters=" << iter->GetNumIterations() << " converged=" << iter->GetConverged()
-                << " ||r||=" << true_rnorm
+                << " ess_tdofs=" << n_ess_global << " iters=" << iter->GetNumIterations()
+                << " converged=" << iter->GetConverged() << " ||r||="
+                << true_rnorm
                 // === TIMING BEGIN ===
                 << " t_setop=" << t_setop << "s t_solve=" << t_solve << "s"
-                << " t_per_iter=" << (iter->GetNumIterations() > 0 ? t_solve / iter->GetNumIterations() : 0.0) << "s"
+                << " t_per_iter=" << (iter->GetNumIterations() > 0 ? t_solve / iter->GetNumIterations() : 0.0)
+                << "s"
                 // === TIMING END ===
                 << "\n";
       // === TIMING BEGIN === deflation internal breakdown
@@ -437,18 +435,17 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
   int iters_jac = runCG(smith::Preconditioner::HypreJacobi, "Jacobi");
   int iters_amg = runCG(smith::Preconditioner::HypreAMG, "HypreAMG");
   int iters_def_add = runCG(smith::Preconditioner::Deflation, "Deflation_Add", smith::CoarseMode::Additive);
-  int iters_def_add_bsr = runCG(smith::Preconditioner::Deflation, "Deflation_Add_BSR", smith::CoarseMode::Additive, true);
-  int iters_def_loc =
-      runCG(smith::Preconditioner::Deflation, "Deflation_AddLocal", smith::CoarseMode::AdditiveLocal);
-  int iters_def_sch =
-      runCG(smith::Preconditioner::Deflation, "Deflation_Schwarz", smith::CoarseMode::AdditiveSchwarz);
-  int iters_def_mul =
-      runCG(smith::Preconditioner::Deflation, "Deflation_Mult", smith::CoarseMode::Multiplicative);
+  int iters_def_add_bsr =
+      runCG(smith::Preconditioner::Deflation, "Deflation_Add_BSR", smith::CoarseMode::Additive, true);
+  int iters_def_loc = runCG(smith::Preconditioner::Deflation, "Deflation_AddLocal", smith::CoarseMode::AdditiveLocal);
+  int iters_def_sch = runCG(smith::Preconditioner::Deflation, "Deflation_Schwarz", smith::CoarseMode::AdditiveSchwarz);
+  int iters_def_mul = runCG(smith::Preconditioner::Deflation, "Deflation_Mult", smith::CoarseMode::Multiplicative);
 
   if (my_rank == 0) {
     std::cout << "[Beam summary] ranks=" << n_ranks << " Jacobi=" << iters_jac << " AMG=" << iters_amg
-              << " Def_Add=" << iters_def_add << " Def_Add_BSR=" << iters_def_add_bsr << " Def_AddLocal=" << iters_def_loc
-              << " Def_Schwarz=" << iters_def_sch << " Def_Mult=" << iters_def_mul << "\n";
+              << " Def_Add=" << iters_def_add << " Def_Add_BSR=" << iters_def_add_bsr
+              << " Def_AddLocal=" << iters_def_loc << " Def_Schwarz=" << iters_def_sch << " Def_Mult=" << iters_def_mul
+              << "\n";
   }
   EXPECT_LT(iters_def_add, iters_jac) << "deflation should beat plain Jacobi";
   EXPECT_LE(std::abs(iters_def_add_bsr - iters_def_add), 2)

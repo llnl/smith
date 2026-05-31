@@ -25,7 +25,7 @@ struct BSRMatrix {
  * back to the wrapped HypreParMatrix.
  */
 class BSROperator : public mfem::Operator {
-public:
+ public:
   /**
    * @brief Construct a new BSROperator
    *
@@ -48,7 +48,7 @@ public:
   /// True when the matrix satisfied the current prototype's block-layout checks.
   bool Enabled() const { return enabled_; }
 
-private:
+ private:
   /// Convert a HYPRE CSR matrix to the internal BSR representation
   static BSRMatrix convertCSRToBSR(hypre_CSRMatrix* csr, int b);
 

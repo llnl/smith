@@ -195,8 +195,8 @@ TEST(BatchedMatvec, BeamTiming)
 
   if (rank == 0) {
     std::cout << "[BeamTiming] ranks=" << nproc << " dofs=" << fes.GlobalTrueVSize() << " k=" << k
-              << " Loop=" << t_loop * 1000 << "ms PackedDense=" << t_pack * 1000
-              << "ms speedup=" << t_loop / t_pack << "x\n";
+              << " Loop=" << t_loop * 1000 << "ms PackedDense=" << t_pack * 1000 << "ms speedup=" << t_loop / t_pack
+              << "x\n";
   }
 }
 
@@ -371,8 +371,8 @@ TEST(BatchedMatvec, BeamTimingTripleProduct)
 
   if (rank == 0) {
     std::cout << "[BeamTiming3] ranks=" << nproc << " dofs=" << fes.GlobalTrueVSize() << " m=" << m
-              << " Loop=" << t_loop * 1000 << "ms PackedDense=" << t_pack * 1000
-              << "ms TripleProduct=" << t_tp * 1000 << "ms"
+              << " Loop=" << t_loop * 1000 << "ms PackedDense=" << t_pack * 1000 << "ms TripleProduct=" << t_tp * 1000
+              << "ms"
               << " (TP vs Loop=" << t_loop / t_tp << "x, TP vs Pack=" << t_pack / t_tp << "x)\n";
     std::cout << "  [TP breakdown avg/iter] halo=" << tp_tm.halo / nreps * 1000
               << "ms diag=" << tp_tm.diag / nreps * 1000 << "ms offd=" << tp_tm.offd / nreps * 1000

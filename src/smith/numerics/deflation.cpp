@@ -26,12 +26,8 @@ bool factorCholesky(const mfem::DenseMatrix& matrix, mfem::DenseMatrix& factors_
   return factors.Factor(matrix.Height());
 }
 
-void choleskySolve(const mfem::CholeskyFactors& factors,
-                   const mfem::DenseMatrixInverse& fallback_lu,
-                   bool use_cholesky,
-                   int size,
-                   const mfem::Vector& rhs,
-                   mfem::Vector& x)
+void choleskySolve(const mfem::CholeskyFactors& factors, const mfem::DenseMatrixInverse& fallback_lu, bool use_cholesky,
+                   int size, const mfem::Vector& rhs, mfem::Vector& x)
 {
   if (!use_cholesky) {
     fallback_lu.Mult(rhs, x);
@@ -44,16 +40,14 @@ void choleskySolve(const mfem::CholeskyFactors& factors,
 
 }  // namespace
 
-DeflationPreconditioner::DeflationPreconditioner(mfem::ParFiniteElementSpace& fes,
-                                                 bool use_smoother,
+DeflationPreconditioner::DeflationPreconditioner(mfem::ParFiniteElementSpace& fes, bool use_smoother,
                                                  mfem::HypreSmoother::Type smoother_type)
     : mfem::Solver(fes.GetTrueVSize()), smoother_type_(smoother_type), use_smoother_(use_smoother)
 {
   attachFES(fes);
 }
 
-DeflationPreconditioner::DeflationPreconditioner(bool use_smoother,
-                                                 mfem::HypreSmoother::Type smoother_type)
+DeflationPreconditioner::DeflationPreconditioner(bool use_smoother, mfem::HypreSmoother::Type smoother_type)
     : mfem::Solver(0), smoother_type_(smoother_type), use_smoother_(use_smoother)
 {
   // FES bound later via attachFES(...). SetOperator before attach is an error.
@@ -295,7 +289,7 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
     MPI_Comm comm = fes_->GetComm();
     const int n_nbr = static_cast<int>(schwarz_neighbors_.size());
     std::vector<std::vector<double>> recv_bufs(static_cast<size_t>(n_nbr),
-                                                std::vector<double>(static_cast<size_t>(modes_per_rank_)));
+                                               std::vector<double>(static_cast<size_t>(modes_per_rank_)));
     std::vector<MPI_Request> reqs;
     reqs.reserve(static_cast<size_t>(2 * n_nbr));
     for (int n = 0; n < n_nbr; ++n) {
@@ -306,8 +300,8 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
     }
     for (int n = 0; n < n_nbr; ++n) {
       MPI_Request req;
-      MPI_Isend(u_local.GetData(), modes_per_rank_, MPI_DOUBLE,
-                schwarz_neighbors_[static_cast<size_t>(n)], 31, comm, &req);
+      MPI_Isend(u_local.GetData(), modes_per_rank_, MPI_DOUBLE, schwarz_neighbors_[static_cast<size_t>(n)], 31, comm,
+                &req);
       reqs.push_back(req);
     }
     if (!reqs.empty()) {
@@ -453,7 +447,7 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
     //   z += Π (r - A z)              (coarse post)
     if (mult_tmp_.Size() != n) mult_tmp_.SetSize(n);
     z = 0.0;
-    addCoarseCorrection(r, z);          // z = Π r
+    addCoarseCorrection(r, z);  // z = Π r
     op_for_mult_->Mult(z, mult_tmp_);
     mfem::Vector r_mid(n);
     for (int i = 0; i < n; ++i) r_mid(i) = r(i) - mult_tmp_(i);

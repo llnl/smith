@@ -28,7 +28,8 @@
 namespace smith {
 
 /// How the coarse correction is applied inside `Mult`.
-enum class CoarseMode {
+enum class CoarseMode
+{
   /// z = M_J^{-1} r + W (WtAW)^{-1} W^T r   (default — global Galerkin coarse solve via Allgather)
   Additive,
   /// z = M_J^{-1} r + W (WtAW_pp)^{-1} W^T r
@@ -55,8 +56,7 @@ class DeflationPreconditioner : public mfem::Solver {
    * @param use_smoother  Enable the second-level smoother.
    * @param smoother_type Hypre smoother type for the second-level smoother.
    */
-  explicit DeflationPreconditioner(mfem::ParFiniteElementSpace& fes,
-                                   bool use_smoother = true,
+  explicit DeflationPreconditioner(mfem::ParFiniteElementSpace& fes, bool use_smoother = true,
                                    mfem::HypreSmoother::Type smoother_type = mfem::HypreSmoother::Jacobi);
 
   /// Deferred-FES constructor. The FES must be supplied via `attachFES(...)` before the first
@@ -167,18 +167,18 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable mfem::CholeskyFactors WtAW_cholesky_factors_;
   mutable mfem::DenseMatrixInverse WtAW_lu_inv_;
   mutable bool WtAW_uses_cholesky_ = false;
-  mutable mfem::DenseMatrix WtAW_pp_;            // diagonal block (p, p) — for AdditiveLocal mode.
+  mutable mfem::DenseMatrix WtAW_pp_;  // diagonal block (p, p) — for AdditiveLocal mode.
   mutable mfem::DenseMatrix WtAW_pp_cholesky_;
   mutable mfem::CholeskyFactors WtAW_pp_cholesky_factors_;
   mutable mfem::DenseMatrixInverse WtAW_pp_lu_inv_;
   mutable bool WtAW_pp_uses_cholesky_ = false;
   mutable bool factored_ = false;
   // Leftmost eigenpair cache (recomputed on each SetOperator via invalidation).
-  mutable mfem::Vector leftmost_evec_;       // length m_
+  mutable mfem::Vector leftmost_evec_;  // length m_
   mutable double leftmost_eval_ = 0.0;
   mutable bool leftmost_valid_ = false;
   CoarseMode coarse_mode_ = CoarseMode::Additive;
-  mutable mfem::Vector mult_tmp_;                // buffer for A·z in Multiplicative mode.
+  mutable mfem::Vector mult_tmp_;  // buffer for A·z in Multiplicative mode.
 
   // AdditiveSchwarz: cached neighbor list + off-diag WtAW blocks (mpr × mpr each).
   mutable std::vector<int> schwarz_neighbors_;

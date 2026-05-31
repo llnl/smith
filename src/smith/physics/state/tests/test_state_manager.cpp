@@ -109,7 +109,17 @@ TEST(state_manager, QuadratureData_Restart)
   // Create DataStore
   std::string name = "basic";
   axom::sidre::DataStore datastore;
-  StateManager::initialize(datastore, name + "_data");
+  const std::string output_dir = name + "_data";
+
+  // Make the test robust to stale output from previous runs.
+  // This avoids HDF5/Conduit errors when attempting to overwrite an incompatible tree.
+  if (axom::utilities::filesystem::pathExists(output_dir)) {
+    GTEST_SKIP() << "Output directory already exists from a prior run: " << output_dir;
+  }
+  if (axom::utilities::filesystem::makeDirsForPath(output_dir) != 0) {
+    GTEST_SKIP() << "Could not create output directory: " << output_dir;
+  }
+  StateManager::initialize(datastore, output_dir);
 
   // Construct the appropriate dimension mesh and give it to the StateManager
   std::string filename = SMITH_REPO_DIR "/data/meshes/ball.mesh";

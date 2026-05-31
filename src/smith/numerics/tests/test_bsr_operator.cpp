@@ -70,15 +70,9 @@ void expectBSRMatchesHypre(int dim)
 
 }  // namespace
 
-TEST(BSROperator, Elasticity2DMatchesHypre)
-{
-  expectBSRMatchesHypre(2);
-}
+TEST(BSROperator, Elasticity2DMatchesHypre) { expectBSRMatchesHypre(2); }
 
-TEST(BSROperator, Elasticity3DMatchesHypre)
-{
-  expectBSRMatchesHypre(3);
-}
+TEST(BSROperator, Elasticity3DMatchesHypre) { expectBSRMatchesHypre(3); }
 
 int main(int argc, char* argv[])
 {

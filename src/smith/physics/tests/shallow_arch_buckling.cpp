@@ -115,8 +115,10 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   EXPECT_GT(globalElementCount(mesh->domain("top_face").total_elements()), 0);
 
   Preconditioner selected_pc = Preconditioner::HypreJacobi;
-  if (preconditioner_name == "Deflation") selected_pc = Preconditioner::Deflation;
-  else if (preconditioner_name == "HypreAMG") selected_pc = Preconditioner::HypreAMG;
+  if (preconditioner_name == "Deflation")
+    selected_pc = Preconditioner::Deflation;
+  else if (preconditioner_name == "HypreAMG")
+    selected_pc = Preconditioner::HypreAMG;
   else if (preconditioner_name != "HypreJacobi")
     throw std::runtime_error("Unknown --preconditioner '" + preconditioner_name + "'");
   smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
@@ -148,11 +150,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     // deformation mode is bending, which is exactly the kind of slow mode the deflation
     // coarse space (per-rank affine modes) is designed to remove.
     constexpr double bending_traction = 5.0e-6;
-    solid.setTraction(
-        [](auto, auto, double t) {
-          return vec2{{0.0, -bending_traction * t}};
-        },
-        mesh->domain("top_face"));
+    solid.setTraction([](auto, auto, double t) { return vec2{{0.0, -bending_traction * t}}; },
+                      mesh->domain("top_face"));
   } else {
     constexpr double final_compression = 0.2;
     constexpr double seed_down_traction = 1.0e-5;

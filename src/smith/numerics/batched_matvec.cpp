@@ -37,8 +37,7 @@ void batchedMatvecLoop(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& X
 // is row-major (per offd col, k contiguous). Local SpMV inner loop iterates k.
 void batchedMatvecPackedDense(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& X, mfem::DenseMatrix& Y)
 {
-  hypre_ParCSRMatrix* parA =
-      static_cast<hypre_ParCSRMatrix*>(const_cast<mfem::HypreParMatrix&>(A));
+  hypre_ParCSRMatrix* parA = static_cast<hypre_ParCSRMatrix*>(const_cast<mfem::HypreParMatrix&>(A));
   hypre_CSRMatrix* diag = hypre_ParCSRMatrixDiag(parA);
   hypre_CSRMatrix* offd = hypre_ParCSRMatrixOffd(parA);
 
@@ -95,8 +94,8 @@ void batchedMatvecPackedDense(const mfem::HypreParMatrix& A, const mfem::DenseMa
   }
 
   // Local diag-block SpMV overlap with comm: Y += A_diag * X.
-  HYPRE_Int*  diag_i = hypre_CSRMatrixI(diag);
-  HYPRE_Int*  diag_j = hypre_CSRMatrixJ(diag);
+  HYPRE_Int* diag_i = hypre_CSRMatrixI(diag);
+  HYPRE_Int* diag_j = hypre_CSRMatrixJ(diag);
   HYPRE_Real* diag_a = hypre_CSRMatrixData(diag);
   for (int row = 0; row < n; ++row) {
     for (HYPRE_Int idx = diag_i[row]; idx < diag_i[row + 1]; ++idx) {
@@ -113,8 +112,8 @@ void batchedMatvecPackedDense(const mfem::HypreParMatrix& A, const mfem::DenseMa
   }
 
   // Off-diag block SpMV using packed halo data: Y += A_offd * recv_buf.
-  HYPRE_Int*  offd_i = hypre_CSRMatrixI(offd);
-  HYPRE_Int*  offd_j = hypre_CSRMatrixJ(offd);
+  HYPRE_Int* offd_i = hypre_CSRMatrixI(offd);
+  HYPRE_Int* offd_j = hypre_CSRMatrixJ(offd);
   HYPRE_Real* offd_a = hypre_CSRMatrixData(offd);
   for (int row = 0; row < n; ++row) {
     for (HYPRE_Int idx = offd_i[row]; idx < offd_i[row + 1]; ++idx) {
@@ -205,8 +204,8 @@ void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_loca
 
   // Diagonal block (p, p) = W_p^T · A_diag · W_p — overlap with comm.
   double t_diag_start = MPI_Wtime();
-  HYPRE_Int*  diag_i = hypre_CSRMatrixI(diag);
-  HYPRE_Int*  diag_j = hypre_CSRMatrixJ(diag);
+  HYPRE_Int* diag_i = hypre_CSRMatrixI(diag);
+  HYPRE_Int* diag_j = hypre_CSRMatrixJ(diag);
   HYPRE_Real* diag_a = hypre_CSRMatrixData(diag);
 
   mfem::DenseMatrix AW_diag(n, mpr);
@@ -239,8 +238,8 @@ void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_loca
   // Off-diag blocks (p, s) for each halo-neighbor s = recv_procs[r].
   double t_offd_start = MPI_Wtime();
   // Per-neighbor AW accumulators: AW_per[r] = A_offd|_p · W_s_halo (restricted to s's halo cols).
-  HYPRE_Int*  offd_i = hypre_CSRMatrixI(offd);
-  HYPRE_Int*  offd_j = hypre_CSRMatrixJ(offd);
+  HYPRE_Int* offd_i = hypre_CSRMatrixI(offd);
+  HYPRE_Int* offd_j = hypre_CSRMatrixJ(offd);
   HYPRE_Real* offd_a = hypre_CSRMatrixData(offd);
 
   // owner_of_offd_col[c] = recv-index (into recv_procs) of the rank that owns offd col c.

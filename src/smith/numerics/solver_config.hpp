@@ -13,9 +13,11 @@
 #pragma once
 
 #include <variant>
+#include <vector>
 
 #include "mfem.hpp"
 #include "smith/infrastructure/format.hpp"
+#include "smith/numerics/block_preconditioner.hpp"
 
 namespace smith {
 
@@ -344,6 +346,9 @@ enum class Preconditioner
   Petsc,            /**< PETSc preconditioner,  */
   AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
   Deflation,        /**< Custom two-level deflation (per-rank affine basis + Jacobi) */
+  BlockDiagonal,    /**< Block diagonal preconditioner */
+  BlockTriangular,  /**< Block triangular preconditioner */
+  BlockSchur,       /**< Block Schur preconditioner */
   None              /**< No preconditioner used */
 };
 // _preconditioners_end
@@ -370,6 +375,12 @@ inline std::string preconditionerName(Preconditioner p)
       return "AMGFContact";
     case Preconditioner::Deflation:
       return "Deflation";
+    case Preconditioner::BlockDiagonal:
+      return "BlockDiagonal";
+    case Preconditioner::BlockTriangular:
+      return "BlockTriangular";
+    case Preconditioner::BlockSchur:
+      return "BlockSchur";
     case Preconditioner::None:
       return "None";
   }
@@ -391,6 +402,9 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"Petsc", Preconditioner::Petsc},
     {"AMGFContact", Preconditioner::AMGFContact},
     {"Deflation", Preconditioner::Deflation},
+    {"BlockDiagonal", Preconditioner::BlockDiagonal},
+    {"BlockTriangular", Preconditioner::BlockTriangular},
+    {"BlockSchur", Preconditioner::BlockSchur},
     {"None", Preconditioner::None},
 };
 
@@ -436,6 +450,18 @@ struct LinearSolverOptions {
 
   /// BSR block size. Use 2 for 2D elasticity and 3 for 3D elasticity.
   int bsr_block_size = 3;
+
+  /// Subblock linear solver options for block preconditioners
+  std::vector<LinearSolverOptions> sub_block_linear_solver_options = {};
+
+  /// Block Triangular Preconditioner factorization type
+  BlockTriangularType block_triangular_type = BlockTriangularType::Lower;
+
+  /// Block Schur preconditioner factorization type
+  BlockSchurType block_schur_type = BlockSchurType::Full;
+
+  /// Schur approximation type
+  SchurApproxType schur_approx_type = SchurApproxType::DiagInv;
 };
 // _linear_options_end
 
@@ -480,9 +506,6 @@ struct NonlinearSolverOptions {
 
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
-
-  /// Should the gradient be converted to a monolithic matrix
-  bool force_monolithic = false;
 };
 // _nonlinear_options_end
 

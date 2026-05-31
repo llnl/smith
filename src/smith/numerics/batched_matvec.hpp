@@ -31,7 +31,8 @@
 
 namespace smith {
 
-enum class BatchedMatvecStrategy {
+enum class BatchedMatvecStrategy
+{
   Loop,         // sequential per-column A.Mult — correctness baseline
   PackedDense,  // single packed halo exchange + per-element local SpMV
 };
