@@ -1022,17 +1022,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
         doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
 
-        // Tight integration with the deflation preconditioner: when subspace_option == NEVER
-        // (or as an additional refinement before the SLEPc subspace call), try improving the
-        // dogleg direction by mixing in the coarse leftmost W-direction via a 2-D model
-        // minimization. Restricted to the negative-curvature case (leftmost coarse eigenvalue
-        // < 0) — that's where the leftmost is actually carrying information the dogleg lacks.
-        // In SPD regions the coarse leftmost is just the lowest-energy affine mode, augmenting
-        // there destabilises CG convergence on subsequent outer iterations. No-op when the
-        // preconditioner is not deflation-based, or when SMITH_DEFLATION_NO_DOGLEG_AUG is set
-        // (debug/A-B compare).
-        if (deflation_precond_ && deflation_leftmost_lambda_ < 0.0 &&
-            std::getenv("SMITH_DEFLATION_NO_DOGLEG_AUG") == nullptr) {
+        // When the coarse Hessian has a negative eigenvalue, augment the dogleg direction
+        // with the coarse leftmost W-direction via 2-D model minimization. In SPD regions
+        // the coarse leftmost is just the lowest-energy affine mode — augmenting there
+        // destabilises CG convergence on subsequent outer iterations.
+        if (deflation_precond_ && deflation_leftmost_lambda_ < 0.0) {
           augmentDirectionWithDeflationLeftmost(trResults.d, r, tr_size, hess_vec_func);
         }
 

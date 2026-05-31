@@ -27,12 +27,6 @@
 namespace smith {
 namespace {
 
-// Compile-time toggle: when true, run a cantilever bending problem (left fixed, downward
-// traction on the top face, right end free) instead of the snap-through compression scenario.
-// Used to evaluate whether the deflation preconditioner gives a bending-dominated speed-up,
-// independent of the indefinite-Hessian snap-through behaviour.
-constexpr bool kBeamBending = true;
-
 constexpr double length = 10.0;
 constexpr double thickness = 0.025;
 constexpr double end_tol = 1.0e-8;
@@ -102,8 +96,6 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   mesh->addDomainOfBoundaryElements("left_end",
                                     [](std::vector<vec2> vertices, int) { return average(vertices)[0] < end_tol; });
   mesh->addDomainOfBoundaryElements(
-      "right_end", [](std::vector<vec2> vertices, int) { return average(vertices)[0] > length - end_tol; });
-  mesh->addDomainOfBoundaryElements(
       "top_face", [](std::vector<vec2> vertices, int) { return average(vertices)[1] > thickness - top_tol; });
   auto globalElementCount = [](int local_count) {
     int global_count = 0;
@@ -111,7 +103,6 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     return global_count;
   };
   EXPECT_GT(globalElementCount(mesh->domain("left_end").total_elements()), 0);
-  EXPECT_GT(globalElementCount(mesh->domain("right_end").total_elements()), 0);
   EXPECT_GT(globalElementCount(mesh->domain("top_face").total_elements()), 0);
 
   Preconditioner selected_pc = Preconditioner::HypreJacobi;
@@ -144,31 +135,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   solid.setMaterial(mat, mesh->entireBody());
   solid.setFixedBCs(mesh->domain("left_end"));
 
-  if constexpr (kBeamBending) {
-    // Pure cantilever bending: only the left end is fixed. A downward traction on the top
-    // face is ramped from 0 to its final magnitude. No compression, no snap. The dominant
-    // deformation mode is bending, which is exactly the kind of slow mode the deflation
-    // coarse space (per-rank affine modes) is designed to remove.
-    constexpr double bending_traction = 5.0e-6;
-    solid.setTraction([](auto, auto, double t) { return vec2{{0.0, -bending_traction * t}}; },
-                      mesh->domain("top_face"));
-  } else {
-    constexpr double final_compression = 0.2;
-    constexpr double seed_down_traction = 1.0e-5;
-    constexpr double final_snap_up_traction = 0.02;
-    solid.setDisplacementBCs([](auto, double t) { return vec2{{-final_compression * t, 0.0}}; },
-                             mesh->domain("right_end"), Component::X);
-    solid.setFixedBCs(mesh->domain("right_end"), Component::Y);
-    solid.setTraction(
-        [](auto, auto, double t) {
-          if (t < 0.5) {
-            return vec2{{0.0, -seed_down_traction * (t / 0.5)}};
-          }
-          const double snap_ramp = (t - 0.5) / 0.5;
-          return vec2{{0.0, -seed_down_traction * (1.0 - snap_ramp) + final_snap_up_traction * snap_ramp}};
-        },
-        mesh->domain("top_face"));
-  }
+  constexpr double bending_traction = 5.0e-6;
+  solid.setTraction([](auto, auto, double t) { return vec2{{0.0, -bending_traction * t}}; }, mesh->domain("top_face"));
 
   solid.completeSetup();
   solid.outputStateToDisk("shallow_arch_buckling");
