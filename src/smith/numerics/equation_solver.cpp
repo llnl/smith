@@ -842,9 +842,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
 
       bool have_computed_Hvs = false;
-      bool have_computed_H_left_mosts = false;
       bool have_prepared_subspace = false;
       TrustRegionSubspaceCache subspace_cache;
+      std::vector<mfem::Vector> H_previous_steps;
 #ifdef MFEM_USE_LAPACK
       constexpr bool can_use_subspace_solver = true;
 #else
@@ -865,24 +865,24 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         if (use_subspace) {
           if (!have_computed_Hvs) {
             have_computed_Hvs = true;
-
             std::vector<const mfem::Vector*> subspace_hess_inputs{&trResults.z, &trResults.cauchy_point};
             std::vector<mfem::Vector*> subspace_hess_outputs{&trResults.H_z, &trResults.H_cauchy_point};
 
-            computeHessianActions(subspace_hess_inputs, subspace_hess_outputs, hess_vec_func);
-          }
+            H_previous_steps.resize(previous_steps.size());
+            for (size_t i = 0; i < previous_steps.size(); ++i) {
+              H_previous_steps[i].SetSize(previous_steps[i].Size());
+              subspace_hess_inputs.push_back(&previous_steps[i]);
+              subspace_hess_outputs.push_back(&H_previous_steps[i]);
+            }
 
-          if (!have_computed_H_left_mosts) {
-            have_computed_H_left_mosts = true;
             H_left_mosts.clear();
-            std::vector<const mfem::Vector*> leftmost_inputs;
-            std::vector<mfem::Vector*> leftmost_outputs;
             for (auto& left : left_mosts) {
               H_left_mosts.emplace_back(std::make_shared<mfem::Vector>(*left));
-              leftmost_inputs.push_back(left.get());
-              leftmost_outputs.push_back(H_left_mosts.back().get());
+              subspace_hess_inputs.push_back(left.get());
+              subspace_hess_outputs.push_back(H_left_mosts.back().get());
             }
-            computeHessianActions(leftmost_inputs, leftmost_outputs, hess_vec_func);
+
+            computeHessianActions(subspace_hess_inputs, subspace_hess_outputs, hess_vec_func);
           }
 
           if (!have_prepared_subspace) {
@@ -890,10 +890,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
             std::vector<const mfem::Vector*> ds{&trResults.z, &trResults.cauchy_point};
             std::vector<const mfem::Vector*> H_ds{&trResults.H_z, &trResults.H_cauchy_point};
-            std::vector<mfem::Vector> H_previous_steps(previous_steps.size());
             for (size_t i = 0; i < previous_steps.size(); ++i) {
-              H_previous_steps[i].SetSize(previous_steps[i].Size());
-              hess_vec_func(previous_steps[i], H_previous_steps[i]);
               ds.push_back(&previous_steps[i]);
               H_ds.push_back(&H_previous_steps[i]);
             }
