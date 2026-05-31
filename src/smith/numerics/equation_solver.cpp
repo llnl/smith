@@ -903,8 +903,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           }
 
           if (have_prepared_subspace) {
-            const SubspaceStepStatus subspace_status = trySubspaceStep(trResults.d, hess_vec_func, subspace_cache, r,
-                                                                       tr_size);
+            const SubspaceStepStatus subspace_status =
+                trySubspaceStep(trResults.d, hess_vec_func, subspace_cache, r, tr_size);
             subspace_unavailable = subspace_status == SubspaceStepStatus::Unavailable;
           }
         }
