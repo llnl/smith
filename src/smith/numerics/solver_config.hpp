@@ -492,6 +492,9 @@ struct NonlinearSolverOptions {
 
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
+
+  /// Number of previous accepted steps to include in trust-region subspace solves
+  int num_previous_steps = 1;
 };
 // _nonlinear_options_end
 

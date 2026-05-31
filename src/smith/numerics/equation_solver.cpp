@@ -7,9 +7,11 @@
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/steihaug_toint_cg.hpp"
 #include "smith/numerics/block_preconditioner.hpp"
+#include "smith/numerics/trust_region_subspace_cache.hpp"
 
 #include <array>
 #include <cstdlib>
+#include <deque>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -412,6 +414,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable std::vector<std::shared_ptr<mfem::Vector>> left_mosts;
   /// the action of the stiffness/hessian (H) on the left most eigenvectors
   mutable std::vector<std::shared_ptr<mfem::Vector>> H_left_mosts;
+  /// accepted trust-region steps available for future subspace solves
+  mutable std::deque<mfem::Vector> previous_steps;
 
   /// nonlinear solution options
   NonlinearSolverOptions nonlinear_options;
@@ -481,7 +485,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   bool prepareSubspaceProblemCache([[maybe_unused]] const std::vector<const mfem::Vector*>& ds,
                                    [[maybe_unused]] const std::vector<const mfem::Vector*>& Hds,
                                    [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] int num_leftmost,
-                                   [[maybe_unused]] CachedTrustRegionSubspaceProblem& prepared_subspace) const
+                                   [[maybe_unused]] TrustRegionSubspaceCache& subspace_cache) const
   {
 #ifdef MFEM_USE_LAPACK
     SMITH_MARK_FUNCTION;
@@ -494,7 +498,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     b *= -1;
 
     try {
-      prepared_subspace = smith::prepareSubspaceProblem(directions, H_directions, b, num_leftmost, GetComm());
+      subspace_cache.prepare(directions, H_directions, b, num_leftmost, GetComm());
     } catch (const std::exception& e) {
       if (print_level >= 1) {
         mfem::out << "subspace preparation failed with " << e.what() << "; using dogleg fallback." << std::endl;
@@ -509,10 +513,10 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
   /// solve cached exact trust-region subspace problem for current trust-region size
   template <typename HessVecFunc>
-  SubspaceStepStatus solvePreparedSubspaceProblem(
-      [[maybe_unused]] mfem::Vector& z, [[maybe_unused]] const HessVecFunc& hess_vec_func,
-      [[maybe_unused]] const CachedTrustRegionSubspaceProblem& prepared_subspace,
-      [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta) const
+  SubspaceStepStatus trySubspaceStep([[maybe_unused]] mfem::Vector& z,
+                                     [[maybe_unused]] const HessVecFunc& hess_vec_func,
+                                     [[maybe_unused]] const TrustRegionSubspaceCache& subspace_cache,
+                                     [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta) const
   {
 #ifdef MFEM_USE_LAPACK
     SMITH_MARK_FUNCTION;
@@ -520,8 +524,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double energy_change;
 
     try {
-      std::tie(sol, std::ignore, std::ignore, energy_change) =
-          smith::solvePreparedSubspaceProblem(prepared_subspace, delta);
+      std::tie(sol, std::ignore, std::ignore, energy_change) = subspace_cache.solve(delta);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
         mfem::out << "subspace solve failed with " << e.what() << "; using dogleg fallback." << std::endl;
@@ -533,7 +536,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_level >= 2) {
-      double leftval = prepared_subspace.leftvals.size() ? prepared_subspace.leftvals[0] : 1.0;
+      double leftval = subspace_cache.leftvals.empty() ? 1.0 : subspace_cache.leftvals[0];
       mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
                 << energy_change << ".  Min eig: " << leftval << std::endl;
     }
@@ -620,6 +623,35 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   {
     auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
     return smith::isDescentDirection(step, residual, dot_many_lambda);
+  }
+
+  void saveAcceptedStep(const mfem::Vector& step) const
+  {
+    const int max_previous_steps = nonlinear_options.num_previous_steps;
+    if (max_previous_steps <= 0) {
+      previous_steps.clear();
+      return;
+    }
+
+    previous_steps.emplace_back(step);
+    while (previous_steps.size() > static_cast<size_t>(max_previous_steps)) {
+      previous_steps.pop_front();
+    }
+  }
+
+  void acceptStep(TrustRegionResults& trResults, const TrustRegionSubspaceCache& subspace_cache,
+                  const mfem::Vector& accepted_x, const mfem::Vector& accepted_r,
+                  const ConvergenceStatus& predicted_status, mfem::Vector& X, mfem::Vector& r,
+                  ConvergenceStatus& status, mfem::real_t& norm) const
+  {
+    saveAcceptedStep(trResults.d);
+    if (!subspace_cache.leftmosts.empty()) {
+      left_mosts = subspace_cache.leftmosts;
+    }
+    X = accepted_x;
+    r = accepted_r;
+    status = predicted_status;
+    norm = status.global_norm;
   }
 
   template <typename HessVecFunc>
@@ -728,6 +760,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
     int subspace_option = nonlinear_options.subspace_option;
     int num_leftmost = nonlinear_options.num_leftmost;
+    previous_steps.clear();
 
     scratch = 1.0;
     double tr_size = nonlinear_options.trust_region_scaling * std::sqrt(Dot(scratch, scratch));
@@ -811,7 +844,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       bool have_computed_Hvs = false;
       bool have_computed_H_left_mosts = false;
       bool have_prepared_subspace = false;
-      CachedTrustRegionSubspaceProblem prepared_subspace;
+      TrustRegionSubspaceCache subspace_cache;
 #ifdef MFEM_USE_LAPACK
       constexpr bool can_use_subspace_solver = true;
 #else
@@ -835,10 +868,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
             std::vector<const mfem::Vector*> subspace_hess_inputs{&trResults.z, &trResults.cauchy_point};
             std::vector<mfem::Vector*> subspace_hess_outputs{&trResults.H_z, &trResults.H_cauchy_point};
-            if (trResults.has_d_old) {
-              subspace_hess_inputs.push_back(&trResults.d_old);
-              subspace_hess_outputs.push_back(&trResults.H_d_old);
-            }
 
             computeHessianActions(subspace_hess_inputs, subspace_hess_outputs, hess_vec_func);
           }
@@ -861,18 +890,21 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
             std::vector<const mfem::Vector*> ds{&trResults.z, &trResults.cauchy_point};
             std::vector<const mfem::Vector*> H_ds{&trResults.H_z, &trResults.H_cauchy_point};
-            if (trResults.has_d_old) {
-              ds.push_back(&trResults.d_old);
-              H_ds.push_back(&trResults.H_d_old);
+            std::vector<mfem::Vector> H_previous_steps(previous_steps.size());
+            for (size_t i = 0; i < previous_steps.size(); ++i) {
+              H_previous_steps[i].SetSize(previous_steps[i].Size());
+              hess_vec_func(previous_steps[i], H_previous_steps[i]);
+              ds.push_back(&previous_steps[i]);
+              H_ds.push_back(&H_previous_steps[i]);
             }
 
-            have_prepared_subspace = prepareSubspaceProblemCache(ds, H_ds, r, num_leftmost, prepared_subspace);
+            have_prepared_subspace = prepareSubspaceProblemCache(ds, H_ds, r, num_leftmost, subspace_cache);
             subspace_unavailable = !have_prepared_subspace;
           }
 
           if (have_prepared_subspace) {
-            const SubspaceStepStatus subspace_status =
-                solvePreparedSubspaceProblem(trResults.d, hess_vec_func, prepared_subspace, r, tr_size);
+            const SubspaceStepStatus subspace_status = trySubspaceStep(trResults.d, hess_vec_func, subspace_cache, r,
+                                                                       tr_size);
             subspace_unavailable = subspace_status == SubspaceStepStatus::Unavailable;
           }
         }
@@ -894,17 +926,14 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
         double realObjective = std::numeric_limits<double>::max();
         double normPred = std::numeric_limits<double>::max();
+        ConvergenceStatus predicted_status;
         try {
-          auto predicted_status = evaluateConvergence(x_pred, r_pred);
+          predicted_status = evaluateConvergence(x_pred, r_pred);
           normPred = predicted_status.global_norm;
           double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
           realObjective = obj1;
           if (predicted_status.converged) {
-            trResults.d_old = trResults.d;
-            X = x_pred;
-            r = r_pred;
-            status = predicted_status;
-            norm = status.global_norm;
+            acceptStep(trResults, subspace_cache, x_pred, r_pred, predicted_status, X, r, status, norm);
             if (print_level >= 2) {
               printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
               trResults.cg_iterations_count = 0;
@@ -917,14 +946,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         }
 
         if (normPred <= norm_goal) {
-          trResults.d_old = trResults.d;
-          trResults.has_d_old = true;
-          if (!prepared_subspace.leftmosts.empty()) {
-            left_mosts = prepared_subspace.leftmosts;
-          }
-          X = x_pred;
-          r = r_pred;
-          norm = normPred;
+          acceptStep(trResults, subspace_cache, x_pred, r_pred, predicted_status, X, r, status, norm);
           if (print_level >= 2) {
             printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
             trResults.cg_iterations_count =
@@ -972,16 +994,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         }
 
         if (willAccept) {
-          trResults.d_old = trResults.d;
-          trResults.has_d_old = true;
-          if (!prepared_subspace.leftmosts.empty()) {
-            left_mosts = prepared_subspace.leftmosts;
-          }
-          X = x_pred;
-          r = r_pred;
-          status = convergence_manager_ ? convergence_manager_->evaluate(1.0, r_pred)
-                                        : scalarConvergenceStatus(normPred, initial_norm, abs_tol, rel_tol);
-          norm = normPred;
+          acceptStep(trResults, subspace_cache, x_pred, r_pred, predicted_status, X, r, status, norm);
           break;
         }
       }

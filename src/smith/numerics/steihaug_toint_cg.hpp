@@ -48,8 +48,6 @@ struct TrustRegionResults {
   {
     z.SetSize(size);
     H_z.SetSize(size);
-    d_old.SetSize(size);
-    H_d_old.SetSize(size);
     d.SetSize(size);
     H_d.SetSize(size);
     Pr.SetSize(size);
@@ -57,8 +55,6 @@ struct TrustRegionResults {
     H_cauchy_point.SetSize(size);
     z = 0.0;
     H_z = 0.0;
-    d_old = 0.0;
-    H_d_old = 0.0;
     d = 0.0;
     H_d = 0.0;
     Pr = 0.0;
@@ -86,12 +82,6 @@ struct TrustRegionResults {
   mfem::Vector z;
   /// action of hessian on current step z
   mfem::Vector H_z;
-  /// old step direction
-  mfem::Vector d_old;
-  /// action of hessian on previous step z_old
-  mfem::Vector H_d_old;
-  /// true after at least one accepted line-search step has populated d_old
-  bool has_d_old = false;
   /// incrementalCG direction
   mfem::Vector d;
   /// action of hessian on direction d

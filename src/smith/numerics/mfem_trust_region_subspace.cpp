@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "smith/numerics/trust_region_solver.hpp"
+#include "smith/numerics/trust_region_subspace_cache.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -231,7 +231,7 @@ std::vector<const mfem::Vector*> toPointers(const std::vector<std::shared_ptr<mf
   return ptrs;
 }
 
-std::vector<mfem::Vector> prepareExactTrustRegionLeftmosts(CachedTrustRegionSubspaceProblem& prepared, int num_leftmost)
+std::vector<mfem::Vector> prepareExactTrustRegionLeftmosts(TrustRegionSubspaceCache& prepared, int num_leftmost)
 {
   prepared.eigenvalues.SetSize(prepared.projected_rhs.Size());
   prepared.eigenvectors.SetSize(prepared.projected_hessian.Height(), prepared.projected_hessian.Width());
@@ -257,7 +257,7 @@ std::vector<mfem::Vector> prepareExactTrustRegionLeftmosts(CachedTrustRegionSubs
   return reduced_leftmosts;
 }
 
-std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const CachedTrustRegionSubspaceProblem& prepared,
+std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const TrustRegionSubspaceCache& prepared,
                                                                    double delta)
 {
   const mfem::DenseMatrix& A = prepared.projected_hessian;
@@ -354,15 +354,14 @@ std::pair<mfem::Vector, bool> solvePreparedExactTrustRegionProblem(const CachedT
 
 }  // namespace
 
-/// @brief prepares reduced trust-region subspace data reusable across trust-region radius updates
-CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
-                                                        const std::vector<const mfem::Vector*>& A_directions,
-                                                        const mfem::Vector& b, int num_leftmost, MPI_Comm comm)
+void TrustRegionSubspaceCache::prepare(const std::vector<const mfem::Vector*>& directions,
+                                       const std::vector<const mfem::Vector*>& A_directions, const mfem::Vector& b,
+                                       int num_leftmost, MPI_Comm comm)
 {
   SMITH_MARK_FUNCTION;
-  CachedTrustRegionSubspaceProblem prepared;
-  prepared.zero_solution = b;
-  prepared.zero_solution = 0.0;
+  *this = TrustRegionSubspaceCache{};
+  zero_solution = b;
+  zero_solution = 0.0;
 
   SubspaceProjections projections = projectSubspaceGlobally(directions, A_directions, b, comm);
   mfem::DenseMatrix& sAs = projections.sAs;
@@ -382,60 +381,72 @@ CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const 
   double trace_mag = 0.0;
   mfem::DenseMatrix T = orthonormalBasisTransform(ss, trace_mag);
   if (trace_mag == 0.0) {
-    return prepared;
+    return;
   }
   if (T.Width() == 0) {
     throw TrustRegionException("No independent directions in MFEM subspace solve.");
   }
-  prepared.projected_hessian = tripleProduct(T, sAs, T);
-  prepared.projected_hessian.Symmetrize();
+  projected_hessian = tripleProduct(T, sAs, T);
+  projected_hessian.Symmetrize();
 
   const mfem::Vector& sb = projections.sb;
-  prepared.projected_rhs = projectWithTranspose(T, sb);
+  projected_rhs = projectWithTranspose(T, sb);
 
   for (int j = 0; j < T.Width(); ++j) {
-    prepared.basis.emplace_back(std::make_shared<mfem::Vector>(combineDirections(directions, matrixColumn(T, j))));
+    basis.emplace_back(std::make_shared<mfem::Vector>(combineDirections(directions, matrixColumn(T, j))));
   }
-  const auto reduced_leftmosts = prepareExactTrustRegionLeftmosts(prepared, num_leftmost);
-  const auto basis_ptrs = toPointers(prepared.basis);
-  prepared.leftmosts.clear();
-  prepared.leftmosts.reserve(reduced_leftmosts.size());
+  const auto reduced_leftmosts = prepareExactTrustRegionLeftmosts(*this, num_leftmost);
+  const auto basis_ptrs = toPointers(basis);
+  leftmosts.clear();
+  leftmosts.reserve(reduced_leftmosts.size());
   for (const auto& leftvec : reduced_leftmosts) {
-    prepared.leftmosts.emplace_back(std::make_shared<mfem::Vector>(combineDirections(basis_ptrs, leftvec)));
+    leftmosts.emplace_back(std::make_shared<mfem::Vector>(combineDirections(basis_ptrs, leftvec)));
   }
-
-  return prepared;
 }
 
-/// @brief solves cached reduced trust-region problem for given trust-region radius
-TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSubspaceProblem& prepared, double delta)
+TrustRegionSubspaceResult TrustRegionSubspaceCache::solve(double delta) const
 {
   SMITH_MARK_FUNCTION;
-  if (prepared.basis.empty()) {
-    mfem::Vector sol(prepared.zero_solution);
+  if (basis.empty()) {
+    mfem::Vector sol(zero_solution);
     sol = 0.0;
-    return std::make_tuple(sol, prepared.leftmosts, prepared.leftvals, 0.0);
+    return std::make_tuple(sol, leftmosts, leftvals, 0.0);
   }
 
-  auto [reduced_x, success] = solvePreparedExactTrustRegionProblem(prepared, delta);
+  auto [reduced_x, success] = solvePreparedExactTrustRegionProblem(*this, delta);
   if (!success) {
     throw TrustRegionException("Trust-region subspace solve failed to converge.");
   }
-  const double energy = quadraticEnergy(prepared.projected_hessian, prepared.projected_rhs, reduced_x);
+  const double energy = quadraticEnergy(projected_hessian, projected_rhs, reduced_x);
 
-  const auto basis_ptrs = toPointers(prepared.basis);
+  const auto basis_ptrs = toPointers(basis);
   mfem::Vector sol = combineDirections(basis_ptrs, reduced_x);
-  return std::make_tuple(sol, prepared.leftmosts, prepared.leftvals, energy);
+  return std::make_tuple(sol, leftmosts, leftvals, energy);
 }
 
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
                                                const mfem::Vector& b, double delta, int num_leftmost, MPI_Comm comm)
 {
-  return solvePreparedSubspaceProblem(prepareSubspaceProblem(directions, A_directions, b, num_leftmost, comm), delta);
+  TrustRegionSubspaceCache cache;
+  cache.prepare(directions, A_directions, b, num_leftmost, comm);
+  return cache.solve(delta);
 }
 
 #else
+
+void TrustRegionSubspaceCache::prepare(const std::vector<const mfem::Vector*>&, const std::vector<const mfem::Vector*>&,
+                                       const mfem::Vector& b, int, MPI_Comm)
+{
+  zero_solution = b;
+  throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
+}
+
+TrustRegionSubspaceResult TrustRegionSubspaceCache::solve(double) const
+{
+  throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
+  return std::make_tuple(zero_solution, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
+}
 
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
                                                const std::vector<const mfem::Vector*>& A_directions,
@@ -443,23 +454,6 @@ TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vec
 {
   throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
   return std::make_tuple(b, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{}, 0.0);
-}
-
-CachedTrustRegionSubspaceProblem prepareSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
-                                                        const std::vector<const mfem::Vector*>& A_directions,
-                                                        const mfem::Vector& b, int, MPI_Comm)
-{
-  throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
-  CachedTrustRegionSubspaceProblem prepared;
-  prepared.zero_solution = b;
-  return prepared;
-}
-
-TrustRegionSubspaceResult solvePreparedSubspaceProblem(const CachedTrustRegionSubspaceProblem& prepared, double)
-{
-  throw TrustRegionException("Trust-region subspace solve requires MFEM LAPACK support.");
-  return std::make_tuple(prepared.zero_solution, std::vector<std::shared_ptr<mfem::Vector>>{}, std::vector<double>{},
-                         0.0);
 }
 
 #endif  // MFEM_USE_LAPACK
