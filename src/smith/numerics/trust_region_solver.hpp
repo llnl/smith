@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file equation_solver.hpp
+ * @file trust_region_solver.hpp
  *
  * @brief This file contains the declaration of a trust region subspace solver
  */
@@ -18,7 +18,6 @@
 #include <memory>
 #include <string>
 #include <tuple>
-#include <utility>
 #include <vector>
 
 #include "mfem.hpp"
@@ -42,12 +41,6 @@ class TrustRegionException : public std::exception {
 /// Subspace solution, leftmost eigenvectors, leftmost eigenvalues, and predicted model energy change.
 using TrustRegionSubspaceResult =
     std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector<double>, double>;
-
-/// @brief computes the global size of mfem::Vector
-int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm);
-
-/// @brief computes the l2 inner product between two mfem::Vector in parallal
-double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm& comm);
 
 /// @brief returns the solution, as well as a list of the N leftmost eigenvectors
 /// and their eigenvalues, and the predicted model energy change

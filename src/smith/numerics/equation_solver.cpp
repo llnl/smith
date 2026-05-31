@@ -139,11 +139,11 @@ bool shouldUseSubspaceStep(int subspace_option, TrustRegionResults::Status statu
                            int line_search_iter)
 {
   const bool failed_or_indefinite = status == TrustRegionResults::Status::NonDescentDirection ||
-                                    status == TrustRegionResults::Status::NegativeCurvature ||
-                                    ((step_norm > (1.0 - 1.0e-6) * tr_size) && line_search_iter > 1);
+                                    status == TrustRegionResults::Status::NegativeCurvature;
   const bool on_boundary = step_norm > (1.0 - 1.0e-6) * tr_size;
-  return ((subspace_option >= 1) && failed_or_indefinite) || ((subspace_option >= 2) && on_boundary) ||
-         (subspace_option >= 3);
+  const bool retrying_on_boundary = on_boundary && line_search_iter > 1;
+  return ((subspace_option >= 1) && (failed_or_indefinite || retrying_on_boundary)) ||
+         ((subspace_option >= 2) && on_boundary) || (subspace_option >= 3);
 }
 
 enum class SubspaceStepStatus
@@ -945,6 +945,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           normPred = std::numeric_limits<double>::max();
         }
 
+        // accept immediately if converged — no need to check model quality (rho)
         if (normPred <= norm_goal) {
           acceptStep(trResults, subspace_cache, x_pred, r_pred, predicted_status, X, r, status, norm);
           if (print_level >= 2) {
