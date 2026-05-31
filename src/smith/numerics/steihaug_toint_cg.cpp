@@ -75,24 +75,28 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   double rPr = dot_many({{&rCurrent, &Pr}})[0];
 
   for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
-    H.Mult(d, Hd);
-
-    auto dots = dot_many({{&d, &rCurrent}, {&d, &Hd}, {&z, &d}, {&d, &d}});
-    double descent_check = dots[0];
-    double curvature = dots[1];
-    double zd = dots[2];
-    double dd = dots[3];
-
+    double descent_check = dot_many({{&d, &rCurrent}})[0];
     if (!isDescentDirection(descent_check)) {
+      d *= -1.0;
       results.interior_status = TrustRegionResults::Status::NonDescentDirection;
-      return;
     }
 
+    H.Mult(d, Hd);
+
+    double curvature = dot_many({{&d, &Hd}})[0];
     const double alphaCg = curvature != 0.0 ? rPr / curvature : 0.0;
-    const double zzNp1 = zz + 2.0 * alphaCg * zd + alphaCg * alphaCg * dd;
+
+    // Compute candidate step and its exact norm (avoids recurrence drift)
+    auto& zPred = Pr;
+    zPred = z;
+    zPred.Add(alphaCg, d);
+    double zzNp1 = dot_many({{&zPred, &zPred}})[0];
 
     const bool go_to_boundary = curvature <= 0 || zzNp1 >= trSize * trSize;
     if (go_to_boundary) {
+      auto dots = dot_many({{&z, &d}, {&d, &d}});
+      double zd = dots[0];
+      double dd = dots[1];
       projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
       if (curvature <= 0) {
         results.interior_status = TrustRegionResults::Status::NegativeCurvature;
@@ -102,10 +106,6 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
       return;
     }
 
-    // Alias Pr as temporary workspace 'zPred' to avoid allocation
-    auto& zPred = Pr;
-    zPred = z;
-    zPred.Add(alphaCg, d);
     z = zPred;
 
     if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
