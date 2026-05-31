@@ -26,6 +26,8 @@
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/profiling.hpp"
 #include "smith/numerics/trust_region_solver.hpp"
+#include "smith/numerics/deflation.hpp"
+#include "smith/numerics/bsr_operator.hpp"
 #include "smith/infrastructure/logger.hpp"
 
 namespace smith {
@@ -426,8 +428,21 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   /// currently required
   Solver& tr_precond;
 
+  /// non-owning view of `tr_precond` when it is a DeflationPreconditioner; nullptr otherwise.
+  /// Populated lazily on first SetOperator. Enables tighter coupling: the leftmost coarse
+  /// direction is treated as a candidate negative-curvature direction in the linesearch and
+  /// (when the SLEPc subspace path is active) is appended to `left_mosts`.
+  mutable DeflationPreconditioner* deflation_precond_ = nullptr;
+  mutable bool deflation_precond_checked_ = false;
+  /// Cached coarse leftmost direction and eigenvalue, refreshed each precond rebuild.
+  mutable mfem::Vector deflation_leftmost_w_;
+  mutable double deflation_leftmost_lambda_ = 0.0;
+
   /// reconstructed smith print level
   mutable size_t print_level = 0;
+
+  /// optional optimized block sparse row operator
+  mutable std::unique_ptr<BSROperator> bsr_operator_;
 
   /// Tracks if grad was monolithicized and needs deletion
   mutable bool grad_monolithic = false;
@@ -675,6 +690,15 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     }
     mfem::Operator& assembled_gradient = oper->GetGradient(x);
     grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
+
+    if (linear_options.use_bsr_spmv) {
+      if (auto* hypre_grad = dynamic_cast<mfem::HypreParMatrix*>(const_cast<mfem::Operator*>(grad))) {
+        bsr_operator_ = std::make_unique<smith::BSROperator>(hypre_grad, linear_options.bsr_block_size);
+        grad = bsr_operator_.get();
+      }
+    } else {
+      bsr_operator_.reset();
+    }
   }
 
   /// evaluate the nonlinear residual
@@ -718,6 +742,78 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     SMITH_MARK_FUNCTION;
     tr_precond.Mult(x_, v_);
   };
+
+  /// Lazy dynamic_cast detection of the deflation preconditioner.
+  void detectDeflationPrecond() const
+  {
+    if (deflation_precond_checked_) return;
+    deflation_precond_ = dynamic_cast<DeflationPreconditioner*>(&tr_precond);
+    deflation_precond_checked_ = true;
+  }
+
+  /// Refresh the cached coarse leftmost (W * v_min of W^T A W) after a precond rebuild.
+  /// Eigen-decomp of the dense m×m coarse matrix is cheap for m = 12 · num_ranks.
+  void refreshDeflationLeftmost() const
+  {
+    if (!deflation_precond_) return;
+    try {
+      deflation_leftmost_lambda_ = deflation_precond_->coarseLeftmostEigenvalue();
+      deflation_precond_->coarseLeftmostDirection(deflation_leftmost_w_);
+    } catch (const std::exception&) {
+      deflation_leftmost_w_.SetSize(0);
+    }
+  }
+
+  /// 2D model-objective minimization in span(d, w): minimize g^T s + 0.5 s^T A s s.t. ||s|| ≤ Δ.
+  /// Closed-form optimal α in `s = d + α w` when w^T A w > 0; otherwise step to TR boundary in
+  /// the descent direction along w. Replaces `d` only if the resulting model objective strictly
+  /// improves on the original `d`. Costs ~2 hess_vecs (Aw and Ad_new).
+  template <typename HessVecFunc>
+  void augmentDirectionWithDeflationLeftmost(mfem::Vector& d, const mfem::Vector& g, double tr_size,
+                                             const HessVecFunc& H) const
+  {
+    if (!deflation_precond_ || deflation_leftmost_w_.Size() != d.Size()) return;
+    const mfem::Vector& w = deflation_leftmost_w_;
+
+    mfem::Vector Ad(d.Size()), Aw(d.Size());
+    H(d, Ad);
+    H(w, Aw);
+    const double q_old = Dot(g, d) + 0.5 * Dot(d, Ad);
+
+    const double wAw = Dot(w, Aw);
+    const double dAw = Dot(d, Aw);
+    const double gw = Dot(g, w);
+
+    // Unconstrained optimum along α: solves d/dα [g^T(d+αw) + 0.5 (d+αw)^T A (d+αw)] = 0
+    double alpha = 0.0;
+    if (wAw > 1e-30) {
+      alpha = -(dAw + gw) / wAw;
+    } else {
+      // Negative or zero curvature along w → go to boundary in the descent direction.
+      alpha = (dAw + gw > 0.0) ? -1.0 : 1.0;
+    }
+
+    // Constrain ||d + α w||^2 ≤ tr_size^2: solve quadratic in α.
+    const double dd = Dot(d, d), dw = Dot(d, w), ww = Dot(w, w);
+    if (ww > 1e-30) {
+      const double radius_sq = tr_size * tr_size;
+      const double disc = dw * dw - ww * (dd - radius_sq);
+      if (disc < 0.0) return;  // current d already outside TR — leave alone
+      const double sq = std::sqrt(disc);
+      const double a_hi = (-dw + sq) / ww;
+      const double a_lo = (-dw - sq) / ww;
+      if (alpha > a_hi) alpha = a_hi;
+      if (alpha < a_lo) alpha = a_lo;
+    }
+
+    mfem::Vector d_new(d);
+    d_new.Add(alpha, w);
+
+    mfem::Vector Adnew(d.Size());
+    H(d_new, Adnew);
+    const double q_new = Dot(g, d_new) + 0.5 * Dot(d_new, Adnew);
+    if (q_new < q_old) d = d_new;
+  }
 
   /// @overload
   void Mult(const mfem::Vector&, mfem::Vector& X) const override
@@ -800,6 +896,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                       cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
         tr_precond.SetOperator(*grad);
         cumulative_cg_iters_from_last_precond_update = 0;
+        detectDeflationPrecond();
+        refreshDeflationLeftmost();
       }
 
       auto hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { hessVec(x_, v_); };
@@ -1034,6 +1132,13 @@ EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_sol
   nonlin_solver_ = std::move(nonlinear_solver);
   lin_solver_ = std::move(linear_solver);
   preconditioner_ = std::move(preconditioner);
+}
+
+void EquationSolver::attachDeflationFES(mfem::ParFiniteElementSpace& fes)
+{
+  if (!preconditioner_) return;
+  auto* defl = dynamic_cast<DeflationPreconditioner*>(preconditioner_.get());
+  if (defl && !defl->hasFES()) defl->attachFES(fes);
 }
 
 void EquationSolver::attachConvergenceManager() const
@@ -1432,6 +1537,14 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
 #else
     SLIC_ERROR_ROOT("PETSc preconditioner requested in non-PETSc build");
 #endif
+  } else if (preconditioner == Preconditioner::Deflation) {
+    // Allow null deflation_fes here — framework callers (e.g. SolidMechanics) cannot
+    // provide the FES at solver-construction time and bind it post-hoc via attachFES.
+    if (linear_opts.deflation_fes) {
+      preconditioner_solver = std::make_unique<DeflationPreconditioner>(*linear_opts.deflation_fes);
+    } else {
+      preconditioner_solver = std::make_unique<DeflationPreconditioner>();
+    }
   } else if (preconditioner == Preconditioner::AMGFContact) {
     auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
     auto amgfcontact_opts = linear_opts.amgfcontact_options;

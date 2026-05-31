@@ -345,6 +345,7 @@ enum class Preconditioner
   AMGX,             /**< NVIDIA's AMGX GPU-enabled algebraic multi-grid, GPU builds only */
   Petsc,            /**< PETSc preconditioner,  */
   AMGFContact,      /**< MFEM-based AMG with filtering (AMGF), contact problems only */
+  Deflation,        /**< Custom two-level deflation (per-rank affine basis + Jacobi) */
   BlockDiagonal,    /**< Block diagonal preconditioner */
   BlockTriangular,  /**< Block triangular preconditioner */
   BlockSchur,       /**< Block Schur preconditioner */
@@ -372,6 +373,8 @@ inline std::string preconditionerName(Preconditioner p)
       return "Petsc";
     case Preconditioner::AMGFContact:
       return "AMGFContact";
+    case Preconditioner::Deflation:
+      return "Deflation";
     case Preconditioner::BlockDiagonal:
       return "BlockDiagonal";
     case Preconditioner::BlockTriangular:
@@ -398,6 +401,7 @@ inline std::map<std::string, Preconditioner> preconditionerMap = {
     {"AMGX", Preconditioner::AMGX},
     {"Petsc", Preconditioner::Petsc},
     {"AMGFContact", Preconditioner::AMGFContact},
+    {"Deflation", Preconditioner::Deflation},
     {"BlockDiagonal", Preconditioner::BlockDiagonal},
     {"BlockTriangular", Preconditioner::BlockTriangular},
     {"BlockSchur", Preconditioner::BlockSchur},
@@ -419,6 +423,10 @@ struct LinearSolverOptions {
   /// AMGFContact Options, used for Preconditioner::AMGFContact
   AMGFContactOptions amgfcontact_options = AMGFContactOptions{};
 
+  /// ParFiniteElementSpace handle, REQUIRED for Preconditioner::Deflation; ignored otherwise.
+  /// Non-owning. Lifetime must outlive the preconditioner.
+  mfem::ParFiniteElementSpace* deflation_fes = nullptr;
+
   /// PETSc preconditioner type
   PetscPCType petsc_preconditioner = PetscPCType::JACOBI;
 
@@ -436,6 +444,12 @@ struct LinearSolverOptions {
 
   /// Debugging print level for the preconditioner
   int preconditioner_print_level = 0;
+
+  /// Toggle to enable conversion to Block Sparse Row (BSR) format for local SpMV
+  bool use_bsr_spmv = false;
+
+  /// BSR block size. Use 2 for 2D elasticity and 3 for 3D elasticity.
+  int bsr_block_size = 3;
 
   /// Subblock linear solver options for block preconditioners
   std::vector<LinearSolverOptions> sub_block_linear_solver_options = {};

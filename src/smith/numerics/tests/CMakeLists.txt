@@ -21,6 +21,16 @@ smith_add_tests( SOURCES       ${numerics_serial_test_sources}
                  DEPENDS_ON    ${numerics_test_dependencies}
                  NUM_MPI_TASKS 1)
 
+set(numerics_parallel_test_sources
+    test_deflation.cpp
+    test_batched_matvec.cpp
+    test_bsr_operator.cpp
+    )
+
+smith_add_tests( SOURCES       ${numerics_parallel_test_sources}
+                 DEPENDS_ON    ${numerics_test_dependencies}
+                 NUM_MPI_TASKS 4)
+
 if(PETSC_FOUND)
     set(petsc_solver_tests
         test_equationsolver_petsc.cpp

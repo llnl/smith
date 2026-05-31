@@ -36,6 +36,7 @@ int print_level = 2;
 int nonlinear_max_iterations = 300000;
 int trust_subspace_option = static_cast<int>(SubSpaceOptions::NEVER);
 int trust_num_leftmost = 1;
+std::string preconditioner_name = "HypreJacobi";
 
 NonlinearSolver selectedNonlinearSolver()
 {
@@ -64,6 +65,8 @@ void parseCommandLine(int& argc, char** argv)
       trust_subspace_option = std::stoi(arg.substr(std::string("--trust-subspace-option=").size()));
     } else if (arg.rfind("--trust-num-leftmost=", 0) == 0) {
       trust_num_leftmost = std::stoi(arg.substr(std::string("--trust-num-leftmost=").size()));
+    } else if (arg.rfind("--preconditioner=", 0) == 0) {
+      preconditioner_name = arg.substr(std::string("--preconditioner=").size());
     } else {
       argv[write_arg] = argv[read_arg];
       ++write_arg;
@@ -80,8 +83,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 
   constexpr int p = 1;
   constexpr int dim = 2;
-  constexpr int nx = 120;
-  constexpr int ny = 5;
+  constexpr int nx = 240;
+  constexpr int ny = 10;
 
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, "shallow_arch_buckling");
@@ -93,8 +96,6 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   mesh->addDomainOfBoundaryElements("left_end",
                                     [](std::vector<vec2> vertices, int) { return average(vertices)[0] < end_tol; });
   mesh->addDomainOfBoundaryElements(
-      "right_end", [](std::vector<vec2> vertices, int) { return average(vertices)[0] > length - end_tol; });
-  mesh->addDomainOfBoundaryElements(
       "top_face", [](std::vector<vec2> vertices, int) { return average(vertices)[1] > thickness - top_tol; });
   auto globalElementCount = [](int local_count) {
     int global_count = 0;
@@ -102,11 +103,17 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     return global_count;
   };
   EXPECT_GT(globalElementCount(mesh->domain("left_end").total_elements()), 0);
-  EXPECT_GT(globalElementCount(mesh->domain("right_end").total_elements()), 0);
   EXPECT_GT(globalElementCount(mesh->domain("top_face").total_elements()), 0);
 
+  Preconditioner selected_pc = Preconditioner::HypreJacobi;
+  if (preconditioner_name == "Deflation")
+    selected_pc = Preconditioner::Deflation;
+  else if (preconditioner_name == "HypreAMG")
+    selected_pc = Preconditioner::HypreAMG;
+  else if (preconditioner_name != "HypreJacobi")
+    throw std::runtime_error("Unknown --preconditioner '" + preconditioner_name + "'");
   smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
-                                            .preconditioner = Preconditioner::HypreJacobi,
+                                            .preconditioner = selected_pc,
                                             .relative_tol = 1.0e-8,
                                             .absolute_tol = 1.0e-14,
                                             .max_iterations = 100000,
@@ -128,29 +135,15 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   solid.setMaterial(mat, mesh->entireBody());
   solid.setFixedBCs(mesh->domain("left_end"));
 
-  constexpr double final_compression = 0.2;
-  constexpr double seed_down_traction = 1.0e-5;
-  constexpr double final_snap_up_traction = 0.02;
-  solid.setDisplacementBCs([](auto, double t) { return vec2{{-final_compression * t, 0.0}}; },
-                           mesh->domain("right_end"), Component::X);
-  solid.setFixedBCs(mesh->domain("right_end"), Component::Y);
-  solid.setTraction(
-      [](auto, auto, double t) {
-        if (t < 0.5) {
-          return vec2{{0.0, -seed_down_traction * (t / 0.5)}};
-        }
-        const double snap_ramp = (t - 0.5) / 0.5;
-        return vec2{{0.0, -seed_down_traction * (1.0 - snap_ramp) + final_snap_up_traction * snap_ramp}};
-      },
-      mesh->domain("top_face"));
+  constexpr double bending_traction = 5.0e-6;
+  solid.setTraction([](auto, auto, double t) { return vec2{{0.0, -bending_traction * t}}; }, mesh->domain("top_face"));
 
   solid.completeSetup();
   solid.outputStateToDisk("shallow_arch_buckling");
 
-  SLIC_INFO_ROOT(
-      std::format("Compressed thin beam snap-through run: solver = {}, trust_subspace_option = {}, "
-                  "trust_num_leftmost = {}",
-                  solver_name, trust_subspace_option, trust_num_leftmost));
+  SLIC_INFO_ROOT(std::format(
+      "Compressed thin beam snap-through run: solver = {}, trust_subspace_option = {}, trust_num_leftmost = {}",
+      solver_name, trust_subspace_option, trust_num_leftmost));
 
   constexpr int num_steps = 5;
   for (int step = 0; step < num_steps; ++step) {
