@@ -7,6 +7,7 @@
 #include "smith/physics/mesh.hpp"
 
 #include <format>
+#include <memory>
 #include <utility>
 
 #include <axom/slic.hpp>
