@@ -202,9 +202,8 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
         double skew_norm;
         hypre_ParCSRMatrixNormFro(Sh, &skew_norm);
 
-        mfem::out << "  Jacobian symmetry check: ||K||_F = " << K_norm
-                   << ", ||skew(K)||_F = " << skew_norm
-                   << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0) << "\n";
+        mfem::out << "  Jacobian symmetry check: ||K||_F = " << K_norm << ", ||skew(K)||_F = " << skew_norm
+                  << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0) << "\n";
       }
     }
   }
@@ -778,9 +777,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         double skew_norm;
         hypre_ParCSRMatrixNormFro(Sh, &skew_norm);
 
-        mfem::out << "  Jacobian symmetry check: ||K||_F = " << K_norm
-                   << ", ||skew(K)||_F = " << skew_norm
-                   << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0) << "\n";
+        mfem::out << "  Jacobian symmetry check: ||K||_F = " << K_norm << ", ||skew(K)||_F = " << skew_norm
+                  << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0) << "\n";
       }
     }
   }
@@ -1074,10 +1072,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
             double skew_norm;
             hypre_ParCSRMatrixNormFro(Sh, &skew_norm);
 
-            mfem::out << "  Rejected step symmetry check: ||K||_F = " << K_norm
-                       << ", ||skew(K)||_F = " << skew_norm
-                       << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0)
-                       << ", rho = " << rho << "\n";
+            mfem::out << "  Rejected step symmetry check: ||K||_F = " << K_norm << ", ||skew(K)||_F = " << skew_norm
+                      << ", ratio = " << (K_norm > 0 ? skew_norm / K_norm : 0.0) << ", rho = " << rho << "\n";
           }
         }
 

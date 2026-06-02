@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
   smith::ApplicationManager applicationManager(argc, argv);
 
   // NOTE: polynomial degree p = 1 required for Tribol mortar method
-  constexpr int p   = 1;
+  constexpr int p = 1;
   // NOTE: dim = 2 (plane-strain Hertzian contact)
   constexpr int dim = 2;
 
@@ -65,52 +65,44 @@ int main(int argc, char* argv[])
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, name + "_data");
 
-  const std::string mesh_file = (argc > 1)
-      ? std::string(argv[1])
-      : std::string("../../data/meshes/hertzian_contact.msh");
+  const std::string mesh_file =
+      (argc > 1) ? std::string(argv[1]) : std::string("../../data/meshes/hertzian_contact.msh");
 
   auto mesh = std::make_shared<smith::Mesh>(mesh_file, "hertzian_2d_mesh", 0, 0);
   mesh->mfemParMesh().CheckElementOrientation(true);
 
   // ── Solver options ────────────────────────────────────────────────────
   smith::LinearSolverOptions linear_options{
-      .linear_solver  = smith::LinearSolver::CG,
-      .preconditioner = smith::Preconditioner::HypreAMG,
-      .print_level    = 0};
+      .linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreAMG, .print_level = 0};
 
-  smith::NonlinearSolverOptions nonlinear_options{
-      .nonlin_solver             = smith::NonlinearSolver::TrustRegion,
-      .relative_tol              = 1.0e-8,
-      .absolute_tol              = 1.0e-8,
-      .max_iterations            = 5000,
-      .max_line_search_iterations = 10,
-      .print_level               = 3};
+  smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
+                                                  .relative_tol = 1.0e-8,
+                                                  .absolute_tol = 1.0e-8,
+                                                  .max_iterations = 5000,
+                                                  .max_line_search_iterations = 10,
+                                                  .print_level = 3};
 
-  smith::ContactOptions contact_options{
-      .method             = smith::ContactMethod::EnergyMortar,
-      .enforcement        = smith::ContactEnforcement::Penalty,
-      .type               = smith::ContactType::Frictionless,
-      .penalty            = 30000.0,
-      .penalty2           = 0,
-      .jacobian           = smith::ContactJacobian::Exact};
+  smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
+                                        .enforcement = smith::ContactEnforcement::Penalty,
+                                        .type = smith::ContactType::Frictionless,
+                                        .penalty = 30000.0,
+                                        .penalty2 = 0,
+                                        .jacobian = smith::ContactJacobian::Exact};
 
   // ── Solid mechanics solver ────────────────────────────────────────────
-  smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>>
-      solid_solver(nonlinear_options, linear_options,
-                   smith::solid_mechanics::default_quasistatic_options,
-                   name, mesh, {"bulk_mod", "shear_mod"}, 0, 0.0,
-                   /*is_dynamic=*/false, /*geometric_nonlinearity=*/false);
+  smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
+      nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
+      {"bulk_mod", "shear_mod"}, 0, 0.0,
+      /*is_dynamic=*/false, /*geometric_nonlinearity=*/false);
 
-  smith::FiniteElementState K_field(
-      smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
-  mfem::Vector K_values({1000.0, 1.0});   // [attr_1=block, attr_2=indenter]
+  smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
+  mfem::Vector K_values({1000.0, 1.0});  // [attr_1=block, attr_2=indenter]
   mfem::PWConstCoefficient K_coeff(K_values);
   K_field.project(K_coeff);
   solid_solver.setParameter(0, K_field);
 
-  smith::FiniteElementState G_field(
-      smith::StateManager::newState(smith::L2<0>{}, "shear_mod", mesh->tag()));
-  mfem::Vector G_values({250.0, 0.25});   // [attr_1=block, attr_2=indenter]
+  smith::FiniteElementState G_field(smith::StateManager::newState(smith::L2<0>{}, "shear_mod", mesh->tag()));
+  mfem::Vector G_values({250.0, 0.25});  // [attr_1=block, attr_2=indenter]
   mfem::PWConstCoefficient G_coeff(G_values);
   G_field.project(G_coeff);
   solid_solver.setParameter(1, G_field);
@@ -127,36 +119,31 @@ int main(int argc, char* argv[])
   // Roller BCs on block sides (attr 5) — fix x only, free y.
   // Implemented as a zero-x displacement BC so the block can compress
   // vertically without lateral drift.
-  auto zero_x_displacement = [](smith::tensor<double, dim> /*x*/, double /*t*/)
-  {
+  auto zero_x_displacement = [](smith::tensor<double, dim> /*x*/, double /*t*/) {
     smith::tensor<double, dim> u{};
     u[0] = 0.0;
     return u;
   };
   mesh->addDomainOfBoundaryElements("block_sides", smith::by_attr<dim>(5));
-  solid_solver.setDisplacementBCs(zero_x_displacement,
-                                  mesh->domain("block_sides"));
+  solid_solver.setDisplacementBCs(zero_x_displacement, mesh->domain("block_sides"));
 
-  constexpr double total_steps     = 300.0;
+  constexpr double total_steps = 300.0;
   constexpr double max_indentation = 0.35;
 
-  auto applied_displacement = [](smith::tensor<double, dim> /*x*/, double t)
-  {
+  auto applied_displacement = [](smith::tensor<double, dim> /*x*/, double t) {
     smith::tensor<double, dim> u{};
-    u[1] = -t * max_indentation / total_steps;   // pure vertical ramp
+    u[1] = -t * max_indentation / total_steps;  // pure vertical ramp
     return u;
   };
 
   mesh->addDomainOfBoundaryElements("indenter_top", smith::by_attr<dim>(1));
-  solid_solver.setDisplacementBCs(applied_displacement,
-                                  mesh->domain("indenter_top"));
+  solid_solver.setDisplacementBCs(applied_displacement, mesh->domain("indenter_top"));
 
   const auto contact_id = 0;
-  std::set<int> master_attrs({3});   // block_top
-  std::set<int> slave_attrs ({2});   // indenter_arc
+  std::set<int> master_attrs({3});  // block_top
+  std::set<int> slave_attrs({2});   // indenter_arc
 
-  solid_solver.addContactInteraction(contact_id, master_attrs, slave_attrs,
-                                     contact_options);
+  solid_solver.addContactInteraction(contact_id, master_attrs, slave_attrs, contact_options);
 
   // ── Output setup ──────────────────────────────────────────────────────
   const std::string paraview_name = name + "_paraview";
@@ -165,17 +152,15 @@ int main(int argc, char* argv[])
   // ── Complete setup and time-march ─────────────────────────────────────
   solid_solver.completeSetup();
 
-  if (std::isnan(solid_solver.displacement().Norml2()))
-  {
+  if (std::isnan(solid_solver.displacement().Norml2())) {
     SLIC_ERROR_ROOT("NaN in displacement before first timestep!");
     return 1;
   }
 
   const double dt = 1.0;
-  const int    n_steps = static_cast<int>(total_steps);
+  const int n_steps = static_cast<int>(total_steps);
 
-  for (int i = 0; i < n_steps; ++i)
-  {
+  for (int i = 0; i < n_steps; ++i) {
     solid_solver.advanceTimestep(dt);
 
     solid_solver.outputStateToDisk(paraview_name);

@@ -178,7 +178,7 @@ double relativeContactSurfaceDisplacementError(const mfem::ParGridFunction& disp
 
 TEST_P(EnergyContactHertzian, solves_indenter_contact)
 {
-  constexpr int p   = 1;
+  constexpr int p = 1;
   constexpr int dim = 2;
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -192,8 +192,10 @@ TEST_P(EnergyContactHertzian, solves_indenter_contact)
   auto mesh = std::make_shared<smith::Mesh>(mesh_file, "hertzian_unit_mesh", 0, 0);
   mesh->mfemParMesh().CheckElementOrientation(true);
 
-  LinearSolverOptions linear_options{
-      .linear_solver = LinearSolver::CG, .preconditioner = Preconditioner::HypreJacobi, .max_iterations = 10000, .print_level = 0};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
+                                     .preconditioner = Preconditioner::HypreJacobi,
+                                     .max_iterations = 10000,
+                                     .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::TrustRegion,
                                            .relative_tol = 1.0e-9,
@@ -205,7 +207,7 @@ TEST_P(EnergyContactHertzian, solves_indenter_contact)
   ContactOptions contact_options{.method = GetParam().first,
                                  .enforcement = ContactEnforcement::Penalty,
                                  .type = ContactType::Frictionless,
-                                 .penalty = 3e6, //2.0e5,
+                                 .penalty = 3e6,  // 2.0e5,
                                  .penalty2 = 0,
                                  .jacobian = ContactJacobian::Exact,
                                  .penalty_smoothing_del = 1e-3};
@@ -222,20 +224,16 @@ TEST_P(EnergyContactHertzian, solves_indenter_contact)
   const double K_indenter = 100.0 * K_block;
   const double G_indenter = 100.0 * G_block;
   const double E_indenter = 9.0 * K_indenter * G_indenter / (3.0 * K_indenter + G_indenter);
-  const double nu_indenter =
-      (3.0 * K_indenter - 2.0 * G_indenter) / (2.0 * (3.0 * K_indenter + G_indenter));
-  const double E_star =
-      1.0 / ((1.0 - nu_block * nu_block) / E_block + (1.0 - nu_indenter * nu_indenter) / E_indenter);
+  const double nu_indenter = (3.0 * K_indenter - 2.0 * G_indenter) / (2.0 * (3.0 * K_indenter + G_indenter));
+  const double E_star = 1.0 / ((1.0 - nu_block * nu_block) / E_block + (1.0 - nu_indenter * nu_indenter) / E_indenter);
   constexpr double top_traction = 2.0;
   const double applied_line_load = top_traction * boundaryLength(mesh->mfemParMesh(), 1);
 
   // Per-attribute materials: block is domain attr 1, indenter is attr 2.
   solid_mechanics::LinearIsotropic block_mat{1.0, K_block, G_block};
   solid_mechanics::LinearIsotropic indenter_mat{1.0, K_indenter, G_indenter};
-  mesh->addDomainOfBodyElements(
-      "block_body", [](std::vector<tensor<double, dim>>, int attr) { return attr == 1; });
-  mesh->addDomainOfBodyElements(
-      "indenter_body", [](std::vector<tensor<double, dim>>, int attr) { return attr == 2; });
+  mesh->addDomainOfBodyElements("block_body", [](std::vector<tensor<double, dim>>, int attr) { return attr == 1; });
+  mesh->addDomainOfBodyElements("indenter_body", [](std::vector<tensor<double, dim>>, int attr) { return attr == 2; });
   solid_solver.setMaterial(block_mat, mesh->domain("block_body"));
   solid_solver.setMaterial(indenter_mat, mesh->domain("indenter_body"));
 
@@ -251,9 +249,8 @@ TEST_P(EnergyContactHertzian, solves_indenter_contact)
   mesh->addDomainOfBoundaryElements("indenter_top", smith::by_attr<dim>(1));
   solid_solver.setFixedBCs(mesh->domain("indenter_top"), Component::X);
 
-  solid_solver.setTraction(
-      [](auto /*x*/, auto n, double t) { return -(t * top_traction) * n; },
-      mesh->domain("indenter_top"));
+  solid_solver.setTraction([](auto /*x*/, auto n, double t) { return -(t * top_traction) * n; },
+                           mesh->domain("indenter_top"));
 
   // Contact: master = block_top (attr 3), slave = indenter_arc (attr 2)
   solid_solver.addContactInteraction(0, {3}, {2}, contact_options);

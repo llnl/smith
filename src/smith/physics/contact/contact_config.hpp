@@ -21,7 +21,7 @@ enum class ContactMethod
 {
   SingleMortar,     /**< Puso and Laursen 2004 */
   EnergyMortar,     /**< Energy-based mortar (g_tilde/A formulation) */
-  EnergyAreaPenalty  /**< Energy-based area-integrated penalty (k/2 * integral H(gn)^2 dA) */
+  EnergyAreaPenalty /**< Energy-based area-integrated penalty (k/2 * integral H(gn)^2 dA) */
 };
 
 /**
@@ -66,7 +66,7 @@ enum class BoundsSmoothing
  */
 enum class PenaltySmoothing
 {
-  Hard, /**< Hard clamp: p = k * max(-g, 0). C0 kink in Jacobian. */
+  Hard,  /**< Hard clamp: p = k * max(-g, 0). C0 kink in Jacobian. */
   Smooth /**< C1 quadratic ramp over [-del/2, +del/2]: penalty decays smoothly to zero. */
 };
 

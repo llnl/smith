@@ -36,9 +36,8 @@ int main(int argc, char* argv[])
   mesh->addDomainOfBoundaryElements("support", smith::by_attr<dim>(1));
   mesh->addDomainOfBoundaryElements("applied_displacement_surface", smith::by_attr<dim>(6));
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
-                                              .preconditioner = smith::Preconditioner::HypreJacobi,
-                                              .print_level = 0};
+  smith::LinearSolverOptions linear_options{
+      .linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreJacobi, .print_level = 0};
 
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-13,

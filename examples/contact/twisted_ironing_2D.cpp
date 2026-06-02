@@ -85,9 +85,8 @@ int main(int argc, char* argv[])
                                       .updateAttrib(1, 2)}),
       "square_ironing_mesh_" + name_postfix, 0, 0);
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
-                                            .preconditioner = smith::Preconditioner::HypreAMG,
-                                            .print_level = 0};
+  smith::LinearSolverOptions linear_options{
+      .linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreAMG, .print_level = 0};
 
   mfem::VisItDataCollection visit_dc("contact_ironing_visit", &mesh->mfemParMesh());
 

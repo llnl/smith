@@ -38,11 +38,10 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 {
   int mesh1_id = 2 * interaction_id;      // unique id for the first Tribol mesh
   int mesh2_id = 2 * interaction_id + 1;  // unique id for the second Tribol mesh
-  auto tribol_method =
-      ( getContactOptions().method == ContactMethod::EnergyMortar ||
-        getContactOptions().method == ContactMethod::EnergyAreaPenalty )
-          ? tribol::PENALTY
-          : tribol::LAGRANGE_MULTIPLIER;
+  auto tribol_method = (getContactOptions().method == ContactMethod::EnergyMortar ||
+                        getContactOptions().method == ContactMethod::EnergyAreaPenalty)
+                           ? tribol::PENALTY
+                           : tribol::LAGRANGE_MULTIPLIER;
   tribol::registerMfemCouplingScheme(interaction_id, mesh1_id, mesh2_id, mesh, current_coords, bdry_attr_surf1,
                                      bdry_attr_surf2, tribol::SURFACE_TO_SURFACE, tribol::NO_CASE, getMethod(),
                                      tribol::FRICTIONLESS, tribol_method);
@@ -77,10 +76,8 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
     contact_opts_.enforcement = ContactEnforcement::NotRequired;
     tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
     tribol::setMfemEnergyMortarOptions(
-        interaction_id,
-        static_cast<tribol::SmoothingType>(contact_opts_.bounds_smoothing),
-        static_cast<tribol::PenaltySmoothing>(contact_opts_.penalty_smoothing),
-        contact_opts_.penalty_smoothing_del);
+        interaction_id, static_cast<tribol::SmoothingType>(contact_opts_.bounds_smoothing),
+        static_cast<tribol::PenaltySmoothing>(contact_opts_.penalty_smoothing), contact_opts_.penalty_smoothing_del);
   }
 
   // set up Tribol to compute exact Jacobian if requested

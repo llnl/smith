@@ -87,7 +87,7 @@ int main(int argc, char* argv[])
       "square_ironing_mesh_" + name_postfix, 0, 0);
 
   smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
-                                            .preconditioner = smith::Preconditioner::HypreJacobi, // Jacobi, //AMG,
+                                            .preconditioner = smith::Preconditioner::HypreJacobi,  // Jacobi, //AMG,
                                             .max_iterations = 500,
                                             .print_level = 0};
 
@@ -103,13 +103,14 @@ int main(int argc, char* argv[])
       .max_line_search_iterations = 10,
       .print_level = 2};
 
-  smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyAreaPenalty, //EnergyAreaPenalty, //EnergyMortar,
-                                        .enforcement = smith::ContactEnforcement::Penalty,
-                                        .type = smith::ContactType::Frictionless,
-                                        .penalty = 80000.0,
-                                        .penalty2 = 0,
-                                        .jacobian = smith::ContactJacobian::Exact,
-                                        .penalty_smoothing_del = 1e-5};
+  smith::ContactOptions contact_options{
+      .method = smith::ContactMethod::EnergyAreaPenalty,  // EnergyAreaPenalty, //EnergyMortar,
+      .enforcement = smith::ContactEnforcement::Penalty,
+      .type = smith::ContactType::Frictionless,
+      .penalty = 80000.0,
+      .penalty2 = 0,
+      .jacobian = smith::ContactJacobian::Exact,
+      .penalty_smoothing_del = 1e-5};
 
   smith::SolidMechanicsContact<p, dim, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
@@ -157,13 +158,13 @@ int main(int argc, char* argv[])
   auto contact_interaction_id1 = 0;
   auto contact_interaction_id2 = 1;
   std::set<int> surface_1_boundary_attributes({9});
-  std::set<int> surface_2_boundary_attributes({2,5,8,10});
+  std::set<int> surface_2_boundary_attributes({2, 5, 8, 10});
   solid_solver.addContactInteraction(contact_interaction_id1, surface_1_boundary_attributes,
                                      surface_2_boundary_attributes, contact_options);
   solid_solver.addContactInteraction(contact_interaction_id2, surface_2_boundary_attributes,
                                      surface_1_boundary_attributes, contact_options);
-  //solid_solver.addContactInteraction(contact_interaction_id2, surface_1_boundary_attributes,
-  //                                   surface_3_boundary_attributes, contact_options);
+  // solid_solver.addContactInteraction(contact_interaction_id2, surface_1_boundary_attributes,
+  //                                    surface_3_boundary_attributes, contact_options);
 
   std::string paraview_name = name + "_paraview";
   solid_solver.outputStateToDisk(paraview_name);

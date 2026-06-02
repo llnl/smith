@@ -30,7 +30,7 @@ namespace {
 struct SolidNeoHookeanMaterial {
   using State = smith::Empty;
 
-  template<int dim, typename DispGradType>
+  template <int dim, typename DispGradType>
   SMITH_HOST_DEVICE auto operator()(State&, const smith::tensor<DispGradType, dim, dim>& du_dX) const
   {
     using std::log1p;
@@ -52,9 +52,9 @@ struct SolidNeoHookeanMaterial {
     return dot(TK, FinvT);
   }
 
-  double density {};
-  double K {};
-  double G {};
+  double density{};
+  double K{};
+  double G{};
 };
 
 }  // namespace
@@ -93,10 +93,8 @@ int main(int argc, char* argv[])
   CLI11_PARSE(app, argc, argv);
 
   if (!std::filesystem::exists(mesh_file)) {
-    SLIC_ERROR_ROOT(
-        "Missing mesh file: " << mesh_file
-                              << ". Generate it with: cubitx --nogui -batch "
-                              << SMITH_REPO_DIR "/examples/contact/single_square_hole_frame.jou");
+    SLIC_ERROR_ROOT("Missing mesh file: " << mesh_file << ". Generate it with: cubitx --nogui -batch "
+                                          << SMITH_REPO_DIR "/examples/contact/single_square_hole_frame.jou");
   }
 
   std::filesystem::create_directories(output_dir);
@@ -133,37 +131,34 @@ int main(int argc, char* argv[])
       .max_iterations = 2000,
       .max_line_search_iterations = 10,
       .print_level = 2,
-       //, smith::SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY
-      };
+      //, smith::SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY
+  };
 
-  smith::LinearSolverOptions linear_options{
-      .linear_solver = smith::LinearSolver::CG,
-      .preconditioner = smith::Preconditioner::HypreAMG,
-      .relative_tol = 1.0e-9,
-      .absolute_tol = 1.0e-10,
-      .max_iterations = 10000,
-      .print_level = 0};
+  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
+                                            .preconditioner = smith::Preconditioner::HypreAMG,
+                                            .relative_tol = 1.0e-9,
+                                            .absolute_tol = 1.0e-10,
+                                            .max_iterations = 10000,
+                                            .print_level = 0};
 
-  smith::ContactOptions contact_options{
-      .method = smith::ContactMethod::EnergyAreaPenalty,
-      .enforcement = smith::ContactEnforcement::Penalty,
-      .type = smith::ContactType::Frictionless,
-      .penalty = penalty,
-      .penalty2 = 0.0,
-      .jacobian = smith::ContactJacobian::Exact,
-      .penalty_smoothing = smith::PenaltySmoothing::Smooth};
+  smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyAreaPenalty,
+                                        .enforcement = smith::ContactEnforcement::Penalty,
+                                        .type = smith::ContactType::Frictionless,
+                                        .penalty = penalty,
+                                        .penalty2 = 0.0,
+                                        .jacobian = smith::ContactJacobian::Exact,
+                                        .penalty_smoothing = smith::PenaltySmoothing::Smooth};
 
-  smith::SolidMechanicsContact<p, dim> solid_solver(
-      nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh,
-      std::vector<std::string>{}, 0, 0, false, true);
+  smith::SolidMechanicsContact<p, dim> solid_solver(nonlinear_options, linear_options,
+                                                    smith::solid_mechanics::default_quasistatic_options, name, mesh,
+                                                    std::vector<std::string>{}, 0, 0, false, true);
 
   SolidNeoHookeanMaterial solid_material{.density = 1000.0, .K = K_solid, .G = G_solid};
   solid_solver.setMaterial(solid_material, mesh->domain("solid"));
 
   auto applied_displacement = [=](const smith::tensor<double, dim>&, double t) {
     smith::tensor<double, dim> u{0.0, 0.0};
-    const double load_factor =
-        std::clamp((final_pseudo_time > 0.0) ? (t / final_pseudo_time) : 1.0, 0.0, 1.0);
+    const double load_factor = std::clamp((final_pseudo_time > 0.0) ? (t / final_pseudo_time) : 1.0, 0.0, 1.0);
     u[1] = target_top_displacement * load_factor;
     return u;
   };
@@ -173,8 +168,6 @@ int main(int argc, char* argv[])
   solid_solver.addContactInteraction(1, {middle_attr}, {middle_attr}, contact_options);
   solid_solver.addContactInteraction(2, {left_attr}, {left_attr}, contact_options);
   solid_solver.addContactInteraction(3, {right_attr}, {right_attr}, contact_options);
-
-
 
   solid_solver.completeSetup();
 

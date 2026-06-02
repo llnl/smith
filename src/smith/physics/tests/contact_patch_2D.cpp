@@ -72,9 +72,8 @@ TEST_P(ContactTest, patch)
   mesh->addDomainOfBoundaryElements("y0_faces", smith::by_attr<dim>(8));
   mesh->addDomainOfBoundaryElements("Ymax_face", smith::by_attr<dim>(9));
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
-                                      .preconditioner = Preconditioner::HypreJacobi,
-                                      .print_level = 0};
+  LinearSolverOptions linear_options{
+      .linear_solver = LinearSolver::CG, .preconditioner = Preconditioner::HypreJacobi, .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::TrustRegion,
                                            .relative_tol = 1.0e-13,

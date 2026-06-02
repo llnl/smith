@@ -52,9 +52,8 @@ TEST_P(ContactPatchTied, patch)
   mesh->addDomainOfBoundaryElements("z0_face", smith::by_attr<dim>(3));
   mesh->addDomainOfBoundaryElements("zmax_face", smith::by_attr<dim>(6));
 
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
-                                      .preconditioner = Preconditioner::HypreJacobi,
-                                      .print_level = 0};
+  LinearSolverOptions linear_options{
+      .linear_solver = LinearSolver::CG, .preconditioner = Preconditioner::HypreJacobi, .print_level = 0};
 
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                            .relative_tol = 1.0e-13,

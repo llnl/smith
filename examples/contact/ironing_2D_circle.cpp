@@ -87,9 +87,8 @@ int main(int argc, char* argv[])
       "ironing_2D_mesh_" + name_postfix, 0, 0);
   mesh->mfemParMesh().CheckElementOrientation(true);
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
-                                            .preconditioner = smith::Preconditioner::HypreAMG,
-                                            .print_level = 0};
+  smith::LinearSolverOptions linear_options{
+      .linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreAMG, .print_level = 0};
 
   mfem::VisItDataCollection visit_dc("contact_ironing_visit", &mesh->mfemParMesh());
 
