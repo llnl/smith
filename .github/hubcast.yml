@@ -3,7 +3,7 @@ Repo:
   dest_org: smith
 
   # Required: name of the destination repository
-  dest_name: smith_cz
+  dest_name: smith
 
   # Optional: name of the CI check as reported back to GitHub (default: gitlab-ci)
   check_name: gitlab-ci
