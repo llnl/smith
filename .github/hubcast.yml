@@ -1,0 +1,28 @@
+Repo:
+  # Required: organization or user that owns the repo on the destination forge
+  dest_org: smith
+
+  # Required: name of the destination repository
+  dest_name: smith
+
+  # Optional: name of the CI check as reported back to GitHub (default: gitlab-ci)
+  check_name: gitlab-ci
+
+  # Optional: granularity of CI statuses reported to GitHub (default: [pipeline])
+  # Set to [pipeline] for overall pipeline status only
+  # Set to [jobs] for individual job statuses only
+  # Set to [pipeline, jobs] to report both
+  check_types: [pipeline]
+
+  # Optional: delete branches from destination when source PR is closed (default: true)
+  delete_closed: true
+
+  # Optional: sync draft PRs/MRs (default: true)
+  sync_drafts: true
+
+  # Optional: post message when draft sync is disabled (default: true)
+  sync_drafts_msg: true
+
+  # Optional: create GitLab MRs from GitHub PRs
+  # allows developers to create synthetic merge commits using GitLab's merged results pipelines feature
+  create_mr: false
