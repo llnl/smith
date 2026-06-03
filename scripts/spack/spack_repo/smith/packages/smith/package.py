@@ -125,9 +125,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     with when("+sundials"):
         # MFEM is deprecating the monitoring support with sundials v6.0 and later
-        # NOTE: Sundials must be built static to prevent the following runtime error:
-        # "error while loading shared libraries: libsundials_nvecserial.so.6:
-        # cannot open shared object file: No such file or directory"
         depends_on("sundials+hypre~trilinos~monitoring~examples~examples-install+static~shared~petsc")
         depends_on("sundials+asan", when="+asan")
 
@@ -187,8 +184,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("axom~raja", when="~raja")
     depends_on("axom+umpire", when="+umpire")
     depends_on("axom~umpire", when="~umpire")
-    depends_on("axom~openmp", when="~openmp")
     depends_on("axom+openmp", when="+openmp")
+    depends_on("axom~openmp", when="~openmp")
 
     depends_on("metis@5.1.0")
     depends_on("parmetis@4.0.3")
@@ -297,6 +294,49 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
               msg="AMD GPU target is required when building with ROCm")
 
 
+    # -----------------------------------------------------------------------
+    # Conflicts
+    # -----------------------------------------------------------------------
+
+    # Enzyme required an LLVM-based compiler
+    for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
+        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler_}")
+
+    requires("%cxx=llvm-amdgpu", when="+enzyme+rocm")
+    requires("%cxx=llvm", when="+enzyme~rocm")
+
+    conflicts("+openmp", when="+rocm")
+    conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
+    conflicts("~petsc", when="+slepc", msg="PETSc must be built when building with SLEPc!")
+
+    conflicts("+cuda", when="+rocm")
+    conflicts("cuda_arch=none", when="+cuda", msg="CUDA architecture is required")
+    conflicts("amdgpu_target=none", when="+rocm", msg="AMD GPU target is required when building with ROCm")
+
+    conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
+
+    # NOTE: Sundials must be built static to prevent the following runtime error:
+    # "error while loading shared libraries: libsundials_nvecserial.so.6:
+    # cannot open shared object file: No such file or directory"
+    conflicts("sundials+shared", when="+sundials",
+              msg="Sundials causes runtime errors if shared!")
+
+    # ASan is only supported by GCC and (some) LLVM-derived
+    # compilers.
+    asan_compiler_denylist = {"aocc", "arm", "cce", "fj", "intel", "nag",
+                              "nvhpc", "oneapi", "pgi", "xl", "xl_r"}
+    asan_compiler_allowlist = {"gcc", "clang", "apple-clang"}
+
+    # ASan compiler denylist and allowlist should be disjoint.
+    assert len(asan_compiler_denylist & asan_compiler_allowlist) == 0
+
+    for compiler_ in asan_compiler_denylist:
+        conflicts(
+            "%{0}".format(compiler_),
+            when="+asan",
+            msg="{0} compilers do not support Address Sanitizer".format(compiler_)
+        )
+
 
     def _get_sys_type(self, spec):
         sys_type = spec.architecture
@@ -344,22 +384,14 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             entries.append(cmake_cache_option("ENABLE_CUDA", True))
             entries.append(cmake_cache_option("CMAKE_CUDA_SEPARABLE_COMPILATION", True))
 
-            if spec.satisfies("cuda_arch=none"):
-                msg = ("# No cuda_arch specified in Spack spec, "
-                       "this is likely to fail\n\n")
-                entries.append(msg)
-            else:
-                # CXX flags will be propagated to the host compiler
-                cxxflags = " ".join(spec.compiler_flags["cxxflags"])
-                cuda_flags = cxxflags
-                cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
-                entries.append(cmake_cache_string("CMAKE_CUDA_FLAGS",
-                                                  cuda_flags, force=True))
+            # CXX flags will be propagated to the host compiler
+            cxxflags = " ".join(spec.compiler_flags["cxxflags"])
+            cuda_flags = cxxflags
+            cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
+            entries.append(cmake_cache_string("CMAKE_CUDA_FLAGS", cuda_flags, force=True))
 
-                entries.append(
-                    "# nvcc does not like gtest's 'pthreads' flag\n")
-                entries.append(
-                    cmake_cache_option("gtest_disable_pthreads", True))
+            entries.append("# nvcc does not like gtest's 'pthreads' flag\n")
+            entries.append(cmake_cache_option("gtest_disable_pthreads", True))
 
         if spec.satisfies("+rocm"):
             entries.append(cmake_cache_option("ENABLE_HIP", True))
@@ -398,11 +430,9 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
                 )
 
             # Additional libraries for TOSS4
-            hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr "
-            hip_link_flags += "-lpgmath "
+            hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr -lpgmath "
             if spec.satisfies("+openmp"):
                 hip_link_flags += "-lompstub "
-
             if spec.satisfies("^hipblas"):
                 hip_link_flags += "-lhipblas "
 
