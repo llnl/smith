@@ -114,6 +114,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("enzyme@0.0.180:", when="+enzyme")
     depends_on("cuda+allow-unsupported-compilers", when="+enzyme+cuda")
     depends_on("enzyme %libllvm=llvm-amdgpu", when="+enzyme+rocm")
+    requires("%cxx=llvm-amdgpu", when="+enzyme+rocm")
+    requires("%cxx=llvm", when="+enzyme~rocm")
 
     # Devtool dependencies these need to match smithdevtools/package.py
     with when("+devtools"):
@@ -256,9 +258,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     # Enzyme required an LLVM-based compiler
     for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
         conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler_}")
-
-    requires("%cxx=llvm-amdgpu", when="+enzyme+rocm")
-    requires("%cxx=llvm", when="+enzyme~rocm")
 
     conflicts("+openmp", when="+rocm")
     conflicts("+cuda", when="+rocm")
