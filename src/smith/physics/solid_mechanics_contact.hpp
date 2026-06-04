@@ -318,11 +318,11 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   FiniteElementDual loadCheckpointedDual(const std::string& dual_name, int cycle) override
   {
     if (isAggregateContactForceName(dual_name) || parseContactInteractionForceId(dual_name).has_value()) {
-      SLIC_ERROR_ROOT_IF(haveLagrangeMultipliers(),
+      SLIC_ERROR_ROOT_IF(contact_.haveLagrangeMultipliers(),
                          "Checkpointed retrieval of contact forces is not supported for Lagrange multiplier contact.");
 
-      const FiniteElementState checkpointed_displacement = loadCheckpointedState("displacement", cycle);
-      double dt = getCheckpointedTimestep(cycle);
+      const FiniteElementState checkpointed_displacement = this->loadCheckpointedState("displacement", cycle);
+      double dt = this->getCheckpointedTimestep(cycle);
       contact_.updateForcesAndJacobian(cycle, time_, dt, BasePhysics::shapeDisplacement(), checkpointed_displacement);
       updateContactForceOutputs();
 
@@ -331,13 +331,13 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       }
 
       const auto interaction_id = parseContactInteractionForceId(dual_name);
-      SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
-                         std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.",
-                                     dual_name, name_));
+      SLIC_ERROR_ROOT_IF(
+          !interaction_id.has_value(),
+          std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.", dual_name, name_));
       auto it = contact_interaction_forces_.find(*interaction_id);
-      SLIC_ERROR_ROOT_IF(it == contact_interaction_forces_.end(),
-                         std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.",
-                                     dual_name, name_));
+      SLIC_ERROR_ROOT_IF(
+          it == contact_interaction_forces_.end(),
+          std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.", dual_name, name_));
       return *it->second;
     }
 
@@ -449,12 +449,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       return std::nullopt;
     }
     return interaction_id;
-  }
-
-  /// @brief Returns true if @p dual_name refers to the merged contact force dual
-  bool isAggregateContactForceName(std::string_view dual_name) const
-  {
-    return detail::removePrefix(this->name_, std::string(dual_name)) == "contact_forces";
   }
 
   /// @brief Solve the Quasi-static Newton system
