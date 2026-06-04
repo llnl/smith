@@ -17,6 +17,7 @@ set(physics_test_depends smith_physics smith_differentiable_numerics smith_physi
 
 set(physics_serial_test_sources
     beam_bending.cpp
+    test_adjoint_workflow.cpp
     fit_test.cpp
     test_mesh_wrapper.cpp
     thermal_finite_diff.cpp
