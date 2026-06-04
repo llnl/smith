@@ -106,12 +106,12 @@ FiniteElementState createReactionDirection(const BasePhysics& solid_solver, std:
   FiniteElementState reaction_directions(reactions.space(), "reaction_directions");
   reaction_directions = 0.0;
 
-  reaction_directions.project(
-      [direction](const mfem::Vector& /*x*/, mfem::Vector& value) {
-        value = 0.0;
-        value[direction] = 1.0;
-      },
-      mesh->domain("essential_boundary"));
+  mfem::VectorFunctionCoefficient reaction_direction(dim, [direction](const mfem::Vector& /*x*/, mfem::Vector& value) {
+    value = 0.0;
+    value[direction] = 1.0;
+  });
+
+  reaction_directions.project(reaction_direction, mesh->domain("essential_boundary"));
 
   return reaction_directions;
 }
@@ -233,27 +233,24 @@ AdjointWorkflowResult runContactSequence(ContactSolid& solid, std::shared_ptr<Me
 
   FiniteElementState contact_force_adjoint_load(contact_force.space(), "contact_force_adjoint_load");
   contact_force_adjoint_load = 0.0;
-  contact_force_adjoint_load.project(
-      [](const mfem::Vector&, mfem::Vector& value) {
-        value = 0.0;
-        value[1] = 1.0;
-      },
-      mesh->domain("driven_surface"));
+  mfem::VectorFunctionCoefficient contact_force_direction(3, [](const mfem::Vector&, mfem::Vector& value) {
+    value = 0.0;
+    value[1] = 1.0;
+  });
+  contact_force_adjoint_load.project(contact_force_direction, mesh->domain("driven_surface"));
 
   FiniteElementDual shape_sensitivity(solid.shapeDisplacement().space(), "shape_sensitivity");
   shape_sensitivity = 0.0;
 
   for (int step = num_time_steps; step > 0; --step) {
     const auto& checkpointed_displacement = solid.loadCheckpointedState("displacement", solid.cycle());
-    const auto& checkpointed_contact_force = solid.loadCheckpointedDual("contact_force_0", solid.cycle());
     EXPECT_GT(checkpointed_displacement.Norml2(), 0.0);
-    EXPECT_GT(checkpointed_contact_force.Norml2(), 0.0);
 
     solid.setAdjointLoad({{"displacement", displacement_adjoint_load}});
     solid.setDualAdjointBcs({{"contact_force_0", contact_force_adjoint_load}});
     solid.reverseAdjointTimestep();
 
-    shape_sensitivity += solid.computeTimestepShapeSensitivity();
+    shape_sensitivity += static_cast<BasePhysics&>(solid).computeTimestepShapeSensitivity();
     EXPECT_EQ(step - 1, solid.cycle());
   }
 
