@@ -145,6 +145,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     mfem::Vector p(contact_.numPressureDofs());
     p = 0.0;
     contact_.updateForcesAndJacobian(cycle, time, dt, BasePhysics::shapeDisplacement(), displacement_, p);
+    updateContactForceOutputs();
   }
 
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
@@ -313,6 +314,36 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     return SolidMechanicsBase::dualAdjoint(dual_name);
   }
 
+  /// @overload
+  FiniteElementDual loadCheckpointedDual(const std::string& dual_name, int cycle) override
+  {
+    if (isAggregateContactForceName(dual_name) || parseContactInteractionForceId(dual_name).has_value()) {
+      SLIC_ERROR_ROOT_IF(haveLagrangeMultipliers(),
+                         "Checkpointed retrieval of contact forces is not supported for Lagrange multiplier contact.");
+
+      const FiniteElementState checkpointed_displacement = loadCheckpointedState("displacement", cycle);
+      double dt = getCheckpointedTimestep(cycle);
+      contact_.updateForcesAndJacobian(cycle, time_, dt, BasePhysics::shapeDisplacement(), checkpointed_displacement);
+      updateContactForceOutputs();
+
+      if (isAggregateContactForceName(dual_name)) {
+        return forces_;
+      }
+
+      const auto interaction_id = parseContactInteractionForceId(dual_name);
+      SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
+                         std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.",
+                                     dual_name, name_));
+      auto it = contact_interaction_forces_.find(*interaction_id);
+      SLIC_ERROR_ROOT_IF(it == contact_interaction_forces_.end(),
+                         std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.",
+                                     dual_name, name_));
+      return *it->second;
+    }
+
+    return SolidMechanicsBase::loadCheckpointedDual(dual_name, cycle);
+  }
+
   /**
    * @brief create a contactSubspaceTransferOperator for AMGF
    */
@@ -335,6 +366,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     double dt = 0.0;
     mfem::Vector p = pressure();
     contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
+    updateContactForceOutputs();
 
     SolidMechanicsBase::completeSetup();
   }
@@ -419,6 +451,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     return interaction_id;
   }
 
+  /// @brief Returns true if @p dual_name refers to the merged contact force dual
+  bool isAggregateContactForceName(std::string_view dual_name) const
+  {
+    return detail::removePrefix(this->name_, std::string(dual_name)) == "contact_forces";
+  }
+
   /// @brief Solve the Quasi-static Newton system
   void quasiStaticSolve(double dt) override
   {
@@ -439,16 +477,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // solve the non-linear system resid = 0 and pressure * gap = 0
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));
-    forces_.SetVector(contact_.forces(), 0);
-
-#ifdef SMITH_USE_TRIBOL
-    for (const auto& interaction : contact_.getContactInteractions()) {
-      auto it = contact_interaction_forces_.find(interaction.getInteractionId());
-      if (it != contact_interaction_forces_.end()) {
-        it->second->SetVector(interaction.forces(), 0);
-      }
-    }
-#endif
+    updateContactForceOutputs();
   }
 
   /**
@@ -631,8 +660,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
         SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
 
-        // The merged contact force dual is the sum of all interaction forces, so its seed contributes through each
-        // interaction Jacobian block.
         if (have_aggregate_contact_force_seed) {
           FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
           tmp = 0.0;
@@ -687,6 +714,20 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
     return BasePhysics::shapeDisplacementSensitivity();
+  }
+
+  /// @brief Update the cached contact-force outputs from the current Tribol state
+  void updateContactForceOutputs()
+  {
+    forces_ = contact_.forces();
+#ifdef SMITH_USE_TRIBOL
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      auto it = contact_interaction_forces_.find(interaction.getInteractionId());
+      if (it != contact_interaction_forces_.end()) {
+        *it->second = interaction.forces();
+      }
+    }
+#endif
   }
 
   using BasePhysics::bcs_;
