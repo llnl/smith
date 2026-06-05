@@ -7,14 +7,11 @@
 ##############################################################################
 
 variables:
-  # Redirect CI to workspace and cleanup jobs after they run
-  # https://ecp-ci.gitlab.io/docs/tutorial/hpc_tutorial.html#working-with-large-repos
-  CUSTOM_CI_BUILDS_DIR: "/usr/workspace/$GITLAB_USER_LOGIN/.smith-jacamar-ci/$CI_CONCURRENT_ID/$CI_PROJECT_NAME"
+  CUSTOM_CI_BUILDS_DIR: "/usr/workspace/$GITLAB_USER_LOGIN/.jacamar-ci/$CI_PROJECT_NAME"
   FF_ENABLE_JOB_CLEANUP: "true"
   GIT_STRATEGY: clone
   GIT_SUBMODULE_STRATEGY: recursive
   PROJECT_ALLOC_NAME: ${CI_PROJECT_NAME}_ci_${CI_PIPELINE_ID}
-  BUILD_ROOT: ${CI_PROJECT_DIR}
   FULL_BUILD_ROOT: ${CUSTOM_CI_BUILDS_DIR}/smith/${CI_JOB_NAME}
   ALLOC_BANK: eng
   SPOT_DIR: ${BUILD_ROOT}/califiles
