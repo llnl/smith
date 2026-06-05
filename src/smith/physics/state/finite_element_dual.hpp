@@ -14,6 +14,7 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 
 #include "mfem.hpp"
 
@@ -49,7 +50,7 @@ class FiniteElementDual : public FiniteElementVector {
    *
    * @param[in] rhs The input vector used for construction
    */
-  FiniteElementDual(FiniteElementDual&& rhs) : FiniteElementVector(rhs)
+  FiniteElementDual(FiniteElementDual&& rhs) : FiniteElementVector(std::move(rhs))
   {
     this->linear_form_ = std::move(rhs.linear_form_);
   }
