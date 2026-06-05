@@ -58,6 +58,9 @@ class FiniteElementDual : public FiniteElementVector {
   /**
    * @brief Move assignment
    *
+   * @warning This intentionally copy-assigns the underlying FiniteElementVector values and preserves this dual's
+   * identity/space. It does not invoke FiniteElementVector move assignment.
+   *
    * @param rhs The right hand side input Dual
    * @return The assigned FiniteElementDual
    */
