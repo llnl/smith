@@ -54,7 +54,7 @@ cron_script_contents() {
 0,20,40 * * * * crontab ${CRON_SCRIPT_PATH}
 
 # Remove contents of Jacamar CI that are older than 48 hours
-0 0 * * * srun -N1 find "${WORKSPACE_CI_DIR}" -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf -- {} +
+0 0 * * * srun -N1 find "${WORKSPACE_CI_DIR}" -mindepth 1 -mtime +1 -exec rm -rf -- {} +
 EOF
 }
 
