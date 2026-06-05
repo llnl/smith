@@ -913,7 +913,7 @@ inline SMITH_HOST_DEVICE tuple<vec3, mat3> eig_symm(const mat3& A)
                 {Q[2][order[0]], Q[2][order[1]], Q[2][order[2]]}}};
   // clang-format on
 
-  return {eigvals, eigvecs};
+  return tuple<vec3, mat3>{eigvals, eigvecs};
 }
 
 /*
