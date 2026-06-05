@@ -1264,15 +1264,32 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   {
     SLIC_ERROR_ROOT_IF(bcs.size() == 0, "Adjoint load container size must be greater than 0 in the solid mechanics.");
 
-    auto reaction_adjoint_load = bcs.find("reactions");
-
-    SLIC_ERROR_ROOT_IF(reaction_adjoint_load == bcs.end(), "Adjoint load for \"reaction\" not found.");
-
-    if (reaction_adjoint_load != bcs.end()) {
-      reactions_adjoint_bcs_ = reaction_adjoint_load->second;
+    for (const auto& [name, bc] : bcs) {
+      SLIC_ERROR_ROOT_IF(!trySetDualAdjointBc(name, bc),
+                         std::format("Unknown dual adjoint BC '{}' for solid mechanics module '{}'.", name, name_));
     }
   }
 
+ protected:
+  /**
+   * @brief Apply a single dual-adjoint boundary condition if this class owns the named dual
+   *
+   * @param[in] dual_name Name of the dual-adjoint BC to apply
+   * @param[in] bc Boundary condition values for the dual adjoint
+   * @return true if the key was recognized and applied
+   * @return false if the key is not owned by this class
+   */
+  virtual bool trySetDualAdjointBc(const std::string& dual_name, const smith::FiniteElementState& bc)
+  {
+    if (dual_name == "reactions") {
+      reactions_adjoint_bcs_ = bc;
+      return true;
+    }
+
+    return false;
+  }
+
+ public:
   /// @overload
   void reverseAdjointTimestep() override
   {

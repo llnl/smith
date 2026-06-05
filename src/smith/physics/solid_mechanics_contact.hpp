@@ -93,10 +93,13 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       : SolidMechanicsBase(std::move(solver), timestepping_opts, physics_name, smith_mesh, parameter_names, cycle, time,
                            checkpoint_to_disk, use_warm_start),
         contact_(BasePhysics::mfemParMesh()),
-        forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces")))
+        forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces"))),
+        contact_force_adjoint_bcs_(displacement_.space(), detail::addPrefix(physics_name, "contact_forces_adjoint_bcs"))
   {
     forces_ = 0;
     duals_.push_back(&forces_);
+    contact_force_adjoint_bcs_ = 0.0;
+    this->dual_adjoints_.push_back(&contact_force_adjoint_bcs_);
   }
 
   /**
@@ -112,10 +115,13 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
                         std::shared_ptr<smith::Mesh> smith_mesh, int cycle = 0, double time = 0.0)
       : SolidMechanicsBase(input_options, physics_name, smith_mesh, cycle, time),
         contact_(BasePhysics::mfemParMesh()),
-        forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces")))
+        forces_(StateManager::newDual(displacement_.space(), detail::addPrefix(physics_name, "contact_forces"))),
+        contact_force_adjoint_bcs_(displacement_.space(), detail::addPrefix(physics_name, "contact_forces_adjoint_bcs"))
   {
     forces_ = 0;
     duals_.push_back(&forces_);
+    contact_force_adjoint_bcs_ = 0.0;
+    this->dual_adjoints_.push_back(&contact_force_adjoint_bcs_);
   }
 
   /// @overload
@@ -123,6 +129,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   {
     SolidMechanicsBase::resetStates(cycle, time);
     forces_ = 0.0;
+    contact_force_adjoint_bcs_ = 0.0;
     for (auto& [_, force] : contact_interaction_forces_) {
       if (force) {
         *force = 0.0;
@@ -138,6 +145,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     mfem::Vector p(contact_.numPressureDofs());
     p = 0.0;
     contact_.updateForcesAndJacobian(cycle, time, dt, BasePhysics::shapeDisplacement(), displacement_, p);
+    updateContactForceOutputs();
   }
 
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
@@ -291,6 +299,10 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   /// @overload
   const FiniteElementState& dualAdjoint(const std::string& dual_name) const override
   {
+    if (isAggregateContactForceName(dual_name)) {
+      return contact_force_adjoint_bcs_;
+    }
+
     const auto interaction_id = parseContactInteractionForceId(dual_name);
     if (interaction_id.has_value()) {
       auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
@@ -300,6 +312,36 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     }
 
     return SolidMechanicsBase::dualAdjoint(dual_name);
+  }
+
+  /// @overload
+  FiniteElementDual loadCheckpointedDual(const std::string& dual_name, int cycle) override
+  {
+    if (isAggregateContactForceName(dual_name) || parseContactInteractionForceId(dual_name).has_value()) {
+      SLIC_ERROR_ROOT_IF(haveLagrangeMultipliers(),
+                         "Checkpointed retrieval of contact forces is not supported for Lagrange multiplier contact.");
+
+      const FiniteElementState checkpointed_displacement = loadCheckpointedState("displacement", cycle);
+      double dt = getCheckpointedTimestep(cycle);
+      contact_.updateForcesAndJacobian(cycle, time_, dt, BasePhysics::shapeDisplacement(), checkpointed_displacement);
+      updateContactForceOutputs();
+
+      if (isAggregateContactForceName(dual_name)) {
+        return forces_;
+      }
+
+      const auto interaction_id = parseContactInteractionForceId(dual_name);
+      SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
+                         std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.",
+                                     dual_name, name_));
+      auto it = contact_interaction_forces_.find(*interaction_id);
+      SLIC_ERROR_ROOT_IF(it == contact_interaction_forces_.end(),
+                         std::format("Requested checkpointed dual '{}' does not exist in physics module '{}'.",
+                                     dual_name, name_));
+      return *it->second;
+    }
+
+    return SolidMechanicsBase::loadCheckpointedDual(dual_name, cycle);
   }
 
   /**
@@ -324,6 +366,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     double dt = 0.0;
     mfem::Vector p = pressure();
     contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
+    updateContactForceOutputs();
 
     SolidMechanicsBase::completeSetup();
   }
@@ -354,47 +397,50 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   }
 #endif
 
+ protected:
   /// @overload
-  void setDualAdjointBcs(std::unordered_map<std::string, const smith::FiniteElementState&> bcs) override
+  bool trySetDualAdjointBc(const std::string& dual_name, const smith::FiniteElementState& bc) override
   {
-    SLIC_ERROR_ROOT_IF(bcs.size() == 0, "Adjoint load container size must be greater than 0 in SolidMechanicsContact.");
-
-    auto reaction_adjoint_load = bcs.find("reactions");
-    if (reaction_adjoint_load != bcs.end()) {
-      SolidMechanicsBase::setDualAdjointBcs({{"reactions", reaction_adjoint_load->second}});
+    if (isAggregateContactForceName(dual_name)) {
+      contact_force_adjoint_bcs_ = bc;
+      return true;
     }
 
-    for (const auto& [name, bc] : bcs) {
-      if (name == "reactions") {
-        continue;
-      }
-
-      const auto interaction_id = parseContactInteractionForceId(name);
-      SLIC_ERROR_ROOT_IF(!interaction_id.has_value(),
-                         std::format("Unknown dual adjoint BC '{}' for SolidMechanicsContact.", name));
-
+    const auto interaction_id = parseContactInteractionForceId(dual_name);
+    if (interaction_id.has_value()) {
       auto it = contact_interaction_force_adjoint_bcs_.find(*interaction_id);
       SLIC_ERROR_ROOT_IF(it == contact_interaction_force_adjoint_bcs_.end(),
                          std::format("No contact force adjoint BC registered for interaction_id={}", *interaction_id));
-
       *it->second = bc;
+      return true;
     }
+
+    return SolidMechanicsBase::trySetDualAdjointBc(dual_name, bc);
   }
 
- protected:
   /// @brief Converts a dual name into an interaction id (if it exists)
-  static std::optional<int> parseContactInteractionForceId(std::string_view dual_name)
+  std::optional<int> parseContactInteractionForceId(std::string_view dual_name) const
   {
     constexpr std::string_view prefix = "contact_force_";
+    const std::string normalized_name = detail::removePrefix(this->name_, std::string(dual_name));
+    const std::string_view normalized_name_view{normalized_name};
 
-    // Accept both the bare name and the module-prefixed name, e.g. "solid_contact_force_0".
-    const auto idx = dual_name.rfind(prefix);
-    if (idx == std::string_view::npos) {
+    if (normalized_name_view.substr(0, prefix.size()) != prefix) {
       return std::nullopt;
     }
 
-    // This code converts everything after the prefix to a candidate id
-    const std::string_view id_str = dual_name.substr(idx + prefix.size());
+    return parseInteractionId(normalized_name_view.substr(prefix.size()));
+  }
+
+  /// @brief Returns true if @p dual_name refers to the merged contact force dual
+  bool isAggregateContactForceName(std::string_view dual_name) const
+  {
+    return detail::removePrefix(this->name_, std::string(dual_name)) == "contact_forces";
+  }
+
+  /// @brief Parses the interaction id from the suffix of a contact force dual name
+  static std::optional<int> parseInteractionId(std::string_view id_str)
+  {
     int interaction_id = -1;
     const auto* begin = id_str.data();
     const auto* end = id_str.data() + id_str.size();
@@ -403,6 +449,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       return std::nullopt;
     }
     return interaction_id;
+  }
+
+  /// @brief Returns true if @p dual_name refers to the merged contact force dual
+  bool isAggregateContactForceName(std::string_view dual_name) const
+  {
+    return detail::removePrefix(this->name_, std::string(dual_name)) == "contact_forces";
   }
 
   /// @brief Solve the Quasi-static Newton system
@@ -425,16 +477,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // solve the non-linear system resid = 0 and pressure * gap = 0
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));
-    forces_.SetVector(contact_.forces(), 0);
-
-#ifdef SMITH_USE_TRIBOL
-    for (const auto& interaction : contact_.getContactInteractions()) {
-      auto it = contact_interaction_forces_.find(interaction.getInteractionId());
-      if (it != contact_interaction_forces_.end()) {
-        it->second->SetVector(interaction.forces(), 0);
-      }
-    }
-#endif
+    updateContactForceOutputs();
   }
 
   /**
@@ -606,27 +649,32 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // Following SolidMechanics::setAdjointLoad() sign convention, displacement_adjoint_load_ stores the negative of the
     // provided dJ/du, so we subtract these contributions here.
 #ifdef SMITH_USE_TRIBOL
-    if (!contact_interaction_force_adjoint_bcs_.empty()) {
+    const bool have_aggregate_contact_force_seed = contact_force_adjoint_bcs_.Norml2() != 0.0;
+    if (!contact_interaction_force_adjoint_bcs_.empty() || have_aggregate_contact_force_seed) {
       FiniteElementDual contact_force_load(displacement_.space(), "contact_force_dual_adjoint_load");
       contact_force_load = 0.0;
 
-      for (const auto& [interaction_id, force_seed] : contact_interaction_force_adjoint_bcs_) {
-        if (!force_seed) {
-          continue;
-        }
-
-        // Only apply if the seed is nonzero.
-        if (force_seed->Norml2() == 0.0) {
-          continue;
-        }
-
+      for (const auto& interaction : contact_.getContactInteractions()) {
+        const int interaction_id = interaction.getInteractionId();
         const auto interaction_J = contactInteraction(interaction_id).jacobianContribution();
         auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
         SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
 
+        if (have_aggregate_contact_force_seed) {
+          FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
+          tmp = 0.0;
+          J00->MultTranspose(contact_force_adjoint_bcs_, tmp);
+          contact_force_load.Add(1.0, tmp);
+        }
+
+        auto it = contact_interaction_force_adjoint_bcs_.find(interaction_id);
+        if (it == contact_interaction_force_adjoint_bcs_.end() || !it->second || it->second->Norml2() == 0.0) {
+          continue;
+        }
+
         FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
         tmp = 0.0;
-        J00->MultTranspose(*force_seed, tmp);
+        J00->MultTranspose(*it->second, tmp);
         contact_force_load.Add(1.0, tmp);
       }
 
@@ -666,6 +714,20 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
     return BasePhysics::shapeDisplacementSensitivity();
+  }
+
+  /// @brief Update the cached contact-force outputs from the current Tribol state
+  void updateContactForceOutputs()
+  {
+    forces_ = contact_.forces();
+#ifdef SMITH_USE_TRIBOL
+    for (const auto& interaction : contact_.getContactInteractions()) {
+      auto it = contact_interaction_forces_.find(interaction.getInteractionId());
+      if (it != contact_interaction_forces_.end()) {
+        *it->second = interaction.forces();
+      }
+    }
+#endif
   }
 
   using BasePhysics::bcs_;
@@ -725,6 +787,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
   /// forces for output
   FiniteElementDual forces_;
+
+  /// merged dual-adjoint (BC) field for the total contact force dual
+  FiniteElementState contact_force_adjoint_bcs_;
 
   /// per-interaction contact forces for output
   std::unordered_map<int, std::unique_ptr<FiniteElementDual>> contact_interaction_forces_;
