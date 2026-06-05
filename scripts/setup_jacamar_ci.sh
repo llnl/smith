@@ -24,7 +24,11 @@ echo "Host: ${HOST_NAME}"
 if [ -e "${WORKSPACE_CI_DIR}" ]; then
   echo "Workspace CI directory already exists at: ${WORKSPACE_CI_DIR}"
   exit 1
-# fi
+fi
+if [ -n "$(crontab -l 2>/dev/null)" ] ; then
+  echo "A cron job has already installed on ${HOSTNAME}."
+  exit 1
+fi
 if [ -e "${CRON_DIR}" ]; then
   echo "Cron directory already exists at: ${CRON_DIR}."
   echo "If you want to regenerate your Cron job, first log into the specific node that has the job, then delete"
@@ -41,6 +45,8 @@ ln -s "${WORKSPACE_CI_DIR}" "${HOME_CI_LINK}"
 # Setup Cron job
 cron_script_contents() {
   cat <<EOF
+# This cron job has been installed on $HOST_NAME.
+
 # For more information about using Cron on LC:
 # https://myconfluence.llnl.gov/spaces/RAM/pages/417729120/Cron+-+how+it+can+be+useful+for+triggering+work+at+a+given+time
 
@@ -53,6 +59,6 @@ EOF
 }
 
 echo "Writing Cron file to: ${CRON_SCRIPT_PATH}"
-mkdir "${CRON_DIR}"
+mkdir -p "${CRON_DIR}"
 cron_script_contents > "${CRON_SCRIPT_PATH}"
 crontab "${CRON_SCRIPT_PATH}"
