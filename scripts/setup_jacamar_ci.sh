@@ -53,8 +53,8 @@ cron_script_contents() {
 # Allows you to update your Cron job without having to go to the specific node
 0,20,40 * * * * crontab ${CRON_SCRIPT_PATH}
 
-# Remove contents of Jacamar CI
-0 0 * * * srun -N1 rm -rf ${WORKSPACE_CI_DIR}/*
+# Remove contents of Jacamar CI that are older than 48 hours
+0 0 * * * srun -N1 find "${WORKSPACE_CI_DIR}" -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf -- {} +
 EOF
 }
 
