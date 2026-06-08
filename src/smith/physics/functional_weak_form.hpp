@@ -160,6 +160,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename BodyLoadType>
+  /// @param depends_on Indices of input fields passed to @p load_function.
   void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
   {
     addBodyIntegral(depends_on, body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
@@ -167,6 +168,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     });
   }
 
+  /// @brief Add a body source depending on all input fields.
   template <typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {
@@ -309,6 +311,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename BoundaryFluxType>
+  /// @param depends_on Indices of input fields passed to @p flux_function.
   void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
                        BoundaryFluxType flux_function)
   {
@@ -318,6 +321,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     });
   }
 
+  /// @brief Add a boundary flux depending on all input fields.
   template <typename BoundaryFluxType>
   void addBoundaryFlux(std::string boundary_name, BoundaryFluxType flux_function)
   {
