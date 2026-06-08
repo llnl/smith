@@ -85,11 +85,7 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 
   auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
   if (amg_prec) {
-    if (retained_linear_options_->amg_elasticity) {
-      amg_prec->SetElasticityOptions(const_cast<mfem::ParFiniteElementSpace*>(&best->space()));
-    } else {
-      amg_prec->SetSystemsOptions(best->space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
-    }
+    amg_prec->SetSystemsOptions(best->space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
   }
 
 #ifdef SMITH_USE_PETSC

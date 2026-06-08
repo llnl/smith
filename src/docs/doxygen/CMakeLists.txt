@@ -4,8 +4,6 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-find_package(Doxygen COMPONENTS dot)
-
 if(DOXYGEN_DOT_FOUND)
     set(DOXYGEN_HAVE_DOT "YES")
 else()
@@ -29,4 +27,3 @@ add_custom_target( build_doxygen_output_dir
                  ) 
 
 add_dependencies( smith_doxygen build_doxygen_output_dir )
-

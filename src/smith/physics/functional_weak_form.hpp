@@ -128,6 +128,13 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         mesh_->domain(body_name));
   }
 
+  /// @brief Add a body integral depending only on selected input fields.
+  template <int... active_parameters, typename BodyIntegralType>
+  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
+  {
+    addBodyIntegralImpl(body_name, integrand, std::integer_sequence<int, active_parameters...>{});
+  }
+
   /// @brief Add a body integral to the weak form.
   template <typename BodyIntegralType>
   void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
@@ -152,6 +159,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * 3>`)
    *
    */
+  template <int... active_parameters, typename BodyLoadType>
+  void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
+  {
+    addBodyIntegral(depends_on, body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      return smith::tuple{-load_function(t_info, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+    });
+  }
+
   template <typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {
@@ -204,6 +219,13 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         mesh_->domain(boundary_name));
   }
 
+  /// @brief Add a boundary integral depending only on selected input fields.
+  template <int... active_parameters, typename BoundaryIntegrandType>
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, BoundaryIntegrandType integrand)
+  {
+    addBoundaryIntegralImpl(boundary_name, integrand, std::integer_sequence<int, active_parameters...>{});
+  }
+
   /// @brief Add a boundary integral to the weak form.
   template <typename BoundaryIntegrandType>
   void addBoundaryIntegral(std::string boundary_name, const BoundaryIntegrandType& integrand)
@@ -252,6 +274,14 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         mesh_->domain(interior_name));
   }
 
+  /// @brief Add an interior boundary integral depending only on selected input fields.
+  template <int... active_parameters, typename InteriorIntegrandType>
+  void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name,
+                                   InteriorIntegrandType integrand)
+  {
+    addInteriorBoundaryIntegralImpl(interior_name, integrand, std::integer_sequence<int, active_parameters...>{});
+  }
+
   /// @brief Add an interior boundary integral to the weak form.
   template <typename InteriorIntegrandType>
   void addInteriorBoundaryIntegral(std::string interior_name, const InteriorIntegrandType& integrand)
@@ -278,6 +308,16 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * 3>`)
    *
    */
+  template <int... active_parameters, typename BoundaryFluxType>
+  void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
+                       BoundaryFluxType flux_function)
+  {
+    addBoundaryIntegral(depends_on, boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      auto n = cross(get<DERIVATIVE>(X));
+      return -flux_function(t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
+    });
+  }
+
   template <typename BoundaryFluxType>
   void addBoundaryFlux(std::string boundary_name, BoundaryFluxType flux_function)
   {

@@ -81,6 +81,14 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
         mesh_->domain(body_name));
   }
 
+  /// @brief Add a body integral depending only on selected input fields.
+  template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
+  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name,
+                       const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    addBodyIntegralImpl(body_name, qfunction, std::integer_sequence<int, active_parameters...>{});
+  }
+
   /// @brief Add a body integral to the objective function.
   template <typename FuncOfTimeSpaceAndParams>
   void addBodyIntegral(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction)
@@ -107,6 +115,14 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
           return qfunction(TimeInfo(time, *dt, *cycle), X, params...);
         },
         mesh_->domain(boundary_name));
+  }
+
+  /// @brief Add a boundary integral depending only on selected input fields.
+  template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name,
+                           const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    addBoundaryIntegralImpl(boundary_name, qfunction, std::integer_sequence<int, active_parameters...>{});
   }
 
   /// @brief Add a boundary integral to the objective function.

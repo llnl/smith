@@ -7,12 +7,9 @@
 Composable Solid Mechanics Demo
 ###############################
 
-This example shows a solid-only setup using the composable differentiable
-numerics interface. It registers fields, builds a solid system, applies a
-Neo-Hookean material with a differentiable Young's modulus field, seeds dynamic
-initial conditions, runs a cycle-zero startup solve plus several implicit
-Newmark steps, checks shape, parameter, and initial-condition sensitivities,
-and writes displacement, velocity, acceleration, and stress to ParaView.
+This demo builds one composable solid mechanics system. It registers fields,
+adds a Young's modulus parameter, applies a Neo-Hookean material, advances a
+dynamic solve, checks sensitivities, and writes output.
 
 The full source code lives in ``examples/solid_mechanics/composable_solid_mechanics.cpp``.
 
@@ -40,12 +37,9 @@ Mesh Construction
 Solver and Field Registration
 -----------------------------
 
-The field registration phase declares the dynamic displacement state pack,
-registers the Young's modulus parameter field on the shared ``FieldStore``,
-and optionally enables stress output. Parameter fields now use the same
-two-phase setup as physics fields: first register with
-``registerParameterFields(field_store, ...)``, then pass the returned
-``ParamFields`` bundle into ``buildSolidMechanicsSystem(...)``.
+Registration declares the displacement fields and the Young's modulus parameter
+on the shared ``FieldStore``. Register parameter fields with
+``registerParameterFields(field_store, ...)`` before building the system.
 
 .. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
    :start-after: _solver_start
@@ -55,9 +49,8 @@ two-phase setup as physics fields: first register with
 System Build and Material Setup
 -------------------------------
 
-The solid system is built from the registered field pack. The material wrapper
-adapts the standard Neo-Hookean material to the ``TimeInfo``-based interface,
-pulling bulk and shear response from the Young's modulus parameter field.
+The build step consumes the registered field pack and parameter bundle. The
+material reads the parameter field and uses the ``TimeInfo`` material interface.
 
 .. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
    :start-after: _build_start
@@ -67,8 +60,8 @@ pulling bulk and shear response from the Young's modulus parameter field.
 Boundary Conditions and Loads
 -----------------------------
 
-The left boundary uses a component-wise Dirichlet condition, fixing only the
-``x`` and ``z`` displacement components.
+The left boundary fixes selected displacement components. The body force and
+traction provide the applied loads.
 
 .. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
    :start-after: _bc_start
@@ -78,8 +71,8 @@ The left boundary uses a component-wise Dirichlet condition, fixing only the
 Physics Creation and Initial Conditions
 ---------------------------------------
 
-The differentiable physics object is constructed from the system. Then the example
-seeds non-zero initial displacement and velocity fields and sets the parameter field.
+The differentiable physics object owns the timestep loop. The example sets the
+parameter field and seeds non-zero initial displacement and velocity fields.
 
 .. literalinclude:: ../../../../examples/solid_mechanics/composable_solid_mechanics.cpp
    :start-after: _ic_start

@@ -330,10 +330,9 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
       "staggered_qoi", mesh_,
       spaces({coupled_system->field_store->getField("displacement"),
               coupled_system->field_store->getField("temperature")}));
-  qoi.addBodyIntegral(mesh_->entireBodyName(), [](auto, auto, auto U, auto Theta) {
+  qoi.addBodyIntegral(DependsOn<0>{}, mesh_->entireBodyName(), [](auto, auto, auto U) {
     auto u = get<VALUE>(U);
-    auto theta = get<VALUE>(Theta);
-    return 0.5 * u[0] * u[0] + 0.05 * theta * theta;
+    return 0.5 * u[0] * u[0];
   });
 
   physics->advanceTimestep(0.5);

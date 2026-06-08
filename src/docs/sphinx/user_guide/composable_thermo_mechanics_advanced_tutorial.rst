@@ -7,9 +7,9 @@
 Composable Thermo-Mechanics Advanced Example
 #############################################
 
-This example extends the basic thermo-mechanics tutorial with a staged solver,
-a parameter field, a differentiable quantity of interest, finite-difference
-verification, and ParaView output.
+This demo extends the minimal thermo-mechanics setup. It adds a parameter field,
+a staged solver, a differentiable quantity of interest, a finite-difference
+check, and ParaView output.
 
 The full source code lives in ``examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp``.
 
@@ -37,9 +37,8 @@ Mesh and Field Setup
 Solver Config and Field Registration
 ------------------------------------
 
-This example uses a single block solver combining Newton line search for the non-linear
-solve and SuperLU for the linear solve. It also registers the thermal-expansion
-scaling parameter directly on the shared ``FieldStore`` with
+Registration declares solid, thermal, and parameter fields on one shared
+``FieldStore``. The thermal-expansion parameter is registered with
 ``registerParameterFields(field_store, ...)`` before either system is built.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
@@ -50,6 +49,9 @@ scaling parameter directly on the shared ``FieldStore`` with
 System Build and Coupling
 -------------------------
 
+The build step creates solid and thermal systems from the registered field
+packs. ``combineSystems(...)`` attaches them to one staged solver.
+
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _build_start
    :end-before: _build_end
@@ -58,11 +60,8 @@ System Build and Coupling
 Boundary Conditions and Loads
 -----------------------------
 
-The traction call uses ``DependsOn<>{}``, so the user callback receives only the
-state arguments it actually needs and none of the trailing coupling or parameter
-fields. The system builders now take the registered ``ParamFields`` bundle
-explicitly, so the build order stays ``self_fields``, optional
-``couplingFields(...)``, then optional params.
+Boundary conditions are applied on the left and right boundaries. Loads are
+added through the solid and thermal systems before timestepping.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _bc_start
