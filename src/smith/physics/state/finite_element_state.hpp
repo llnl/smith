@@ -147,6 +147,9 @@ class FiniteElementState : public FiniteElementVector {
   /**
    * @brief Move assignment
    *
+   * @warning This intentionally copy-assigns the underlying FiniteElementVector values and preserves this state's
+   * identity/space. It does not invoke FiniteElementVector move assignment.
+   *
    * @param rhs The right hand side input State
    * @return The assigned FiniteElementState
    */

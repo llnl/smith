@@ -168,9 +168,7 @@ double computeSolidMechanicsQoi(BasePhysics& solid_solver, const TimeSteppingInf
 {
   auto dts = ts_info.dts;
   solid_solver.resetStates();
-  solid_solver.outputStateToDisk("paraview_contact");
   solid_solver.advanceTimestep(1.0);
-  solid_solver.outputStateToDisk("paraview_contact");
   return computeStepQoi(solid_solver.state("displacement"));
 }
 
@@ -417,6 +415,81 @@ TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdj
   diff.Add(-1.0, lambda_from_load);
 
   EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
+}
+
+TEST_F(ContactSensitivityFixture, AggregateContactForcesDualAdjointBcsMatchesEquivalentAdjointLoad)
+{
+  auto solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  FiniteElementState dJ_df_total(solver->state("displacement").space(), "dJ_df_total");
+  fillDirection(*solver, dJ_df_total);
+
+  FiniteElementDual zero_load(solver->state("displacement").space(), "zero_load");
+  zero_load = 0.0;
+  solver->setAdjointLoad({{"displacement", zero_load}});
+  solver->setDualAdjointBcs({{"contact_forces", dJ_df_total}});
+  solver->reverseAdjointTimestep();
+
+  FiniteElementState lambda_from_seed(solver->adjoint("displacement"));
+
+  solver->resetStates();
+  solver->advanceTimestep(1.0);
+  EXPECT_EQ(1, solver->cycle());
+
+  FiniteElementDual equivalent_load(solver->state("displacement").space(), "equivalent_load");
+  equivalent_load = 0.0;
+  for (const auto& dual_name : solver->dualNames()) {
+    const std::string prefix = "contact_force_";
+    if (dual_name.substr(0, prefix.size()) != prefix) {
+      continue;
+    }
+
+    const int interaction_id = std::stoi(dual_name.substr(prefix.size()));
+    const auto interaction_jacobian = solver->contactInteraction(interaction_id).jacobianContribution();
+    auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_jacobian->GetBlock(0, 0));
+    SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+    FiniteElementDual interaction_load(solver->state("displacement").space(), "interaction_load");
+    interaction_load = 0.0;
+    J00->MultTranspose(dJ_df_total, interaction_load);
+    equivalent_load.Add(1.0, interaction_load);
+  }
+
+  solver->setAdjointLoad({{"displacement", equivalent_load}});
+  solver->reverseAdjointTimestep();
+
+  const auto& lambda_from_load = solver->adjoint("displacement");
+
+  FiniteElementState diff(lambda_from_seed);
+  diff.Add(-1.0, lambda_from_load);
+
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
+}
+
+TEST_F(ContactSensitivityFixture, AggregateContactForcesDualAdjointAcceptsPrefixedName)
+{
+  auto solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  FiniteElementState seed(solver->state("displacement").space(), "aggregate_contact_force_seed");
+  fillDirection(*solver, seed);
+
+  const auto prefixed_name = solver->dual("contact_forces").name();
+  solver->setDualAdjointBcs({{prefixed_name, seed}});
+
+  const auto& stored_seed = solver->dualAdjoint("contact_forces");
+  const auto& stored_prefixed_seed = solver->dualAdjoint(prefixed_name);
+
+  FiniteElementState diff(stored_seed);
+  diff.Add(-1.0, seed);
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-12);
+
+  FiniteElementState prefixed_diff(stored_prefixed_seed);
+  prefixed_diff.Add(-1.0, seed);
+  EXPECT_NEAR(prefixed_diff.Norml2(), 0.0, 1.0e-12);
 }
 
 }  // namespace smith

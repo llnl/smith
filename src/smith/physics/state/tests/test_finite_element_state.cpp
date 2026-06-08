@@ -11,6 +11,7 @@
 #include "gtest/gtest.h"
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/numerics/functional/tensor.hpp"
@@ -126,6 +127,22 @@ TEST_F(TestFiniteElementState, DISABLED_ErrorsIfFieldFunctionDimensionMismatched
 
   EXPECT_DEATH(state.setFromFieldFunction(vector_field),
                "Cannot copy tensor into an MFEM Vector with incompatible size.");
+}
+
+TEST_F(TestFiniteElementState, MoveAssignmentPreservesDestinationIdentity)
+{
+  FiniteElementState source(*mesh, H1<1>{}, "source_state");
+  source = 2.0;
+
+  FiniteElementState destination(*mesh, H1<1>{}, "destination_state");
+  destination = 1.0;
+
+  destination = std::move(source);
+
+  EXPECT_EQ("destination_state", destination.name());
+  for (const mfem::real_t* dof = destination.begin(); dof != destination.end(); ++dof) {
+    EXPECT_DOUBLE_EQ(2.0, *dof);
+  }
 }
 
 }  // namespace smith
