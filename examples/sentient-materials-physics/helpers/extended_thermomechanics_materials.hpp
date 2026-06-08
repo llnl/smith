@@ -494,4 +494,486 @@ struct ThermalStiffeningMaterial {
   // }
   static constexpr int numParameters() { return 1; }
 };
+
+/// Viscoelastic PNC thermal stiffening material model
+struct ViscoThermalStiffeningMaterial {
+  double K;      ///< material bulk modulus
+  double beta;   ///< material volumetric thermal expansion coefficient
+  
+  double Gmeq0;  ///< matrix equilibrium shear modulus, MPa
+  double Gmneq0; ///< matrix nonequilibrium shear modulus, MPa
+  double etam;   ///< matrix viscosity, MPa-s
+
+  double Gceq0;  ///< chain equilibrium shear modulus, MPa
+  double Gcneq0; ///< chain nonequilibrium shear modulus, MPa
+  double etac;   ///< chain viscosity, MPa-s
+  double Jcm;    ///< relative volume change between matrix and chains (maybe not linked to Fcm yet)
+
+  double C_v;    ///< material volumetric heat capacity (must account for matrix+chain+particle)
+  double kappa;  ///< material thermal conductivity (must account for matrix+chain+particle)
+  double rho0;   ///< material initial density
+
+  double c;      ///< rate-dependent entanglement dissipation term
+  double modscale; ///< scaling parameter since moduli are hard-coded as Pa
+
+  // E_a and R can be SI units since they cancel out in the exponent
+  double Af;    ///< forward (low-high) exponential prefactor, 1/s
+  double E_af;  ///< forward (low-high) activation energy, J/mol
+  double Ar;    ///< reverse exponential prefactor, 1/s
+  double E_ar;  ///< reverse activation energy, J/mol
+  double R;     ///< universal gas constant, J/mol/K
+  double Tr;    ///< reference temperature, K
+
+  double gw;  ///< particle weight fraction
+
+  using State = smith::Empty;
+
+  template <int d>
+  struct FullStatePacking {
+  static constexpr int sz = 3;
+  static constexpr int tensor_size = sz * sz;
+  static constexpr int num_tensors = 3;
+  static constexpr int packed_size = 2 + num_tensors * tensor_size;
+
+  template <int sd, typename ScalarW, typename ScalarT, typename T0, typename T1, typename T2>
+  static auto pack(const ScalarW& wp,
+                   const ScalarT& Tp,
+                   const smith::tensor<T0, d, d>& A,
+                   const smith::tensor<T1, d, d>& B,
+                   const smith::tensor<T2, d, d>& C)
+  {
+    static_assert(sd == packed_size, "Packed state size mismatch.");
+    using PackedValue = decltype(wp + Tp + A(0,0) + B(0,0) + C(0,0));
+
+    smith::tensor<PackedValue, sd> out{};
+
+    // store mass fraction w
+    out[0] = wp;
+    // store previous temperature
+    out[1] = Tp;
+    // iterate through Fcm tensor
+    int k = 2;
+    for (int i = 0; i < d; ++i) {
+      for (int j = 0; j < d; ++j) {
+        out[k++] = A(i, j);
+      }
+    }
+    // iterate through Fmv tensor
+    for (int i = 0; i < d; ++i) {
+      for (int j = 0; j < d; ++j) {
+        out[k++] = B(i, j);
+      }
+    }
+    // iterate through Fcv tensor
+    for (int i = 0; i < d; ++i) {
+      for (int j = 0; j < d; ++j) {
+        out[k++] = C(i, j);
+      }
+    }
+
+    return out;
+  }
+
+  template <typename T, int sd>
+  static auto unpack(const smith::tensor<T, sd>& in)
+  {
+    static_assert(sd == packed_size, "Packed state size mismatch.");
+
+    // unpack entangled mass fraction
+    T wp = in[0];
+    // unpack previous temperature
+    T Tp = in[1];
+
+    smith::tensor<T, d, d> A{};
+    smith::tensor<T, d, d> B{};
+    smith::tensor<T, d, d> C{};
+   
+    // unpack Fcm 
+    int k = 2;
+    for (int i = 0; i < d; ++i) {
+      for (int j = 0; j < d; ++j) {
+        A(i, j) = in[k++];
+      }
+    }
+    // unpack Fmv
+    for (int i = 0; i < d; ++i) {
+      for (int j = 0; j < d; ++j) {
+        B(i, j) = in[k++];
+      }
+    }
+    // unpack Fcv
+    for (int i = 0; i < d; ++i) {
+      for (int j = 0; j < d; ++j) {
+        C(i, j) = in[k++];
+      }
+    }
+
+    return smith::tuple{wp, Tp, A, B, C};
+  }
+};
+  /**
+   * @brief Evaluate constitutive variables for thermomechanics
+   *
+   * @tparam T1 Type of the displacement gradient components (number-like)
+   * @tparam T2 Type of the velocity gradient components (number-like)
+   * @tparam T3 Type of the temperature (number-like)
+   * @tparam T4 Type of the temperature gradient components (number-like)
+   *
+   * @param[in] grad_u Displacement gradient
+   * @param[in] grad_v Velocity gradient
+   * @param[in] theta Temperature
+   * @param[in] grad_theta Temperature
+   * @param[in,out] state State variables for this material
+   *
+   * @return[out] tuple of constitutive outputs. Contains the
+   * First Piola stress, the volumetric heat capacity in the reference
+   * configuration, the heat generated per unit volume during the time
+   * step (units of energy), and the referential heat flux (units of
+   * energy per unit time and per unit area).
+   */
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto fGmeq(scalar g) const
+  {
+    using std::pow;
+    // percolation parameters
+    auto Gr = 0.017;      //GPa, rigid modulus
+    auto Gs0 = 1.7e-6;    //GPa, soft modulus
+    auto Xc = 0.24;       //critical percolation volume fraction
+    auto rhof = 2.65;     //g/cc, filler density
+    auto rhom = 1.06;     //g/cc, matrix density
+    auto n = 0.4;         //percolation exponent
+
+    // Guth-Gold parameters
+    auto a1 = 2.5;        //linear X_eff correction
+    auto a2 = 14.1;       //quadratic X_eff correction
+    auto r = 100.0;       //particle radius, nm
+    auto d = 50.0;        //interphase thickness, nm
+
+    auto X = g*rhom/(rhof+g*(rhom-rhof));            //convert weight fraction gw to volume fraction X
+    auto X_eff = X*pow(r+d,3)/pow(r,3);              //effective volume fraction
+    auto Gs = Gs0*(1.+a1*X_eff+a2*X_eff*X_eff);      //Guth-Gold correction
+    auto psi = 0.;
+    if (X>Xc) { // do I want to use X or X_eff here?
+      psi = X*pow((X-Xc)/(1.-Xc),n);
+    }
+    auto Gnum = (1.-2.*psi+psi*X)*Gr*Gs+(1.-X)*psi*Gr*Gr;
+    auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
+    auto G = Gnum/Gdenom; // this is in GPa
+    
+    return (Gmeq0*G*1.e9)/modscale;        // convert to Pa*modscale
+  }
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto fGmneq(scalar g) const
+  {
+    using std::pow;
+    auto Betam = 0.1;      //scale factor on modulus
+    // percolation parameters
+    auto Gr = 0.017;      //GPa, rigid modulus
+    auto Gs0 = 1.7e-6;    //GPa, soft modulus
+    auto Xc = 0.24;       //critical percolation volume fraction
+    auto rhof = 2.65;     //g/cc, filler density
+    auto rhom = 1.06;     //g/cc, matrix density
+    auto n = 0.4;         //percolation exponent
+
+    // Guth-Gold parameters
+    auto a1 = 2.5;        //linear X_eff correction
+    auto a2 = 14.1;       //quadratic X_eff correction
+    auto r = 100.0;       //particle radius, nm
+    auto d = 50.0;        //interphase thickness, nm
+
+    auto X = g*rhom/(rhof+g*(rhom-rhof));            //convert weight fraction gw to volume fraction X
+    auto X_eff = X*pow(r+d,3)/pow(r,3);              //effective volume fraction
+    auto Gs = Gs0*(1.+a1*X_eff+a2*X_eff*X_eff);      //Guth-Gold correction
+    auto psi = 0.;
+    if (X>Xc) { // do I want to use X or X_eff here?
+      psi = X*pow((X-Xc)/(1.-Xc),n);
+    }
+    auto Gnum = (1.-2.*psi+psi*X)*Gr*Gs+(1.-X)*psi*Gr*Gr;
+    auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
+    auto G = Gnum/Gdenom; // this is in GPa
+    
+    return (Betam*Gmneq0*G*1.e9)/modscale;        // convert to Pa*modscale
+  }
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto F1(scalar T) const
+  {
+    using std::exp;
+    // thermal softening function for low-T modulus
+    auto N = 0.02;
+    return exp(-N * (T - Tr));
+  }
+/*
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto dF1(scalar T) const
+  {
+    using std::exp;
+    // derivative of thermal softening function for low-T modulus
+    auto N = 0.02;
+    return -N * exp(-N * (T - Tr));
+  }
+*/
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto fGceq(scalar g) const
+  {
+    using std::pow;
+    // percolation parameters
+    auto Gr = 0.12;      //GPa, rigid modulus
+    auto Gs0 = 6.5e-7;    //GPa, soft modulus
+    auto Xc = 0.05;       //critical percolation volume fraction
+    auto rhof = 2.65;     //g/cc, filler density
+    auto rhom = 1.06;     //g/cc, matrix density
+    auto n = 1.2;         //percolation exponent
+
+    // Guth-Gold parameters
+    auto a1 = 2.5;        //linear X_eff correction
+    auto a2 = 14.1;       //quadratic X_eff correction
+    auto r = 100.0;       //particle radius, nm
+    auto d = 50.0;        //interphase thickness, nm
+
+    auto X = g*rhom/(rhof+g*(rhom-rhof));            //convert weight fraction gw to volume fraction X
+    auto X_eff = X*pow(r+d,3)/pow(r,3);              //effective volume fraction
+    auto Gs = Gs0*(1.+a1*X_eff+a2*X_eff*X_eff);      //Guth-Gold correction
+    auto psi = 0.;
+    if (X>Xc) { // do I want to use X or X_eff here?
+      psi = X*pow((X-Xc)/(1.-Xc),n);
+    }
+    auto Gnum = (1.-2.*psi+psi*X)*Gr*Gs+(1.-X)*psi*Gr*Gr;
+    auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
+    auto G = Gnum/Gdenom; // this is in GPa
+    
+    return (Gceq0*G*1.e9)/modscale;        // convert to Pa*modscale
+  }
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto fGcneq(scalar g) const
+  {
+    using std::pow;
+    auto Betac = 0.1;     //scale factor on modulus
+    // percolation parameters
+    auto Gr = 0.12;      //GPa, rigid modulus
+    auto Gs0 = 6.5e-7;    //GPa, soft modulus
+    auto Xc = 0.05;       //critical percolation volume fraction
+    auto rhof = 2.65;     //g/cc, filler density
+    auto rhom = 1.06;     //g/cc, matrix density
+    auto n = 1.2;         //percolation exponent
+
+    // Guth-Gold parameters
+    auto a1 = 2.5;        //linear X_eff correction
+    auto a2 = 14.1;       //quadratic X_eff correction
+    auto r = 100.0;       //particle radius, nm
+    auto d = 50.0;        //interphase thickness, nm
+
+    auto X = g*rhom/(rhof+g*(rhom-rhof));            //convert weight fraction gw to volume fraction X
+    auto X_eff = X*pow(r+d,3)/pow(r,3);              //effective volume fraction
+    auto Gs = Gs0*(1.+a1*X_eff+a2*X_eff*X_eff);      //Guth-Gold correction
+    auto psi = 0.;
+    if (X>Xc) { // do I want to use X or X_eff here?
+      psi = X*pow((X-Xc)/(1.-Xc),n);
+    }
+    auto Gnum = (1.-2.*psi+psi*X)*Gr*Gs+(1.-X)*psi*Gr*Gr;
+    auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
+    auto G = Gnum/Gdenom; // this is in GPa
+    
+    return (Betac*Gcneq0*G*1.e9)/modscale;        // convert to Pa*modscale
+  }
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto fAf(scalar g) const
+  {
+    using std::pow;
+    //auto G4 = 1.
+    //auto A4 = 1.e16;
+    //auto AG4 = A4*G4;
+    auto rhof = 2.65;     //g/cc, filler density
+    auto rhom = 1.06;     //g/cc, matrix density
+    auto X = g*rhom/(rhof+g*(rhom-rhof));            //convert weight fraction gw to volume fraction X
+    if (X==0.0) {
+      auto gwn = 0.01;
+      X = gwn*rhom/(rhof+gwn*(rhom-rhof));
+    }
+    auto d = 55; //nm
+    auto TwoRG = 24.534; //exact gw=0.4 value
+    auto ID = d*(pow(2./(X*3.14159265358979323846),1./3)-1.0);
+    auto fID = pow(ID/TwoRG,2.0);
+    
+    return 1./fID; //multiply this by Af0
+  }
+
+  template <typename scalar>
+  SMITH_HOST_DEVICE auto fAr(scalar g) const
+  {
+    using std::pow;
+    //auto G4 = 1.
+    //auto A4 = 0.5e-20;
+    //auto AG4 = A4*G4;
+    auto rhof = 2.65;     //g/cc, filler density
+    auto rhom = 1.06;     //g/cc, matrix density
+    auto X = g*rhom/(rhof+g*(rhom-rhof));            //convert weight fraction gw to volume fraction X
+    if (X==0.0) {
+      auto gwn = 0.01;
+      X = gwn*rhom/(rhof+gwn*(rhom-rhof));
+    }
+    auto d = 55; //nm
+    auto TwoRG = 24.534; //exact gw=0.4 value
+    auto ID = d*(pow(2./(X*3.14159265358979323846),1./3)-1.0);
+    auto fID = pow(ID/TwoRG,2.0);
+    
+    return 1./fID; //multiply this by Ar0
+  }
+
+  template <typename T1, typename T2, typename T3, typename T4, typename T5, int d, int sd>
+  auto operator()(double dt, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v, T3 theta,
+                  const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
+  {
+    // Calculate Alpha new using the old variables to be used
+
+    auto [wp, thetap, Fcmp, Fmvp, Fcvp] = FullStatePacking<d>::template unpack<T5, sd>(alpha_old);
+
+    using std::pow, std::exp;
+
+    // Tr is a double but I need auto to add to theta
+    auto tempref = Tr;  // 353.0;
+    theta = theta + tempref;
+
+    // get kinematics
+    static constexpr auto I = smith::Identity<d>();
+    auto F = grad_u + I;
+
+    // calculate forward and reverse reaction rates
+    auto kf = Af * fAf(gw) * exp(-E_af / (R * theta)) +thetap-thetap;
+    auto kr = Ar * fAr(gw) * exp(-E_ar / (R * theta));
+    //std::cout << "fAf,fAr" <<fAf(gw)<<", "<<fAr(gw)<< " \n";
+    auto ksum = kf+kr;
+    // exponential integration to get new entanglement fraction
+    auto w = 0.0*kf;
+    if (ksum > 0.0) {
+      auto winf = kf/ksum;
+      w = winf+(wp-winf)*exp(-ksum*dt);
+    }
+    else {
+      w = wp;
+    }
+    
+    // get mass fraction increment and rate for later
+    auto dw = w - wp;
+    auto what = dw/dt;
+
+    // get moduli
+    auto Gmeq = fGmeq(gw) * F1(theta);
+    auto Gmneq = fGmneq(gw) * F1(theta);
+    auto Gceq = fGceq(gw);
+    auto Gcneq = fGcneq(gw);
+    //std::cout << "Gmeq,Gmneq,Gceq,Gcneq: " <<Gmeq<<", "<<Gmneq<<", "<<Gceq<<", "<<Gcneq << " \n";
+    // do some kinematics
+    auto J = det(F);
+    auto B = dot(F,transpose(F));
+
+    // equilibrium Cauchy stress terms
+    auto Tvol = K*(J-1.-beta*(theta-tempref))*I;
+    auto Tmeq = Gmeq*pow(J,-5./3)*dev(B); 
+
+    // nonequilibrium matrix stuff
+    // trial values
+    auto Fmtr = dot(F,inv(Fmvp));
+    auto Cmtr = dot(transpose(Fmtr),Fmtr);
+    auto Hmtr = 0.5*log_symm(Cmtr);
+    auto Mm = 2.0*Gmneq*dev(Hmtr);
+    // update Dmv
+    auto Dmv = Mm/(2.*(etam+dt*Gmneq));
+    Mm = Mm - 2.*dt*Gmneq*Dmv; //or Mm = 2.*etam*Dvm
+    // update Fmv
+    auto Fmv = dot(exp_symm(dt*Dmv),Fmvp);
+    // get Fme
+    auto Fme = dot(F,inv(Fmv));
+    // nonequilibrium Cauchy matrix stress
+    auto Tmneq = dot(transpose(inv(Fme)),dot(Mm,transpose(Fme)))/J;
+
+    // shift of chain deformation stuff
+    // trial values
+    auto Fctr = dot(F,inv(Fcmp));
+    auto Cctr = dot(transpose(Fctr),Fctr);
+    auto Hctr = 0.5*log_symm(Cctr);
+    auto Mcm = 2.0*w*Jcm*Gceq*dev(Hctr);
+    // get approximation to lambda_dot
+    auto junk = double_dot(Mcm,Mcm);
+    auto lamdot = 0.0 * junk;
+    if (dw > 0) {
+      auto Qtr = double_dot(Mcm,Mcm);
+      if (Qtr != 0.0) {
+        auto alph = 2.0*w*Jcm*Gceq*dt;
+        auto Aa = 1.0+0.5*dw/w;
+        auto Bb = 2.0*alph*c*what*what/Qtr;
+        //auto MM = (0.5*Qtr/(Aa*Aa))*(1.0-Aa*Bb+sqrt(1.0-2.*Aa*Bb));
+        auto MM = (0.5*Qtr/(Aa*Aa))*(1.0-Aa*Bb+sqrt(abs(1.0-2.*Aa*Bb)));
+        //std::cout << "dw,Qtr,Aa,Bb,MM: " <<dw<<", "<<Qtr<<", "<<Aa<<", "<<Bb<<", "<<MM << " \n";
+        lamdot = what/(4.*w*w*Jcm*Gceq) + c*what*what/MM;
+      }
+    }
+    // update Dcm as needed
+    auto Dcm = Mcm*lamdot/(1.+2*lamdot*w*Jcm*Gceq*dt);
+    //Mcm = 0.0 * Dcm;
+    if (dw > 0 && lamdot != 0.0) {
+      // get the Mandel stress
+      Mcm = Dcm/lamdot;
+    }
+    // update Fcm
+    auto Fcm = Fcmp + 0.0 * Dcm; // necessary for typing reasons
+    if (dw > 0) {
+      Fcm = dot(exp_symm(dt*Dcm),Fcmp);
+    }
+    // get Fc
+    auto Fc = dot(F,inv(Fcm));
+    // equilibrium Cauchy chain stress
+    auto Tceq = dot(transpose(inv(Fc)),dot(Mcm,transpose(Fc)))/J;
+
+    // nonequilibrium chain stuff
+    // trial values
+    auto Fcetr = dot(Fc,inv(Fcvp));
+    auto Ccetr = dot(transpose(Fcetr),Fcetr);
+    auto Hcetr = 0.5*log_symm(Ccetr);
+    auto Mce = 2.0*Gcneq*dev(Hcetr);
+    // update Dcv
+    auto Dcv = Mce/(2.*(etac+w*Jcm*Gcneq*dt));
+    Mce = Mce - 2.*w*Jcm*Gcneq*dt*Dcv;
+    // update Fcv
+    auto Fcv = dot(exp_symm(dt*Dcv),Fcvp);
+    // get Fce
+    auto Fce = dot(Fc,inv(Fcv));
+    // nonequilibrium Cauchy chain stress
+    auto Tcneq = dot(transpose(inv(Fce)),dot(Mce,transpose(Fce)))/J;
+
+    //std::cout << "Hcetr,Dcv,Mce,Fcv: " <<", "<<Hcetr<<", "<<Dcv<<", "<<Mce<<", "<<Fcv << " \n";
+
+    // total Cauchy stress
+    auto T = Tvol + Tmeq + Tmneq + Tceq + Tcneq;
+    //std::cout << "Tmeq,Tmneq,Tceq,Tcneq: " <<", "<<Tmeq<<", "<<Tmneq<<", "<<Tceq<<", "<<Tcneq << " \n";
+    // Kirchoff stress
+    auto TK = J*T;
+    // 1st Piola from Kirchhoff
+    const auto Piola = dot(TK, inv(transpose(F)));
+
+    // heat flux
+    const auto q0 = -kappa * grad_theta;
+
+    // did not do these yet
+    // internal heat power
+    auto green_strain_rate = greenStrainRate(grad_u, grad_v);
+    // viscous stress
+    //auto Sv = 2 * ((1. - we) * etam + we * etae) * dot(Ci, dot(green_strain_rate, Ci));
+    // derivative of elastic S with respect to T
+    //auto dtmdT = Gm0(gw) * df1(theta) * pow(J, -2. / 3) * B_bar - Km * J * betam * I;
+    //auto dSedT = dot(inv(F), dot(wm * dtmdT, transpose(inv(F))));
+    const auto s0 = -K * beta * theta * tr(green_strain_rate);
+    //tr(dot(Sv + theta * dSedT, green_strain_rate));
+    // const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
+
+    auto alpha_new = FullStatePacking<d>::template pack<sd>(w, theta, Fcm, Fmv, Fcv);
+    return smith::tuple{Piola, C_v, s0, q0, alpha_new};
+  }
+  static constexpr int numParameters() { return 1; }
+};
+
 };  // namespace extended_thermomechanics_materials

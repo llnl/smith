@@ -59,6 +59,12 @@ smith_add_executable(NAME       PNC_simple_new
                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                      DEPENDS_ON smith
                      )
+
+smith_add_executable(NAME       Visco_PNC_driver
+                     SOURCES   Visco_PNC_driver.cpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
 install(
     FILES
         PNC_double_network_test.cpp
@@ -92,6 +98,13 @@ install(
         PNC_simple_new.cpp
     DESTINATION
         examples/smith/PNC_simple_new
+)
+
+install(
+    FILES
+        Visco_PNC_driver.cpp
+    DESTINATION
+        examples/smith/Visco_PNC_driver
 )
 
 if(SMITH_ENABLE_TESTS)
