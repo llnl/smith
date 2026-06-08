@@ -67,7 +67,12 @@ class FiniteElementDual : public FiniteElementVector {
   FiniteElementDual& operator=(FiniteElementDual&& rhs)
   {
     FiniteElementVector::operator=(rhs);
-    this->linear_form_ = std::move(rhs.linear_form_);
+    if (rhs.linear_form_) {
+      linearForm();
+      *linear_form_ = *rhs.linear_form_;
+    } else {
+      linear_form_.reset();
+    }
     return *this;
   }
 
