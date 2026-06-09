@@ -48,15 +48,15 @@ using ParametricSolid = SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>>;
 using ContactSolid = SolidMechanicsContact<p, contact_dim>;
 #endif
 
-const std::string mesh_tag {"mesh"};
-const std::string physics_prefix {"solid"};
+const std::string mesh_tag{"mesh"};
+const std::string physics_prefix{"solid"};
 
 struct AdjointWorkflowResult {
-  double displacement_norm {};
-  double reaction_norm {};
-  double parameter0_norm {};
-  double parameter1_norm {};
-  double shape_norm {};
+  double displacement_norm{};
+  double reaction_norm{};
+  double parameter0_norm{};
+  double parameter1_norm{};
+  double shape_norm{};
 };
 
 struct PhysicsCase {
@@ -65,9 +65,9 @@ struct PhysicsCase {
   std::unique_ptr<BasePhysics> physics;
   std::string adjoint_dual_name;
   std::string adjoint_dual_domain_name;
-  int adjoint_dual_direction {};
+  int adjoint_dual_direction{};
   std::string preferred_validation_dual_name;
-  bool check_parameter_sensitivities {};
+  bool check_parameter_sensitivities{};
 };
 
 constexpr double time_step = 1.0;
@@ -159,8 +159,8 @@ std::unique_ptr<BasePhysics> createContactSolver(std::shared_ptr<Mesh> mesh)
 }
 #endif
 
-FiniteElementState createDualDirection(const BasePhysics& physics, std::shared_ptr<Mesh> mesh, const std::string& dual_name,
-                                       const std::string& domain_name, int direction)
+FiniteElementState createDualDirection(const BasePhysics& physics, std::shared_ptr<Mesh> mesh,
+                                       const std::string& dual_name, const std::string& domain_name, int direction)
 {
   const FiniteElementDual& dual = physics.dual(dual_name);
 
@@ -168,10 +168,11 @@ FiniteElementState createDualDirection(const BasePhysics& physics, std::shared_p
   dual_direction = 0.0;
 
   const int vdim = dual.space().GetVDim();
-  mfem::VectorFunctionCoefficient direction_coefficient(vdim, [direction](const mfem::Vector& /*x*/, mfem::Vector& value) {
-    value = 0.0;
-    value[direction] = 1.0;
-  });
+  mfem::VectorFunctionCoefficient direction_coefficient(vdim,
+                                                        [direction](const mfem::Vector& /*x*/, mfem::Vector& value) {
+                                                          value = 0.0;
+                                                          value[direction] = 1.0;
+                                                        });
 
   dual_direction.project(direction_coefficient, mesh->domain(domain_name));
 
@@ -242,7 +243,7 @@ AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const PhysicsCa
   }
 
   auto dual_adjoint_load = createDualDirection(physics, test_case.mesh, test_case.adjoint_dual_name,
-                                              test_case.adjoint_dual_domain_name, test_case.adjoint_dual_direction);
+                                               test_case.adjoint_dual_domain_name, test_case.adjoint_dual_direction);
 
   std::vector<std::unique_ptr<FiniteElementState>> dual_adjoint_loads;
   std::unordered_map<std::string, const FiniteElementState&> dual_adjoint_load_refs;
