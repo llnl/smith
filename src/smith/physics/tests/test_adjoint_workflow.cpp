@@ -178,6 +178,28 @@ FiniteElementState createDualDirection(const BasePhysics& physics, std::shared_p
   return dual_direction;
 }
 
+void updateStaticInputs(BasePhysics& physics)
+{
+  const auto parameter_names = physics.parameterNames();
+  for (std::size_t i = 0; i < parameter_names.size(); ++i) {
+    FiniteElementState parameter_value(physics.parameter(i));
+    physics.setParameter(i, parameter_value);
+  }
+
+  FiniteElementState zero_shape(physics.shapeDisplacement().space(), "zero_shape");
+  zero_shape = 0.0;
+  physics.setShapeDisplacement(zero_shape);
+}
+
+void setStaticStateGuesses(BasePhysics& physics)
+{
+  for (const auto& state_name : physics.stateNames()) {
+    FiniteElementState state_guess(physics.state(state_name).space(), state_name + "_state_guess");
+    state_guess = 0.0;
+    physics.setState(state_name, state_guess);
+  }
+}
+
 std::string validationDualName(const BasePhysics& physics, const PhysicsCase& test_case)
 {
   const auto dual_names = physics.dualNames();
@@ -195,6 +217,7 @@ std::string validationDualName(const BasePhysics& physics, const PhysicsCase& te
 
 AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const PhysicsCase& test_case)
 {
+  updateStaticInputs(physics);
   physics.resetAdjointStates();
   EXPECT_EQ(1, physics.cycle());
 
@@ -206,8 +229,17 @@ AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const PhysicsCa
   EXPECT_GT(checkpointed_displacement.Norml2(), 0.0);
   EXPECT_GT(checkpointed_validation_dual.Norml2(), 0.0);
 
-  FiniteElementDual displacement_adjoint_load(displacement.space(), "displacement_adjoint_load");
-  displacement_adjoint_load = 1.0;
+  std::vector<std::unique_ptr<FiniteElementDual>> state_adjoint_loads;
+  std::unordered_map<std::string, const FiniteElementDual&> state_adjoint_load_refs;
+  for (const auto& state_name : physics.stateNames()) {
+    auto load = std::make_unique<FiniteElementDual>(physics.state(state_name).space(), state_name + "_adjoint_load");
+    *load = 0.0;
+    if (state_name == "displacement") {
+      *load = 1.0;
+    }
+    state_adjoint_load_refs.insert({state_name, *load});
+    state_adjoint_loads.push_back(std::move(load));
+  }
 
   auto dual_adjoint_load = createDualDirection(physics, test_case.mesh, test_case.adjoint_dual_name,
                                               test_case.adjoint_dual_domain_name, test_case.adjoint_dual_direction);
@@ -224,7 +256,7 @@ AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const PhysicsCa
     dual_adjoint_loads.push_back(std::move(load));
   }
 
-  physics.setAdjointLoad({{"displacement", displacement_adjoint_load}});
+  physics.setAdjointLoad(state_adjoint_load_refs);
   physics.setDualAdjointBcs(dual_adjoint_load_refs);
   physics.reverseAdjointTimestep();
   EXPECT_EQ(0, physics.cycle());
@@ -285,7 +317,9 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveCanRepeatForBasePhysicsTypes)
     SCOPED_TRACE(test_case.name);
     auto& physics = *test_case.physics;
 
+    updateStaticInputs(physics);
     physics.resetStates();
+    setStaticStateGuesses(physics);
     physics.advanceTimestep(time_step);
     EXPECT_EQ(1, physics.cycle());
     EXPECT_NEAR(time_step, physics.time(), 1.0e-14);
