@@ -4,9 +4,11 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -64,7 +66,7 @@ struct PhysicsCase {
   std::string adjoint_dual_name;
   std::string adjoint_dual_domain_name;
   int adjoint_dual_direction {};
-  std::string validation_dual_name;
+  std::string preferred_validation_dual_name;
   bool check_parameter_sensitivities {};
 };
 
@@ -176,15 +178,31 @@ FiniteElementState createDualDirection(const BasePhysics& physics, std::shared_p
   return dual_direction;
 }
 
+std::string validationDualName(const BasePhysics& physics, const PhysicsCase& test_case)
+{
+  const auto dual_names = physics.dualNames();
+  EXPECT_FALSE(dual_names.empty());
+  if (dual_names.empty()) {
+    return "";
+  }
+
+  if (std::find(dual_names.begin(), dual_names.end(), test_case.preferred_validation_dual_name) != dual_names.end()) {
+    return test_case.preferred_validation_dual_name;
+  }
+
+  return dual_names.front();
+}
+
 AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const PhysicsCase& test_case)
 {
   physics.resetAdjointStates();
   EXPECT_EQ(1, physics.cycle());
 
+  const auto validation_dual_name = validationDualName(physics, test_case);
   const auto& displacement = physics.state("displacement");
-  const auto& validation_dual = physics.dual(test_case.validation_dual_name);
+  const auto& validation_dual = physics.dual(validation_dual_name);
   const auto checkpointed_displacement = physics.loadCheckpointedState("displacement", physics.cycle());
-  const auto checkpointed_validation_dual = physics.loadCheckpointedDual(test_case.validation_dual_name, physics.cycle());
+  const auto checkpointed_validation_dual = physics.loadCheckpointedDual(validation_dual_name, physics.cycle());
   EXPECT_GT(checkpointed_displacement.Norml2(), 0.0);
   EXPECT_GT(checkpointed_validation_dual.Norml2(), 0.0);
 
@@ -194,8 +212,20 @@ AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const PhysicsCa
   auto dual_adjoint_load = createDualDirection(physics, test_case.mesh, test_case.adjoint_dual_name,
                                               test_case.adjoint_dual_domain_name, test_case.adjoint_dual_direction);
 
+  std::vector<std::unique_ptr<FiniteElementState>> dual_adjoint_loads;
+  std::unordered_map<std::string, const FiniteElementState&> dual_adjoint_load_refs;
+  for (const auto& dual_name : physics.dualNames()) {
+    auto load = std::make_unique<FiniteElementState>(physics.dual(dual_name).space(), dual_name + "_adjoint_load");
+    *load = 0.0;
+    if (dual_name == test_case.adjoint_dual_name) {
+      *load = dual_adjoint_load;
+    }
+    dual_adjoint_load_refs.insert({dual_name, *load});
+    dual_adjoint_loads.push_back(std::move(load));
+  }
+
   physics.setAdjointLoad({{"displacement", displacement_adjoint_load}});
-  physics.setDualAdjointBcs({{test_case.adjoint_dual_name, dual_adjoint_load}});
+  physics.setDualAdjointBcs(dual_adjoint_load_refs);
   physics.reverseAdjointTimestep();
   EXPECT_EQ(0, physics.cycle());
 
@@ -225,7 +255,7 @@ std::vector<PhysicsCase> createPhysicsCases()
                               .adjoint_dual_name = "reactions",
                               .adjoint_dual_domain_name = "essential_boundary",
                               .adjoint_dual_direction = 1,
-                              .validation_dual_name = "reactions",
+                              .preferred_validation_dual_name = "reactions",
                               .check_parameter_sensitivities = true});
 
 #ifdef SMITH_USE_TRIBOL
@@ -236,7 +266,7 @@ std::vector<PhysicsCase> createPhysicsCases()
                               .adjoint_dual_name = "reactions",
                               .adjoint_dual_domain_name = "two",
                               .adjoint_dual_direction = 1,
-                              .validation_dual_name = "contact_force_0",
+                              .preferred_validation_dual_name = "contact_force_0",
                               .check_parameter_sensitivities = false});
 #endif
 
@@ -260,7 +290,12 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveCanRepeatForBasePhysicsTypes)
     EXPECT_EQ(1, physics.cycle());
     EXPECT_NEAR(time_step, physics.time(), 1.0e-14);
     EXPECT_GT(physics.state("displacement").Norml2(), 0.0);
-    EXPECT_GT(physics.dual(test_case.validation_dual_name).Norml2(), 0.0);
+
+    const auto dual_names = physics.dualNames();
+    EXPECT_FALSE(dual_names.empty());
+    for (const auto& dual_name : dual_names) {
+      EXPECT_TRUE(std::isfinite(physics.dual(dual_name).Norml2())) << dual_name;
+    }
 
     const auto first = runStaticAdjointPass(physics, test_case);
     const auto second = runStaticAdjointPass(physics, test_case);
