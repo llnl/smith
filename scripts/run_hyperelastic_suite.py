@@ -26,13 +26,16 @@ class Problem:
     name: str
     executable: str
     hyper_case: str | None = None
+    # Per-problem load-step override. Twist needs finer stepping (plus the in-code
+    # imperfection) to stay on one post-buckling branch across proc counts.
+    default_steps: int | None = None
 
 
 PROBLEM_TABLE = {
     "arch": Problem("arch", "tests/shallow_arch_buckling"),
     "block": Problem("block", "tests/hyperelastic_benchmarks", "block"),
     "contact": Problem("contact", "tests/hyperelastic_benchmarks", "contact"),
-    "twist": Problem("twist", "tests/hyperelastic_benchmarks", "twist"),
+    "twist": Problem("twist", "tests/hyperelastic_benchmarks", "twist", default_steps=6),
 }
 
 
@@ -257,6 +260,19 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         f"--print-level={args.print_level}",
         f"--nonlinear-max-iterations={args.nonlinear_max_iterations}",
     ]
+    for flag, value in (
+        ("--cg-forcing-rel", args.cg_forcing_rel),
+        ("--residual-growth-cap", args.residual_growth_cap),
+        ("--tr-decrease-factor", args.tr_decrease_factor),
+        ("--tr-increase-factor", args.tr_increase_factor),
+        ("--tr-eta1", args.tr_eta1),
+        ("--tr-eta2", args.tr_eta2),
+        ("--tr-eta3", args.tr_eta3),
+        ("--tr-eta4", args.tr_eta4),
+        ("--mesh-scale", args.mesh_scale),
+    ):
+        if value is not None:
+            common.append(f"{flag}={value}")
     if args.cg_stagnation_tol is not None:
         common.append(f"--cg-stagnation-tol={args.cg_stagnation_tol}")
     if args.cg_stagnation_window is not None:
@@ -280,7 +296,7 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         f"--nonlinear-solver={args.nonlinear_solver}",
         f"--linear-solver={args.linear_solver}",
         f"--linear-max-iterations={args.max_cg_iterations}",
-        f"--steps={args.hyper_steps}",
+        f"--steps={args.hyper_steps if args.hyper_steps is not None else (problem.default_steps or 3)}",
     ]
     if args.use_bsr_spmv:
         hyper.append("--use-bsr-spmv")
@@ -466,13 +482,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trust-num-lanczos", type=int, default=0)
     parser.add_argument("--trust-num-lanczos-iters", type=int, default=0)
     parser.add_argument("--max-cg-iterations", type=int, default=1000)
+    parser.add_argument("--cg-forcing-rel", type=float, default=None)
+    parser.add_argument("--residual-growth-cap", type=float, default=None)
+    parser.add_argument("--tr-decrease-factor", type=float, default=None)
+    parser.add_argument("--tr-increase-factor", type=float, default=None)
+    parser.add_argument("--tr-eta1", type=float, default=None)
+    parser.add_argument("--tr-eta2", type=float, default=None)
+    parser.add_argument("--tr-eta3", type=float, default=None)
+    parser.add_argument("--tr-eta4", type=float, default=None)
+    parser.add_argument("--mesh-scale", type=float, default=None)
     parser.add_argument("--cg-stagnation-tol", type=float, default=None)
     parser.add_argument("--cg-stagnation-window", type=int, default=None)
     parser.add_argument("--cg-eisenstat-walker", action="store_true")
     parser.add_argument("--use-bsr-spmv", action="store_true")
     parser.add_argument("--use-exact-energy", action="store_true")
     parser.add_argument("--nonlinear-max-iterations", type=int, default=300000)
-    parser.add_argument("--hyper-steps", type=int, default=3)
+    parser.add_argument("--hyper-steps", type=int, default=None,
+                        help="Override load steps for all hyper cases (default: per-problem, twist=6, others=3)")
     parser.add_argument("--print-level", type=int, default=1)
     parser.add_argument("--extra-arch-arg", action="append", default=[])
     parser.add_argument("--extra-hyper-arg", action="append", default=[])

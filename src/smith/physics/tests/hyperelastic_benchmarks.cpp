@@ -55,6 +55,19 @@ double cg_model_stagnation_tol = 0.0;
 int cg_model_stagnation_window = 0;
 bool cg_eisenstat_walker = false;
 bool use_bsr_spmv = false;
+double cg_forcing_rel = 5.0e-5;
+double residual_growth_cap = 3.0;
+double tr_decrease_factor = 0.25;
+double tr_increase_factor = 1.75;
+double tr_eta1 = 1.0e-9;
+double tr_eta2 = 0.1;
+double tr_eta3 = 0.6;
+double tr_eta4 = 4.2;
+// Uniform multiplier on each case's Cartesian mesh resolution; <1 gives cheap
+// screening meshes for parameter searches, 1 is the benchmark size.
+double mesh_scale = 1.0;
+
+int scaled(int n) { return std::max(1, static_cast<int>(std::lround(n * mesh_scale))); }
 
 template <typename T>
 T parseEnum(const std::map<std::string, T>& values, const std::string& value, const std::string& option)
@@ -120,7 +133,15 @@ NonlinearSolverOptions nonlinearOptions()
           .num_previous_steps = trust_num_previous_steps,
           .trust_work_quadrature_points = trust_work_quadrature_points,
           .trust_num_lanczos = trust_num_lanczos,
-          .trust_num_lanczos_iters = trust_num_lanczos_iters};
+          .trust_num_lanczos_iters = trust_num_lanczos_iters,
+          .cg_forcing_rel = cg_forcing_rel,
+          .residual_growth_cap = residual_growth_cap,
+          .tr_decrease_factor = tr_decrease_factor,
+          .tr_increase_factor = tr_increase_factor,
+          .tr_eta1 = tr_eta1,
+          .tr_eta2 = tr_eta2,
+          .tr_eta3 = tr_eta3,
+          .tr_eta4 = tr_eta4};
 }
 
 int globalElementCount(const Mesh& mesh)
@@ -206,6 +227,24 @@ void parseCommandLine(int& argc, char** argv)
       cg_eisenstat_walker = true;
     } else if (arg == "--use-bsr-spmv") {
       use_bsr_spmv = true;
+    } else if (arg.rfind("--cg-forcing-rel=", 0) == 0) {
+      cg_forcing_rel = std::stod(arg.substr(std::string("--cg-forcing-rel=").size()));
+    } else if (arg.rfind("--residual-growth-cap=", 0) == 0) {
+      residual_growth_cap = std::stod(arg.substr(std::string("--residual-growth-cap=").size()));
+    } else if (arg.rfind("--tr-decrease-factor=", 0) == 0) {
+      tr_decrease_factor = std::stod(arg.substr(std::string("--tr-decrease-factor=").size()));
+    } else if (arg.rfind("--tr-increase-factor=", 0) == 0) {
+      tr_increase_factor = std::stod(arg.substr(std::string("--tr-increase-factor=").size()));
+    } else if (arg.rfind("--tr-eta1=", 0) == 0) {
+      tr_eta1 = std::stod(arg.substr(std::string("--tr-eta1=").size()));
+    } else if (arg.rfind("--tr-eta2=", 0) == 0) {
+      tr_eta2 = std::stod(arg.substr(std::string("--tr-eta2=").size()));
+    } else if (arg.rfind("--tr-eta3=", 0) == 0) {
+      tr_eta3 = std::stod(arg.substr(std::string("--tr-eta3=").size()));
+    } else if (arg.rfind("--tr-eta4=", 0) == 0) {
+      tr_eta4 = std::stod(arg.substr(std::string("--tr-eta4=").size()));
+    } else if (arg.rfind("--mesh-scale=", 0) == 0) {
+      mesh_scale = std::stod(arg.substr(std::string("--mesh-scale=").size()));
     } else if (arg.rfind("--print-level=", 0) == 0) {
       print_level = std::stoi(arg.substr(std::string("--print-level=").size()));
     } else if (arg.rfind("--steps=", 0) == 0) {
@@ -237,7 +276,9 @@ void runNearIncompressibleBlockCompression()
   constexpr double height = 0.8;
 
   auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh(mfem::Mesh::MakeCartesian3D(nx, ny, nz, mfem::Element::HEXAHEDRON, length, width, height)),
+      mfem::Mesh(
+          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
+                                      height)),
       "hyperelastic_block_mesh", 0, 0);
   checkElementCount("near-incompressible block", *mesh);
 
@@ -278,7 +319,9 @@ void runSpherePenaltyContact()
   const vec3 sphere_center{{0.5 * length, 0.5 * width, -0.26}};
 
   auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh(mfem::Mesh::MakeCartesian3D(nx, ny, nz, mfem::Element::HEXAHEDRON, length, width, height)),
+      mfem::Mesh(
+          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
+                                      height)),
       "hyperelastic_contact_mesh", 0, 0);
   checkElementCount("sphere penalty contact", *mesh);
 
@@ -364,9 +407,15 @@ void runTwistedBeam()
   constexpr double height = 0.5;
   constexpr double twist_angle = 1.75 * M_PI;
   constexpr double axial_compression = 0.18;
+  // Deliberate symmetry-breaking imperfection: a small lateral offset of the driven face
+  // (2% of the beam width). The post-buckling branch is otherwise selected by roundoff,
+  // which made the final answer scatter 8-13% across reduction-order changes.
+  constexpr double transverse_imperfection = 1.0e-2;
 
   auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh(mfem::Mesh::MakeCartesian3D(nx, ny, nz, mfem::Element::HEXAHEDRON, length, width, height)),
+      mfem::Mesh(
+          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
+                                      height)),
       "hyperelastic_twisted_beam_mesh", 0, 0);
   checkElementCount("twisted beam", *mesh);
 
@@ -385,7 +434,7 @@ void runTwistedBeam()
         const double z0 = X[2] - 0.5 * height;
         tensor<double, dim> displacement{};
         displacement[0] = -axial_compression * time;
-        displacement[1] = std::cos(theta) * y0 - std::sin(theta) * z0 - y0;
+        displacement[1] = std::cos(theta) * y0 - std::sin(theta) * z0 - y0 + transverse_imperfection * time;
         displacement[2] = std::sin(theta) * y0 + std::cos(theta) * z0 - z0;
         return displacement;
       },

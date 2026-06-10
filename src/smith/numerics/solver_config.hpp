@@ -565,6 +565,32 @@ struct NonlinearSolverOptions {
   /// better convergence to extreme eigenvalues. Defaults to 0 (use 3× `trust_num_lanczos`
   /// when active).
   int trust_num_lanczos_iters = 0;
+
+  /// Relative CG forcing term: each TrustRegion model solve uses
+  /// cg_tol = max(0.5 * outer_goal, cg_forcing_rel * ||r||).
+  double cg_forcing_rel = 5.0e-5;
+
+  /// TrustRegion acceptance safeguard (only without an exact-energy callback): reject a
+  /// candidate step whose predicted residual norm exceeds this multiple of the current one.
+  double residual_growth_cap = 3.0;
+
+  /// Trust-region radius decrease factor on rejected / low-quality steps.
+  double tr_decrease_factor = 0.25;
+
+  /// Trust-region radius increase factor on high-quality boundary steps.
+  double tr_increase_factor = 1.75;
+
+  /// Worst-case work-ratio rho for accepting a step (eta1).
+  double tr_eta1 = 1.0e-9;
+
+  /// rho below which the radius shrinks (eta2).
+  double tr_eta2 = 0.1;
+
+  /// rho above which a boundary step grows the radius (eta3).
+  double tr_eta3 = 0.6;
+
+  /// rho ceiling: steps with rho above this are distrusted and rejected (eta4).
+  double tr_eta4 = 4.2;
 };
 // _nonlinear_options_end
 

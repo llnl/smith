@@ -48,6 +48,15 @@ double cg_model_stagnation_tol = 0.0;
 int cg_model_stagnation_window = 0;
 bool cg_eisenstat_walker = false;
 bool use_bsr_spmv = false;
+double cg_forcing_rel = 5.0e-5;
+double residual_growth_cap = 3.0;
+double tr_decrease_factor = 0.25;
+double tr_increase_factor = 1.75;
+double tr_eta1 = 1.0e-9;
+double tr_eta2 = 0.1;
+double tr_eta3 = 0.6;
+double tr_eta4 = 4.2;
+double mesh_scale = 1.0;
 std::string preconditioner_name = "HypreJacobi";
 std::string deflation_order_name = "affine";
 std::string deflation_coarse_mode_name = "global";
@@ -99,6 +108,24 @@ void parseCommandLine(int& argc, char** argv)
       cg_eisenstat_walker = true;
     } else if (arg == "--use-bsr-spmv") {
       use_bsr_spmv = true;
+    } else if (arg.rfind("--cg-forcing-rel=", 0) == 0) {
+      cg_forcing_rel = std::stod(arg.substr(std::string("--cg-forcing-rel=").size()));
+    } else if (arg.rfind("--residual-growth-cap=", 0) == 0) {
+      residual_growth_cap = std::stod(arg.substr(std::string("--residual-growth-cap=").size()));
+    } else if (arg.rfind("--tr-decrease-factor=", 0) == 0) {
+      tr_decrease_factor = std::stod(arg.substr(std::string("--tr-decrease-factor=").size()));
+    } else if (arg.rfind("--tr-increase-factor=", 0) == 0) {
+      tr_increase_factor = std::stod(arg.substr(std::string("--tr-increase-factor=").size()));
+    } else if (arg.rfind("--tr-eta1=", 0) == 0) {
+      tr_eta1 = std::stod(arg.substr(std::string("--tr-eta1=").size()));
+    } else if (arg.rfind("--tr-eta2=", 0) == 0) {
+      tr_eta2 = std::stod(arg.substr(std::string("--tr-eta2=").size()));
+    } else if (arg.rfind("--tr-eta3=", 0) == 0) {
+      tr_eta3 = std::stod(arg.substr(std::string("--tr-eta3=").size()));
+    } else if (arg.rfind("--tr-eta4=", 0) == 0) {
+      tr_eta4 = std::stod(arg.substr(std::string("--tr-eta4=").size()));
+    } else if (arg.rfind("--mesh-scale=", 0) == 0) {
+      mesh_scale = std::stod(arg.substr(std::string("--mesh-scale=").size()));
     } else if (arg.rfind("--preconditioner=", 0) == 0) {
       preconditioner_name = arg.substr(std::string("--preconditioner=").size());
     } else if (arg.rfind("--deflation-order=", 0) == 0) {
@@ -121,8 +148,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 
   constexpr int p = 2;
   constexpr int dim = 2;
-  constexpr int nx = 240;
-  constexpr int ny = 10;
+  const int nx = std::max(1, static_cast<int>(std::lround(240 * mesh_scale)));
+  const int ny = std::max(1, static_cast<int>(std::lround(10 * mesh_scale)));
 
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, "shallow_arch_buckling");
@@ -188,7 +215,15 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
       .num_previous_steps = trust_num_previous_steps,
       .trust_work_quadrature_points = trust_work_quadrature_points,
       .trust_num_lanczos = trust_num_lanczos,
-      .trust_num_lanczos_iters = trust_num_lanczos_iters};
+      .trust_num_lanczos_iters = trust_num_lanczos_iters,
+      .cg_forcing_rel = cg_forcing_rel,
+      .residual_growth_cap = residual_growth_cap,
+      .tr_decrease_factor = tr_decrease_factor,
+      .tr_increase_factor = tr_increase_factor,
+      .tr_eta1 = tr_eta1,
+      .tr_eta2 = tr_eta2,
+      .tr_eta3 = tr_eta3,
+      .tr_eta4 = tr_eta4};
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "compressed_beam", mesh);

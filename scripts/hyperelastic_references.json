@@ -12,7 +12,7 @@
     "rel_tol": 0.01
   },
   "twist": {
-    "final_displacement_l2": 43.4432515,
-    "rel_tol": 0.05
+    "final_displacement_l2": 52.3017392,
+    "rel_tol": 0.02
   }
 }

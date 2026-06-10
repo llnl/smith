@@ -1039,6 +1039,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     settings.model_stagnation_tol = linear_options.cg_model_stagnation_tol;
     settings.model_stagnation_window = static_cast<size_t>(std::max(0, linear_options.cg_model_stagnation_window));
     settings.cg_tol = 0.5 * norm_goal;
+    settings.t1 = nonlinear_options.tr_decrease_factor;
+    settings.t2 = nonlinear_options.tr_increase_factor;
+    settings.eta1 = nonlinear_options.tr_eta1;
+    settings.eta2 = nonlinear_options.tr_eta2;
+    settings.eta3 = nonlinear_options.tr_eta3;
+    settings.eta4 = nonlinear_options.tr_eta4;
 
     // === TIMING BEGIN ===
     hess_vec_time_ = precond_time_ = augment_time_ = 0.0;
@@ -1189,7 +1195,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           ew_prev_norm = norm;
           ew_prev_eta = eta_k;
         } else {
-          settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
+          settings.cg_tol = std::max(0.5 * norm_goal, nonlinear_options.cg_forcing_rel * norm);
         }
         // Push Lanczos eigvec approximations of the assembled Hessian's leftmost spectrum
         // into left_mosts as subspace candidates. Applies regardless of W choice.
@@ -1465,7 +1471,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         // Residual-norm safeguard against the trapezoid/Simpson blind spot. Skipped when the
         // exact-energy callback is in use, because ΔE is then sign-accurate by construction
         // and the safeguard would over-reject legitimate energy-descent steps that grow ‖r‖.
-        constexpr double residual_growth_cap = 3.0;
+        const double residual_growth_cap = nonlinear_options.residual_growth_cap;
         const bool residual_safe = energy_function_ || (normPred <= residual_growth_cap * norm);
         const bool willAccept = rho >= settings.eta1 && rho <= settings.eta4 && residual_safe;
         if (!residual_safe) tr_size *= settings.t1;
