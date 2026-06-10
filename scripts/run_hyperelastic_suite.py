@@ -29,13 +29,16 @@ class Problem:
     # Per-problem load-step override. Twist needs finer stepping (plus the in-code
     # imperfection) to stay on one post-buckling branch across proc counts.
     default_steps: int | None = None
+    # Per-problem refinement calibrated so each case runs ~60 s at np=6 with the
+    # current best options (see performance_plan.md). Global --mesh-scale overrides.
+    default_mesh_scale: float | None = None
 
 
 PROBLEM_TABLE = {
-    "arch": Problem("arch", "tests/shallow_arch_buckling"),
-    "block": Problem("block", "tests/hyperelastic_benchmarks", "block"),
-    "contact": Problem("contact", "tests/hyperelastic_benchmarks", "contact"),
-    "twist": Problem("twist", "tests/hyperelastic_benchmarks", "twist", default_steps=6),
+    "arch": Problem("arch", "tests/shallow_arch_buckling", default_mesh_scale=1.2),
+    "block": Problem("block", "tests/hyperelastic_benchmarks", "block", default_mesh_scale=1.6),
+    "contact": Problem("contact", "tests/hyperelastic_benchmarks", "contact", default_mesh_scale=0.8),
+    "twist": Problem("twist", "tests/hyperelastic_benchmarks", "twist", default_steps=6, default_mesh_scale=0.9),
 }
 
 
@@ -269,7 +272,7 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         ("--tr-eta2", args.tr_eta2),
         ("--tr-eta3", args.tr_eta3),
         ("--tr-eta4", args.tr_eta4),
-        ("--mesh-scale", args.mesh_scale),
+        ("--mesh-scale", args.mesh_scale if args.mesh_scale is not None else problem.default_mesh_scale),
     ):
         if value is not None:
             common.append(f"{flag}={value}")

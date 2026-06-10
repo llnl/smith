@@ -117,8 +117,7 @@ LinearSolverOptions linearOptions()
           .cg_model_stagnation_window = cg_model_stagnation_window,
           .cg_eisenstat_walker = cg_eisenstat_walker,
           .print_level = 0,
-          .use_bsr_spmv = use_bsr_spmv,
-          .bsr_block_size = dim};
+          .use_bsr_spmv = use_bsr_spmv};
 }
 
 NonlinearSolverOptions nonlinearOptions()

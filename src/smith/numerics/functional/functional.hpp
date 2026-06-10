@@ -29,6 +29,7 @@
 #include "smith/numerics/functional/quadrature.hpp"
 #include "smith/numerics/functional/finite_element.hpp"
 #include "smith/numerics/functional/integral.hpp"
+#include "smith/numerics/functional/assembly_timers.hpp"
 #include "smith/numerics/functional/differentiate_wrt.hpp"
 #include "smith/numerics/functional/element_restriction.hpp"
 #include "smith/numerics/functional/domain.hpp"
@@ -892,7 +893,10 @@ class Functional<test(trials...), exec> {
             detail::zero_out(K_e);
 
             // perform the actual calculations
+            double t_kernel0 = MPI_Wtime();
             calculate_element_matrices_func(K_e);
+            double t_scatter0 = MPI_Wtime();
+            gradient_assemble_timers.kernels += t_scatter0 - t_kernel0;
 
             const std::vector<int>& element_ids = integral.domain_.get(geom);
 
@@ -915,10 +919,12 @@ class Functional<test(trials...), exec> {
                 }
               }
             }
+            gradient_assemble_timers.scatter += MPI_Wtime() - t_scatter0;
           }
         }
       }
 
+      double t_rap0 = MPI_Wtime();
       auto* R = form_.test_space_->Dof_TrueDof_Matrix();
 
       // If either test_space_ or trial_space_ is L2, the local matrix (A_local) will includ ghost rows and columns like
@@ -972,6 +978,7 @@ class Functional<test(trials...), exec> {
       std::unique_ptr<mfem::HypreParMatrix> A(mfem::RAP(R, A_hypre, P));
 
       delete A_hypre;
+      gradient_assemble_timers.rap += MPI_Wtime() - t_rap0;
 
       return A;
     };

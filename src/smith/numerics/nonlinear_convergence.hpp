@@ -80,6 +80,9 @@ class ConvergenceManagedNonlinearSolver {
 
   /// @brief Attach the shared convergence manager used to evaluate nonlinear stopping criteria.
   virtual void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) = 0;
+
+  /// @brief Inform the solver of the FES vector dimension so BSR paths can auto-detect block size. Default no-op.
+  virtual void setBSRBlockSize(int /*block_size*/) {}
 };
 
 }  // namespace smith

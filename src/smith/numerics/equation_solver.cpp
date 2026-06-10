@@ -28,6 +28,7 @@
 #include "smith/numerics/trust_region_solver.hpp"
 #include "smith/numerics/deflation.hpp"
 #include "smith/numerics/bsr_operator.hpp"
+#include "smith/numerics/functional/assembly_timers.hpp"
 #include "smith/infrastructure/logger.hpp"
 
 namespace smith {
@@ -553,6 +554,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable double precond_time_ = 0.0;
   mutable double augment_time_ = 0.0;
   mutable double assemble_jacobian_time_ = 0.0;
+  mutable double assemble_gradient_time_ = 0.0;
+  mutable double bsr_convert_time_ = 0.0;
   mutable double precond_setop_time_ = 0.0;
   mutable double subspace_prepare_time_ = 0.0;
   mutable double subspace_solve_time_ = 0.0;
@@ -614,6 +617,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) override
   {
     convergence_manager_ = std::move(convergence_manager);
+  }
+
+  /// auto-detect BSR block size from the FES vdim; an explicit user setting (>0) wins
+  void setBSRBlockSize(int block_size) override
+  {
+    if (linear_options.bsr_block_size <= 0) linear_options.bsr_block_size = block_size;
   }
 
   /// compute several vector inner products with a single MPI reduction when possible
@@ -867,8 +876,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     }
     mfem::Operator& assembled_gradient = oper->GetGradient(x);
     grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
+    double t1 = MPI_Wtime();
+    assemble_gradient_time_ += t1 - t0;
 
     if (linear_options.use_bsr_spmv) {
+      MFEM_VERIFY(linear_options.bsr_block_size > 0,
+                  "use_bsr_spmv requires a block size; attach an FES (auto-detect) or set bsr_block_size explicitly");
       if (auto* hypre_grad = dynamic_cast<mfem::HypreParMatrix*>(const_cast<mfem::Operator*>(grad))) {
         bsr_operator_ = std::make_unique<smith::BSROperator>(hypre_grad, linear_options.bsr_block_size);
         grad = bsr_operator_.get();
@@ -876,6 +889,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     } else {
       bsr_operator_.reset();
     }
+    bsr_convert_time_ += MPI_Wtime() - t1;
     assemble_jacobian_time_ += MPI_Wtime() - t0;
   }
 
@@ -1049,6 +1063,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     // === TIMING BEGIN ===
     hess_vec_time_ = precond_time_ = augment_time_ = 0.0;
     assemble_jacobian_time_ = precond_setop_time_ = 0.0;
+    assemble_gradient_time_ = bsr_convert_time_ = 0.0;
+    gradient_assemble_timers = {};
     subspace_prepare_time_ = subspace_solve_time_ = batch_hess_vec_time_ = 0.0;
     num_hess_vecs_ = num_preconds_ = num_augments_ = 0;
     num_jacobian_assembles_ = num_precond_setops_ = 0;
@@ -1524,6 +1540,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double t_pc = rmax(precond_time_);
     double t_ag = rmax(augment_time_);
     double t_aj = rmax(assemble_jacobian_time_);
+    double t_ag_grad = rmax(assemble_gradient_time_);
+    double t_bsr = rmax(bsr_convert_time_);
+    double t_asm_kernels = rmax(gradient_assemble_timers.kernels);
+    double t_asm_scatter = rmax(gradient_assemble_timers.scatter);
+    double t_asm_rap = rmax(gradient_assemble_timers.rap);
     double t_ps = rmax(precond_setop_time_);
     double t_sp = rmax(subspace_prepare_time_);
     double t_ss = rmax(subspace_solve_time_);
@@ -1536,6 +1557,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       mfem::out << "\n========= TrustRegion solve timing (max across ranks) =========\n"
                 << "  total solve            : " << t_total << " s\n"
                 << "  assembleJacobian       : " << t_aj << " s  (" << num_jacobian_assembles_ << " calls)\n"
+                << "    GetGradient          : " << t_ag_grad << " s\n"
+                << "      element kernels    : " << t_asm_kernels << " s\n"
+                << "      scatter (SearchRow): " << t_asm_scatter << " s\n"
+                << "      hypre + RAP        : " << t_asm_rap << " s\n"
+                << "    CSR->BSR convert     : " << t_bsr << " s\n"
                 << "  precond SetOperator    : " << t_ps << " s  (" << num_precond_setops_ << " calls)\n"
                 << "  hess_vec total         : " << t_hv << " s  (" << num_hess_vecs_ << " calls)\n"
                 << "  precond Mult total     : " << t_pc << " s  (" << num_preconds_ << " calls)\n"
@@ -1600,6 +1626,9 @@ EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_sol
 
 void EquationSolver::attachDeflationFES(mfem::ParFiniteElementSpace& fes)
 {
+  if (auto* managed = dynamic_cast<ConvergenceManagedNonlinearSolver*>(nonlin_solver_.get())) {
+    managed->setBSRBlockSize(fes.GetVDim());
+  }
   if (!preconditioner_) return;
   auto* defl = dynamic_cast<DeflationPreconditioner*>(preconditioner_.get());
   if (defl && !defl->hasFES()) defl->attachFES(fes);
