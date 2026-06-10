@@ -58,23 +58,13 @@ class FiniteElementDual : public FiniteElementVector {
   /**
    * @brief Move assignment
    *
-   * @warning This intentionally copy-assigns the underlying FiniteElementVector values and preserves this dual's
-   * identity/space. It does not invoke FiniteElementVector move assignment.
+   * @note Move assignment is deleted because replacing a registered dual's identity and FE space does not interact
+   * well with StateManager.
    *
    * @param rhs The right hand side input Dual
    * @return The assigned FiniteElementDual
    */
-  FiniteElementDual& operator=(FiniteElementDual&& rhs)
-  {
-    FiniteElementVector::operator=(rhs);
-    if (rhs.linear_form_) {
-      linearForm();
-      *linear_form_ = *rhs.linear_form_;
-    } else {
-      linear_form_.reset();
-    }
-    return *this;
-  }
+  FiniteElementDual& operator=(FiniteElementDual&& rhs) = delete;
 
   /**
    * @brief Copy assignment
