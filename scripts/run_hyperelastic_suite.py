@@ -284,6 +284,8 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         common.append("--cg-eisenstat-walker")
     if args.deflation_smoother is not None:
         common.append(f"--deflation-smoother={args.deflation_smoother}")
+    if args.assemble_bsr:
+        common.append("--assemble-bsr")
 
     if problem.name == "arch":
         arch = [
@@ -501,6 +503,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cg-eisenstat-walker", action="store_true")
     parser.add_argument("--use-bsr-spmv", action="store_true")
     parser.add_argument("--deflation-smoother", choices=("hypre", "jacobi", "block"), default=None)
+    parser.add_argument("--assemble-bsr", action="store_true")
     parser.add_argument("--use-exact-energy", action="store_true")
     parser.add_argument("--nonlinear-max-iterations", type=int, default=300000)
     parser.add_argument("--hyper-steps", type=int, default=None,

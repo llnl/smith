@@ -38,6 +38,7 @@
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/infrastructure/accelerator.hpp"
 #include "smith/infrastructure/profiling.hpp"
+#include "smith/numerics/bsr_direct_assembler.hpp"
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/functional/differentiate_wrt.hpp"
 #include "smith/numerics/functional/functional.hpp"
@@ -754,6 +755,10 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /// linesearch uses ΔE = E(x+d) - E(x) instead of the integrated-work surrogate.
   void setEnergyFunction(EquationSolver::EnergyFunction fn) { nonlin_solver_->setEnergyFunction(std::move(fn)); }
 
+  /// @brief Assemble quasistatic Jacobians directly into a BSR operator (forward solves only;
+  /// after the first assembly, stiffnessMatrix() returns stale data). See BSRDirectAssembler.
+  void enableDirectBSRAssembly(bool enable = true) { use_direct_bsr_assembly_ = enable; }
+
   /**
    * Functor for materials that get dt as an argument
    *
@@ -1064,6 +1069,25 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
           SMITH_MARK_FUNCTION;
           auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                         *parameters_[parameter_indices].state...);
+          if (use_direct_bsr_assembly_) {
+            // Steady-state path: kernels + scatter into the local CSR, then route values
+            // straight into the BSR operator (no hypre RAP / elimination / conversion).
+            // First call bootstraps structure from one legacy assembly; J_/J_e_ then hold
+            // that first assembly only (forward solves do not read them again).
+            if (!bsr_assembler_) {
+              J_.reset();
+              J_ = assemble(drdu);
+              J_e_.reset();
+              J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+              bsr_assembler_ = std::make_unique<BSRDirectAssembler>(displacement_.space(), bcs_.allEssentialTrueDofs(),
+                                                                    J_.get(), drdu.localRowPtr(), drdu.localColInd(),
+                                                                    drdu.localValues());
+            } else {
+              drdu.assembleLocalCSR();
+              bsr_assembler_->update(drdu.localValues());
+            }
+            return bsr_assembler_->op();
+          }
           J_.reset();
           J_ = assemble(drdu);
           J_e_.reset();
@@ -1459,6 +1483,12 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   std::unique_ptr<mfem_ext::StdFunctionOperator> residual_with_bcs_;
 
   /// the specific methods and tolerances specified to solve the nonlinear residual equations
+  /// When true, quasistatic Jacobians after the first are routed directly into a BSR
+  /// operator (see BSRDirectAssembler). Forward-solve only: J_/J_e_/stiffnessMatrix()
+  /// hold the bootstrap (first) assembly.
+  bool use_direct_bsr_assembly_ = false;
+  std::unique_ptr<BSRDirectAssembler> bsr_assembler_;
+
   std::unique_ptr<EquationSolver> nonlin_solver_;
 
   /**

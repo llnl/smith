@@ -852,27 +852,19 @@ class Functional<test(trials...), exec> {
       return max_entries;
     }
 
-    std::unique_ptr<mfem::HypreParMatrix> assemble()
+    /**
+     * @brief Run the element kernels and scatter into the persistent local L-dof CSR
+     * (row_ptr / col_ind / values_). This is the local half of assemble(); the direct-BSR
+     * assembly path consumes the CSR from here without ever forming a hypre matrix.
+     */
+    void assembleLocalCSR()
     {
       if (row_ptr.empty()) {
         initialize_sparsity_pattern();
       }
 
-      // since we own the storage for row_ptr, col_ind, values,
-      // we ask mfem to not deallocate those pointers in the SparseMatrix dtor
-      constexpr bool sparse_matrix_frees_graph_ptrs = false;
-      constexpr bool sparse_matrix_frees_values_ptr = false;
-      constexpr bool col_ind_is_sorted = true;
-
-      // note: we make a copy of col_ind since mfem::HypreParMatrix
-      //       changes it in the constructor
-      std::vector<int> col_ind_copy = col_ind;
-
-      int nnz = row_ptr.back();
-      std::vector<double> values(uint32_t(nnz), 0.0);
-      auto A_local = mfem::SparseMatrix(row_ptr.data(), col_ind_copy.data(), values.data(), form_.output_L_.Size(),
-                                        form_.input_L_[which_argument].Size(), sparse_matrix_frees_graph_ptrs,
-                                        sparse_matrix_frees_values_ptr, col_ind_is_sorted);
+      values_.assign(static_cast<size_t>(row_ptr.back()), 0.0);
+      std::vector<double>& values = values_;
 
       std::vector<double> K_elem_buffer(max_buffer_size());
 
@@ -944,6 +936,35 @@ class Functional<test(trials...), exec> {
           }
         }
       }
+    }
+
+    /// local L-dof CSR accessors (valid after assembleLocalCSR / assemble)
+    const std::vector<int>& localRowPtr() const { return row_ptr; }
+    /// @overload
+    const std::vector<int>& localColInd() const { return col_ind; }
+    /// @overload
+    const std::vector<double>& localValues() const { return values_; }
+
+    std::unique_ptr<mfem::HypreParMatrix> assemble()
+    {
+      assembleLocalCSR();
+
+      // since we own the storage for row_ptr, col_ind, values,
+      // we ask mfem to not deallocate those pointers in the SparseMatrix dtor
+      constexpr bool sparse_matrix_frees_graph_ptrs = false;
+      constexpr bool sparse_matrix_frees_values_ptr = false;
+      constexpr bool col_ind_is_sorted = true;
+
+      // note: we copy col_ind AND values since mfem::HypreParMatrix permutes both in the
+      //       constructor (diagonal-first row reorder); values_ must stay aligned with the
+      //       sorted col_ind for the direct-BSR routing path
+      std::vector<int> col_ind_copy = col_ind;
+      std::vector<double> values_copy = values_;
+
+      auto A_local = mfem::SparseMatrix(row_ptr.data(), col_ind_copy.data(), values_copy.data(),
+                                        form_.output_L_.Size(), form_.input_L_[which_argument].Size(),
+                                        sparse_matrix_frees_graph_ptrs, sparse_matrix_frees_values_ptr,
+                                        col_ind_is_sorted);
 
       double t_rap0 = MPI_Wtime();
       auto* R = form_.test_space_->Dof_TrueDof_Matrix();
@@ -1012,6 +1033,8 @@ class Functional<test(trials...), exec> {
 
     std::vector<int> row_ptr;
     std::vector<int> col_ind;
+    /// local CSR values, refreshed by assembleLocalCSR()
+    std::vector<double> values_;
 
     /// per-(integral, geometry) map from flat element-matrix entry to nnz index in col_ind/values
     std::map<std::pair<size_t, mfem::Geometry::Type>, std::vector<int32_t>> scatter_maps_;

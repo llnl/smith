@@ -17,6 +17,7 @@ set(numerics_headers
     block_preconditioner.hpp
     deflation.hpp
     batched_matvec.hpp
+    bsr_direct_assembler.hpp
     bsr_operator.hpp
     )
 
@@ -30,6 +31,7 @@ set(numerics_sources
     block_preconditioner.cpp
     deflation.cpp
     batched_matvec.cpp
+    bsr_direct_assembler.cpp
     bsr_operator.cpp
     )
 

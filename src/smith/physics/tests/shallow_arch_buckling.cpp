@@ -49,6 +49,7 @@ int cg_model_stagnation_window = 0;
 bool cg_eisenstat_walker = false;
 bool use_bsr_spmv = false;
 std::string deflation_smoother = "hypre";
+bool assemble_bsr = false;
 double cg_forcing_rel = 5.0e-5;
 double residual_growth_cap = 3.0;
 double tr_decrease_factor = 0.25;
@@ -111,6 +112,8 @@ void parseCommandLine(int& argc, char** argv)
       use_bsr_spmv = true;
     } else if (arg.rfind("--deflation-smoother=", 0) == 0) {
       deflation_smoother = arg.substr(std::string("--deflation-smoother=").size());
+    } else if (arg == "--assemble-bsr") {
+      assemble_bsr = true;
     } else if (arg.rfind("--cg-forcing-rel=", 0) == 0) {
       cg_forcing_rel = std::stod(arg.substr(std::string("--cg-forcing-rel=").size()));
     } else if (arg.rfind("--residual-growth-cap=", 0) == 0) {
@@ -141,6 +144,10 @@ void parseCommandLine(int& argc, char** argv)
     }
   }
   argc = write_arg;
+  // the hypre smoother would read stale matrix values under direct-BSR assembly
+  if (assemble_bsr && deflation_smoother == "hypre") {
+    deflation_smoother = "jacobi";
+  }
 }
 
 }  // namespace
@@ -230,6 +237,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "compressed_beam", mesh);
+  if (assemble_bsr) solid.enableDirectBSRAssembly();
 
   solid_mechanics::NeoHookean mat{.density = 1.0, .K = 100.0, .G = 10.0};
   solid.setMaterial(mat, mesh->entireBody());

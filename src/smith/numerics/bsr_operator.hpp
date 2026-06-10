@@ -72,6 +72,11 @@ class BSROperator : public mfem::Operator {
   /// Local off-diagonal (halo-coupled) block of the BSR representation (valid when Enabled())
   const BSRMatrix& OffdBSR() const { return offd_bsr_; }
 
+  /// Mutable value access for in-place refresh by the direct-BSR assembly path
+  std::vector<double>& MutableDiagData() { return diag_bsr_.data; }
+  /// @overload
+  std::vector<double>& MutableOffdData() { return offd_bsr_.data; }
+
  private:
   /// Convert a HYPRE CSR matrix to the internal BSR representation
   static BSRMatrix convertCSRToBSR(hypre_CSRMatrix* csr, int b);

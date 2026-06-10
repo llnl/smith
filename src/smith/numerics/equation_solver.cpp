@@ -545,6 +545,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
   /// optional optimized block sparse row operator
   mutable std::unique_ptr<BSROperator> bsr_operator_;
+  /// non-owning view of the current gradient when it is a BSROperator (wrapped or direct-assembled)
+  mutable const BSROperator* grad_bsr_view_ = nullptr;
 
   /// Tracks if grad was monolithicized and needs deletion
   mutable bool grad_monolithic = false;
@@ -857,9 +859,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     ++num_batch_hess_vec_calls_;
     num_batch_hess_vec_actions_ += inputs.size();
     double t0 = MPI_Wtime();
-    if (bsr_operator_ && bsr_operator_->Enabled() && grad == bsr_operator_.get()) {
+    if (grad_bsr_view_ && grad_bsr_view_->Enabled() && grad == grad_bsr_view_) {
       // one packed halo exchange + one matrix sweep for the whole batch
-      bsr_operator_->MultBatch(inputs, outputs);
+      grad_bsr_view_->MultBatch(inputs, outputs);
     } else {
       for (size_t i = 0; i < inputs.size(); ++i) {
         hess_vec_func(*inputs[i], *outputs[i]);
@@ -884,14 +886,16 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double t1 = MPI_Wtime();
     assemble_gradient_time_ += t1 - t0;
 
-    if (linear_options.use_bsr_spmv) {
+    grad_bsr_view_ = dynamic_cast<const BSROperator*>(grad);  // direct-BSR assembly hands us one already
+    if (!grad_bsr_view_ && linear_options.use_bsr_spmv) {
       MFEM_VERIFY(linear_options.bsr_block_size > 0,
                   "use_bsr_spmv requires a block size; attach an FES (auto-detect) or set bsr_block_size explicitly");
       if (auto* hypre_grad = dynamic_cast<mfem::HypreParMatrix*>(const_cast<mfem::Operator*>(grad))) {
         bsr_operator_ = std::make_unique<smith::BSROperator>(hypre_grad, linear_options.bsr_block_size);
         grad = bsr_operator_.get();
+        grad_bsr_view_ = bsr_operator_.get();
       }
-    } else {
+    } else if (!grad_bsr_view_) {
       bsr_operator_.reset();
     }
     bsr_convert_time_ += MPI_Wtime() - t1;
