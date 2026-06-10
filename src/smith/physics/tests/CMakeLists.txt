@@ -15,6 +15,12 @@ smith_add_library(
       
 set(physics_test_depends smith_physics smith_differentiable_numerics smith_physics_test_utils gtest)
 
+smith_add_executable(NAME       hyperelastic_benchmarks
+                     SOURCES    hyperelastic_benchmarks.cpp
+                     DEPENDS_ON smith_physics
+                     OUTPUT_DIR ${PROJECT_BINARY_DIR}/tests
+                     FOLDER     smith/tests)
+
 set(physics_serial_test_sources
     beam_bending.cpp
     fit_test.cpp
@@ -75,7 +81,6 @@ set(physics_parallel_test_sources
     thermal_mechanics.cpp
     thermal_robin_condition.cpp
     dynamic_thermal_adjoint.cpp
-    hyperelastic_benchmarks.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
     )
