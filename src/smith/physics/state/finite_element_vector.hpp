@@ -113,8 +113,6 @@ class FiniteElementVector : public mfem::HypreParVector {
   /**
    * @brief Move assignment
    *
-   * @warning This replaces field identity and FE-space ownership. Do not use on fields registered with StateManager.
-   *
    * @param rhs The right hand side input vector
    * @return The move assigned input vector
    */
