@@ -2054,7 +2054,16 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     }
     defl->setDeflationOrder(linear_opts.deflation_order);
     defl->setCoarseMode(linear_opts.deflation_coarse_mode);
-    defl->setUseBlockJacobiSmoother(linear_opts.deflation_block_jacobi);
+    if (linear_opts.deflation_smoother == "block") {
+      defl->setSmootherVariant(DeflationSmoother::BlockJacobi);
+    } else if (linear_opts.deflation_smoother == "jacobi") {
+      defl->setSmootherVariant(DeflationSmoother::PointJacobi);
+    } else if (linear_opts.deflation_smoother == "hypre") {
+      defl->setSmootherVariant(DeflationSmoother::Hypre);
+    } else {
+      SLIC_ERROR_ROOT("Unknown deflation_smoother value '" + linear_opts.deflation_smoother +
+                      "' (expected hypre|jacobi|block)");
+    }
     preconditioner_solver = std::move(defl);
   } else if (preconditioner == Preconditioner::AMGFContact) {
     auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();

@@ -75,6 +75,21 @@ enum class CoarseMode
   Multiplicative,
 };
 
+class BSROperator;
+
+/// Which first-level smoother `Mult` applies.
+enum class DeflationSmoother
+{
+  /// mfem::HypreSmoother (scalar Jacobi by default). Needs a hypre matrix handle.
+  Hypre,
+  /// z_i = r_i / a_ii with the diagonal read from the BSR blocks (hypre fallback).
+  /// Same arithmetic as Hypre Jacobi (weight 1) — exists so the apply path works
+  /// without a hypre matrix once assembly goes direct-to-BSR.
+  PointJacobi,
+  /// Exact vdim x vdim diagonal-block inverses (block-Jacobi).
+  BlockJacobi,
+};
+
 class DeflationPreconditioner : public mfem::Solver {
  public:
   /**
@@ -95,9 +110,8 @@ class DeflationPreconditioner : public mfem::Solver {
   /// Subsequent `SetOperator` calls build the basis against this FES.
   void attachFES(mfem::ParFiniteElementSpace& fes);
 
-  /// Replace the scalar Hypre smoother with a vdim x vdim block-Jacobi smoother.
-  /// Takes effect at the next SetOperator.
-  void setUseBlockJacobiSmoother(bool enable) { use_block_jacobi_ = enable; }
+  /// Select the first-level smoother variant. Takes effect at the next SetOperator.
+  void setSmootherVariant(DeflationSmoother variant) { smoother_variant_ = variant; }
 
   bool hasFES() const { return fes_ != nullptr; }
 
@@ -252,6 +266,10 @@ class DeflationPreconditioner : public mfem::Solver {
   /// Build the inverted vdim x vdim diagonal blocks for the block-Jacobi smoother.
   void buildBlockJacobi();
 
+  /// Extract the scalar matrix diagonal for the PointJacobi smoother. Reads the BSR
+  /// diagonal blocks when available (the direct-BSR-assembly path), hypre otherwise.
+  void buildPointJacobi(const BSROperator* bsr_op);
+
   /// Apply the configured smoother (block-Jacobi or HypreSmoother): z = M^{-1} r.
   void applySmoother(const mfem::Vector& r, mfem::Vector& z) const;
 
@@ -261,12 +279,14 @@ class DeflationPreconditioner : public mfem::Solver {
   std::unique_ptr<mfem::HypreSmoother> smoother_;
   mfem::HypreSmoother::Type smoother_type_;
   bool use_smoother_ = true;
-  /// Use a dim x dim block-Jacobi smoother (exact per-node diagonal-block inverses)
-  /// instead of the scalar HypreSmoother. BC-eliminated dofs (zeroed row/col, 1 on the
-  /// diagonal) decouple inside their block, so the block inverse handles them exactly.
-  bool use_block_jacobi_ = false;
+  /// First-level smoother variant. For BlockJacobi: BC-eliminated dofs (zeroed row/col,
+  /// 1 on the diagonal) decouple inside their block, so the block inverse handles them
+  /// exactly. PointJacobi reproduces Hypre Jacobi without needing a hypre handle.
+  DeflationSmoother smoother_variant_ = DeflationSmoother::Hypre;
   /// Inverted diagonal blocks, row-major b x b per block (size = (n/b) * b * b).
   mutable std::vector<double> block_jacobi_inv_;
+  /// Scalar matrix diagonal for the PointJacobi variant.
+  mutable std::vector<double> point_diag_;
   mfem::Array<int> ess_tdofs_;
 
   // === TIMING BEGIN ===

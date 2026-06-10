@@ -487,9 +487,10 @@ struct LinearSolverOptions {
   /// BSR block size. 0 (default) = auto-detect from the attached FES vdim; set >0 to override.
   int bsr_block_size = 0;
 
-  /// Use a vdim x vdim block-Jacobi smoother in the Deflation preconditioner instead of
-  /// the scalar Hypre Jacobi smoother.
-  bool deflation_block_jacobi = false;
+  /// Deflation first-level smoother: "hypre" (scalar Hypre Jacobi, default), "jacobi"
+  /// (point Jacobi with the diagonal read from the BSR blocks — same answer as hypre,
+  /// but works without a hypre matrix), or "block" (vdim x vdim block-Jacobi).
+  std::string deflation_smoother = "hypre";
 
   /// Subblock linear solver options for block preconditioners
   std::vector<LinearSolverOptions> sub_block_linear_solver_options = {};

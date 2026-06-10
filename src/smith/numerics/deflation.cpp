@@ -364,13 +364,20 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
   setop_factor_time_ += t2 - t1;
   // === TIMING END ===
 
-  if (use_block_jacobi_) {
-    buildBlockJacobi();
-    smoother_.reset();
-  } else {
-    smoother_ = std::make_unique<mfem::HypreSmoother>();
-    smoother_->SetType(smoother_type_);
-    smoother_->SetOperator(const_cast<mfem::HypreParMatrix&>(*A_));
+  switch (smoother_variant_) {
+    case DeflationSmoother::BlockJacobi:
+      buildBlockJacobi();
+      smoother_.reset();
+      break;
+    case DeflationSmoother::PointJacobi:
+      buildPointJacobi(bsr_op);
+      smoother_.reset();
+      break;
+    case DeflationSmoother::Hypre:
+      smoother_ = std::make_unique<mfem::HypreSmoother>();
+      smoother_->SetType(smoother_type_);
+      smoother_->SetOperator(const_cast<mfem::HypreParMatrix&>(*A_));
+      break;
   }
   // === TIMING BEGIN ===
   setop_smoother_time_ += MPI_Wtime() - t2;
@@ -415,9 +422,50 @@ void DeflationPreconditioner::buildBlockJacobi()
   }
 }
 
+void DeflationPreconditioner::buildPointJacobi(const BSROperator* bsr_op)
+{
+  const int n = A_->Height();
+  point_diag_.assign(static_cast<size_t>(n), 1.0);
+  if (bsr_op && bsr_op->Enabled()) {
+    const BSRMatrix& diag = bsr_op->DiagBSR();
+    const int b = diag.b;
+    for (int br = 0; br < diag.nb_rows; ++br) {
+      for (int m = diag.I[static_cast<size_t>(br)]; m < diag.I[static_cast<size_t>(br) + 1]; ++m) {
+        if (diag.J[static_cast<size_t>(m)] == br) {
+          const double* block = &diag.data[static_cast<size_t>(m) * static_cast<size_t>(b * b)];
+          for (int i = 0; i < b; ++i) {
+            point_diag_[static_cast<size_t>(br * b + i)] = block[i * b + i];
+          }
+          break;
+        }
+      }
+    }
+  } else {
+    auto* parA = static_cast<hypre_ParCSRMatrix*>(const_cast<mfem::HypreParMatrix&>(*A_));
+    hypre_CSRMatrix* diag = hypre_ParCSRMatrixDiag(parA);
+    HYPRE_Int* diag_i = hypre_CSRMatrixI(diag);
+    HYPRE_Int* diag_j = hypre_CSRMatrixJ(diag);
+    HYPRE_Real* diag_a = hypre_CSRMatrixData(diag);
+    for (int row = 0; row < n; ++row) {
+      for (HYPRE_Int idx = diag_i[row]; idx < diag_i[row + 1]; ++idx) {
+        if (static_cast<int>(diag_j[idx]) == row) {
+          point_diag_[static_cast<size_t>(row)] = diag_a[idx];
+          break;
+        }
+      }
+    }
+  }
+}
+
 void DeflationPreconditioner::applySmoother(const mfem::Vector& r, mfem::Vector& z) const
 {
-  if (use_block_jacobi_ && !block_jacobi_inv_.empty()) {
+  if (smoother_variant_ == DeflationSmoother::PointJacobi && !point_diag_.empty()) {
+    const int n = static_cast<int>(r.Size());
+    const double* rd = r.GetData();
+    double* zd = z.GetData();
+    // divide (not multiply by a stored inverse) to match hypre Jacobi bit-for-bit
+    for (int i = 0; i < n; ++i) zd[i] = rd[i] / point_diag_[static_cast<size_t>(i)];
+  } else if (smoother_variant_ == DeflationSmoother::BlockJacobi && !block_jacobi_inv_.empty()) {
     const int b = fes_->GetVDim();
     const int nb = static_cast<int>(r.Size()) / b;
     const double* rd = r.GetData();
@@ -858,7 +906,9 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
   // === TIMING END ===
   const int n = fes_->GetTrueVSize();
   z.SetSize(n);
-  if (use_smoother_ && (smoother_ || (use_block_jacobi_ && !block_jacobi_inv_.empty()))) {
+  const bool have_smoother = smoother_ || (smoother_variant_ == DeflationSmoother::BlockJacobi && !block_jacobi_inv_.empty()) ||
+                             (smoother_variant_ == DeflationSmoother::PointJacobi && !point_diag_.empty());
+  if (use_smoother_ && have_smoother) {
     applySmoother(r, z);
   } else {
     z = 0.0;
