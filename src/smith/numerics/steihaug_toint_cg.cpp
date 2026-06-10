@@ -6,6 +6,8 @@
 
 #include "smith/numerics/steihaug_toint_cg.hpp"
 
+#include "mpi.h"
+
 namespace smith {
 
 namespace {
@@ -39,17 +41,55 @@ bool isDescentDirection(const mfem::Vector& direction, const mfem::Vector& resid
 
 void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
                      const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
-                     double r0_norm_squared, const DotManyFunction& dot_many)
+                     double r0_norm_squared, const DotManyFunction& dot_many, CGProfile* profile)
 {
   // minimize r0@z + 0.5*z@J@z
   results.interior_status = TrustRegionResults::Status::Interior;
   results.cg_iterations_count = 0;
+  results.cg_hit_max_iters = false;
+  results.cg_model_stagnated = false;
 
   auto& z = results.z;
   auto& cgIter = results.cg_iterations_count;
   auto& d = results.d;
   auto& Pr = results.Pr;
   auto& Hd = results.H_d;
+
+  // Profiling wrappers — zero-cost when `profile` is nullptr (compiler folds the branch).
+  auto timed_P = [&](const mfem::Vector& in, mfem::Vector& out) {
+    if (!P) {
+      out = in;
+      return;
+    }
+    if (profile) {
+      double t0 = MPI_Wtime();
+      P->Mult(in, out);
+      profile->P_mult_time += MPI_Wtime() - t0;
+      ++profile->P_mult_count;
+    } else {
+      P->Mult(in, out);
+    }
+  };
+  auto timed_H = [&](const mfem::Vector& in, mfem::Vector& out) {
+    if (profile) {
+      double t0 = MPI_Wtime();
+      H.Mult(in, out);
+      profile->H_mult_time += MPI_Wtime() - t0;
+      ++profile->H_mult_count;
+    } else {
+      H.Mult(in, out);
+    }
+  };
+  auto timed_dots = [&](const std::vector<DotPair>& pairs) {
+    if (profile) {
+      double t0 = MPI_Wtime();
+      auto r = dot_many(pairs);
+      profile->dots_time += MPI_Wtime() - t0;
+      ++profile->dot_call_count;
+      return r;
+    }
+    return dot_many(pairs);
+  };
 
   const double cg_tol_squared = settings.cg_tol * settings.cg_tol;
 
@@ -58,11 +98,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   }
 
   rCurrent = r0;
-  if (P) {
-    P->Mult(rCurrent, Pr);
-  } else {
-    Pr = rCurrent;
-  }
+  timed_P(rCurrent, Pr);
 
   // d = -Pr
   d = Pr;
@@ -72,29 +108,35 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   double zz = 0.;
 
   // rPr = dot(rCurrent, Pr)
-  double rPr = dot_many({{&rCurrent, &Pr}})[0];
+  double rPr = timed_dots({{&rCurrent, &Pr}})[0];
+
+  // Quadratic-model value m_k = g^T z + 0.5 z^T H z; starts at 0 (z_0 = 0).
+  // Per-iter decrement = 0.5 * alpha_k * rPr_k (standard PCG identity).
+  double model_value = 0.0;
+  size_t stagnant_count = 0;
+  const bool stagnation_enabled = settings.model_stagnation_window > 0 && settings.model_stagnation_tol > 0.0;
 
   for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
-    double descent_check = dot_many({{&d, &rCurrent}})[0];
+    double descent_check = timed_dots({{&d, &rCurrent}})[0];
     if (!isDescentDirection(descent_check)) {
       d *= -1.0;
       results.interior_status = TrustRegionResults::Status::NonDescentDirection;
     }
 
-    H.Mult(d, Hd);
+    timed_H(d, Hd);
 
-    double curvature = dot_many({{&d, &Hd}})[0];
+    double curvature = timed_dots({{&d, &Hd}})[0];
     const double alphaCg = curvature != 0.0 ? rPr / curvature : 0.0;
 
     // Compute candidate step and its exact norm (avoids recurrence drift)
     auto& zPred = Pr;
     zPred = z;
     zPred.Add(alphaCg, d);
-    double zzNp1 = dot_many({{&zPred, &zPred}})[0];
+    double zzNp1 = timed_dots({{&zPred, &zPred}})[0];
 
     const bool go_to_boundary = curvature <= 0 || zzNp1 >= trSize * trSize;
     if (go_to_boundary) {
-      auto dots = dot_many({{&z, &d}, {&d, &d}});
+      auto dots = timed_dots({{&z, &d}, {&d, &d}});
       double zd = dots[0];
       double dd = dots[1];
       projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
@@ -112,15 +154,29 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
       return;
     }
 
-    rCurrent.Add(alphaCg, Hd);
-
-    if (P) {
-      P->Mult(rCurrent, Pr);
-    } else {
-      Pr = rCurrent;
+    // Model-decrease stagnation termination. Per-iter decrement = 0.5*alpha*rPr;
+    // stop when relative decrement / |cumulative model| stays below tol for
+    // `window` consecutive iters. Cheap; no extra reductions.
+    if (stagnation_enabled) {
+      const double decrement = 0.5 * alphaCg * rPr;
+      model_value -= decrement;
+      const double abs_m = std::abs(model_value);
+      if (abs_m > 0.0 && decrement < settings.model_stagnation_tol * abs_m) {
+        ++stagnant_count;
+        if (stagnant_count >= settings.model_stagnation_window) {
+          results.cg_model_stagnated = true;
+          return;
+        }
+      } else {
+        stagnant_count = 0;
+      }
     }
 
-    auto dots2 = dot_many({{&rCurrent, &Pr}, {&rCurrent, &rCurrent}});
+    rCurrent.Add(alphaCg, Hd);
+
+    timed_P(rCurrent, Pr);
+
+    auto dots2 = timed_dots({{&rCurrent, &Pr}, {&rCurrent, &rCurrent}});
     double rPrNp1 = dots2[0];
     double r_current_norm_squared = dots2[1];
 
@@ -136,6 +192,12 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
     zz = zzNp1;
   }
   cgIter--;
+  // Reached the iter cap with Interior status (boundary / negative-curvature
+  // branches above all return early). Mark so callers can route to the
+  // subspace path.
+  if (results.interior_status == TrustRegionResults::Status::Interior) {
+    results.cg_hit_max_iters = true;
+  }
 }
 
 }  // namespace smith

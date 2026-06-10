@@ -75,6 +75,7 @@ set(physics_parallel_test_sources
     thermal_mechanics.cpp
     thermal_robin_condition.cpp
     dynamic_thermal_adjoint.cpp
+    hyperelastic_benchmarks.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
     )

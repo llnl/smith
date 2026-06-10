@@ -6,6 +6,9 @@
 
 #include "smith/numerics/batched_matvec.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -14,6 +17,13 @@
 namespace smith {
 
 namespace {
+
+bool envFlagEnabled(const char* name)
+{
+  const char* value = std::getenv(name);
+  if (!value) return false;
+  return value[0] != '\0' && value[0] != '0';
+}
 
 void batchedMatvecLoop(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& X, mfem::DenseMatrix& Y)
 {
@@ -166,6 +176,25 @@ void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_loca
   const int num_recvs = hypre_ParCSRCommPkgNumRecvs(comm_pkg);
   const int num_cols_offd = hypre_CSRMatrixNumCols(offd);
 
+  if (envFlagEnabled("SMITH_DEFLATION_VERIFY")) {
+    std::vector<int> recv_procs(static_cast<size_t>(num_recvs));
+    for (int r = 0; r < num_recvs; ++r) recv_procs[static_cast<size_t>(r)] = hypre_ParCSRCommPkgRecvProc(comm_pkg, r);
+    std::vector<int> sorted_recv_procs = recv_procs;
+    std::sort(sorted_recv_procs.begin(), sorted_recv_procs.end());
+    const bool has_duplicate_recv =
+        std::adjacent_find(sorted_recv_procs.begin(), sorted_recv_procs.end()) != sorted_recv_procs.end();
+
+    std::ostringstream os;
+    os << "[rank " << my_rank << "] assembleWtAW comm: sends=" << num_sends << ", recvs=" << num_recvs
+       << ", offd_cols=" << num_cols_offd << ", duplicate_recv_proc=" << has_duplicate_recv << "\n";
+    for (int r = 0; r < num_recvs; ++r) {
+      os << "  recv[" << r << "] peer=" << hypre_ParCSRCommPkgRecvProc(comm_pkg, r) << " range=["
+         << hypre_ParCSRCommPkgRecvVecStart(comm_pkg, r) << ", " << hypre_ParCSRCommPkgRecvVecStart(comm_pkg, r + 1)
+         << ")\n";
+    }
+    mfem::out << os.str();
+  }
+
   // Halo exchange of W_local (one packed message per neighbor, mpr values per halo dof).
   double t_halo_start = MPI_Wtime();
   std::vector<double> recv_buf(static_cast<size_t>(num_cols_offd) * static_cast<size_t>(mpr), 0.0);
@@ -259,6 +288,9 @@ void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_loca
     for (HYPRE_Int idx = offd_i[row]; idx < offd_i[row + 1]; ++idx) {
       const int col = static_cast<int>(offd_j[idx]);
       const int r = owner_of_offd_col[static_cast<size_t>(col)];
+      if (r < 0) {
+        throw std::runtime_error("assembleWtAW: offd column was not covered by the Hypre recv map");
+      }
       const double val = offd_a[idx];
       const double* rb = recv_buf.data() + static_cast<size_t>(col) * static_cast<size_t>(mpr);
       mfem::DenseMatrix& AWr = AW_per[static_cast<size_t>(r)];

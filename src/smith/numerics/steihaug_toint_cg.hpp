@@ -23,6 +23,11 @@ struct TrustRegionSettings {
   size_t min_cg_iterations = 0;  //
   /// max cg iters should be around # of system dofs
   size_t max_cg_iterations = 10000;  //
+  /// Relative quadratic-model-decrease threshold below which a CG iter counts as "stagnant".
+  /// 0 disables the check. Typical: 1e-3. Compared against per-iter decrement / |cumulative model|.
+  double model_stagnation_tol = 0.0;
+  /// Consecutive stagnant iters required to exit CG early. 0 disables.
+  size_t model_stagnation_window = 0;
   /// max cumulative iterations
   size_t max_cumulative_iteration = 1;
   /// minimum trust region size
@@ -96,10 +101,27 @@ struct TrustRegionResults {
   Status interior_status = Status::Interior;
   /// iteration counter
   size_t cg_iterations_count = 0;
+  /// true when the inner CG exhausted `max_cg_iterations` without converging or
+  /// hitting the TR boundary. Distinct from `interior_status`, which the CG
+  /// always leaves as Interior in that case.
+  bool cg_hit_max_iters = false;
+  /// true when CG exited because the quadratic-model decrease stagnated for
+  /// `model_stagnation_window` consecutive iters. Status stays Interior.
+  bool cg_model_stagnated = false;
 };
 
 using DotPair = std::pair<const mfem::Vector*, const mfem::Vector*>;                      ///< using
 using DotManyFunction = std::function<std::vector<double>(const std::vector<DotPair>&)>;  ///< using
+
+/// In-CG wall-time accumulators. Pass `nullptr` to skip profiling.
+struct CGProfile {
+  double H_mult_time = 0.0;  ///< wall time spent in H.Mult inside CG
+  double P_mult_time = 0.0;  ///< wall time spent in P->Mult inside CG
+  double dots_time = 0.0;    ///< wall time spent in dot_many invocations (incl. Allreduce)
+  size_t H_mult_count = 0;
+  size_t P_mult_count = 0;
+  size_t dot_call_count = 0;  ///< number of dot_many invocations
+};
 
 /// compute local dot products for many vector pairs
 std::vector<double> dotMany(const std::vector<DotPair>& pairs);
@@ -116,6 +138,6 @@ bool isDescentDirection(const mfem::Vector& direction, const mfem::Vector& resid
  */
 void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
                      const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
-                     double r0_norm_squared, const DotManyFunction& dot_many);
+                     double r0_norm_squared, const DotManyFunction& dot_many, CGProfile* profile = nullptr);
 
 }  // namespace smith

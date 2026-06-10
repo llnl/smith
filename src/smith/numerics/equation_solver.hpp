@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -91,6 +92,17 @@ class EquationSolver {
 
   /// @brief Reset nonlinear convergence state stored across iterations of a single solve.
   void resetConvergenceState() const;
+
+  /// Callback that returns the total energy E(x) at a given true-dof vector x. Set via
+  /// `setEnergyFunction(...)`. When set, the TrustRegion accept logic uses ΔE = E(x+d) - E(x)
+  /// in place of the integrated-work surrogate (∫ r·d). This is the exact mechanical energy
+  /// change for potential systems (strain energy minus external work), so accepted steps are
+  /// guaranteed to be energy-descent — no limit cycles possible if we beat the Cauchy step.
+  using EnergyFunction = std::function<double(const mfem::Vector&)>;
+
+  /// Provide an exact-energy evaluator to the underlying nonlinear solver if it supports one
+  /// (TrustRegion currently). No-op for solvers that ignore it.
+  void setEnergyFunction(EnergyFunction fn);
 
   /**
    * Returns the underlying solver object

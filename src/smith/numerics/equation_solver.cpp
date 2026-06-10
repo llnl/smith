@@ -34,6 +34,99 @@ namespace smith {
 
 namespace {
 
+/// Symmetric Lanczos with full reorthogonalization. Computes `n_evecs` approximate leftmost
+/// eigenvalues/eigenvectors of the symmetric operator `A` using `n_iter` Krylov iterations
+/// (n_iter ≥ n_evecs). `dots` is the MPI-aware dot helper. Start vector is `b_seed` if its
+/// size matches; otherwise a deterministic non-zero pattern.
+///
+/// Returns the approximate eigenpairs sorted ascending by eigenvalue. Approximations to the
+/// true leftmost eigenpairs of A converge as `n_iter` grows beyond `n_evecs`; in practice
+/// 2×n_evecs Krylov iterations give useful approximations for extreme eigenvalues even on
+/// indefinite operators.
+void lanczosLeftmostEigvecs(const mfem::Operator& A, int n_iter, int n_evecs, const mfem::Vector& b_seed,
+                            std::vector<mfem::Vector>& evecs_out, std::vector<double>& evals_out,
+                            const DotManyFunction& dots)
+{
+  evecs_out.clear();
+  evals_out.clear();
+  const int N = A.Height();
+  n_iter = std::min(std::max(n_iter, n_evecs), N);
+  if (n_iter <= 0) return;
+
+  std::vector<mfem::Vector> V;
+  V.reserve(static_cast<size_t>(n_iter));
+  std::vector<double> alpha(static_cast<size_t>(n_iter), 0.0);
+  std::vector<double> beta(static_cast<size_t>(n_iter), 0.0);
+
+  // Seed vector: use b_seed if size matches, else a deterministic non-trivial pattern.
+  mfem::Vector v(N);
+  if (b_seed.Size() == N) {
+    v = b_seed;
+  } else {
+    for (int i = 0; i < N; ++i) v(i) = std::sin(0.137 * i + 1.7);
+  }
+  double vv = dots({{&v, &v}})[0];
+  if (vv <= 0.0) return;
+  v *= 1.0 / std::sqrt(vv);
+  V.emplace_back(v);
+
+  mfem::Vector w(N), vprev(N);
+  vprev = 0.0;
+
+  for (int j = 0; j < n_iter; ++j) {
+    A.Mult(V[static_cast<size_t>(j)], w);
+    alpha[static_cast<size_t>(j)] = dots({{&V[static_cast<size_t>(j)], &w}})[0];
+    if (j > 0) w.Add(-beta[static_cast<size_t>(j - 1)], V[static_cast<size_t>(j - 1)]);
+    w.Add(-alpha[static_cast<size_t>(j)], V[static_cast<size_t>(j)]);
+    // Full reorthogonalization (numerical hygiene; small for the n_iter sizes here).
+    for (const auto& vi : V) {
+      const double c = dots({{&vi, &w}})[0];
+      w.Add(-c, vi);
+    }
+    const double ww = dots({{&w, &w}})[0];
+    if (ww <= 1e-30 || j == n_iter - 1) {
+      beta[static_cast<size_t>(j)] = std::sqrt(std::max(ww, 0.0));
+      break;
+    }
+    beta[static_cast<size_t>(j)] = std::sqrt(ww);
+    w *= 1.0 / beta[static_cast<size_t>(j)];
+    V.emplace_back(w);
+  }
+  const int m = static_cast<int>(V.size());
+  if (m == 0) return;
+
+  // Symmetric tridiagonal eigensystem via dense LAPACK (mfem::DenseMatrixEigensystem).
+  mfem::DenseMatrix T(m, m);
+  T = 0.0;
+  for (int i = 0; i < m; ++i) {
+    T(i, i) = alpha[static_cast<size_t>(i)];
+    if (i + 1 < m) {
+      T(i, i + 1) = beta[static_cast<size_t>(i)];
+      T(i + 1, i) = beta[static_cast<size_t>(i)];
+    }
+  }
+  mfem::DenseMatrixEigensystem eig(T);
+  eig.Eval();
+  const mfem::Vector& evals = eig.Eigenvalues();
+  const mfem::DenseMatrix& evecs_T = eig.Eigenvectors();
+
+  std::vector<int> order(static_cast<size_t>(m));
+  for (int i = 0; i < m; ++i) order[static_cast<size_t>(i)] = i;
+  std::sort(order.begin(), order.end(), [&](int a, int b) { return evals(a) < evals(b); });
+
+  const int kk = std::min(n_evecs, m);
+  for (int q = 0; q < kk; ++q) {
+    const int idx = order[static_cast<size_t>(q)];
+    evals_out.push_back(evals(idx));
+    mfem::Vector full(N);
+    full = 0.0;
+    for (int i = 0; i < m; ++i) {
+      full.Add(evecs_T(i, idx), V[static_cast<size_t>(i)]);
+    }
+    evecs_out.emplace_back(std::move(full));
+  }
+}
+
 size_t rootOnlyPrintLevel(const mfem::NewtonSolver& solver, size_t level)
 {
 #ifdef MFEM_USE_MPI
@@ -138,14 +231,15 @@ ConvergenceStatus scalarConvergenceStatus(double residual_norm, double initial_n
 }
 
 bool shouldUseSubspaceStep(int subspace_option, TrustRegionResults::Status status, double step_norm, double tr_size,
-                           int line_search_iter)
+                           int line_search_iter, bool cg_hit_max_iters, bool cg_model_stagnated)
 {
   const bool failed_or_indefinite = status == TrustRegionResults::Status::NonDescentDirection ||
                                     status == TrustRegionResults::Status::NegativeCurvature;
   const bool on_boundary = step_norm > (1.0 - 1.0e-6) * tr_size;
   const bool retrying_on_boundary = on_boundary && line_search_iter > 1;
-  return ((subspace_option >= 1) && (failed_or_indefinite || retrying_on_boundary)) ||
-         ((subspace_option >= 2) && on_boundary) || (subspace_option >= 3);
+  const bool poor_inner = cg_hit_max_iters || cg_model_stagnated;
+  return ((subspace_option >= 1) && (failed_or_indefinite || retrying_on_boundary || poor_inner)) ||
+         ((subspace_option >= 2) && (on_boundary || poor_inner)) || (subspace_option >= 3);
 }
 
 enum class SubspaceStepStatus
@@ -438,6 +532,13 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable mfem::Vector deflation_leftmost_w_;
   mutable double deflation_leftmost_lambda_ = 0.0;
 
+  /// Lanczos approximate leftmost eigvecs of the assembled Hessian, refreshed each outer
+  /// iter (when `trust_num_lanczos > 0`). Pushed into `left_mosts` before solveModelProblem.
+  mutable std::vector<mfem::Vector> lanczos_evecs_;
+  mutable std::vector<double> lanczos_evals_;
+  mutable double lanczos_time_ = 0.0;
+  mutable size_t num_lanczos_calls_ = 0;
+
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
@@ -447,9 +548,52 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   /// Tracks if grad was monolithicized and needs deletion
   mutable bool grad_monolithic = false;
 
+  // === TIMING BEGIN ===
+  mutable double hess_vec_time_ = 0.0;
+  mutable double precond_time_ = 0.0;
+  mutable double augment_time_ = 0.0;
+  mutable double assemble_jacobian_time_ = 0.0;
+  mutable double precond_setop_time_ = 0.0;
+  mutable double subspace_prepare_time_ = 0.0;
+  mutable double subspace_solve_time_ = 0.0;
+  mutable double batch_hess_vec_time_ = 0.0;
+  mutable size_t num_hess_vecs_ = 0;
+  mutable size_t num_preconds_ = 0;
+  mutable size_t num_augments_ = 0;
+  mutable size_t num_jacobian_assembles_ = 0;
+  mutable size_t num_precond_setops_ = 0;
+  mutable size_t num_subspace_prepares_ = 0;
+  mutable size_t num_subspace_solves_ = 0;
+  mutable size_t num_batch_hess_vec_calls_ = 0;
+  mutable size_t num_batch_hess_vec_actions_ = 0;
+  /// In-CG profile accumulators (filled by steihaugTointCG, pointer-passed).
+  mutable CGProfile cg_profile_;
+  /// Histogram of CG iteration counts per outer TR iteration.
+  /// Bins (right-exclusive): [0,10), [10,50), [50,200), [200,1000), [1000,max).
+  mutable std::array<size_t, 5> cg_iter_hist_{};
+  mutable size_t cg_outer_count_ = 0;
+  mutable size_t cg_iter_sum_ = 0;
+  mutable size_t cg_iter_max_ = 0;
+  /// Per-outer-iter status counts (Interior, NegCurv, OnBoundary, NonDescent).
+  mutable std::array<size_t, 4> cg_status_hist_{};
+  /// # outer iters where the CG hit `max_cg_iterations` (a subset of Interior).
+  mutable size_t cg_hit_max_iters_count_ = 0;
+  /// Sum of line-search retries per outer iter.
+  mutable size_t line_search_retries_total_ = 0;
+  mutable size_t line_search_retries_max_ = 0;
+  // === TIMING END ===
+
   std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 
+  /// Optional exact-energy evaluator. When set, the linesearch acceptance uses
+  /// `realObjective = E(x+d) - E(x)` instead of an integrated-work surrogate.
+  EquationSolver::EnergyFunction energy_function_;
+
  public:
+  /// Set the exact-energy evaluator. Pass an empty std::function to disable.
+  void setEnergyFunction(EquationSolver::EnergyFunction fn) { energy_function_ = std::move(fn); }
+  bool hasEnergyFunction() const { return static_cast<bool>(energy_function_); }
+
 #ifdef MFEM_USE_MPI
   /// constructor
   TrustRegion(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts,
@@ -512,14 +656,18 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     mfem::Vector b(g);
     b *= -1;
 
+    ++num_subspace_prepares_;
+    double t0 = MPI_Wtime();
     try {
       subspace_cache.prepare(directions, H_directions, b, num_leftmost, GetComm());
     } catch (const std::exception& e) {
+      subspace_prepare_time_ += MPI_Wtime() - t0;
       if (print_level >= 1) {
         mfem::out << "subspace preparation failed with " << e.what() << "; using dogleg fallback." << std::endl;
       }
       return false;
     }
+    subspace_prepare_time_ += MPI_Wtime() - t0;
     return true;
 #else
     return false;
@@ -538,14 +686,18 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     mfem::Vector sol;
     double energy_change;
 
+    ++num_subspace_solves_;
+    double tsol0 = MPI_Wtime();
     try {
       std::tie(sol, std::ignore, std::ignore, energy_change) = subspace_cache.solve(delta);
     } catch (const std::exception& e) {
+      subspace_solve_time_ += MPI_Wtime() - tsol0;
       if (print_level >= 1) {
         mfem::out << "subspace solve failed with " << e.what() << "; using dogleg fallback." << std::endl;
       }
       return SubspaceStepStatus::Unavailable;
     }
+    subspace_solve_time_ += MPI_Wtime() - tsol0;
 
     double base_energy = computeEnergy(g, hess_vec_func, z);
     double subspace_energy = computeEnergy(g, hess_vec_func, sol);
@@ -623,7 +775,23 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                          double r0_norm_squared) const
   {
     auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
-    steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda);
+    try {
+      steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda, &cg_profile_);
+    } catch (const DeflationIndefiniteCoarseException& e) {
+      results.interior_status = TrustRegionResults::Status::NegativeCurvature;
+      results.cg_iterations_count = std::max<size_t>(results.cg_iterations_count, 1);
+      results.cg_hit_max_iters = false;
+      results.cg_model_stagnated = false;
+      // Per user spec: z = leftmost direction as-is. The subspace solver picks optimal sign
+      // and magnitude. Do NOT append to left_mosts — z itself is fed to the subspace as one
+      // of its bases, alongside cauchy, previous_steps, and the existing left_mosts ring.
+      results.z = e.direction();
+      rCurrent = r0;
+      if (print_level >= 2) {
+        mfem::out << "Deflation coarse operator is indefinite, lambda_min = " << e.eigenvalue()
+                  << "; z := W*v_min, routed to subspace.\n";
+      }
+    }
   }
 
   void fallbackToCauchyPoint(TrustRegionResults& results, const char* reason) const
@@ -674,15 +842,21 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                              const HessVecFunc& hess_vec_func) const
   {
     MFEM_VERIFY(inputs.size() == outputs.size(), "Subspace Hessian-vector batch input/output size mismatch");
+    ++num_batch_hess_vec_calls_;
+    num_batch_hess_vec_actions_ += inputs.size();
+    double t0 = MPI_Wtime();
     for (size_t i = 0; i < inputs.size(); ++i) {
       hess_vec_func(*inputs[i], *outputs[i]);
     }
+    batch_hess_vec_time_ += MPI_Wtime() - t0;
   }
 
   /// assemble the jacobian
   void assembleJacobian(const mfem::Vector& x) const
   {
     SMITH_MARK_FUNCTION;
+    ++num_jacobian_assembles_;
+    double t0 = MPI_Wtime();
     if (grad_monolithic) {
       delete grad;
       grad = nullptr;
@@ -699,6 +873,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     } else {
       bsr_operator_.reset();
     }
+    assemble_jacobian_time_ += MPI_Wtime() - t0;
   }
 
   /// evaluate the nonlinear residual
@@ -733,14 +908,20 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   void hessVec(const mfem::Vector& x_, mfem::Vector& v_) const
   {
     SMITH_MARK_FUNCTION;
+    ++num_hess_vecs_;
+    double t0 = MPI_Wtime();
     grad->Mult(x_, v_);
+    hess_vec_time_ += MPI_Wtime() - t0;
   }
 
   /// apply trust region specific preconditioner
   void precond(const mfem::Vector& x_, mfem::Vector& v_) const
   {
     SMITH_MARK_FUNCTION;
+    ++num_preconds_;
+    double t0 = MPI_Wtime();
     tr_precond.Mult(x_, v_);
+    precond_time_ += MPI_Wtime() - t0;
   };
 
   /// Lazy dynamic_cast detection of the deflation preconditioner.
@@ -852,7 +1033,27 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     TrustRegionSettings settings;
     settings.min_cg_iterations = static_cast<size_t>(nonlinear_options.min_iterations);
     settings.max_cg_iterations = static_cast<size_t>(linear_options.max_iterations);
+    settings.model_stagnation_tol = linear_options.cg_model_stagnation_tol;
+    settings.model_stagnation_window = static_cast<size_t>(std::max(0, linear_options.cg_model_stagnation_window));
     settings.cg_tol = 0.5 * norm_goal;
+
+    // === TIMING BEGIN ===
+    hess_vec_time_ = precond_time_ = augment_time_ = 0.0;
+    assemble_jacobian_time_ = precond_setop_time_ = 0.0;
+    subspace_prepare_time_ = subspace_solve_time_ = batch_hess_vec_time_ = 0.0;
+    num_hess_vecs_ = num_preconds_ = num_augments_ = 0;
+    num_jacobian_assembles_ = num_precond_setops_ = 0;
+    num_subspace_prepares_ = num_subspace_solves_ = 0;
+    num_batch_hess_vec_calls_ = num_batch_hess_vec_actions_ = 0;
+    cg_profile_ = CGProfile{};
+    cg_iter_hist_.fill(0);
+    cg_status_hist_.fill(0);
+    cg_outer_count_ = cg_iter_sum_ = cg_iter_max_ = 0;
+    cg_hit_max_iters_count_ = 0;
+    line_search_retries_total_ = line_search_retries_max_ = 0;
+    if (auto* defl = dynamic_cast<DeflationPreconditioner*>(&tr_precond)) defl->resetTimers();
+    double solve_t0 = MPI_Wtime();
+    // === TIMING END ===
 
     int subspace_option = nonlinear_options.subspace_option;
     int num_leftmost = nonlinear_options.num_leftmost;
@@ -861,6 +1062,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     scratch = 1.0;
     double tr_size = nonlinear_options.trust_region_scaling * std::sqrt(Dot(scratch, scratch));
     size_t cumulative_cg_iters_from_last_precond_update = 0;
+
+    // Eisenstat–Walker state. prev_norm starts at the initial residual norm;
+    // prev_eta seeds at eta_max so the first outer iter uses the cap directly.
+    real_t ew_prev_norm = norm;
+    real_t ew_prev_eta = linear_options.cg_ew_eta_max;
 
     int it = 0;
     for (; true; it++) {
@@ -894,10 +1100,31 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
       if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
                       cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
+        ++num_precond_setops_;
+        double tps0 = MPI_Wtime();
         tr_precond.SetOperator(*grad);
+        precond_setop_time_ += MPI_Wtime() - tps0;
         cumulative_cg_iters_from_last_precond_update = 0;
         detectDeflationPrecond();
         refreshDeflationLeftmost();
+        // Lanczos enrichment: compute approximate leftmost eigvecs of the assembled Hessian
+        // directly. Independent of the deflation basis; surfaces the true negative-curvature
+        // mode that per-rank polynomial W projections often miss in snap-through problems.
+        if (nonlinear_options.trust_num_lanczos > 0) {
+          const int n_evecs = nonlinear_options.trust_num_lanczos;
+          const int n_iter =
+              nonlinear_options.trust_num_lanczos_iters > 0 ? nonlinear_options.trust_num_lanczos_iters : 3 * n_evecs;
+          auto dots_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
+          double t_lz = MPI_Wtime();
+          lanczosLeftmostEigvecs(*grad, n_iter, n_evecs, r, lanczos_evecs_, lanczos_evals_, dots_lambda);
+          lanczos_time_ += MPI_Wtime() - t_lz;
+          ++num_lanczos_calls_;
+          if (print_level >= 2 && !lanczos_evals_.empty()) {
+            mfem::out << "  [lanczos] " << lanczos_evals_.size() << " evals:";
+            for (double e : lanczos_evals_) mfem::out << " " << e;
+            mfem::out << "\n";
+          }
+        }
       }
 
       auto hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { hessVec(x_, v_); };
@@ -934,10 +1161,93 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         trResults.cg_iterations_count = 1;
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
-        settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
+        if (linear_options.cg_eisenstat_walker) {
+          // Eisenstat–Walker choice 2 with the standard safeguard.
+          const double gamma = linear_options.cg_ew_gamma;
+          const double alpha = linear_options.cg_ew_alpha;
+          const double eta_max = linear_options.cg_ew_eta_max;
+          double eta_k = eta_max;
+          if (it > 0 && ew_prev_norm > 0.0) {
+            eta_k = gamma * std::pow(norm / ew_prev_norm, alpha);
+            const double safeguard = gamma * std::pow(ew_prev_eta, alpha);
+            if (safeguard > 0.1) {
+              eta_k = std::max(eta_k, safeguard);
+            }
+            eta_k = std::min(eta_k, eta_max);
+          }
+          // Absolute floor: don't solve past the outer convergence goal.
+          settings.cg_tol = std::max(eta_k * norm, 0.5 * norm_goal);
+          ew_prev_norm = norm;
+          ew_prev_eta = eta_k;
+        } else {
+          settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
+        }
+        // Push Lanczos eigvec approximations of the assembled Hessian's leftmost spectrum
+        // into left_mosts as subspace candidates. Applies regardless of W choice.
+        for (const auto& v : lanczos_evecs_) {
+          if (v.Size() != r.Size()) continue;
+          const int k = std::max(1, nonlinear_options.num_leftmost + nonlinear_options.trust_num_lanczos);
+          while (left_mosts.size() >= static_cast<size_t>(k)) {
+            left_mosts.erase(left_mosts.begin());
+          }
+          left_mosts.emplace_back(std::make_shared<mfem::Vector>(v));
+        }
+        // Indefinite-coarse path: push the WtAW lowest mode into left_mosts as a candidate
+        // negative-curvature subspace basis vector. Mult itself applies smoother only (PD)
+        // so CG runs normally and contributes a Newton-quality direction.
+        if (deflation_precond_ && !deflation_precond_->coarseIsSPD() && deflation_leftmost_w_.Size() == r.Size()) {
+          const int k = std::max(1, nonlinear_options.num_leftmost);
+          while (left_mosts.size() >= static_cast<size_t>(k)) {
+            left_mosts.erase(left_mosts.begin());
+          }
+          left_mosts.emplace_back(std::make_shared<mfem::Vector>(deflation_leftmost_w_));
+          if (print_level >= 2) {
+            // Diagnostic: verify curvature and descent sign of the leftmost direction.
+            const mfem::Vector& w = deflation_leftmost_w_;
+            mfem::Vector Aw(w.Size());
+            hess_vec_func(w, Aw);
+            const double wAw = Dot(w, Aw);
+            const double gw = Dot(r, w);
+            const double ww = Dot(w, w);
+            mfem::out << "  [indef-WtAW] lambda_min=" << deflation_leftmost_lambda_ << " w·Aw=" << wAw << " w·w=" << ww
+                      << " curvature=w·Aw/w·w=" << (ww > 0 ? wAw / ww : 0.0) << " g·w=" << gw
+                      << " (need <0 for descent)\n";
+          }
+        }
         solveModelProblem(r, scratch, *grad, &this->tr_precond, settings, tr_size, trResults, norm * norm);
+        if (print_level >= 2 && deflation_precond_ && !deflation_precond_->coarseIsSPD()) {
+          mfem::out << "  [post-CG] cg_iter=" << trResults.cg_iterations_count
+                    << " status=" << static_cast<int>(trResults.interior_status)
+                    << " hit_max=" << trResults.cg_hit_max_iters << "\n";
+        }
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
+
+      // === TIMING BEGIN === — per-outer-iter CG-count histogram + status tally
+      {
+        const size_t ci = trResults.cg_iterations_count;
+        const size_t bin = (ci < 10) ? 0 : (ci < 50) ? 1 : (ci < 200) ? 2 : (ci < 1000) ? 3 : 4;
+        ++cg_iter_hist_[bin];
+        ++cg_outer_count_;
+        cg_iter_sum_ += ci;
+        if (ci > cg_iter_max_) cg_iter_max_ = ci;
+        switch (trResults.interior_status) {
+          case TrustRegionResults::Status::Interior:
+            ++cg_status_hist_[0];
+            break;
+          case TrustRegionResults::Status::NegativeCurvature:
+            ++cg_status_hist_[1];
+            break;
+          case TrustRegionResults::Status::OnBoundary:
+            ++cg_status_hist_[2];
+            break;
+          case TrustRegionResults::Status::NonDescentDirection:
+            ++cg_status_hist_[3];
+            break;
+        }
+        if (trResults.cg_hit_max_iters) ++cg_hit_max_iters_count_;
+      }
+      // === TIMING END ===
 
       bool have_computed_Hvs = false;
       bool have_prepared_subspace = false;
@@ -957,7 +1267,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         const double d_norm = subspace_option >= 1 ? std::sqrt(Dot(trResults.d, trResults.d)) : 0.0;
         const bool use_subspace =
             can_use_subspace_solver &&
-            shouldUseSubspaceStep(subspace_option, trResults.interior_status, d_norm, tr_size, lineSearchIter);
+            shouldUseSubspaceStep(subspace_option, trResults.interior_status, d_norm, tr_size, lineSearchIter,
+                                  trResults.cg_hit_max_iters, trResults.cg_model_stagnated);
 
         bool subspace_unavailable = false;
         if (use_subspace) {
@@ -1025,8 +1336,69 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         try {
           predicted_status = evaluateConvergence(x_pred, r_pred);
           normPred = predicted_status.global_norm;
-          double obj1 = 0.5 * (Dot(r, trResults.d) + Dot(r_pred, trResults.d)) - roundOffTol;
-          realObjective = obj1;
+          // Real work along the step. Preferred path: exact ΔE via user-supplied energy
+          // callback (`setEnergyFunction`). Fallback: integrated `∫₀¹ r·d dτ` via 2/3/5-point
+          // quadrature (trapezoid/Simpson/Boole). The exact-energy path guarantees energy
+          // descent on accepted steps — no limit cycles possible for potential systems.
+          const double rd_a = Dot(r, trResults.d);
+          const double rd_b = Dot(r_pred, trResults.d);
+          double obj1 = 0.5 * (rd_a + rd_b) - roundOffTol;  // trapezoid: r·d at endpoints
+          double real_work = obj1;
+          if (energy_function_) {
+            const double E0 = energy_function_(X);
+            const double E1 = energy_function_(x_pred);
+            real_work = E1 - E0;
+            // Cauchy-preference guard: the subspace step must beat the Cauchy point in
+            // exact energy decrease. Otherwise replace d with the Cauchy step and re-evaluate.
+            // This makes limit cycles impossible: the algorithm is at least as good as
+            // gradient-descent (which provably converges for bounded-below potential systems).
+            mfem::Vector x_c(X.Size());
+            add(X, trResults.cauchy_point, x_c);
+            const double E_cauchy = energy_function_(x_c);
+            const double dE_cauchy = E_cauchy - E0;
+            if (dE_cauchy < real_work) {
+              if (print_level >= 2) {
+                mfem::out << "  [cauchy-preference] subspace ΔE=" << real_work << " > cauchy ΔE=" << dE_cauchy
+                          << "; using cauchy.\n";
+              }
+              trResults.d = trResults.cauchy_point;
+              x_pred = x_c;
+              // Refresh predicted residual and norms to match the new step.
+              predicted_status = evaluateConvergence(x_pred, r_pred);
+              normPred = predicted_status.global_norm;
+              real_work = dE_cauchy;
+              // Recompute model objective at the new d.
+              hess_vec_func(trResults.d, trResults.H_d);
+              const auto md = dot_many({{&trResults.d, &trResults.H_d}, {&r, &trResults.d}});
+              modelObjective = md[1] + 0.5 * md[0] - roundOffTol;
+            }
+          } else {
+            const int qpts = nonlinear_options.trust_work_quadrature_points;
+            if (qpts == 3 || qpts == 5) {
+              // Simpson: 1 extra eval at midpoint, weights (1,4,1)/6.
+              mfem::Vector x_q(X.Size()), r_q(r.Size());
+              add(X, 0.5, trResults.d, x_q);
+              oper->Mult(x_q, r_q);
+              const double rd_mid = Dot(r_q, trResults.d);
+              real_work = (1.0 / 6.0) * (rd_a + 4.0 * rd_mid + rd_b) - roundOffTol;
+              if (qpts == 5) {
+                // Boole's 5-point closed Newton-Cotes: nodes 0, 1/4, 1/2, 3/4, 1;
+                // weights (7,32,12,32,7)/90. Need r at 1/4 and 3/4 (already have 0, 1/2, 1).
+                add(X, 0.25, trResults.d, x_q);
+                oper->Mult(x_q, r_q);
+                const double rd_q1 = Dot(r_q, trResults.d);
+                add(X, 0.75, trResults.d, x_q);
+                oper->Mult(x_q, r_q);
+                const double rd_q3 = Dot(r_q, trResults.d);
+                real_work = (1.0 / 90.0) * (7.0 * rd_a + 32.0 * rd_q1 + 12.0 * rd_mid + 32.0 * rd_q3 + 7.0 * rd_b) -
+                            roundOffTol;
+              }
+              if (print_level >= 2 && std::abs(real_work - obj1) > 0.5 * std::max(std::abs(obj1), 1e-12)) {
+                mfem::out << "  [work quadrature: trapezoid=" << obj1 << "  qpt-" << qpts << "=" << real_work << "]\n";
+              }
+            }
+          }
+          realObjective = real_work;
           if (predicted_status.converged) {
             acceptStep(trResults, subspace_cache, x_pred, r_pred, predicted_status, X, r, status, norm);
             if (print_level >= 2) {
@@ -1081,7 +1453,13 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         // modelRes = g + Jd
         // modelResNorm = np.linalg.norm(modelRes)
         // realResNorm = np.linalg.norm(gy)
-        const bool willAccept = rho >= settings.eta1 && rho <= settings.eta4;
+        // Residual-norm safeguard against the trapezoid/Simpson blind spot. Skipped when the
+        // exact-energy callback is in use, because ΔE is then sign-accurate by construction
+        // and the safeguard would over-reject legitimate energy-descent steps that grow ‖r‖.
+        constexpr double residual_growth_cap = 3.0;
+        const bool residual_safe = energy_function_ || (normPred <= residual_growth_cap * norm);
+        const bool willAccept = rho >= settings.eta1 && rho <= settings.eta4 && residual_safe;
+        if (!residual_safe) tr_size *= settings.t1;
 
         if (print_level >= 2) {
           printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, willAccept);
@@ -1094,6 +1472,13 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           break;
         }
       }
+      // === TIMING BEGIN ===
+      {
+        const size_t ls = static_cast<size_t>(lineSearchIter);
+        line_search_retries_total_ += ls;
+        if (ls > line_search_retries_max_) line_search_retries_max_ = ls;
+      }
+      // === TIMING END ===
     }
 
     final_iter = it;
@@ -1106,6 +1491,70 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
       mfem::out << "TrustRegion: No convergence!\n";
     }
+
+    // === TIMING BEGIN ===
+    double solve_total = MPI_Wtime() - solve_t0;
+    MPI_Comm comm = MPI_COMM_WORLD;
+#ifdef MFEM_USE_MPI
+    if (GetComm() != MPI_COMM_NULL) comm = GetComm();
+#endif
+    int rank = 0;
+    MPI_Comm_rank(comm, &rank);
+    auto rmax = [comm](double v) {
+      double out = 0.0;
+      MPI_Reduce(&v, &out, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+      return out;
+    };
+    double t_hv = rmax(hess_vec_time_);
+    double t_pc = rmax(precond_time_);
+    double t_ag = rmax(augment_time_);
+    double t_aj = rmax(assemble_jacobian_time_);
+    double t_ps = rmax(precond_setop_time_);
+    double t_sp = rmax(subspace_prepare_time_);
+    double t_ss = rmax(subspace_solve_time_);
+    double t_bh = rmax(batch_hess_vec_time_);
+    double t_total = rmax(solve_total);
+    double t_cg_H = rmax(cg_profile_.H_mult_time);
+    double t_cg_P = rmax(cg_profile_.P_mult_time);
+    double t_cg_dots = rmax(cg_profile_.dots_time);
+    if (rank == 0) {
+      mfem::out << "\n========= TrustRegion solve timing (max across ranks) =========\n"
+                << "  total solve            : " << t_total << " s\n"
+                << "  assembleJacobian       : " << t_aj << " s  (" << num_jacobian_assembles_ << " calls)\n"
+                << "  precond SetOperator    : " << t_ps << " s  (" << num_precond_setops_ << " calls)\n"
+                << "  hess_vec total         : " << t_hv << " s  (" << num_hess_vecs_ << " calls)\n"
+                << "  precond Mult total     : " << t_pc << " s  (" << num_preconds_ << " calls)\n"
+                << "  batched hess_vec       : " << t_bh << " s  (" << num_batch_hess_vec_calls_ << " calls; "
+                << num_batch_hess_vec_actions_ << " H-actions)\n"
+                << "  subspace prepare       : " << t_sp << " s  (" << num_subspace_prepares_ << " calls)\n"
+                << "  subspace solve         : " << t_ss << " s  (" << num_subspace_solves_ << " calls)\n"
+                << "  augment-direction      : " << t_ag << " s  (" << num_augments_ << " calls)\n"
+                << "  --- in-CG breakdown ---\n"
+                << "  in-CG H.Mult           : " << t_cg_H << " s  (" << cg_profile_.H_mult_count << " calls)\n"
+                << "  in-CG P.Mult           : " << t_cg_P << " s  (" << cg_profile_.P_mult_count << " calls)\n"
+                << "  in-CG dot_many (+Allred): " << t_cg_dots << " s  (" << cg_profile_.dot_call_count << " calls)\n"
+                << "  --- CG iter histogram (per outer; " << cg_outer_count_ << " outers) ---\n"
+                << "  [0,10)   : " << cg_iter_hist_[0] << "\n"
+                << "  [10,50)  : " << cg_iter_hist_[1] << "\n"
+                << "  [50,200) : " << cg_iter_hist_[2] << "\n"
+                << "  [200,1k) : " << cg_iter_hist_[3] << "\n"
+                << "  [1k,+)   : " << cg_iter_hist_[4] << "\n"
+                << "  mean = " << (cg_outer_count_ ? cg_iter_sum_ / cg_outer_count_ : 0) << "  max = " << cg_iter_max_
+                << "  total = " << cg_iter_sum_ << "\n"
+                << "  --- CG exit status ---\n"
+                << "  Interior   : " << cg_status_hist_[0] << "\n"
+                << "  NegCurv    : " << cg_status_hist_[1] << "\n"
+                << "  OnBoundary : " << cg_status_hist_[2] << "\n"
+                << "  NonDescent : " << cg_status_hist_[3] << "\n"
+                << "  cg_hit_max : " << cg_hit_max_iters_count_ << " (subset of Interior; routed to subspace)\n"
+                << "  --- line-search retries ---\n"
+                << "  total = " << line_search_retries_total_
+                << "  mean = " << (cg_outer_count_ ? line_search_retries_total_ / cg_outer_count_ : 0)
+                << "  max = " << line_search_retries_max_ << "\n"
+                << "===============================================================\n\n";
+    }
+    if (auto* defl = dynamic_cast<DeflationPreconditioner*>(&tr_precond)) defl->printTimingSummary(comm);
+    // === TIMING END ===
   }
 };
 /// @endcond
@@ -1183,6 +1632,14 @@ void EquationSolver::resetConvergenceState() const
 {
   if (convergence_manager_) {
     convergence_manager_->reset();
+  }
+}
+
+void EquationSolver::setEnergyFunction(EnergyFunction fn)
+{
+  // TrustRegion lives in the anonymous namespace of this TU; cast in-file.
+  if (auto* tr = dynamic_cast<TrustRegion*>(nonlin_solver_.get())) {
+    tr->setEnergyFunction(std::move(fn));
   }
 }
 
@@ -1540,11 +1997,15 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
   } else if (preconditioner == Preconditioner::Deflation) {
     // Allow null deflation_fes here — framework callers (e.g. SolidMechanics) cannot
     // provide the FES at solver-construction time and bind it post-hoc via attachFES.
+    std::unique_ptr<DeflationPreconditioner> defl;
     if (linear_opts.deflation_fes) {
-      preconditioner_solver = std::make_unique<DeflationPreconditioner>(*linear_opts.deflation_fes);
+      defl = std::make_unique<DeflationPreconditioner>(*linear_opts.deflation_fes);
     } else {
-      preconditioner_solver = std::make_unique<DeflationPreconditioner>();
+      defl = std::make_unique<DeflationPreconditioner>();
     }
+    defl->setDeflationOrder(linear_opts.deflation_order);
+    defl->setCoarseMode(linear_opts.deflation_coarse_mode);
+    preconditioner_solver = std::move(defl);
   } else if (preconditioner == Preconditioner::AMGFContact) {
     auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
     auto amgfcontact_opts = linear_opts.amgfcontact_options;

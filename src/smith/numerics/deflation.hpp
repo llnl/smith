@@ -24,8 +24,34 @@
 #include <vector>
 
 #include "mfem.hpp"
+#include "mpi.h"
+
+#include "smith/numerics/batched_matvec.hpp"
 
 namespace smith {
+
+class DeflationIndefiniteCoarseException : public std::runtime_error {
+ public:
+  DeflationIndefiniteCoarseException(double eigenvalue, const mfem::Vector& direction);
+
+  double eigenvalue() const { return eigenvalue_; }
+  const mfem::Vector& direction() const { return direction_; }
+
+ private:
+  double eigenvalue_ = 0.0;
+  mfem::Vector direction_;
+};
+
+/// Polynomial order of the per-rank deflation basis.
+enum class DeflationOrder
+{
+  /// Constant + linear per component. mpr = dim*(dim+1)  (6 in 2D, 12 in 3D).
+  Affine,
+  /// Constant + linear + quadratic per component, all centered on the rank
+  /// element-volume centroid and per-component Gram–Schmidt orthonormalized.
+  /// mpr = dim*(1 + dim + dim*(dim+1)/2)  (12 in 2D, 30 in 3D).
+  Quadratic,
+};
 
 /// How the coarse correction is applied inside `Mult`.
 enum class CoarseMode
@@ -99,11 +125,15 @@ class DeflationPreconditioner : public mfem::Solver {
   void applyWtranspose(const mfem::Vector& r, mfem::Vector& alpha_local) const;
 
   /// Given mpr-size local rhs `c_local = W^T r |_p`, solve W^T A W * alpha = c_global and
-  /// return the full global m-vector `alpha`. Allgather + Cholesky/LU on the cached factors.
+  /// return the full global m-vector `alpha`. Allgather + rank-revealing spectral solve.
   void solveCoarse(const mfem::Vector& c_local, mfem::Vector& alpha_global) const;
 
-  /// True iff the cached W^T A W factorization used Cholesky (i.e. coarse matrix was SPD).
-  bool coarseIsSPD() const { return WtAW_uses_cholesky_; }
+  /// True iff the retained coarse spectrum is positive. Tiny signed eigenvalues below the
+  /// rank-revealing tolerance are dropped and do not make the preconditioner indefinite.
+  bool coarseIsSPD() const { return coarse_is_spd_; }
+
+  int coarseSpectralRank() const { return coarse_spectral_rank_; }
+  double coarseSpectralTolerance() const { return coarse_spectral_tol_; }
 
   /// Smallest eigenvalue of W^T A W. Computed lazily on first call after SetOperator.
   double coarseLeftmostEigenvalue() const;
@@ -112,6 +142,11 @@ class DeflationPreconditioner : public mfem::Solver {
   /// of W^T A W associated with the smallest eigenvalue. Output `d` is sized to the local
   /// tdof count and contains only this rank's W-slice contribution.
   void coarseLeftmostDirection(mfem::Vector& d) const;
+
+  /// Fill `dirs` with up to `k` directions d_i = W * v_i, where v_i are the unit
+  /// eigenvectors of sym(W^T A W) associated with the `k` smallest eigenvalues
+  /// (ascending). `evals` receives the matching eigenvalues. Sized to local tdofs.
+  void coarseSmallestDirections(int k, std::vector<mfem::Vector>& dirs, std::vector<double>& evals) const;
 
   // === TIMING BEGIN === (remove block when no longer needed)
   double setopMatvecTime() const { return setop_matvec_time_; }
@@ -126,7 +161,14 @@ class DeflationPreconditioner : public mfem::Solver {
     setop_matvec_time_ = setop_factor_time_ = setop_smoother_time_ = 0.0;
     mult_total_time_ = mult_coarse_time_ = mult_smoother_time_ = 0.0;
     mult_calls_ = 0;
+    assemble_timings_ = AssembleWtAWTimings{};
+    cc_wt_time_ = cc_allgather_time_ = cc_solve_time_ = cc_w_time_ = 0.0;
+    cc_calls_ = 0;
+    setop_calls_ = 0;
+    wtaw_cholesky_failures_ = wtaw_pp_cholesky_failures_ = 0;
+    wtaw_regularized_ = 0;
   }
+  void printTimingSummary(MPI_Comm comm) const;
   // === TIMING END ===
 
   /// zero out the rows of W on the given essential true dofs.
@@ -138,17 +180,28 @@ class DeflationPreconditioner : public mfem::Solver {
   void setCoarseMode(CoarseMode m) { coarse_mode_ = m; }
   CoarseMode coarseMode() const { return coarse_mode_; }
 
+  /// Polynomial order of the deflation basis. Must be called before the first
+  /// `SetOperator`; later calls force a basis rebuild.
+  void setDeflationOrder(DeflationOrder order);
+  DeflationOrder deflationOrder() const { return order_; }
+
  private:
   void buildBasis();
   void applyEssentialDofMask();
   void packWMatrix();
-  void centerLinearModes();
   void addScaledCoarseCorrection(const mfem::Vector& r, mfem::Vector& y, double scale) const;
+  void computeCoarseSpectralData();
+  void spectralCoarseSolve(const mfem::Vector& rhs, mfem::Vector& alpha) const;
   void ensureLeftmostComputed() const;
+  void verifyWtAWAssembly() const;
 
   mfem::ParFiniteElementSpace* fes_ = nullptr;
   int dim_ = 0;
   int modes_per_rank_ = 0;
+  DeflationOrder order_ = DeflationOrder::Affine;
+  /// Element-volume centroid of this rank's mesh; used to center linear and
+  /// quadratic monomials for conditioning of W^T A W.
+  mfem::Vector rank_centroid_;
   int m_ = 0;
   int my_rank_ = 0;
   int n_ranks_ = 1;
@@ -167,6 +220,11 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable mfem::CholeskyFactors WtAW_cholesky_factors_;
   mutable mfem::DenseMatrixInverse WtAW_lu_inv_;
   mutable bool WtAW_uses_cholesky_ = false;
+  mutable mfem::DenseMatrix coarse_evecs_kept_;
+  mutable mfem::Vector coarse_evals_kept_;
+  mutable int coarse_spectral_rank_ = 0;
+  mutable double coarse_spectral_tol_ = 0.0;
+  mutable bool coarse_is_spd_ = true;
   mutable mfem::DenseMatrix WtAW_pp_;  // diagonal block (p, p) — for AdditiveLocal mode.
   mutable mfem::DenseMatrix WtAW_pp_cholesky_;
   mutable mfem::CholeskyFactors WtAW_pp_cholesky_factors_;
@@ -200,6 +258,17 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable double mult_coarse_time_ = 0.0;
   mutable double mult_smoother_time_ = 0.0;
   mutable int mult_calls_ = 0;
+  mutable int setop_calls_ = 0;
+  mutable AssembleWtAWTimings assemble_timings_{};
+  mutable double cc_wt_time_ = 0.0;
+  mutable double cc_allgather_time_ = 0.0;
+  mutable double cc_solve_time_ = 0.0;
+  mutable double cc_w_time_ = 0.0;
+  mutable int cc_calls_ = 0;
+  mutable int wtaw_cholesky_failures_ = 0;
+  mutable int wtaw_pp_cholesky_failures_ = 0;
+  mutable int wtaw_regularized_ = 0;
+  mutable long long wtaw_null_filtered_ = 0;
   // === TIMING END ===
 };
 

@@ -748,6 +748,12 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     setMaterial(DependsOn<>{}, material, domain, qdata);
   }
 
+  /// Forward an exact-energy evaluator to the underlying nonlinear solver. The function
+  /// takes a true-dof displacement vector (with essential dofs already imposed) and returns
+  /// the total mechanical energy (strain energy minus external work). When set, the TR
+  /// linesearch uses ΔE = E(x+d) - E(x) instead of the integrated-work surrogate.
+  void setEnergyFunction(EquationSolver::EnergyFunction fn) { nonlin_solver_->setEnergyFunction(std::move(fn)); }
+
   /**
    * Functor for materials that get dt as an argument
    *
@@ -1370,6 +1376,19 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * @return A reference to the current displacement finite element state
    */
   const smith::FiniteElementState& displacement() const { return displacement_; };
+
+  /// Evaluate the residual at an arbitrary displacement true-dof vector. Uses the
+  /// currently-stored shape displacement, acceleration, and parameter states. Intended for
+  /// diagnostic tests (e.g., finite-difference check r ≈ -∇E).
+  void evaluateResidual(const mfem::Vector& u_true, mfem::Vector& r_out) const
+  {
+    smith::FiniteElementState u_scratch(displacement_);
+    u_scratch = u_true;
+    mfem::Vector residual_value =
+        (*residual_)(time_, shapeDisplacement(), u_scratch, acceleration_, *parameters_[parameter_indices].state...);
+    r_out.SetSize(residual_value.Size());
+    r_out = residual_value;
+  }
 
   /**
    * @brief Get the velocity state

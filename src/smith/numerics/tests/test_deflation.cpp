@@ -4,9 +4,13 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <iostream>
-#include <memory>
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <string>
 
 #include "gtest/gtest.h"
 #include "mfem.hpp"
@@ -26,7 +30,7 @@ struct ProblemSetup {
   std::unique_ptr<mfem::HypreParMatrix> A;
 };
 
-ProblemSetup makeCube(mfem::Ordering::Type ordering, double translate = 0.0)
+ProblemSetup makeCube(mfem::Ordering::Type ordering, double translate = 0.0, int order = 1)
 {
   ProblemSetup s;
   auto serial_mesh = mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0);
@@ -39,7 +43,6 @@ ProblemSetup makeCube(mfem::Ordering::Type ordering, double translate = 0.0)
     }
   }
   s.pmesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, serial_mesh);
-  constexpr int order = 1;
   constexpr int dim = 3;
   s.fec = std::make_unique<mfem::H1_FECollection>(order, dim);
   s.fes = std::make_unique<mfem::ParFiniteElementSpace>(s.pmesh.get(), s.fec.get(), dim, ordering);
@@ -74,6 +77,16 @@ std::pair<mfem::Vector, mfem::Vector> makeAffine(const smith::DeflationPrecondit
     v.Add(alpha(offset + j), Wcols[static_cast<size_t>(j)]);
   }
   return {alpha, v};
+}
+
+void symmetrize(mfem::DenseMatrix& matrix)
+{
+  for (int j = 0; j < matrix.Width(); ++j) {
+    for (int i = 0; i < j; ++i) {
+      const double s = 0.5 * (matrix(i, j) + matrix(j, i));
+      matrix(i, j) = matrix(j, i) = s;
+    }
+  }
 }
 
 }  // namespace
@@ -116,6 +129,163 @@ TEST(Deflation, AffinePatchPureCoarse_byVDIM)
   mfem::Vector diff(z0);
   diff -= v;
   EXPECT_LT(diff.Norml2() / v.Norml2(), 1.0e-10);
+}
+
+// Pure-coarse manufactured test for the QUADRATIC basis: build v = W * alpha for a random alpha
+// with the quadratic-order W, form RHS r = -A * v, and check defl.coarseSolve(r) ≈ v.
+// If u_exact lies in range(W_quadratic), the coarse-solve recovers it exactly (to round-off).
+// Catches W/WtAW/coarse-solve bugs that manifest only at quadratic order across ranks.
+TEST(Deflation, QuadraticPatchPureCoarse_byVDIM)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.setDeflationOrder(smith::DeflationOrder::Quadratic);
+  defl.SetOperator(*s.A);
+  EXPECT_TRUE(defl.coarseIsSPD());
+
+  auto [alpha, v] = makeAffine(defl, s.fes->GetTrueVSize());
+  mfem::Vector r(v.Size());
+  s.A->Mult(v, r);
+  r *= -1.0;
+
+  mfem::Vector z0(v.Size());
+  defl.coarseSolve(r, z0);
+
+  mfem::Vector diff(z0);
+  diff -= v;
+  double err_sq_local = diff * diff, ref_sq_local = v * v;
+  double err_sq = 0.0, ref_sq = 0.0;
+  MPI_Allreduce(&err_sq_local, &err_sq, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&ref_sq_local, &ref_sq, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  EXPECT_LT(std::sqrt(err_sq / std::max(ref_sq, 1e-30)), 1.0e-9);
+}
+
+TEST(Deflation, QuadraticCoarseSolveDropsNumericalNullspace)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM);
+  *s.A *= -1.0;
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.setDeflationOrder(smith::DeflationOrder::Quadratic);
+  const char* old_tol = std::getenv("SMITH_DEFLATION_RANK_TOL");
+  const std::string old_tol_value = old_tol ? old_tol : "";
+  setenv("SMITH_DEFLATION_RANK_TOL", "2.0", 1);
+  defl.SetOperator(*s.A);
+  if (old_tol) {
+    setenv("SMITH_DEFLATION_RANK_TOL", old_tol_value.c_str(), 1);
+  } else {
+    unsetenv("SMITH_DEFLATION_RANK_TOL");
+  }
+
+  mfem::DenseMatrix M(defl.coarseMatrix());
+  symmetrize(M);
+  mfem::DenseMatrixEigensystem eig(M);
+  eig.Eval();
+  const mfem::Vector& evals = eig.Eigenvalues();
+  const mfem::DenseMatrix& evecs = eig.Eigenvectors();
+
+  int expected_rank = 0;
+  int dropped = -1;
+  for (int i = 0; i < evals.Size(); ++i) {
+    if (evals(i) > 0.0 || evals(i) < -defl.coarseSpectralTolerance()) {
+      ++expected_rank;
+    } else if (dropped < 0) {
+      dropped = i;
+    }
+  }
+  EXPECT_EQ(defl.coarseSpectralRank(), expected_rank);
+  ASSERT_GE(dropped, 0);
+  ASSERT_LT(defl.coarseSpectralRank(), defl.numGlobalColumns());
+  EXPECT_TRUE(defl.coarseIsSPD());
+
+  (void)evecs;
+}
+
+// Quadratic basis, PCG: rhs lies in range(W_quadratic), so the deflation coarse correction
+// should solve it exactly on the first iteration. Hard companion to the pure-coarse test —
+// catches preconditioner-side bugs (smoother interference, masking) that pure-coarse misses.
+TEST(Deflation, QuadraticPatch_CG_OneIter_byVDIM)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.setDeflationOrder(smith::DeflationOrder::Quadratic);
+  defl.SetOperator(*s.A);
+  auto [alpha, v] = makeAffine(defl, s.fes->GetTrueVSize());
+
+  mfem::Vector b(v.Size());
+  s.A->Mult(v, b);
+
+  mfem::CGSolver cg(MPI_COMM_WORLD);
+  cg.SetOperator(*s.A);
+  cg.SetPreconditioner(defl);
+  cg.SetRelTol(1e-12);
+  cg.SetAbsTol(1e-14);
+  cg.SetMaxIter(50);
+  cg.SetPrintLevel(0);
+  cg.iterative_mode = false;
+
+  mfem::Vector x(v.Size());
+  x = 0.0;
+  cg.Mult(b, x);
+
+  std::cout << "[QuadraticOneIter] CG iters=" << cg.GetNumIterations() << "\n";
+  EXPECT_TRUE(cg.GetConverged());
+  EXPECT_LE(cg.GetNumIterations(), 1);
+}
+
+// Order-2 FES: mid-edge / mid-face tdofs are shared across partition boundaries, so the
+// off-diagonal blocks of W^T A W carry more information than at order 1. Stresses the
+// cross-rank assembly + masking interplay that the shallow_arch_buckling test (p=2) exercises.
+TEST(Deflation, QuadraticPatchPureCoarse_byVDIM_Order2)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM, /*translate=*/0.0, /*order=*/2);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.setDeflationOrder(smith::DeflationOrder::Quadratic);
+  defl.SetOperator(*s.A);
+
+  auto [alpha, v] = makeAffine(defl, s.fes->GetTrueVSize());
+  mfem::Vector r(v.Size());
+  s.A->Mult(v, r);
+  r *= -1.0;
+
+  mfem::Vector z0(v.Size());
+  defl.coarseSolve(r, z0);
+
+  mfem::Vector diff(z0);
+  diff -= v;
+  double err_sq_local = diff * diff, ref_sq_local = v * v;
+  double err_sq = 0.0, ref_sq = 0.0;
+  MPI_Allreduce(&err_sq_local, &err_sq, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&ref_sq_local, &ref_sq, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  EXPECT_LT(std::sqrt(err_sq / std::max(ref_sq, 1e-30)), 1.0e-9);
+}
+
+TEST(Deflation, QuadraticPatch_CG_OneIter_byVDIM_Order2)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM, /*translate=*/0.0, /*order=*/2);
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.setDeflationOrder(smith::DeflationOrder::Quadratic);
+  defl.SetOperator(*s.A);
+  auto [alpha, v] = makeAffine(defl, s.fes->GetTrueVSize());
+
+  mfem::Vector b(v.Size());
+  s.A->Mult(v, b);
+
+  mfem::CGSolver cg(MPI_COMM_WORLD);
+  cg.SetOperator(*s.A);
+  cg.SetPreconditioner(defl);
+  cg.SetRelTol(1e-12);
+  cg.SetAbsTol(1e-14);
+  cg.SetMaxIter(50);
+  cg.SetPrintLevel(0);
+  cg.iterative_mode = false;
+
+  mfem::Vector x(v.Size());
+  x = 0.0;
+  cg.Mult(b, x);
+
+  std::cout << "[QuadraticOneIterOrder2] CG iters=" << cg.GetNumIterations() << "\n";
+  EXPECT_TRUE(cg.GetConverged());
+  EXPECT_LE(cg.GetNumIterations(), 1);
 }
 
 TEST(Deflation, AffinePatch_CG_OneIter_byVDIM)
@@ -233,9 +403,8 @@ TEST(Deflation, TrustRegionHooks_RoundTrip)
   EXPECT_LT(vd2.Norml2() / v.Norml2(), 1.0e-9);
 }
 
-// Leftmost eigenpair: must equal the smallest eigenvalue of WtAW directly computed. On this
-// small cube WtAW may be near-singular (LU fallback path), but the eigen-decomposition is
-// still well-defined.
+// Leftmost eigenpair: must equal the smallest retained eigenvalue of WtAW. Near-null modes
+// below the rank-revealing tolerance are dropped and should not be exposed to trust-region.
 TEST(Deflation, CoarseLeftmostEigenpair)
 {
   auto s = makeCube(mfem::Ordering::byVDIM);
@@ -245,11 +414,15 @@ TEST(Deflation, CoarseLeftmostEigenpair)
   const double lam = defl.coarseLeftmostEigenvalue();
 
   mfem::DenseMatrix M(defl.coarseMatrix());
+  symmetrize(M);
   mfem::DenseMatrixEigensystem eig(M);
   eig.Eval();
   const mfem::Vector& evs = eig.Eigenvalues();
-  double evmin = evs(0);
-  for (int i = 1; i < evs.Size(); ++i) evmin = std::min(evmin, evs(i));
+  double evmin = std::numeric_limits<double>::infinity();
+  for (int i = 0; i < evs.Size(); ++i) {
+    if (evs(i) > 0.0 || evs(i) < -defl.coarseSpectralTolerance()) evmin = std::min(evmin, evs(i));
+  }
+  ASSERT_TRUE(std::isfinite(evmin));
   EXPECT_NEAR(lam, evmin, 1e-10 * std::max(1.0, std::abs(evmin)));
 
   // d = W * v: must be nonzero (so it's a usable direction in the TR subspace).
@@ -259,6 +432,30 @@ TEST(Deflation, CoarseLeftmostEigenpair)
   double dnorm_sq_local = d * d, dnorm_sq = 0.0;
   MPI_Allreduce(&dnorm_sq_local, &dnorm_sq, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   EXPECT_GT(dnorm_sq, 1.0e-30);
+}
+
+TEST(Deflation, IndefiniteCoarseUsesSmootherOnlyAndReportsNegativeDirection)
+{
+  auto s = makeCube(mfem::Ordering::byVDIM);
+  *s.A *= -1.0;
+
+  smith::DeflationPreconditioner defl(*s.fes, false);
+  defl.SetOperator(*s.A);
+  EXPECT_FALSE(defl.coarseIsSPD());
+  EXPECT_LT(defl.coarseLeftmostEigenvalue(), 0.0);
+
+  mfem::Vector rhs(s.fes->GetTrueVSize());
+  rhs = 1.0;
+  mfem::Vector z(rhs.Size());
+  defl.Mult(rhs, z);
+  EXPECT_EQ(z.Size(), rhs.Size());
+
+  mfem::Vector d;
+  defl.coarseLeftmostDirection(d);
+  double norm2_local = d * d;
+  double norm2 = 0.0;
+  MPI_Allreduce(&norm2_local, &norm2, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  EXPECT_GT(norm2, 1.0e-30);
 }
 
 namespace {

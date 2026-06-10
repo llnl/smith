@@ -123,6 +123,24 @@ struct NeoHookean {
     return dot(TK, inv(transpose(F)));
   }
 
+  /**
+   * @brief Strain energy density consistent with the stress above.
+   *
+   * For compressible NeoHookean with this stress, the strain energy density is
+   *     ψ(F) = (G/2) tr(B - I) - G log(J) + (λ/2) (log J)²
+   * with B = F·F^T, J = det(F), λ = K - (2/3) G. Verified ∂ψ/∂F = P (1st Piola).
+   * The (B - I) form avoids cancellation error when F is near I; same form as the stress.
+   */
+  template <typename T, int dim>
+  SMITH_HOST_DEVICE auto strainEnergyDensity(State& /* state */, const tensor<T, dim, dim>& du_dX) const
+  {
+    using std::log1p;
+    auto lambda = K - (2.0 / 3.0) * G;
+    auto B_minus_I = dot(du_dX, transpose(du_dX)) + transpose(du_dX) + du_dX;
+    auto logJ = log1p(detApIm1(du_dX));
+    return 0.5 * G * tr(B_minus_I) - G * logJ + 0.5 * lambda * logJ * logJ;
+  }
+
   double density;  ///< mass density
   double K;        ///< bulk modulus
   double G;        ///< shear modulus

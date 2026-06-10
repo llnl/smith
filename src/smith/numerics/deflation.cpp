@@ -6,6 +6,13 @@
 
 #include "smith/numerics/deflation.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <sstream>
 #include <stdexcept>
 
 #include "mpi.h"
@@ -38,7 +45,38 @@ void choleskySolve(const mfem::CholeskyFactors& factors, const mfem::DenseMatrix
   factors.Solve(size, 1, x.GetData());
 }
 
+bool envFlagEnabled(const char* name)
+{
+  const char* value = std::getenv(name);
+  if (!value) return false;
+  return value[0] != '\0' && value[0] != '0';
+}
+
+double envDoubleOrDefault(const char* name, double default_value)
+{
+  const char* value = std::getenv(name);
+  if (!value || value[0] == '\0') return default_value;
+  char* end = nullptr;
+  const double parsed = std::strtod(value, &end);
+  return (end != value && std::isfinite(parsed) && parsed >= 0.0) ? parsed : default_value;
+}
+
+void symmetrize(mfem::DenseMatrix& matrix)
+{
+  for (int j = 0; j < matrix.Width(); ++j) {
+    for (int i = 0; i < j; ++i) {
+      const double s = 0.5 * (matrix(i, j) + matrix(j, i));
+      matrix(i, j) = matrix(j, i) = s;
+    }
+  }
+}
+
 }  // namespace
+
+DeflationIndefiniteCoarseException::DeflationIndefiniteCoarseException(double eigenvalue, const mfem::Vector& direction)
+    : std::runtime_error("Deflation coarse operator is indefinite"), eigenvalue_(eigenvalue), direction_(direction)
+{
+}
 
 DeflationPreconditioner::DeflationPreconditioner(mfem::ParFiniteElementSpace& fes, bool use_smoother,
                                                  mfem::HypreSmoother::Type smoother_type)
@@ -61,17 +99,50 @@ void DeflationPreconditioner::attachFES(mfem::ParFiniteElementSpace& fes)
   if (dim_ < 2 || dim_ > 3) {
     throw std::runtime_error("DeflationPreconditioner: vdim must be 2 or 3");
   }
-  modes_per_rank_ = (dim_ + 1) * dim_;  // 12 in 3D, 6 in 2D
+  // Per-component mode counts: 1 (const) + dim (linear) [+ dim*(dim+1)/2 (quadratic)].
+  const int per_comp_affine = 1 + dim_;
+  const int per_comp_quadratic = per_comp_affine + dim_ * (dim_ + 1) / 2;
+  const int per_comp = (order_ == DeflationOrder::Quadratic) ? per_comp_quadratic : per_comp_affine;
+  modes_per_rank_ = dim_ * per_comp;
   MPI_Comm comm = fes_->GetComm();
   MPI_Comm_rank(comm, &my_rank_);
   MPI_Comm_size(comm, &n_ranks_);
   my_col_offset_ = my_rank_ * modes_per_rank_;
   m_ = n_ranks_ * modes_per_rank_;
+
+  // Element-volume-weighted centroid of this rank's mesh, used to shift monomials.
+  rank_centroid_.SetSize(dim_);
+  rank_centroid_ = 0.0;
+  if (mfem::Mesh* mesh = fes_->GetMesh()) {
+    double total_vol = 0.0;
+    mfem::Vector elem_center(dim_);
+    for (int e = 0; e < mesh->GetNE(); ++e) {
+      mfem::ElementTransformation* T = mesh->GetElementTransformation(e);
+      const mfem::Geometry::Type geom = mesh->GetElementBaseGeometry(e);
+      const mfem::IntegrationPoint& ref_center = mfem::Geometries.GetCenter(geom);
+      T->Transform(ref_center, elem_center);
+      const double vol = mesh->GetElementVolume(e);
+      rank_centroid_.Add(vol, elem_center);
+      total_vol += vol;
+    }
+    if (total_vol > 0.0) rank_centroid_ *= (1.0 / total_vol);
+  }
+
   // Force rebuild on next SetOperator.
   W_local_.clear();
   W_mat_.reset();
   factored_ = false;
   leftmost_valid_ = false;
+}
+
+void DeflationPreconditioner::setDeflationOrder(DeflationOrder order)
+{
+  if (order_ == order) return;
+  order_ = order;
+  if (fes_) {
+    // Re-run sizing + centroid + invalidate basis.
+    attachFES(*fes_);
+  }
 }
 
 void DeflationPreconditioner::buildBasis()
@@ -82,13 +153,35 @@ void DeflationPreconditioner::buildBasis()
   W_local_.clear();
   W_local_.reserve(static_cast<size_t>(modes_per_rank_));
 
+  // Monomial list (in centered coordinates xi = x - centroid):
+  //   degree 0:  1
+  //   degree 1:  xi_0, xi_1, [xi_2]
+  //   degree 2:  xi_j * xi_k  for 0 <= j <= k < dim
+  // Each is replicated `dim_` times, one per spatial component.
+  struct Monomial {
+    int i = -1;
+    int j = -1;
+  };  // -1 means "constant" sentinel; otherwise i<=j<dim.
+  std::vector<Monomial> monomials;
+  monomials.push_back({-1, -1});  // constant
+  for (int k = 0; k < dim_; ++k) monomials.push_back({k, -1});
+  if (order_ == DeflationOrder::Quadratic) {
+    for (int j = 0; j < dim_; ++j) {
+      for (int k = j; k < dim_; ++k) monomials.push_back({j, k});
+    }
+  }
+
+  mfem::Vector centroid = rank_centroid_;
   for (int c = 0; c < dim_; ++c) {
-    for (int mode = 0; mode < dim_ + 1; ++mode) {
-      const int m = mode;
-      mfem::VectorFunctionCoefficient coef(dim_, [c, m, dim](const mfem::Vector& p, mfem::Vector& v) {
+    for (const Monomial& mo : monomials) {
+      const Monomial cap = mo;
+      mfem::VectorFunctionCoefficient coef(dim_, [c, cap, dim, centroid](const mfem::Vector& p, mfem::Vector& v) {
         v.SetSize(dim);
         v = 0.0;
-        v(c) = (m == 0) ? 1.0 : p(m - 1);
+        double val = 1.0;
+        if (cap.i >= 0) val *= (p(cap.i) - centroid(cap.i));
+        if (cap.j >= 0) val *= (p(cap.j) - centroid(cap.j));
+        v(c) = val;
       });
       mfem::ParGridFunction gf(fes_);
       gf.ProjectCoefficient(coef);
@@ -98,28 +191,38 @@ void DeflationPreconditioner::buildBasis()
     }
   }
   applyEssentialDofMask();
-  centerLinearModes();
-  packWMatrix();
-}
-
-void DeflationPreconditioner::centerLinearModes()
-{
-  // For each component c, subtract per-rank mean of the linear-in-X_k mode from itself, using
-  // the constant mode (= 1 on c's tdofs) as the "indicator" for the active tdof set. This
-  // keeps span(constant, linear) unchanged while improving the conditioning of W^T A W when
-  // the mesh is far from the origin or the local subdomain bounding box is large.
+  // Per-component modified Gram-Schmidt over the local tdof inner product.
+  // Columns belonging to different components have disjoint support, so we only
+  // need to orthonormalize within each component's mode block.
+  //
+  // Two safeguards needed once `Quadratic` monomials enter the basis: monomials
+  // of different polynomial degree have very different natural scales (e.g. for
+  // this thin-arch geometry the y-domain is ~0.025, so xi_y^2 ~ 1e-4 vs
+  // const ~ 1). Without (a) pre-normalization, MGS projection coefficients span
+  // many orders and the subtraction loses precision; without (b) a relative
+  // collapse threshold, a near-rank-deficient column is renormalized from noise
+  // and corrupts W^T A W.
+  const int per_comp = static_cast<int>(monomials.size());
+  constexpr double rank_drop_tol = 1.0e-12;
   for (int c = 0; c < dim_; ++c) {
-    const int const_idx = c * (dim_ + 1);
-    mfem::Vector& const_col = W_local_[static_cast<size_t>(const_idx)];
-    double n_active = const_col.Sum();
-    if (n_active <= 0.0) continue;  // no owned/active dofs for this component on this rank
-    for (int k = 1; k <= dim_; ++k) {
-      mfem::Vector& lin_col = W_local_[static_cast<size_t>(const_idx + k)];
-      double mean = lin_col.Sum() / n_active;
-      // lin_col -= mean * const_col
-      lin_col.Add(-mean, const_col);
+    for (int k = 0; k < per_comp; ++k) {
+      mfem::Vector& vk = W_local_[static_cast<size_t>(c * per_comp + k)];
+      const double init_nrm = std::sqrt(vk * vk);
+      if (init_nrm > 0.0) vk *= 1.0 / init_nrm;
+      for (int j = 0; j < k; ++j) {
+        const mfem::Vector& vj = W_local_[static_cast<size_t>(c * per_comp + j)];
+        const double proj = (vk * vj);
+        vk.Add(-proj, vj);
+      }
+      const double nrm2 = (vk * vk);
+      if (nrm2 > rank_drop_tol) {
+        vk *= 1.0 / std::sqrt(nrm2);
+      } else {
+        vk = 0.0;  // mode collapsed onto earlier modes; drop it
+      }
     }
   }
+  packWMatrix();
 }
 
 void DeflationPreconditioner::packWMatrix()
@@ -178,20 +281,24 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
 
   // === TIMING BEGIN ===
   double t0 = MPI_Wtime();
+  ++setop_calls_;
   // === TIMING END ===
-  // W^T A W via the block-sparse triple product: one halo exchange of W (m/p cols per rank),
-  // local diag DGEMM, per-neighbor offd SpMV, single MPI_Allreduce of the m × m result.
-  // See deflation.md Phase 5b for the math.
-  assembleWtAW(*A_, W_dense_, modes_per_rank_, WtAW_);
+  assembleWtAW(*A_, W_dense_, modes_per_rank_, WtAW_, &assemble_timings_);
   // === TIMING BEGIN ===
   double t1 = MPI_Wtime();
   setop_matvec_time_ += t1 - t0;
   // === TIMING END ===
 
+  if (envFlagEnabled("SMITH_DEFLATION_VERIFY")) {
+    verifyWtAWAssembly();
+  }
+
   WtAW_uses_cholesky_ = factorCholesky(WtAW_, WtAW_cholesky_, WtAW_cholesky_factors_);
   if (!WtAW_uses_cholesky_) {
-    WtAW_lu_inv_.SetOperator(WtAW_);
+    ++wtaw_cholesky_failures_;
   }
+  computeCoarseSpectralData();
+
   // Diagonal block (my_offset, my_offset) used by the AdditiveLocal mode. Only the owner
   // contributes to its own (p,p) block during assembleWtAW, so post-Allreduce this is
   // already exactly W_p^T A_diag|_p W_p.
@@ -201,8 +308,12 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
       WtAW_pp_(i, j) = WtAW_(my_col_offset_ + i, my_col_offset_ + j);
     }
   }
+  for (int j = 0; j < WtAW_pp_.Height(); ++j) {
+    if (WtAW_pp_(j, j) == 0.0) WtAW_pp_(j, j) = 1.0;
+  }
   WtAW_pp_uses_cholesky_ = factorCholesky(WtAW_pp_, WtAW_pp_cholesky_, WtAW_pp_cholesky_factors_);
   if (!WtAW_pp_uses_cholesky_) {
+    ++wtaw_pp_cholesky_failures_;
     WtAW_pp_lu_inv_.SetOperator(WtAW_pp_);
   }
 
@@ -265,15 +376,21 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
 {
   if (!factored_) throw std::runtime_error("DeflationPreconditioner::addCoarseCorrection: call SetOperator first");
 
+  ++cc_calls_;
+  double tcc0 = MPI_Wtime();
   mfem::Vector rhs_local(modes_per_rank_);
   W_mat_->MultTranspose(r, rhs_local);
+  double tcc1 = MPI_Wtime();
+  cc_wt_time_ += tcc1 - tcc0;
 
   if (coarse_mode_ == CoarseMode::AdditiveLocal) {
-    // Skip the Allgather — solve only against the diagonal block of WtAW (per-rank only).
     mfem::Vector alpha_local(modes_per_rank_);
     choleskySolve(WtAW_pp_cholesky_factors_, WtAW_pp_lu_inv_, WtAW_pp_uses_cholesky_, modes_per_rank_, rhs_local,
                   alpha_local);
+    double tcc2 = MPI_Wtime();
+    cc_solve_time_ += tcc2 - tcc1;
     W_mat_->AddMult(alpha_local, y, scale);
+    cc_w_time_ += MPI_Wtime() - tcc2;
     return;
   }
 
@@ -283,8 +400,11 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
     //   exchange u with neighbors → u_s
     //   alpha = u - WtAW_pp^{-1} Σ_s WtAW_{p,s} u_s
     mfem::Vector u_local(modes_per_rank_);
+    double tsolv0 = MPI_Wtime();
     choleskySolve(WtAW_pp_cholesky_factors_, WtAW_pp_lu_inv_, WtAW_pp_uses_cholesky_, modes_per_rank_, rhs_local,
                   u_local);
+    cc_solve_time_ += MPI_Wtime() - tsolv0;
+    double texch0 = MPI_Wtime();
 
     MPI_Comm comm = fes_->GetComm();
     const int n_nbr = static_cast<int>(schwarz_neighbors_.size());
@@ -307,7 +427,9 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
     if (!reqs.empty()) {
       MPI_Waitall(static_cast<int>(reqs.size()), reqs.data(), MPI_STATUSES_IGNORE);
     }
+    cc_allgather_time_ += MPI_Wtime() - texch0;
 
+    double tsolv1 = MPI_Wtime();
     mfem::Vector corr(modes_per_rank_);
     corr = 0.0;
     mfem::Vector tmp(modes_per_rank_);
@@ -321,29 +443,42 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
 
     mfem::Vector alpha_local(u_local);
     alpha_local -= delta;
+    cc_solve_time_ += MPI_Wtime() - tsolv1;
+    double twa0 = MPI_Wtime();
     W_mat_->AddMult(alpha_local, y, scale);
+    cc_w_time_ += MPI_Wtime() - twa0;
     return;
   }
 
+  double tag0 = MPI_Wtime();
   mfem::Vector rhs_global(m_);
   MPI_Allgather(rhs_local.GetData(), modes_per_rank_, MPI_DOUBLE, rhs_global.GetData(), modes_per_rank_, MPI_DOUBLE,
                 fes_->GetComm());
+  cc_allgather_time_ += MPI_Wtime() - tag0;
 
+  double tsolv2 = MPI_Wtime();
   mfem::Vector alpha(m_);
-  choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, WtAW_uses_cholesky_, m_, rhs_global, alpha);
+  if (WtAW_uses_cholesky_) {
+    choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, true, m_, rhs_global, alpha);
+  } else {
+    spectralCoarseSolve(rhs_global, alpha);
+  }
+  cc_solve_time_ += MPI_Wtime() - tsolv2;
 
+  double twa1 = MPI_Wtime();
   mfem::Vector alpha_local(alpha.GetData() + my_col_offset_, modes_per_rank_);
   W_mat_->AddMult(alpha_local, y, scale);
+  cc_w_time_ += MPI_Wtime() - twa1;
 }
 
 void DeflationPreconditioner::setEssentialTrueDofs(const mfem::Array<int>& ess_tdofs)
 {
   ess_tdofs_ = ess_tdofs;
-  applyEssentialDofMask();
-  if (!W_local_.empty()) {
-    centerLinearModes();
-    if (W_mat_) packWMatrix();
-  }
+  // Force a clean rebuild: essential-dof masking changes the active tdof set,
+  // so the per-component MGS must be redone over the new active set rather
+  // than patched in place.
+  W_local_.clear();
+  W_mat_.reset();
   factored_ = false;
   leftmost_valid_ = false;
 }
@@ -378,33 +513,77 @@ void DeflationPreconditioner::solveCoarse(const mfem::Vector& c_local, mfem::Vec
   mfem::Vector rhs_global(m_);
   MPI_Allgather(c_local.GetData(), modes_per_rank_, MPI_DOUBLE, rhs_global.GetData(), modes_per_rank_, MPI_DOUBLE,
                 fes_->GetComm());
-  choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, WtAW_uses_cholesky_, m_, rhs_global, alpha_global);
+  if (WtAW_uses_cholesky_) {
+    choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, true, m_, rhs_global, alpha_global);
+  } else {
+    spectralCoarseSolve(rhs_global, alpha_global);
+  }
+}
+
+void DeflationPreconditioner::computeCoarseSpectralData()
+{
+  mfem::DenseMatrix sym(WtAW_);
+  symmetrize(sym);
+  mfem::DenseMatrixEigensystem eig(sym);
+  eig.Eval();
+  const mfem::Vector& evals = eig.Eigenvalues();
+  const mfem::DenseMatrix& evecs = eig.Eigenvectors();
+
+  double max_abs_eval = 0.0;
+  for (int i = 0; i < evals.Size(); ++i) max_abs_eval = std::max(max_abs_eval, std::abs(evals(i)));
+
+  const double rank_tol = envDoubleOrDefault("SMITH_DEFLATION_RANK_TOL", 1.0e-5);
+  coarse_spectral_tol_ = rank_tol * max_abs_eval;
+  coarse_spectral_rank_ = 0;
+  coarse_is_spd_ = true;
+  for (int i = 0; i < evals.Size(); ++i) {
+    if (evals(i) > 0.0 || evals(i) < -coarse_spectral_tol_) {
+      if (evals(i) < -coarse_spectral_tol_) coarse_is_spd_ = false;
+      ++coarse_spectral_rank_;
+    }
+  }
+
+  coarse_evals_kept_.SetSize(coarse_spectral_rank_);
+  coarse_evecs_kept_.SetSize(m_, coarse_spectral_rank_);
+  int kept = 0;
+  for (int j = 0; j < evals.Size(); ++j) {
+    if (evals(j) <= 0.0 && evals(j) >= -coarse_spectral_tol_) continue;
+    coarse_evals_kept_(kept) = evals(j);
+    for (int i = 0; i < m_; ++i) coarse_evecs_kept_(i, kept) = evecs(i, j);
+    ++kept;
+  }
+}
+
+void DeflationPreconditioner::spectralCoarseSolve(const mfem::Vector& rhs, mfem::Vector& alpha) const
+{
+  alpha.SetSize(m_);
+  alpha = 0.0;
+  if (coarse_spectral_rank_ == 0) return;
+
+  mfem::Vector coeff(coarse_spectral_rank_);
+  coarse_evecs_kept_.MultTranspose(rhs, coeff);
+  for (int i = 0; i < coarse_spectral_rank_; ++i) coeff(i) /= coarse_evals_kept_(i);
+  coarse_evecs_kept_.Mult(coeff, alpha);
 }
 
 void DeflationPreconditioner::ensureLeftmostComputed() const
 {
   if (leftmost_valid_) return;
   if (!factored_) throw std::runtime_error("DeflationPreconditioner::leftmost: SetOperator not called");
-  // Symmetric eigen-decomposition of the dense m×m W^T A W. m = 12·P (3D) ⇒ tiny for P ≤ few k.
-  // Replicated on every rank; result is consistent without further communication.
-  mfem::DenseMatrix sym(WtAW_);
-  for (int j = 0; j < m_; ++j) {
-    for (int i = 0; i < j; ++i) {
-      double s = 0.5 * (sym(i, j) + sym(j, i));
-      sym(i, j) = sym(j, i) = s;
-    }
+  if (coarse_spectral_rank_ == 0) {
+    leftmost_eval_ = 0.0;
+    leftmost_evec_.SetSize(m_);
+    leftmost_evec_ = 0.0;
+    leftmost_valid_ = true;
+    return;
   }
-  mfem::DenseMatrixEigensystem eig(sym);
-  eig.Eval();
-  const mfem::Vector& evals = eig.Eigenvalues();
-  const mfem::DenseMatrix& evecs = eig.Eigenvectors();
   int imin = 0;
-  for (int i = 1; i < m_; ++i) {
-    if (evals(i) < evals(imin)) imin = i;
+  for (int i = 1; i < coarse_spectral_rank_; ++i) {
+    if (coarse_evals_kept_(i) < coarse_evals_kept_(imin)) imin = i;
   }
-  leftmost_eval_ = evals(imin);
+  leftmost_eval_ = coarse_evals_kept_(imin);
   leftmost_evec_.SetSize(m_);
-  for (int i = 0; i < m_; ++i) leftmost_evec_(i) = evecs(i, imin);
+  for (int i = 0; i < m_; ++i) leftmost_evec_(i) = coarse_evecs_kept_(i, imin);
   leftmost_valid_ = true;
 }
 
@@ -423,6 +602,176 @@ void DeflationPreconditioner::coarseLeftmostDirection(mfem::Vector& d) const
   W_mat_->AddMult(v_local, d, 1.0);
 }
 
+void DeflationPreconditioner::coarseSmallestDirections(int k, std::vector<mfem::Vector>& dirs,
+                                                       std::vector<double>& evals_out) const
+{
+  dirs.clear();
+  evals_out.clear();
+  if (!factored_ || k <= 0) return;
+  std::vector<int> order(static_cast<size_t>(coarse_spectral_rank_));
+  for (int i = 0; i < coarse_spectral_rank_; ++i) order[static_cast<size_t>(i)] = i;
+  std::sort(order.begin(), order.end(), [&](int a, int b) { return coarse_evals_kept_(a) < coarse_evals_kept_(b); });
+  const int n = fes_->GetTrueVSize();
+  const int kk = std::min(k, coarse_spectral_rank_);
+  dirs.reserve(static_cast<size_t>(kk));
+  evals_out.reserve(static_cast<size_t>(kk));
+  for (int q = 0; q < kk; ++q) {
+    const int idx = order[static_cast<size_t>(q)];
+    evals_out.push_back(coarse_evals_kept_(idx));
+    mfem::Vector d(n);
+    d = 0.0;
+    mfem::Vector v_local(modes_per_rank_);
+    for (int i = 0; i < modes_per_rank_; ++i) v_local(i) = coarse_evecs_kept_(my_col_offset_ + i, idx);
+    W_mat_->AddMult(v_local, d, 1.0);
+    dirs.emplace_back(std::move(d));
+  }
+}
+
+void DeflationPreconditioner::verifyWtAWAssembly() const
+{
+  if (!A_ || !W_mat_) return;
+
+  MPI_Comm comm = fes_->GetComm();
+  const int n = fes_->GetTrueVSize();
+
+  mfem::DenseMatrix WtAW_ref(m_, m_);
+  WtAW_ref = 0.0;
+
+  mfem::Vector x(n);
+  mfem::Vector ax(n);
+  mfem::Vector local_block_col(modes_per_rank_);
+
+  for (int owner = 0; owner < n_ranks_; ++owner) {
+    const int owner_offset = owner * modes_per_rank_;
+    for (int j = 0; j < modes_per_rank_; ++j) {
+      x.SetSize(n);
+      if (my_rank_ == owner) {
+        for (int i = 0; i < n; ++i) x(i) = W_dense_(i, j);
+      } else {
+        x = 0.0;
+      }
+
+      A_->Mult(x, ax);
+      W_mat_->MultTranspose(ax, local_block_col);
+
+      for (int i = 0; i < modes_per_rank_; ++i) {
+        WtAW_ref(my_col_offset_ + i, owner_offset + j) = local_block_col(i);
+      }
+    }
+  }
+
+  MPI_Allreduce(MPI_IN_PLACE, WtAW_ref.Data(), m_ * m_, MPI_DOUBLE, MPI_SUM, comm);
+
+  double max_abs = 0.0;
+  double max_rel = 0.0;
+  int max_i = 0;
+  int max_j = 0;
+  double max_fast = 0.0;
+  double max_ref = 0.0;
+  double max_sym_fast = 0.0;
+  double max_sym_ref = 0.0;
+
+  mfem::DenseMatrix block_max(n_ranks_, n_ranks_);
+  block_max = 0.0;
+
+  for (int j = 0; j < m_; ++j) {
+    for (int i = 0; i < m_; ++i) {
+      const double fast = WtAW_(i, j);
+      const double ref = WtAW_ref(i, j);
+      const double diff = std::abs(fast - ref);
+      const double denom = std::max({1.0, std::abs(fast), std::abs(ref)});
+      const double rel = diff / denom;
+      block_max(i / modes_per_rank_, j / modes_per_rank_) =
+          std::max(block_max(i / modes_per_rank_, j / modes_per_rank_), diff);
+      if (diff > max_abs) {
+        max_abs = diff;
+        max_rel = rel;
+        max_i = i;
+        max_j = j;
+        max_fast = fast;
+        max_ref = ref;
+      }
+      max_sym_fast = std::max(max_sym_fast, std::abs(WtAW_(i, j) - WtAW_(j, i)));
+      max_sym_ref = std::max(max_sym_ref, std::abs(WtAW_ref(i, j) - WtAW_ref(j, i)));
+    }
+  }
+
+  mfem::DenseMatrix sym(WtAW_);
+  for (int j = 0; j < m_; ++j) {
+    for (int i = 0; i < j; ++i) {
+      const double s = 0.5 * (sym(i, j) + sym(j, i));
+      sym(i, j) = sym(j, i) = s;
+    }
+  }
+  mfem::DenseMatrixEigensystem eig(sym);
+  eig.Eval();
+  const mfem::Vector& evals = eig.Eigenvalues();
+  double eval_min = std::numeric_limits<double>::infinity();
+  double eval_max = -std::numeric_limits<double>::infinity();
+  int n_negative = 0;
+  for (int i = 0; i < evals.Size(); ++i) {
+    eval_min = std::min(eval_min, evals(i));
+    eval_max = std::max(eval_max, evals(i));
+    if (evals(i) < 0.0) ++n_negative;
+  }
+
+  std::vector<double> diag_block_min(static_cast<size_t>(n_ranks_), 0.0);
+  std::vector<double> diag_block_max(static_cast<size_t>(n_ranks_), 0.0);
+  for (int b = 0; b < n_ranks_; ++b) {
+    mfem::DenseMatrix block(modes_per_rank_, modes_per_rank_);
+    const int off = b * modes_per_rank_;
+    for (int j = 0; j < modes_per_rank_; ++j) {
+      for (int i = 0; i < modes_per_rank_; ++i) {
+        block(i, j) = 0.5 * (WtAW_(off + i, off + j) + WtAW_(off + j, off + i));
+      }
+    }
+    mfem::DenseMatrixEigensystem block_eig(block);
+    block_eig.Eval();
+    const mfem::Vector& block_evals = block_eig.Eigenvalues();
+    double bmin = std::numeric_limits<double>::infinity();
+    double bmax = -std::numeric_limits<double>::infinity();
+    for (int i = 0; i < block_evals.Size(); ++i) {
+      bmin = std::min(bmin, block_evals(i));
+      bmax = std::max(bmax, block_evals(i));
+    }
+    diag_block_min[static_cast<size_t>(b)] = bmin;
+    diag_block_max[static_cast<size_t>(b)] = bmax;
+  }
+
+  int rank = 0;
+  MPI_Comm_rank(comm, &rank);
+  if (rank != 0) return;
+
+  const int row_rank = max_i / modes_per_rank_;
+  const int col_rank = max_j / modes_per_rank_;
+  const int row_mode = max_i % modes_per_rank_;
+  const int col_mode = max_j % modes_per_rank_;
+
+  mfem::out << "\n========= Deflation WtAW verifier =========\n";
+  mfem::out << "  max |fast-ref| = " << std::setprecision(17) << max_abs << ", rel = " << max_rel << "\n";
+  mfem::out << "  at (" << max_i << ", " << max_j << ") block (" << row_rank << ", " << col_rank << ") mode ("
+            << row_mode << ", " << col_mode << ")\n";
+  mfem::out << "  fast = " << max_fast << ", ref = " << max_ref << "\n";
+  mfem::out << "  symmetry max |fast-fast^T| = " << max_sym_fast << "\n";
+  mfem::out << "  symmetry max |ref-ref^T| = " << max_sym_ref << "\n";
+  mfem::out << "  sym(WtAW) eigen min/max = " << eval_min << " / " << eval_max << ", negative count = " << n_negative
+            << "\n";
+  mfem::out << "  diagonal-block eigen min/max:\n";
+  for (int b = 0; b < n_ranks_; ++b) {
+    mfem::out << "    block " << b << ": " << diag_block_min[static_cast<size_t>(b)] << " / "
+              << diag_block_max[static_cast<size_t>(b)] << "\n";
+  }
+  mfem::out << "  block max |fast-ref|:\n";
+  for (int bi = 0; bi < n_ranks_; ++bi) {
+    mfem::out << "    ";
+    for (int bj = 0; bj < n_ranks_; ++bj) {
+      mfem::out << std::setw(12) << std::setprecision(4) << std::scientific << block_max(bi, bj);
+    }
+    mfem::out << "\n";
+  }
+  mfem::out << "===========================================\n\n";
+}
+
 void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
 {
   // === TIMING BEGIN ===
@@ -434,6 +783,14 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
     smoother_->Mult(r, z);
   } else {
     z = 0.0;
+  }
+  // Smoother-only fallback when the retained coarse op is materially indefinite. Tiny signed
+  // eigenvalues below the rank-revealing tolerance were dropped in the spectral solve.
+  if (!coarse_is_spd_) {
+    mult_total_time_ += MPI_Wtime() - t0;
+    mult_smoother_time_ += MPI_Wtime() - t0;
+    ++mult_calls_;
+    return;
   }
   // === TIMING BEGIN ===
   double t1 = MPI_Wtime();
@@ -468,6 +825,72 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
   mult_total_time_ += t2 - t0;
   ++mult_calls_;
   // === TIMING END ===
+}
+
+void DeflationPreconditioner::printTimingSummary(MPI_Comm comm) const
+{
+  int rank = 0, nproc = 1;
+  MPI_Comm_rank(comm, &rank);
+  MPI_Comm_size(comm, &nproc);
+
+  auto rmax = [comm](double v) {
+    double out = 0.0;
+    MPI_Reduce(&v, &out, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    return out;
+  };
+  auto isum = [comm](long long v) {
+    long long out = 0;
+    MPI_Reduce(&v, &out, 1, MPI_LONG_LONG, MPI_SUM, 0, comm);
+    return out;
+  };
+
+  double mt_total = rmax(mult_total_time_);
+  double mt_smoo = rmax(mult_smoother_time_);
+  double mt_coarse = rmax(mult_coarse_time_);
+  double so_mv = rmax(setop_matvec_time_);
+  double so_fac = rmax(setop_factor_time_);
+  double so_smo = rmax(setop_smoother_time_);
+  double a_halo = rmax(assemble_timings_.halo);
+  double a_diag = rmax(assemble_timings_.diag);
+  double a_offd = rmax(assemble_timings_.offd);
+  double a_ar = rmax(assemble_timings_.allreduce);
+  double c_wt = rmax(cc_wt_time_);
+  double c_ag = rmax(cc_allgather_time_);
+  double c_sv = rmax(cc_solve_time_);
+  double c_w = rmax(cc_w_time_);
+  long long n_mult = isum(static_cast<long long>(mult_calls_));
+  long long n_cc = isum(static_cast<long long>(cc_calls_));
+  long long n_so = isum(static_cast<long long>(setop_calls_));
+  long long n_wtaw_chol_fail = isum(static_cast<long long>(wtaw_cholesky_failures_));
+  long long n_wtaw_pp_chol_fail = isum(static_cast<long long>(wtaw_pp_cholesky_failures_));
+  long long n_wtaw_reg = isum(static_cast<long long>(wtaw_regularized_));
+  long long n_wtaw_null = isum(wtaw_null_filtered_);
+
+  if (rank != 0) return;
+  auto pf = [](const char* label, double t) { mfem::out << "    " << label << ": " << t << " s\n"; };
+  mfem::out << "\n========= DeflationPreconditioner timing (max across " << nproc << " ranks) =========\n";
+  mfem::out << "  SetOperator (" << n_so / std::max<long long>(nproc, 1) << " calls/rank)\n";
+  pf("assembleWtAW (total)", so_mv);
+  pf("  halo (pack+isend/irecv+wait)", a_halo);
+  pf("  diag SpMV+gemm", a_diag);
+  pf("  offd SpMV+gemm", a_offd);
+  pf("  Allreduce(m*m)", a_ar);
+  pf("factor (Cholesky/LU)", so_fac);
+  mfem::out << "    WtAW Cholesky failures: " << n_wtaw_chol_fail / std::max<long long>(nproc, 1) << " / rank\n";
+  mfem::out << "    WtAW_pp Cholesky failures: " << n_wtaw_pp_chol_fail / std::max<long long>(nproc, 1) << " / rank\n";
+  mfem::out << "    WtAW A-null cols filtered: " << n_wtaw_null / std::max<long long>(nproc, 1) << " / rank\n";
+  (void)n_wtaw_reg;
+  pf("smoother setup", so_smo);
+  mfem::out << "  Mult (" << n_mult / std::max<long long>(nproc, 1) << " calls/rank, "
+            << n_cc / std::max<long long>(nproc, 1) << " coarse-corrections/rank)\n";
+  pf("total", mt_total);
+  pf("  smoother", mt_smoo);
+  pf("  coarse", mt_coarse);
+  pf("    W^T * r", c_wt);
+  pf("    Allgather / nbr-exchange", c_ag);
+  pf("    factor-solve", c_sv);
+  pf("    W * alpha", c_w);
+  mfem::out << "===================================================================\n\n";
 }
 
 }  // namespace smith
