@@ -327,6 +327,12 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
       comm_pkg = hypre_ParCSRMatrixCommPkg(parA);
     }
     const int n_recvs = hypre_ParCSRCommPkgNumRecvs(comm_pkg);
+    const int n_sends = hypre_ParCSRCommPkgNumSends(comm_pkg);
+    schwarz_send_neighbors_.clear();
+    schwarz_send_neighbors_.reserve(static_cast<size_t>(n_sends));
+    for (int s = 0; s < n_sends; ++s) {
+      schwarz_send_neighbors_.push_back(hypre_ParCSRCommPkgSendProc(comm_pkg, s));
+    }
     schwarz_neighbors_.clear();
     schwarz_neighbor_blocks_.clear();
     schwarz_neighbors_.reserve(static_cast<size_t>(n_recvs));
@@ -418,10 +424,12 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
                 schwarz_neighbors_[static_cast<size_t>(n)], 31, comm, &req);
       reqs.push_back(req);
     }
-    for (int n = 0; n < n_nbr; ++n) {
+    // Send to the ranks that reference our halo (hypre send-procs); receiving from
+    // recv-procs only pairs correctly when each of our recv neighbors lists us as a
+    // send target, which an asymmetric comm package does not guarantee.
+    for (int neighbor : schwarz_send_neighbors_) {
       MPI_Request req;
-      MPI_Isend(u_local.GetData(), modes_per_rank_, MPI_DOUBLE, schwarz_neighbors_[static_cast<size_t>(n)], 31, comm,
-                &req);
+      MPI_Isend(u_local.GetData(), modes_per_rank_, MPI_DOUBLE, neighbor, 31, comm, &req);
       reqs.push_back(req);
     }
     if (!reqs.empty()) {

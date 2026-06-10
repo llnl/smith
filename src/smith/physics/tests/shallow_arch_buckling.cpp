@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <cmath>
 #include <format>
 #include <memory>
 #include <stdexcept>
@@ -46,6 +47,7 @@ int max_cg_iterations = 100000;
 double cg_model_stagnation_tol = 0.0;
 int cg_model_stagnation_window = 0;
 bool cg_eisenstat_walker = false;
+bool use_bsr_spmv = false;
 std::string preconditioner_name = "HypreJacobi";
 std::string deflation_order_name = "affine";
 std::string deflation_coarse_mode_name = "global";
@@ -95,6 +97,8 @@ void parseCommandLine(int& argc, char** argv)
       cg_model_stagnation_window = std::stoi(arg.substr(std::string("--cg-stagnation-window=").size()));
     } else if (arg == "--cg-eisenstat-walker") {
       cg_eisenstat_walker = true;
+    } else if (arg == "--use-bsr-spmv") {
+      use_bsr_spmv = true;
     } else if (arg.rfind("--preconditioner=", 0) == 0) {
       preconditioner_name = arg.substr(std::string("--preconditioner=").size());
     } else if (arg.rfind("--deflation-order=", 0) == 0) {
@@ -169,7 +173,9 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
                                             .cg_model_stagnation_tol = cg_model_stagnation_tol,
                                             .cg_model_stagnation_window = cg_model_stagnation_window,
                                             .cg_eisenstat_walker = cg_eisenstat_walker,
-                                            .print_level = 0};
+                                            .print_level = 0,
+                                            .use_bsr_spmv = use_bsr_spmv,
+                                            .bsr_block_size = dim};
 
   smith::NonlinearSolverOptions nonlinear_options{
       .nonlin_solver = selectedNonlinearSolver(),
@@ -289,6 +295,11 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     solid.outputStateToDisk("shallow_arch_buckling");
   }
   SLIC_INFO_ROOT(std::format("Total advanceTimestep wall = {:.3f} s over {} steps", cumulative_step_time, num_steps));
+
+  const double displacement_norm = mfem::ParNormlp(solid.displacement(), 2, MPI_COMM_WORLD);
+  SLIC_INFO_ROOT(std::format("shallow arch: final displacement l2 = {:.8e}", displacement_norm));
+  EXPECT_TRUE(std::isfinite(displacement_norm));
+  EXPECT_GT(displacement_norm, 0.0);
 }
 
 }  // namespace smith

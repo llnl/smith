@@ -10,9 +10,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
-#include "gtest/gtest.h"
 #include "mpi.h"
 #include "mfem.hpp"
 
@@ -40,11 +38,23 @@ std::string nonlinear_solver_name = "NewtonLineSearch";
 std::string linear_solver_name = "GMRES";
 std::string preconditioner_name = "HypreAMG";
 std::string deflation_order_name = "affine";
+std::string deflation_coarse_mode_name = "global";
 int nonlinear_max_iterations = 30;
 int linear_max_iterations = 800;
 int print_level = 1;
-int num_steps = 5;
+int num_steps = 3;
 bool write_output = false;
+std::string selected_case = "all";
+int trust_subspace_option = static_cast<int>(SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY);
+int trust_num_leftmost = 2;
+int trust_num_previous_steps = 4;
+int trust_work_quadrature_points = 2;
+int trust_num_lanczos = 0;
+int trust_num_lanczos_iters = 0;
+double cg_model_stagnation_tol = 0.0;
+int cg_model_stagnation_window = 0;
+bool cg_eisenstat_walker = false;
+bool use_bsr_spmv = false;
 
 template <typename T>
 T parseEnum(const std::map<std::string, T>& values, const std::string& value, const std::string& option)
@@ -67,15 +77,34 @@ DeflationOrder selectedDeflationOrder()
   throw std::runtime_error("Unknown --deflation-order value '" + deflation_order_name + "'");
 }
 
+CoarseMode selectedCoarseMode()
+{
+  if (deflation_coarse_mode_name == "global") {
+    return CoarseMode::Additive;
+  }
+  if (deflation_coarse_mode_name == "local") {
+    return CoarseMode::AdditiveLocal;
+  }
+  if (deflation_coarse_mode_name == "schwarz") {
+    return CoarseMode::AdditiveSchwarz;
+  }
+  throw std::runtime_error("Unknown --deflation-coarse-mode value '" + deflation_coarse_mode_name + "'");
+}
+
 LinearSolverOptions linearOptions()
 {
   return {.linear_solver = parseEnum(linearSolverMap, linear_solver_name, "--linear-solver"),
           .preconditioner = parseEnum(preconditionerMap, preconditioner_name, "--preconditioner"),
           .deflation_order = selectedDeflationOrder(),
+          .deflation_coarse_mode = selectedCoarseMode(),
           .relative_tol = 1.0e-7,
           .absolute_tol = 1.0e-14,
           .max_iterations = linear_max_iterations,
+          .cg_model_stagnation_tol = cg_model_stagnation_tol,
+          .cg_model_stagnation_window = cg_model_stagnation_window,
+          .cg_eisenstat_walker = cg_eisenstat_walker,
           .print_level = 0,
+          .use_bsr_spmv = use_bsr_spmv,
           .bsr_block_size = dim};
 }
 
@@ -86,9 +115,12 @@ NonlinearSolverOptions nonlinearOptions()
           .absolute_tol = 1.0e-9,
           .max_iterations = nonlinear_max_iterations,
           .print_level = print_level,
-          .subspace_option = SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY,
-          .num_leftmost = 2,
-          .num_previous_steps = 4};
+          .subspace_option = static_cast<SubSpaceOptions>(trust_subspace_option),
+          .num_leftmost = trust_num_leftmost,
+          .num_previous_steps = trust_num_previous_steps,
+          .trust_work_quadrature_points = trust_work_quadrature_points,
+          .trust_num_lanczos = trust_num_lanczos,
+          .trust_num_lanczos_iters = trust_num_lanczos_iters};
 }
 
 int globalElementCount(const Mesh& mesh)
@@ -103,7 +135,9 @@ void checkElementCount(const std::string& name, const Mesh& mesh)
 {
   const int elements = globalElementCount(mesh);
   SLIC_INFO_ROOT(std::format("{}: global elements = {}", name, elements));
-  EXPECT_LT(elements, max_benchmark_elements);
+  SLIC_ERROR_ROOT_IF(
+      elements >= max_benchmark_elements,
+      std::format("{} has {} elements, exceeding the benchmark cap of {}", name, elements, max_benchmark_elements));
 }
 
 void advance(SolidMechanics<p, dim>& solid, const std::string& output_name)
@@ -129,8 +163,8 @@ void checkDisplacement(const std::string& name, const SolidMechanics<p, dim>& so
 {
   const double displacement_norm = mfem::ParNormlp(solid.displacement(), 2, MPI_COMM_WORLD);
   SLIC_INFO_ROOT(std::format("{}: final displacement l2 = {:.8e}", name, displacement_norm));
-  EXPECT_TRUE(std::isfinite(displacement_norm));
-  EXPECT_GT(displacement_norm, 0.0);
+  SLIC_ERROR_ROOT_IF(!std::isfinite(displacement_norm), name + " produced a non-finite displacement norm");
+  SLIC_ERROR_ROOT_IF(displacement_norm <= 0.0, name + " produced a zero displacement norm");
 }
 
 void parseCommandLine(int& argc, char** argv)
@@ -146,16 +180,40 @@ void parseCommandLine(int& argc, char** argv)
       preconditioner_name = arg.substr(std::string("--preconditioner=").size());
     } else if (arg.rfind("--deflation-order=", 0) == 0) {
       deflation_order_name = arg.substr(std::string("--deflation-order=").size());
+    } else if (arg.rfind("--deflation-coarse-mode=", 0) == 0) {
+      deflation_coarse_mode_name = arg.substr(std::string("--deflation-coarse-mode=").size());
     } else if (arg.rfind("--nonlinear-max-iterations=", 0) == 0) {
       nonlinear_max_iterations = std::stoi(arg.substr(std::string("--nonlinear-max-iterations=").size()));
     } else if (arg.rfind("--linear-max-iterations=", 0) == 0) {
       linear_max_iterations = std::stoi(arg.substr(std::string("--linear-max-iterations=").size()));
+    } else if (arg.rfind("--trust-subspace-option=", 0) == 0) {
+      trust_subspace_option = std::stoi(arg.substr(std::string("--trust-subspace-option=").size()));
+    } else if (arg.rfind("--trust-num-leftmost=", 0) == 0) {
+      trust_num_leftmost = std::stoi(arg.substr(std::string("--trust-num-leftmost=").size()));
+    } else if (arg.rfind("--trust-num-previous-steps=", 0) == 0) {
+      trust_num_previous_steps = std::stoi(arg.substr(std::string("--trust-num-previous-steps=").size()));
+    } else if (arg.rfind("--trust-work-quadrature=", 0) == 0) {
+      trust_work_quadrature_points = std::stoi(arg.substr(std::string("--trust-work-quadrature=").size()));
+    } else if (arg.rfind("--trust-num-lanczos=", 0) == 0) {
+      trust_num_lanczos = std::stoi(arg.substr(std::string("--trust-num-lanczos=").size()));
+    } else if (arg.rfind("--trust-num-lanczos-iters=", 0) == 0) {
+      trust_num_lanczos_iters = std::stoi(arg.substr(std::string("--trust-num-lanczos-iters=").size()));
+    } else if (arg.rfind("--cg-stagnation-tol=", 0) == 0) {
+      cg_model_stagnation_tol = std::stod(arg.substr(std::string("--cg-stagnation-tol=").size()));
+    } else if (arg.rfind("--cg-stagnation-window=", 0) == 0) {
+      cg_model_stagnation_window = std::stoi(arg.substr(std::string("--cg-stagnation-window=").size()));
+    } else if (arg == "--cg-eisenstat-walker") {
+      cg_eisenstat_walker = true;
+    } else if (arg == "--use-bsr-spmv") {
+      use_bsr_spmv = true;
     } else if (arg.rfind("--print-level=", 0) == 0) {
       print_level = std::stoi(arg.substr(std::string("--print-level=").size()));
     } else if (arg.rfind("--steps=", 0) == 0) {
       num_steps = std::stoi(arg.substr(std::string("--steps=").size()));
     } else if (arg == "--write-output") {
       write_output = true;
+    } else if (arg.rfind("--case=", 0) == 0) {
+      selected_case = arg.substr(std::string("--case=").size());
     } else {
       argv[write_arg] = argv[read_arg];
       ++write_arg;
@@ -166,14 +224,14 @@ void parseCommandLine(int& argc, char** argv)
 
 }  // namespace
 
-TEST(HyperelasticBenchmarks, NearIncompressibleBlockCompression)
+void runNearIncompressibleBlockCompression()
 {
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "hyperelastic_block_compression");
 
-  constexpr int nx = 30;
-  constexpr int ny = 8;
-  constexpr int nz = 8;
+  constexpr int nx = 16;
+  constexpr int ny = 5;
+  constexpr int nz = 5;
   constexpr double length = 3.0;
   constexpr double width = 0.8;
   constexpr double height = 0.8;
@@ -204,19 +262,19 @@ TEST(HyperelasticBenchmarks, NearIncompressibleBlockCompression)
   checkDisplacement("near-incompressible block", solid);
 }
 
-TEST(HyperelasticBenchmarks, SpherePenaltyContact)
+void runSpherePenaltyContact()
 {
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "hyperelastic_sphere_penalty_contact");
 
-  constexpr int nx = 20;
-  constexpr int ny = 20;
+  constexpr int nx = 26;
+  constexpr int ny = 26;
   constexpr int nz = 8;
   constexpr double length = 1.0;
   constexpr double width = 1.0;
   constexpr double height = 0.4;
   constexpr double sphere_radius = 0.22;
-  constexpr double contact_penalty = 5.0e4;
+  constexpr double contact_penalty = 1.0e5;
   const vec3 sphere_center{{0.5 * length, 0.5 * width, -0.26}};
 
   auto mesh = std::make_shared<Mesh>(
@@ -234,7 +292,7 @@ TEST(HyperelasticBenchmarks, SpherePenaltyContact)
   solid.setDisplacementBCs(
       [](tensor<double, dim>, double time) {
         tensor<double, dim> displacement{};
-        displacement[2] = -0.08 * time;
+        displacement[2] = -0.06 * time;
         return displacement;
       },
       mesh->domain("driven_face"));
@@ -289,18 +347,18 @@ TEST(HyperelasticBenchmarks, SpherePenaltyContact)
   const double energy = contact_energy(solid.time(), solid.displacement());
   const double area = active_area(solid.time(), solid.displacement());
   SLIC_INFO_ROOT(std::format("sphere penalty contact: active area = {:.8e}, contact energy = {:.8e}", area, energy));
-  EXPECT_GT(area, 0.0);
-  EXPECT_TRUE(std::isfinite(energy));
+  SLIC_ERROR_ROOT_IF(area <= 0.0, "sphere penalty contact produced no active contact area");
+  SLIC_ERROR_ROOT_IF(!std::isfinite(energy), "sphere penalty contact produced non-finite contact energy");
 }
 
-TEST(HyperelasticBenchmarks, TwistedBeam)
+void runTwistedBeam()
 {
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "hyperelastic_twisted_beam");
 
-  constexpr int nx = 80;
-  constexpr int ny = 6;
-  constexpr int nz = 6;
+  constexpr int nx = 50;
+  constexpr int ny = 5;
+  constexpr int nz = 5;
   constexpr double length = 8.0;
   constexpr double width = 0.5;
   constexpr double height = 0.5;
@@ -343,7 +401,18 @@ TEST(HyperelasticBenchmarks, TwistedBeam)
 int main(int argc, char* argv[])
 {
   smith::parseCommandLine(argc, argv);
-  ::testing::InitGoogleTest(&argc, argv);
   smith::ApplicationManager applicationManager(argc, argv);
-  return RUN_ALL_TESTS();
+  if (smith::selected_case == "all" || smith::selected_case == "block") {
+    smith::runNearIncompressibleBlockCompression();
+  }
+  if (smith::selected_case == "all" || smith::selected_case == "contact") {
+    smith::runSpherePenaltyContact();
+  }
+  if (smith::selected_case == "all" || smith::selected_case == "twist") {
+    smith::runTwistedBeam();
+  }
+  SLIC_ERROR_ROOT_IF(smith::selected_case != "all" && smith::selected_case != "block" &&
+                         smith::selected_case != "contact" && smith::selected_case != "twist",
+                     "Unknown --case value '" + smith::selected_case + "'; use all, block, contact, or twist");
+  return 0;
 }

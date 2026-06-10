@@ -110,6 +110,11 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   // rPr = dot(rCurrent, Pr)
   double rPr = timed_dots({{&rCurrent, &Pr}})[0];
 
+  // d·r is maintained by recurrence to avoid a per-iteration reduction:
+  //   d_{k+1}·r_{k+1} = -rPr_{k+1} + beta*(d_k·r_k + alpha*d_k·H d_k).
+  // At iteration 1, d = -Pr so d·r = -rPr exactly.
+  double descent_check = -rPr;
+
   // Quadratic-model value m_k = g^T z + 0.5 z^T H z; starts at 0 (z_0 = 0).
   // Per-iter decrement = 0.5 * alpha_k * rPr_k (standard PCG identity).
   double model_value = 0.0;
@@ -117,7 +122,6 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   const bool stagnation_enabled = settings.model_stagnation_window > 0 && settings.model_stagnation_tol > 0.0;
 
   for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
-    double descent_check = timed_dots({{&d, &rCurrent}})[0];
     if (!isDescentDirection(descent_check)) {
       d *= -1.0;
       results.interior_status = TrustRegionResults::Status::NonDescentDirection;
@@ -125,20 +129,22 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
 
     timed_H(d, Hd);
 
-    double curvature = timed_dots({{&d, &Hd}})[0];
+    // One fused reduction covers the curvature plus the step-norm ingredients:
+    // ||z + alpha*d||^2 = zz + 2*alpha*(z·d) + alpha^2*(d·d), so the candidate
+    // norm and the boundary projection need no further reductions.
+    auto dots1 = timed_dots({{&d, &Hd}, {&z, &d}, {&d, &d}});
+    double curvature = dots1[0];
+    double zd = dots1[1];
+    double dd = dots1[2];
     const double alphaCg = curvature != 0.0 ? rPr / curvature : 0.0;
 
-    // Compute candidate step and its exact norm (avoids recurrence drift)
     auto& zPred = Pr;
     zPred = z;
     zPred.Add(alphaCg, d);
-    double zzNp1 = timed_dots({{&zPred, &zPred}})[0];
+    double zzNp1 = zz + 2.0 * alphaCg * zd + alphaCg * alphaCg * dd;
 
     const bool go_to_boundary = curvature <= 0 || zzNp1 >= trSize * trSize;
     if (go_to_boundary) {
-      auto dots = timed_dots({{&z, &d}, {&d, &d}});
-      double zd = dots[0];
-      double dd = dots[1];
       projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
       if (curvature <= 0) {
         results.interior_status = TrustRegionResults::Status::NegativeCurvature;
@@ -185,6 +191,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
     }
 
     double beta = rPrNp1 / rPr;
+    descent_check = -rPrNp1 + beta * (descent_check + alphaCg * curvature);
     rPr = rPrNp1;
     d *= beta;
     d.Add(-1.0, Pr);

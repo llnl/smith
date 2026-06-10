@@ -240,6 +240,9 @@ class DeflationPreconditioner : public mfem::Solver {
 
   // AdditiveSchwarz: cached neighbor list + off-diag WtAW blocks (mpr × mpr each).
   mutable std::vector<int> schwarz_neighbors_;
+  /// Ranks that need our coarse coefficients (hypre send-procs). May differ from
+  /// `schwarz_neighbors_` (recv-procs) when the halo graph is asymmetric.
+  mutable std::vector<int> schwarz_send_neighbors_;
   mutable std::vector<mfem::DenseMatrix> schwarz_neighbor_blocks_;
 
   const mfem::HypreParMatrix* A_ = nullptr;

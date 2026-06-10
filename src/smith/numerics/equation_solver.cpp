@@ -561,6 +561,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable size_t num_preconds_ = 0;
   mutable size_t num_augments_ = 0;
   mutable size_t num_jacobian_assembles_ = 0;
+  /// true while `grad` matches the current iterate X; cleared whenever X changes.
+  mutable bool grad_is_current_ = false;
   mutable size_t num_precond_setops_ = 0;
   mutable size_t num_subspace_prepares_ = 0;
   mutable size_t num_subspace_solves_ = 0;
@@ -831,6 +833,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     if (!subspace_cache.leftmosts.empty()) {
       left_mosts = subspace_cache.leftmosts;
     }
+    grad_is_current_ = false;
     X = accepted_x;
     r = accepted_r;
     status = predicted_status;
@@ -1057,6 +1060,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
     int subspace_option = nonlinear_options.subspace_option;
     int num_leftmost = nonlinear_options.num_leftmost;
+    grad_is_current_ = false;
     previous_steps.clear();
 
     scratch = 1.0;
@@ -1096,7 +1100,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         break;
       }
 
-      assembleJacobian(X);
+      // Skip re-assembly when every linesearch retry of the previous outer iteration was
+      // rejected: X is unchanged, so the Jacobian (and BSR copy) would be bit-identical.
+      if (!grad_is_current_) {
+        assembleJacobian(X);
+        grad_is_current_ = true;
+      }
 
       if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
                       cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
