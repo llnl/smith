@@ -14,7 +14,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <tuple>
 #include <type_traits>
@@ -874,7 +876,9 @@ class Functional<test(trials...), exec> {
 
       std::vector<double> K_elem_buffer(max_buffer_size());
 
+      size_t integral_id = 0;
       for (auto& integral : form_.integrals_) {
+        ++integral_id;
         // if this integral's derivative isn't identically zero
         if (integral.functional_to_integral_index_.count(which_argument) > 0) {
           Domain& dom = integral.domain_;
@@ -903,21 +907,38 @@ class Functional<test(trials...), exec> {
             uint32_t rows_per_elem = uint32_t(test_restriction.nodes_per_elem * test_restriction.components);
             uint32_t cols_per_elem = uint32_t(trial_restriction.nodes_per_elem * trial_restriction.components);
 
-            std::vector<DoF> test_vdofs(rows_per_elem);
-            std::vector<DoF> trial_vdofs(cols_per_elem);
-
-            for (uint32_t e = 0; e < element_ids.size(); e++) {
-              test_restriction.GetElementVDofs(int(e), test_vdofs);
-              trial_restriction.GetElementVDofs(int(e), trial_vdofs);
-
-              for (uint32_t i = 0; i < cols_per_elem; i++) {
-                int col = int(trial_vdofs[i].index());
-
-                for (uint32_t j = 0; j < rows_per_elem; j++) {
-                  int row = int(test_vdofs[j].index());
-                  A_local.SearchRow(row, col) += K_e(e, i, j);
+            // The sparsity (and the element dof maps) are fixed for the lifetime of this
+            // Gradient, so the nnz index of every element-matrix entry is precomputed once;
+            // subsequent assembles are a flat indexed accumulation instead of a per-entry
+            // binary search (SearchRow).
+            std::vector<int32_t>& smap = scatter_maps_[{integral_id, geom}];
+            if (smap.empty()) {
+              smap.resize(element_ids.size() * cols_per_elem * rows_per_elem);
+              std::vector<DoF> test_vdofs(rows_per_elem);
+              std::vector<DoF> trial_vdofs(cols_per_elem);
+              size_t k = 0;
+              for (uint32_t e = 0; e < element_ids.size(); e++) {
+                test_restriction.GetElementVDofs(int(e), test_vdofs);
+                trial_restriction.GetElementVDofs(int(e), trial_vdofs);
+                for (uint32_t i = 0; i < cols_per_elem; i++) {
+                  int col = int(trial_vdofs[i].index());
+                  for (uint32_t j = 0; j < rows_per_elem; j++) {
+                    int row = int(test_vdofs[j].index());
+                    const int* begin = col_ind.data() + row_ptr[uint32_t(row)];
+                    const int* end = col_ind.data() + row_ptr[uint32_t(row) + 1];
+                    const int* it = std::lower_bound(begin, end, col);
+                    SLIC_ERROR_IF(it == end || *it != col, "Gradient::assemble: entry missing from sparsity pattern");
+                    smap[k++] = int32_t(it - col_ind.data());
+                  }
                 }
               }
+            }
+
+            const int32_t* map_k = smap.data();
+            const double* K_e_flat = K_elem_buffer.data();
+            size_t total = smap.size();
+            for (size_t k = 0; k < total; k++) {
+              values[uint32_t(map_k[k])] += K_e_flat[k];
             }
             gradient_assemble_timers.scatter += MPI_Wtime() - t_scatter0;
           }
@@ -991,6 +1012,9 @@ class Functional<test(trials...), exec> {
 
     std::vector<int> row_ptr;
     std::vector<int> col_ind;
+
+    /// per-(integral, geometry) map from flat element-matrix entry to nnz index in col_ind/values
+    std::map<std::pair<size_t, mfem::Geometry::Type>, std::vector<int32_t>> scatter_maps_;
 
     /**
      * @brief this member variable tells us which argument the associated Functional this gradient
