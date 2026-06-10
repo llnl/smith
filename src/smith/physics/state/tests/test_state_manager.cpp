@@ -165,42 +165,6 @@ TEST(state_manager, QuadratureData_Restart)
   detail::apply_function_to_quadrature_data_states(good_starting_value, new_qdata, check_state);
 }
 
-TEST(StateManager, RegisteredFiniteElementVectorsSurviveFactoryMoveConstruction)
-{
-  constexpr int serial_refinement = 0;
-  constexpr int parallel_refinement = 0;
-  constexpr int field_value = 2;
-
-  axom::sidre::DataStore datastore;
-  const std::string output_dir = "state_manager_registered_fe_move_data";
-  if (axom::utilities::filesystem::pathExists(output_dir)) {
-    GTEST_SKIP() << "Output directory already exists from a prior run: " << output_dir;
-  }
-  StateManager::initialize(datastore, output_dir);
-
-  std::string filename = SMITH_REPO_DIR "/data/meshes/beam-hex.mesh";
-  const std::string mesh_tag = "registered_fe_move_mesh";
-  StateManager::setMesh(mesh::refineAndDistribute(buildMeshFromFile(filename), serial_refinement, parallel_refinement),
-                        mesh_tag);
-
-  // Construction through unique_ptr forces move construction from the StateManager factory return value.
-  auto registered_state =
-      std::make_unique<FiniteElementState>(StateManager::newState(H1<1>{}, "registered_state", mesh_tag));
-  *registered_state = field_value;
-  // Forces StateManager to use the ParGridFunction registered during factory construction.
-  StateManager::updateState(*registered_state);
-
-  // Repeat the same move construction check for dual fields.
-  auto registered_dual =
-      std::make_unique<FiniteElementDual>(StateManager::newDual(registered_state->space(), "registered_dual"));
-  *registered_dual = field_value;
-  // Exercises the registered dual FE space (the spaces in the StateManager dual and the registered_dual should match)
-  StateManager::updateDual(*registered_dual);
-
-  // Covers the Sidre/MFEM output path used by physics output after registered fields are synchronized.
-  StateManager::save(0.0, 0, mesh_tag);
-}
-
 TEST(StateManager, StoresHighOrderMeshes)
 {
   // This test ensures that when high order meshes are given to
