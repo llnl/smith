@@ -128,6 +128,45 @@ void BSROperator::bsrSpMVAdd(const BSRMatrix& A, const double* x, double* y, dou
   }
 }
 
+namespace {
+
+template <int b>
+void bsrSpMMAddImpl(const BSRMatrix& A, const double* X, double* Y, int k, double alpha)
+{
+  const int* I = A.I.data();
+  const int* J = A.J.data();
+  const double* data = A.data.data();
+
+  for (int br = 0; br < A.nb_rows; ++br) {
+    double* y_block = &Y[static_cast<size_t>(br * b) * static_cast<size_t>(k)];
+    for (int m = I[br]; m < I[br + 1]; ++m) {
+      const double* block = &data[static_cast<size_t>(m) * static_cast<size_t>(b * b)];
+      const double* x_block = &X[static_cast<size_t>(J[m] * b) * static_cast<size_t>(k)];
+      for (int i = 0; i < b; ++i) {
+        for (int j = 0; j < b; ++j) {
+          const double a_ij = alpha * block[i * b + j];
+          const double* x_row = &x_block[j * k];
+          double* y_row = &y_block[i * k];
+          for (int c = 0; c < k; ++c) {
+            y_row[c] += a_ij * x_row[c];
+          }
+        }
+      }
+    }
+  }
+}
+
+}  // namespace
+
+void bsrSpMMAdd(const BSRMatrix& A, const double* X, double* Y, int k, double alpha)
+{
+  if (A.b == 2) {
+    bsrSpMMAddImpl<2>(A, X, Y, k, alpha);
+  } else if (A.b == 3) {
+    bsrSpMMAddImpl<3>(A, X, Y, k, alpha);
+  }
+}
+
 void BSROperator::Mult(const mfem::Vector& x, mfem::Vector& y) const
 {
   y = 0.0;
@@ -164,6 +203,83 @@ void BSROperator::AddMult(const mfem::Vector& x, mfem::Vector& y, const double a
 
   if (offd_bsr_.nb_rows > 0 && !recv_buf_.empty()) {
     bsrSpMVAdd(offd_bsr_, recv_buf_.data(), y_data, a);
+  }
+}
+
+void BSROperator::MultBatch(const std::vector<const mfem::Vector*>& xs, const std::vector<mfem::Vector*>& ys) const
+{
+  MFEM_VERIFY(xs.size() == ys.size(), "BSROperator::MultBatch input/output size mismatch");
+  const int k = static_cast<int>(xs.size());
+  if (k == 0) return;
+
+  if (!enabled_) {
+    for (int j = 0; j < k; ++j) {
+      A_->Mult(*xs[static_cast<size_t>(j)], *ys[static_cast<size_t>(j)]);
+    }
+    return;
+  }
+
+  const int n = Height();
+  const size_t ku = static_cast<size_t>(k);
+
+  // Pack the RHS row-major (k contiguous values per dof) for the SpMM kernel.
+  std::vector<double> X(static_cast<size_t>(n) * ku);
+  for (int j = 0; j < k; ++j) {
+    const double* xj = xs[static_cast<size_t>(j)]->HostRead();
+    for (int i = 0; i < n; ++i) {
+      X[static_cast<size_t>(i) * ku + static_cast<size_t>(j)] = xj[i];
+    }
+  }
+
+  MPI_Comm comm = hypre_ParCSRCommPkgComm(comm_pkg_);
+  const int num_recvs = hypre_ParCSRCommPkgNumRecvs(comm_pkg_);
+
+  std::vector<double> recv(recv_buf_.size() * ku, 0.0);
+  std::vector<MPI_Request> reqs;
+  reqs.reserve(static_cast<size_t>(num_sends_ + num_recvs));
+
+  for (int r = 0; r < num_recvs; ++r) {
+    int peer = hypre_ParCSRCommPkgRecvProc(comm_pkg_, r);
+    int start = hypre_ParCSRCommPkgRecvVecStart(comm_pkg_, r);
+    int len = hypre_ParCSRCommPkgRecvVecStart(comm_pkg_, r + 1) - start;
+    MPI_Request req;
+    MPI_Irecv(recv.data() + static_cast<size_t>(start) * ku, len * k, MPI_DOUBLE, peer, 29, comm, &req);
+    reqs.push_back(req);
+  }
+
+  std::vector<std::vector<double>> send_bufs(static_cast<size_t>(num_sends_));
+  for (int s = 0; s < num_sends_; ++s) {
+    int peer = hypre_ParCSRCommPkgSendProc(comm_pkg_, s);
+    int start = hypre_ParCSRCommPkgSendMapStart(comm_pkg_, s);
+    int len = hypre_ParCSRCommPkgSendMapStart(comm_pkg_, s + 1) - start;
+    auto& sb = send_bufs[static_cast<size_t>(s)];
+    sb.resize(static_cast<size_t>(len) * ku);
+    for (int i = 0; i < len; ++i) {
+      const size_t src = static_cast<size_t>(hypre_ParCSRCommPkgSendMapElmt(comm_pkg_, start + i)) * ku;
+      std::copy_n(&X[src], ku, &sb[static_cast<size_t>(i) * ku]);
+    }
+    MPI_Request req;
+    MPI_Isend(sb.data(), len * k, MPI_DOUBLE, peer, 29, comm, &req);
+    reqs.push_back(req);
+  }
+
+  // Local diag SpMM overlaps with the halo exchange.
+  std::vector<double> Y(static_cast<size_t>(n) * ku, 0.0);
+  bsrSpMMAdd(diag_bsr_, X.data(), Y.data(), k);
+
+  if (!reqs.empty()) {
+    MPI_Waitall(static_cast<int>(reqs.size()), reqs.data(), MPI_STATUSES_IGNORE);
+  }
+
+  if (offd_bsr_.nb_rows > 0 && !recv.empty()) {
+    bsrSpMMAdd(offd_bsr_, recv.data(), Y.data(), k);
+  }
+
+  for (int j = 0; j < k; ++j) {
+    double* yj = ys[static_cast<size_t>(j)]->HostWrite();
+    for (int i = 0; i < n; ++i) {
+      yj[i] = Y[static_cast<size_t>(i) * ku + static_cast<size_t>(j)];
+    }
   }
 }
 

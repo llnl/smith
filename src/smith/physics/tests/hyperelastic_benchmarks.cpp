@@ -55,6 +55,7 @@ double cg_model_stagnation_tol = 0.0;
 int cg_model_stagnation_window = 0;
 bool cg_eisenstat_walker = false;
 bool use_bsr_spmv = false;
+bool deflation_block_jacobi = false;
 double cg_forcing_rel = 5.0e-5;
 double residual_growth_cap = 3.0;
 double tr_decrease_factor = 0.25;
@@ -117,7 +118,8 @@ LinearSolverOptions linearOptions()
           .cg_model_stagnation_window = cg_model_stagnation_window,
           .cg_eisenstat_walker = cg_eisenstat_walker,
           .print_level = 0,
-          .use_bsr_spmv = use_bsr_spmv};
+          .use_bsr_spmv = use_bsr_spmv,
+          .deflation_block_jacobi = deflation_block_jacobi};
 }
 
 NonlinearSolverOptions nonlinearOptions()
@@ -226,6 +228,8 @@ void parseCommandLine(int& argc, char** argv)
       cg_eisenstat_walker = true;
     } else if (arg == "--use-bsr-spmv") {
       use_bsr_spmv = true;
+    } else if (arg == "--deflation-block-jacobi") {
+      deflation_block_jacobi = true;
     } else if (arg.rfind("--cg-forcing-rel=", 0) == 0) {
       cg_forcing_rel = std::stod(arg.substr(std::string("--cg-forcing-rel=").size()));
     } else if (arg.rfind("--residual-growth-cap=", 0) == 0) {

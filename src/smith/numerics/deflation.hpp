@@ -95,6 +95,10 @@ class DeflationPreconditioner : public mfem::Solver {
   /// Subsequent `SetOperator` calls build the basis against this FES.
   void attachFES(mfem::ParFiniteElementSpace& fes);
 
+  /// Replace the scalar Hypre smoother with a vdim x vdim block-Jacobi smoother.
+  /// Takes effect at the next SetOperator.
+  void setUseBlockJacobiSmoother(bool enable) { use_block_jacobi_ = enable; }
+
   bool hasFES() const { return fes_ != nullptr; }
 
   /// factor W^T A W; also forwards to the inner smoother. A must be HypreParMatrix.
@@ -245,12 +249,24 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable std::vector<int> schwarz_send_neighbors_;
   mutable std::vector<mfem::DenseMatrix> schwarz_neighbor_blocks_;
 
+  /// Build the inverted vdim x vdim diagonal blocks for the block-Jacobi smoother.
+  void buildBlockJacobi();
+
+  /// Apply the configured smoother (block-Jacobi or HypreSmoother): z = M^{-1} r.
+  void applySmoother(const mfem::Vector& r, mfem::Vector& z) const;
+
   const mfem::HypreParMatrix* A_ = nullptr;
   const mfem::Operator* op_for_mult_ = nullptr;
 
   std::unique_ptr<mfem::HypreSmoother> smoother_;
   mfem::HypreSmoother::Type smoother_type_;
   bool use_smoother_ = true;
+  /// Use a dim x dim block-Jacobi smoother (exact per-node diagonal-block inverses)
+  /// instead of the scalar HypreSmoother. BC-eliminated dofs (zeroed row/col, 1 on the
+  /// diagonal) decouple inside their block, so the block inverse handles them exactly.
+  bool use_block_jacobi_ = false;
+  /// Inverted diagonal blocks, row-major b x b per block (size = (n/b) * b * b).
+  mutable std::vector<double> block_jacobi_inv_;
   mfem::Array<int> ess_tdofs_;
 
   // === TIMING BEGIN ===

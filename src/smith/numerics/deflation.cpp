@@ -263,8 +263,10 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
   if (!fes_) throw std::runtime_error("DeflationPreconditioner::SetOperator: attachFES not called");
 
   const mfem::HypreParMatrix* hyp = dynamic_cast<const mfem::HypreParMatrix*>(&op);
+  const BSROperator* bsr_op = nullptr;
   if (!hyp) {
-    if (const auto* bsr_op = dynamic_cast<const BSROperator*>(&op)) {
+    bsr_op = dynamic_cast<const BSROperator*>(&op);
+    if (bsr_op) {
       hyp = bsr_op->GetHypreMatrix();
     }
   }
@@ -283,7 +285,11 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
   double t0 = MPI_Wtime();
   ++setop_calls_;
   // === TIMING END ===
-  assembleWtAW(*A_, W_dense_, modes_per_rank_, WtAW_, &assemble_timings_);
+  if (bsr_op && bsr_op->Enabled()) {
+    assembleWtAW(*bsr_op, W_dense_, modes_per_rank_, WtAW_, &assemble_timings_);
+  } else {
+    assembleWtAW(*A_, W_dense_, modes_per_rank_, WtAW_, &assemble_timings_);
+  }
   // === TIMING BEGIN ===
   double t1 = MPI_Wtime();
   setop_matvec_time_ += t1 - t0;
@@ -358,12 +364,77 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
   setop_factor_time_ += t2 - t1;
   // === TIMING END ===
 
-  smoother_ = std::make_unique<mfem::HypreSmoother>();
-  smoother_->SetType(smoother_type_);
-  smoother_->SetOperator(const_cast<mfem::HypreParMatrix&>(*A_));
+  if (use_block_jacobi_) {
+    buildBlockJacobi();
+    smoother_.reset();
+  } else {
+    smoother_ = std::make_unique<mfem::HypreSmoother>();
+    smoother_->SetType(smoother_type_);
+    smoother_->SetOperator(const_cast<mfem::HypreParMatrix&>(*A_));
+  }
   // === TIMING BEGIN ===
   setop_smoother_time_ += MPI_Wtime() - t2;
   // === TIMING END ===
+}
+
+void DeflationPreconditioner::buildBlockJacobi()
+{
+  const int b = fes_->GetVDim();
+  const int n = A_->Height();
+  if (b < 1 || n % b != 0) {
+    throw std::runtime_error("DeflationPreconditioner: block-Jacobi requires vdim-aligned true dofs");
+  }
+  auto* parA = static_cast<hypre_ParCSRMatrix*>(const_cast<mfem::HypreParMatrix&>(*A_));
+  hypre_CSRMatrix* diag = hypre_ParCSRMatrixDiag(parA);
+  HYPRE_Int* diag_i = hypre_CSRMatrixI(diag);
+  HYPRE_Int* diag_j = hypre_CSRMatrixJ(diag);
+  HYPRE_Real* diag_a = hypre_CSRMatrixData(diag);
+
+  const int nb = n / b;
+  block_jacobi_inv_.assign(static_cast<size_t>(nb) * static_cast<size_t>(b * b), 0.0);
+  mfem::DenseMatrix block(b, b);
+  for (int br = 0; br < nb; ++br) {
+    // Gather the b x b diagonal block. BC-eliminated dofs appear as a zeroed row/col with
+    // 1.0 on the diagonal, which decouples them inside the block; the LU inverse below is
+    // then exactly identity on those components and the inverse of the active sub-block.
+    block = 0.0;
+    for (int i = 0; i < b; ++i) {
+      const int row = br * b + i;
+      for (HYPRE_Int idx = diag_i[row]; idx < diag_i[row + 1]; ++idx) {
+        const int col = static_cast<int>(diag_j[idx]);
+        if (col >= br * b && col < (br + 1) * b) {
+          block(i, col - br * b) = diag_a[idx];
+        }
+      }
+    }
+    block.Invert();
+    double* out = &block_jacobi_inv_[static_cast<size_t>(br) * static_cast<size_t>(b * b)];
+    for (int i = 0; i < b; ++i) {
+      for (int j = 0; j < b; ++j) out[i * b + j] = block(i, j);
+    }
+  }
+}
+
+void DeflationPreconditioner::applySmoother(const mfem::Vector& r, mfem::Vector& z) const
+{
+  if (use_block_jacobi_ && !block_jacobi_inv_.empty()) {
+    const int b = fes_->GetVDim();
+    const int nb = static_cast<int>(r.Size()) / b;
+    const double* rd = r.GetData();
+    double* zd = z.GetData();
+    for (int br = 0; br < nb; ++br) {
+      const double* inv = &block_jacobi_inv_[static_cast<size_t>(br) * static_cast<size_t>(b * b)];
+      const double* rb = &rd[br * b];
+      double* zb = &zd[br * b];
+      for (int i = 0; i < b; ++i) {
+        double acc = 0.0;
+        for (int j = 0; j < b; ++j) acc += inv[i * b + j] * rb[j];
+        zb[i] = acc;
+      }
+    }
+  } else {
+    smoother_->Mult(r, z);
+  }
 }
 
 void DeflationPreconditioner::coarseSolve(const mfem::Vector& r, mfem::Vector& z0) const
@@ -787,8 +858,8 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
   // === TIMING END ===
   const int n = fes_->GetTrueVSize();
   z.SetSize(n);
-  if (use_smoother_ && smoother_) {
-    smoother_->Mult(r, z);
+  if (use_smoother_ && (smoother_ || (use_block_jacobi_ && !block_jacobi_inv_.empty()))) {
+    applySmoother(r, z);
   } else {
     z = 0.0;
   }
@@ -817,7 +888,7 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
     mfem::Vector r_mid(n);
     for (int i = 0; i < n; ++i) r_mid(i) = r(i) - mult_tmp_(i);
     mfem::Vector s_mid(n);
-    smoother_->Mult(r_mid, s_mid);
+    applySmoother(r_mid, s_mid);
     for (int i = 0; i < n; ++i) z(i) += s_mid(i);
     op_for_mult_->Mult(z, mult_tmp_);
     mfem::Vector r_post(n);

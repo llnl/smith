@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include "smith/numerics/batched_matvec.hpp"
+#include "smith/numerics/bsr_operator.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -321,6 +322,179 @@ void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_loca
   if (timings) {
     // Halo time = pack + irecv/isend + the waitall. The diag SpMV overlaps with comm so
     // we attribute only the wait portion to halo. Charge diag separately.
+    timings->halo += (t_halo_end - t_halo_start) - (t_diag_end - t_diag_start);
+    timings->diag += t_diag_end - t_diag_start;
+    timings->offd += t_offd_end - t_offd_start;
+    timings->allreduce += t_ar_end - t_ar_start;
+  }
+}
+
+void assembleWtAW(const BSROperator& bsr, const mfem::DenseMatrix& W_local, int modes_per_rank,
+                  mfem::DenseMatrix& WtAW, AssembleWtAWTimings* timings)
+{
+  if (!bsr.Enabled()) {
+    assembleWtAW(*bsr.GetHypreMatrix(), W_local, modes_per_rank, WtAW, timings);
+    return;
+  }
+
+  hypre_ParCSRMatrix* parA = static_cast<hypre_ParCSRMatrix*>(*bsr.GetHypreMatrix());
+  hypre_ParCSRCommPkg* comm_pkg = hypre_ParCSRMatrixCommPkg(parA);
+  if (!comm_pkg) {
+    hypre_MatvecCommPkgCreate(parA);
+    comm_pkg = hypre_ParCSRMatrixCommPkg(parA);
+  }
+  MPI_Comm comm = hypre_ParCSRCommPkgComm(comm_pkg);
+
+  int my_rank = 0, nproc = 1;
+  MPI_Comm_rank(comm, &my_rank);
+  MPI_Comm_size(comm, &nproc);
+
+  const int n = W_local.Height();
+  const int mpr = modes_per_rank;
+  const int m = mpr * nproc;
+  const int my_offset = my_rank * mpr;
+  const size_t mpru = static_cast<size_t>(mpr);
+
+  if (W_local.Width() != mpr) {
+    throw std::runtime_error("assembleWtAW(BSR): W_local.Width() != modes_per_rank");
+  }
+  if (n != bsr.Height()) {
+    throw std::runtime_error("assembleWtAW(BSR): W_local.Height() != A.Height()");
+  }
+
+  WtAW.SetSize(m, m);
+  WtAW = 0.0;
+
+  const int num_sends = hypre_ParCSRCommPkgNumSends(comm_pkg);
+  const int num_recvs = hypre_ParCSRCommPkgNumRecvs(comm_pkg);
+  const int b = bsr.BlockSize();
+  const int total_offd_cols = num_recvs > 0 ? hypre_ParCSRCommPkgRecvVecStart(comm_pkg, num_recvs) : 0;
+
+  // Pack W row-major (mpr contiguous per dof) for the SpMM kernel.
+  std::vector<double> W_rm(static_cast<size_t>(n) * mpru);
+  for (int j = 0; j < mpr; ++j) {
+    for (int i = 0; i < n; ++i) {
+      W_rm[static_cast<size_t>(i) * mpru + static_cast<size_t>(j)] = W_local(i, j);
+    }
+  }
+
+  // Halo exchange of W (one packed message per neighbor, mpr values per halo dof).
+  double t_halo_start = MPI_Wtime();
+  std::vector<double> recv_buf(static_cast<size_t>(total_offd_cols) * mpru, 0.0);
+  std::vector<MPI_Request> reqs;
+  reqs.reserve(static_cast<size_t>(num_sends + num_recvs));
+
+  for (int r = 0; r < num_recvs; ++r) {
+    int peer = hypre_ParCSRCommPkgRecvProc(comm_pkg, r);
+    int start = hypre_ParCSRCommPkgRecvVecStart(comm_pkg, r);
+    int len = hypre_ParCSRCommPkgRecvVecStart(comm_pkg, r + 1) - start;
+    MPI_Request req;
+    MPI_Irecv(recv_buf.data() + static_cast<size_t>(start) * mpru, len * mpr, MPI_DOUBLE, peer, 23, comm, &req);
+    reqs.push_back(req);
+  }
+
+  std::vector<std::vector<double>> send_bufs(static_cast<size_t>(num_sends));
+  for (int s = 0; s < num_sends; ++s) {
+    int peer = hypre_ParCSRCommPkgSendProc(comm_pkg, s);
+    int start = hypre_ParCSRCommPkgSendMapStart(comm_pkg, s);
+    int len = hypre_ParCSRCommPkgSendMapStart(comm_pkg, s + 1) - start;
+    auto& sb = send_bufs[static_cast<size_t>(s)];
+    sb.resize(static_cast<size_t>(len) * mpru);
+    for (int i = 0; i < len; ++i) {
+      const size_t src = static_cast<size_t>(hypre_ParCSRCommPkgSendMapElmt(comm_pkg, start + i)) * mpru;
+      std::copy_n(&W_rm[src], mpru, &sb[static_cast<size_t>(i) * mpru]);
+    }
+    MPI_Request req;
+    MPI_Isend(sb.data(), len * mpr, MPI_DOUBLE, peer, 23, comm, &req);
+    reqs.push_back(req);
+  }
+
+  // Diagonal block (p, p) = W_p^T · A_diag · W_p — overlap with comm.
+  double t_diag_start = MPI_Wtime();
+  std::vector<double> AW_rm(static_cast<size_t>(n) * mpru, 0.0);
+  bsrSpMMAdd(bsr.DiagBSR(), W_rm.data(), AW_rm.data(), mpr);
+
+  for (int row = 0; row < n; ++row) {
+    const double* aw = &AW_rm[static_cast<size_t>(row) * mpru];
+    for (int i = 0; i < mpr; ++i) {
+      const double w = W_local(row, i);
+      for (int j = 0; j < mpr; ++j) {
+        WtAW(my_offset + i, my_offset + j) += w * aw[j];
+      }
+    }
+  }
+  double t_diag_end = MPI_Wtime();
+
+  if (!reqs.empty()) {
+    MPI_Waitall(static_cast<int>(reqs.size()), reqs.data(), MPI_STATUSES_IGNORE);
+  }
+  double t_halo_end = MPI_Wtime();
+
+  // Off-diag blocks (p, s): BSR offd SpMM with per-neighbor attribution. A BSR offd block
+  // column bc covers scalar offd cols [bc*b, bc*b + b), all owned by the same neighbor
+  // (halo dofs come in whole nodes when the BSR layout checks pass).
+  double t_offd_start = MPI_Wtime();
+  std::vector<int> owner_of_offd_col(static_cast<size_t>(total_offd_cols), -1);
+  for (int r = 0; r < num_recvs; ++r) {
+    int start = hypre_ParCSRCommPkgRecvVecStart(comm_pkg, r);
+    int end = hypre_ParCSRCommPkgRecvVecStart(comm_pkg, r + 1);
+    for (int c = start; c < end; ++c) owner_of_offd_col[static_cast<size_t>(c)] = r;
+  }
+  for (int bc = 0; bc * b < total_offd_cols; ++bc) {
+    if (owner_of_offd_col[static_cast<size_t>(bc * b)] != owner_of_offd_col[static_cast<size_t>(bc * b + b - 1)]) {
+      throw std::runtime_error("assembleWtAW(BSR): halo block straddles two neighbor ranks");
+    }
+  }
+
+  std::vector<std::vector<double>> AW_per(static_cast<size_t>(num_recvs));
+  for (auto& buf : AW_per) buf.assign(static_cast<size_t>(n) * mpru, 0.0);
+
+  const BSRMatrix& offd = bsr.OffdBSR();
+  const int* I = offd.I.data();
+  const int* J = offd.J.data();
+  const double* data = offd.data.data();
+  for (int br = 0; br < offd.nb_rows; ++br) {
+    for (int e = I[br]; e < I[br + 1]; ++e) {
+      const int bc = J[e];
+      const int r = owner_of_offd_col[static_cast<size_t>(bc * b)];
+      if (r < 0) {
+        throw std::runtime_error("assembleWtAW(BSR): offd column was not covered by the Hypre recv map");
+      }
+      const double* block = &data[static_cast<size_t>(e) * static_cast<size_t>(b * b)];
+      const double* x_block = &recv_buf[static_cast<size_t>(bc * b) * mpru];
+      double* y_block = &AW_per[static_cast<size_t>(r)][static_cast<size_t>(br * b) * mpru];
+      for (int i = 0; i < b; ++i) {
+        for (int j = 0; j < b; ++j) {
+          const double a_ij = block[i * b + j];
+          const double* x_row = &x_block[static_cast<size_t>(j) * mpru];
+          double* y_row = &y_block[static_cast<size_t>(i) * mpru];
+          for (int c = 0; c < mpr; ++c) y_row[c] += a_ij * x_row[c];
+        }
+      }
+    }
+  }
+
+  for (int r = 0; r < num_recvs; ++r) {
+    int peer = hypre_ParCSRCommPkgRecvProc(comm_pkg, r);
+    int peer_offset = peer * mpr;
+    const std::vector<double>& AWr = AW_per[static_cast<size_t>(r)];
+    for (int row = 0; row < n; ++row) {
+      const double* aw = &AWr[static_cast<size_t>(row) * mpru];
+      for (int i = 0; i < mpr; ++i) {
+        const double w = W_local(row, i);
+        for (int j = 0; j < mpr; ++j) {
+          WtAW(my_offset + i, peer_offset + j) += w * aw[j];
+        }
+      }
+    }
+  }
+  double t_offd_end = MPI_Wtime();
+
+  double t_ar_start = MPI_Wtime();
+  MPI_Allreduce(MPI_IN_PLACE, WtAW.Data(), m * m, MPI_DOUBLE, MPI_SUM, comm);
+  double t_ar_end = MPI_Wtime();
+
+  if (timings) {
     timings->halo += (t_halo_end - t_halo_start) - (t_diag_end - t_diag_start);
     timings->diag += t_diag_end - t_diag_start;
     timings->offd += t_offd_end - t_offd_start;

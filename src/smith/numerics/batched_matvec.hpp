@@ -77,4 +77,13 @@ void batchedMatvec(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& X, mf
 void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_local, int modes_per_rank,
                   mfem::DenseMatrix& WtAW, AssembleWtAWTimings* timings = nullptr);
 
+class BSROperator;
+
+/**
+ * @brief Same as above, but the local diag/offd SpMM runs on the BSR representation
+ * (one block index per b*b entries, contiguous block math). Requires bsr.Enabled().
+ */
+void assembleWtAW(const BSROperator& bsr, const mfem::DenseMatrix& W_local, int modes_per_rank,
+                  mfem::DenseMatrix& WtAW, AssembleWtAWTimings* timings = nullptr);
+
 }  // namespace smith

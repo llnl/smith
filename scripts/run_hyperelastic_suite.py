@@ -282,6 +282,8 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         common.append(f"--cg-stagnation-window={args.cg_stagnation_window}")
     if args.cg_eisenstat_walker:
         common.append("--cg-eisenstat-walker")
+    if args.deflation_block_jacobi:
+        common.append("--deflation-block-jacobi")
 
     if problem.name == "arch":
         arch = [
@@ -498,6 +500,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cg-stagnation-window", type=int, default=None)
     parser.add_argument("--cg-eisenstat-walker", action="store_true")
     parser.add_argument("--use-bsr-spmv", action="store_true")
+    parser.add_argument("--deflation-block-jacobi", action="store_true")
     parser.add_argument("--use-exact-energy", action="store_true")
     parser.add_argument("--nonlinear-max-iterations", type=int, default=300000)
     parser.add_argument("--hyper-steps", type=int, default=None,

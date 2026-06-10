@@ -16,6 +16,14 @@ struct BSRMatrix {
 };
 
 /**
+ * @brief Multi-RHS BSR SpMM: Y += alpha * A * X for k right-hand sides in one matrix sweep.
+ *
+ * X and Y are row-major with k contiguous values per scalar dof (X row i = k values of
+ * dof i), matching the packed-halo layouts used by the deflation/batched-matvec paths.
+ */
+void bsrSpMMAdd(const BSRMatrix& A, const double* X, double* Y, int k, double alpha = 1.0);
+
+/**
  * @brief Operator wrapper that intercepts a HypreParMatrix, converts its local
  * diagonal and off-diagonal blocks to a Block Sparse Row (BSR) format, and
  * performs an optimized SpMV during Mult.
@@ -42,11 +50,27 @@ class BSROperator : public mfem::Operator {
   /// Perform the matrix-vector multiplication y += A * x using the BSR representation
   void AddMult(const mfem::Vector& x, mfem::Vector& y, const double a = 1.0) const override;
 
+  /**
+   * @brief Multi-RHS multiply: ys[j] = A * xs[j] for all j with a single packed halo
+   * exchange and one sweep over the matrix (each loaded block is applied to every RHS).
+   * Falls back to per-vector hypre Mult when the BSR layout checks failed.
+   */
+  void MultBatch(const std::vector<const mfem::Vector*>& xs, const std::vector<mfem::Vector*>& ys) const;
+
   /// Retrieve the underlying HypreParMatrix
   mfem::HypreParMatrix* GetHypreMatrix() const { return A_; }
 
   /// True when the matrix satisfied the current prototype's block-layout checks.
   bool Enabled() const { return enabled_; }
+
+  /// Block size of the BSR representation
+  int BlockSize() const { return block_size_; }
+
+  /// Local diagonal block of the BSR representation (valid when Enabled())
+  const BSRMatrix& DiagBSR() const { return diag_bsr_; }
+
+  /// Local off-diagonal (halo-coupled) block of the BSR representation (valid when Enabled())
+  const BSRMatrix& OffdBSR() const { return offd_bsr_; }
 
  private:
   /// Convert a HYPRE CSR matrix to the internal BSR representation

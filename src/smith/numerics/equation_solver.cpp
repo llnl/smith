@@ -857,8 +857,13 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     ++num_batch_hess_vec_calls_;
     num_batch_hess_vec_actions_ += inputs.size();
     double t0 = MPI_Wtime();
-    for (size_t i = 0; i < inputs.size(); ++i) {
-      hess_vec_func(*inputs[i], *outputs[i]);
+    if (bsr_operator_ && bsr_operator_->Enabled() && grad == bsr_operator_.get()) {
+      // one packed halo exchange + one matrix sweep for the whole batch
+      bsr_operator_->MultBatch(inputs, outputs);
+    } else {
+      for (size_t i = 0; i < inputs.size(); ++i) {
+        hess_vec_func(*inputs[i], *outputs[i]);
+      }
     }
     batch_hess_vec_time_ += MPI_Wtime() - t0;
   }
@@ -2049,6 +2054,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     }
     defl->setDeflationOrder(linear_opts.deflation_order);
     defl->setCoarseMode(linear_opts.deflation_coarse_mode);
+    defl->setUseBlockJacobiSmoother(linear_opts.deflation_block_jacobi);
     preconditioner_solver = std::move(defl);
   } else if (preconditioner == Preconditioner::AMGFContact) {
     auto amgfcontact_preconditioner = std::make_unique<mfem::AMGFSolver>();
