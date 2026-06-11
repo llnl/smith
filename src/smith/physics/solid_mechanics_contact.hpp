@@ -382,6 +382,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       return true;
     }
 
+    // No match found for dual_name in SolidMechanicsContact. Try the base class.
     return SolidMechanicsBase::trySetDualAdjointBc(dual_name, bc);
   }
 
