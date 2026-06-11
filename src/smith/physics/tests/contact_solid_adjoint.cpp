@@ -286,8 +286,8 @@ TEST_F(ContactSensitivityFixture, ReactionShapeSensitivities)
 {
   auto solid_solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
   auto [qoi_base, shape_sensitivity] = computeContactReactionQoiSensitivities(*solid_solver, mesh);
-
   solid_solver->resetStates();
+
   FiniteElementState derivative_direction(shape_sensitivity.space(), "derivative_direction");
   fillDirection(*solid_solver, derivative_direction);
 
