@@ -94,7 +94,8 @@ def baseline_params() -> dict:
     return {name: spec[3] for name, spec in PARAM_SPACE.items()}
 
 
-def suite_command(params: dict, args, out_dir: Path, screening: bool) -> list[str]:
+def suite_command(params: dict, args, out_dir: Path, screening: bool, problem: str | None = None,
+                  timeout_sec: int | None = None) -> list[str]:
     cmd = [
         sys.executable,
         str(SUITE),
@@ -102,7 +103,7 @@ def suite_command(params: dict, args, out_dir: Path, screening: bool) -> list[st
         "--use-bsr-spmv",
         "--assemble-bsr",
         f"--procs={args.np}",
-        f"--timeout-sec={args.timeout_sec}",
+        f"--timeout-sec={timeout_sec if timeout_sec is not None else args.timeout_sec}",
         f"--output-dir={out_dir}",
         f"--cg-stagnation-tol={params['cg_stagnation_tol']:.6g}",
         f"--cg-stagnation-window={params['cg_stagnation_window']}",
@@ -120,29 +121,84 @@ def suite_command(params: dict, args, out_dir: Path, screening: bool) -> list[st
     ]
     if screening:
         cmd += [f"--mesh-scale-factor={args.mesh_scale_factor}", f"--references-file={SCREEN_REFS}"]
+    if problem is not None:
+        cmd += ["--problems", problem]
     return cmd
 
 
-def evaluate(params: dict, args, out_dir: Path, screening: bool) -> dict:
+class EvalState:
+    """Best-known per-problem walls and overall score, used for early-kill decisions."""
+
+    def __init__(self):
+        self.best_walls: dict[str, float] = {}
+        self.best_score = float("inf")
+
+    def record(self, result: dict) -> None:
+        for p, w in result["walls"].items():
+            if result["statuses"].get(p) == "ok":
+                self.best_walls[p] = min(self.best_walls.get(p, float("inf")), w)
+        if result["n_bad"] == 0:
+            self.best_score = min(self.best_score, result["score"])
+
+    def problem_order(self):
+        # cheapest-first so hopeless configs die fast
+        return sorted(PROBLEMS, key=lambda p: self.best_walls.get(p, 0.0))
+
+    def timeout_for(self, p: str, args) -> int:
+        best = self.best_walls.get(p)
+        if best is None:
+            return args.timeout_sec
+        return int(min(args.timeout_sec, max(15.0, args.kill_factor * best)))
+
+
+def evaluate(params: dict, args, out_dir: Path, screening: bool, state: EvalState | None = None) -> dict:
+    """Run the suite one problem at a time, killing the eval early when it cannot win:
+    (a) any non-ok problem (the 4x penalty is unrecoverable), (b) per-problem adaptive
+    timeout = kill_factor * best-known wall, (c) an optimistic bound on the final score
+    (remaining problems at their best-known walls) already exceeding kill_margin * best."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    cmd = suite_command(params, args, out_dir, screening)
-    subprocess.run(cmd, cwd=REPO, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     walls, statuses = {}, {}
-    summary = out_dir / "summary.csv"
-    if summary.exists():
-        with summary.open() as stream:
-            for row in csv.DictReader(stream):
-                statuses[row["problem"]] = row["status"]
-                try:
-                    walls[row["problem"]] = float(row["wall_s"])
-                except ValueError:
-                    walls[row["problem"]] = float(args.timeout_sec)
-    n_bad = sum(1 for p in PROBLEMS if statuses.get(p) != "ok")
-    geomean = math.exp(
-        sum(math.log(max(1e-3, walls.get(p, float(args.timeout_sec)))) for p in PROBLEMS) / len(PROBLEMS)
-    )
-    score = geomean * (4.0**n_bad)
-    return {"score": score, "geomean": geomean, "n_bad": n_bad, "walls": walls, "statuses": statuses}
+    aborted = False
+    order = state.problem_order() if state else list(PROBLEMS)
+    for idx, p in enumerate(order):
+        timeout = state.timeout_for(p, args) if state else args.timeout_sec
+        cmd = suite_command(params, args, out_dir / p, screening, problem=p, timeout_sec=timeout)
+        subprocess.run(cmd, cwd=REPO, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        summary = out_dir / p / "summary.csv"
+        statuses[p] = "failed"
+        walls[p] = float(timeout)
+        if summary.exists():
+            with summary.open() as stream:
+                for row in csv.DictReader(stream):
+                    statuses[p] = row["status"]
+                    try:
+                        walls[p] = float(row["wall_s"])
+                    except ValueError:
+                        pass
+        if statuses[p] != "ok":
+            aborted = True  # unrecoverable: score *= 4
+            break
+        if state and state.best_score < float("inf"):
+            done = [walls[q] for q in order[: idx + 1]]
+            optimistic = done + [state.best_walls.get(q, 1.0) for q in order[idx + 1 :]]
+            bound = math.exp(sum(math.log(max(1e-3, w)) for w in optimistic) / len(PROBLEMS))
+            if bound > args.kill_margin * state.best_score:
+                aborted = True
+                break
+
+    for p in PROBLEMS:
+        if p not in statuses:
+            statuses[p] = "skipped"
+            # pessimistic fill so aborted evals rank behind everything that finished
+            walls[p] = float(args.timeout_sec)
+    n_bad = sum(1 for p in PROBLEMS if statuses.get(p) not in ("ok", "skipped"))
+    geomean = math.exp(sum(math.log(max(1e-3, walls[p])) for p in PROBLEMS) / len(PROBLEMS))
+    score = geomean * (4.0**n_bad) * (2.0 if aborted else 1.0)
+    result = {"score": score, "geomean": geomean, "n_bad": n_bad, "walls": walls, "statuses": statuses,
+              "aborted": aborted}
+    if state:
+        state.record(result)
+    return result
 
 
 def log_eval(log_path: Path, tag: str, params: dict, result: dict, out_dir: Path) -> None:
@@ -150,7 +206,8 @@ def log_eval(log_path: Path, tag: str, params: dict, result: dict, out_dir: Path
     with log_path.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(record) + "\n")
     walls = " ".join(f"{p}={result['walls'].get(p, float('nan')):.1f}" for p in PROBLEMS)
-    print(f"[{tag}] score={result['score']:.2f} bad={result['n_bad']} {walls}", flush=True)
+    aborted = " ABORTED" if result.get("aborted") else ""
+    print(f"[{tag}] score={result['score']:.2f} bad={result['n_bad']}{aborted} {walls}", flush=True)
 
 
 def run_search(args) -> None:
@@ -170,11 +227,12 @@ def run_search(args) -> None:
     while len(population) < args.population:
         population.append([min(1.0, max(0.0, u + rng.gauss(0.0, 0.15))) for u in base_u])
 
+    state = EvalState()
     scores: list[float] = []
     eval_count = 0
     for i, member in enumerate(population):
         params = repair({name: from_unit(name, u) for name, u in zip(names, member)})
-        result = evaluate(params, args, root / f"eval-{eval_count:04d}", screening=True)
+        result = evaluate(params, args, root / f"eval-{eval_count:04d}", screening=True, state=state)
         log_eval(log_path, f"gen0/{i}", params, result, root / f"eval-{eval_count:04d}")
         scores.append(result["score"])
         eval_count += 1
@@ -189,7 +247,7 @@ def run_search(args) -> None:
                 if j == j_rand or rng.random() < CR:
                     trial[j] = min(1.0, max(0.0, population[a][j] + F * (population[b][j] - population[c][j])))
             params = repair({name: from_unit(name, u) for name, u in zip(names, trial)})
-            result = evaluate(params, args, root / f"eval-{eval_count:04d}", screening=True)
+            result = evaluate(params, args, root / f"eval-{eval_count:04d}", screening=True, state=state)
             log_eval(log_path, f"gen{gen}/{i}", params, result, root / f"eval-{eval_count:04d}")
             if result["score"] < scores[i]:
                 population[i] = trial
@@ -235,6 +293,10 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--timeout-sec", type=int, default=120, help="per-problem timeout for screening evals")
     parser.add_argument("--mesh-scale-factor", type=float, default=0.6)
+    parser.add_argument("--kill-factor", type=float, default=4.0,
+                        help="per-problem timeout = kill_factor * best-known wall")
+    parser.add_argument("--kill-margin", type=float, default=1.5,
+                        help="abort the eval when its optimistic score bound exceeds kill_margin * best score")
     parser.add_argument("--confirm", type=int, default=0, help="confirm top-N configs from --log at full size")
     parser.add_argument("--confirm-timeout-sec", type=int, default=240)
     parser.add_argument("--log", type=Path, default=None, help="evals.jsonl from a screening run (for --confirm)")
