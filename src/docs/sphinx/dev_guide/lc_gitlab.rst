@@ -55,14 +55,14 @@ Run it manually first to make sure it is cleaning the expected directory:
 
 .. code-block:: bash
 
-   scripts/cleanup_gitlab_builds.sh -d 30
+   scripts/cleanup_gitlab_builds.sh -d 4
 
 The script defaults to a dry run. Add ``-f`` after confirming the output to
 delete the matched directories:
 
 .. code-block:: bash
 
-   scripts/cleanup_gitlab_builds.sh -d 30 -f
+   scripts/cleanup_gitlab_builds.sh -d 4 -f
 
 Setting Up a Cron Job
 =====================

@@ -11,7 +11,7 @@ if [[ ! -d "$WORK_DIR" ]]; then
     exit 1
 fi
 
-LAST_MODIFY_DAYS=14
+LAST_MODIFY_DAYS=4
 DRY_RUN=1
 QUIET=0
 
@@ -20,7 +20,7 @@ usage() {
 Usage: $(basename "$0") [-d DAYS] [-f] [-q] [-h]
 
 Options:
-  -d DAYS   Delete directories older than DAYS days by mtime. Default: 14
+  -d DAYS   Delete directories older than DAYS days by mtime. Default: 4
   -f        Actually delete directories. Default is dry-run.
   -q        Quiet mode
   -h        Show this help
