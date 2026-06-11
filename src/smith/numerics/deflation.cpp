@@ -308,6 +308,72 @@ void DeflationPreconditioner::wAddMultCompact(const double* alpha_local, mfem::V
   }
 }
 
+bool DeflationPreconditioner::skylineFactorWtAW() const
+{
+  const int m = m_;
+  sky_first_.assign(static_cast<size_t>(m), 0);
+  sky_ptr_.assign(static_cast<size_t>(m) + 1, 0);
+  // Profile from the lower triangle's first structural nonzero per row. Non-neighbor rank
+  // blocks are exact zeros (assembled as allreduced sums of zeros), so this is the
+  // rank-coupling block sparsity; Cholesky fill stays inside the row profile.
+  for (int i = 0; i < m; ++i) {
+    int first = i;
+    for (int j = 0; j < i; ++j) {
+      if (WtAW_(i, j) != 0.0) {
+        first = j;
+        break;
+      }
+    }
+    sky_first_[static_cast<size_t>(i)] = first;
+    sky_ptr_[static_cast<size_t>(i) + 1] = sky_ptr_[static_cast<size_t>(i)] + (i - first + 1);
+  }
+  sky_L_.assign(static_cast<size_t>(sky_ptr_[static_cast<size_t>(m)]), 0.0);
+
+  // Row-oriented (up-looking) Cholesky-Crout over the profile:
+  //   L(i,j) = (A(i,j) - sum_k L(i,k) L(j,k)) / L(j,j),  k in [max(first_i, first_j), j)
+  //   L(i,i) = sqrt(A(i,i) - sum_k L(i,k)^2)
+  for (int i = 0; i < m; ++i) {
+    const int fi = sky_first_[static_cast<size_t>(i)];
+    double* Li = &sky_L_[static_cast<size_t>(sky_ptr_[static_cast<size_t>(i)])] - fi;  // Li[j] = L(i,j)
+    for (int j = fi; j < i; ++j) {
+      const int fj = sky_first_[static_cast<size_t>(j)];
+      const double* Lj = &sky_L_[static_cast<size_t>(sky_ptr_[static_cast<size_t>(j)])] - fj;
+      double a = 0.0;
+      for (int k = std::max(fi, fj); k < j; ++k) a += Li[k] * Lj[k];
+      Li[j] = (WtAW_(i, j) - a) / Lj[j];
+    }
+    double a = 0.0;
+    for (int k = fi; k < i; ++k) a += Li[k] * Li[k];
+    const double pivot = WtAW_(i, i) - a;
+    if (!(pivot > 0.0)) return false;
+    Li[i] = std::sqrt(pivot);
+  }
+  return true;
+}
+
+void DeflationPreconditioner::skylineSolve(const mfem::Vector& rhs, mfem::Vector& x) const
+{
+  const int m = m_;
+  x.SetSize(m);
+  for (int i = 0; i < m; ++i) x(i) = rhs(i);
+  double* xd = x.GetData();
+  // forward: L y = b
+  for (int i = 0; i < m; ++i) {
+    const int fi = sky_first_[static_cast<size_t>(i)];
+    const double* Li = &sky_L_[static_cast<size_t>(sky_ptr_[static_cast<size_t>(i)])] - fi;
+    double a = 0.0;
+    for (int j = fi; j < i; ++j) a += Li[j] * xd[j];
+    xd[i] = (xd[i] - a) / Li[i];
+  }
+  // back: L^T x = y
+  for (int i = m - 1; i >= 0; --i) {
+    const int fi = sky_first_[static_cast<size_t>(i)];
+    const double* Li = &sky_L_[static_cast<size_t>(sky_ptr_[static_cast<size_t>(i)])] - fi;
+    const double xi = (xd[i] /= Li[i]);
+    for (int j = fi; j < i; ++j) xd[j] -= Li[j] * xi;
+  }
+}
+
 void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
 {
   if (!fes_) throw std::runtime_error("DeflationPreconditioner::SetOperator: attachFES not called");
@@ -349,7 +415,7 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
     verifyWtAWAssembly();
   }
 
-  WtAW_uses_cholesky_ = factorCholesky(WtAW_, WtAW_cholesky_, WtAW_cholesky_factors_);
+  WtAW_uses_cholesky_ = skylineFactorWtAW();
   if (!WtAW_uses_cholesky_) {
     ++wtaw_cholesky_failures_;
   }
@@ -636,7 +702,7 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
   double tsolv2 = MPI_Wtime();
   mfem::Vector alpha(m_);
   if (WtAW_uses_cholesky_) {
-    choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, true, m_, rhs_global, alpha);
+    skylineSolve(rhs_global, alpha);
   } else {
     spectralCoarseSolve(rhs_global, alpha);
   }
@@ -691,7 +757,7 @@ void DeflationPreconditioner::solveCoarse(const mfem::Vector& c_local, mfem::Vec
   MPI_Allgather(c_local.GetData(), modes_per_rank_, MPI_DOUBLE, rhs_global.GetData(), modes_per_rank_, MPI_DOUBLE,
                 fes_->GetComm());
   if (WtAW_uses_cholesky_) {
-    choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, true, m_, rhs_global, alpha_global);
+    skylineSolve(rhs_global, alpha_global);
   } else {
     spectralCoarseSolve(rhs_global, alpha_global);
   }
@@ -988,12 +1054,8 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
     double ta = MPI_Wtime();
     cc_allgather_time_ += ta - ts;
 
-    // Per-apply m x m factor solve kept deliberately: replacing it with precomputed
-    // (WtAW)^{-1} rows (a mpr x m GEMV) saves only ~0.4 s/300k applies on arch but
-    // perturbs roundoff enough to change the nonlinear trajectory and fail the arch
-    // answer assert (relerr 3.6%) — see performance_plan.md, 2026-06-11.
     if (WtAW_uses_cholesky_) {
-      choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, true, m_, cc_rhs_global_, cc_alpha_);
+      skylineSolve(cc_rhs_global_, cc_alpha_);
     } else {
       spectralCoarseSolve(cc_rhs_global_, cc_alpha_);
     }

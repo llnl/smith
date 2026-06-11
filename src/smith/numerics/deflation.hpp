@@ -208,6 +208,11 @@ class DeflationPreconditioner : public mfem::Solver {
   void applyEssentialDofMask();
   void packWMatrix();
   void addScaledCoarseCorrection(const mfem::Vector& r, mfem::Vector& y, double scale) const;
+  /// Profile/skyline Cholesky of the (replicated) WtAW lower triangle. Returns false on a
+  /// non-positive pivot (indefinite/rank-deficient coarse matrix → spectral fallback).
+  bool skylineFactorWtAW() const;
+  /// x = (L L^T)^{-1} rhs via forward then back substitution over the stored profile.
+  void skylineSolve(const mfem::Vector& rhs, mfem::Vector& x) const;
   /// rhs = W^T r via the compact layout (bitwise == W_mat_->MultTranspose).
   void wTransposeCompact(const mfem::Vector& r, mfem::Vector& rhs) const;
   /// y += scale * W * alpha_local via the compact layout (bitwise == W_mat_->AddMult).
@@ -245,9 +250,12 @@ class DeflationPreconditioner : public mfem::Solver {
   mfem::DenseMatrix W_dense_;
 
   mutable mfem::DenseMatrix WtAW_;
-  mutable mfem::DenseMatrix WtAW_cholesky_;
-  mutable mfem::CholeskyFactors WtAW_cholesky_factors_;
-  mutable mfem::DenseMatrixInverse WtAW_lu_inv_;
+  /// Skyline (profile) Cholesky of WtAW. WtAW is block-sparse by rank-neighbor coupling, so
+  /// each row i only stores columns [sky_first_[i], i]; fill stays inside the profile. The
+  /// per-apply coarse solve is the typical forward + back lower-triangular solve pair.
+  mutable std::vector<int> sky_first_;
+  mutable std::vector<int> sky_ptr_;
+  mutable std::vector<double> sky_L_;
   mutable bool WtAW_uses_cholesky_ = false;
   mutable mfem::DenseMatrix coarse_evecs_kept_;
   mutable mfem::Vector coarse_evals_kept_;
