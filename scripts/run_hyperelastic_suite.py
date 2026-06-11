@@ -125,12 +125,14 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def references_path() -> Path:
+def references_path(args=None) -> Path:
+    if args is not None and args.references_file is not None:
+        return args.references_file
     return repo_root() / "scripts" / "hyperelastic_references.json"
 
 
-def load_references() -> dict:
-    path = references_path()
+def load_references(args=None) -> dict:
+    path = references_path(args)
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     return {}
@@ -156,8 +158,8 @@ def check_answer(row: dict, references: dict) -> None:
         row["status"] = "wrong-answer"
 
 
-def update_references(rows: list[dict], default_rel_tols: dict[str, float]) -> None:
-    references = load_references()
+def update_references(rows: list[dict], default_rel_tols: dict[str, float], args=None) -> None:
+    references = load_references(args)
     for row in rows:
         value = row.get("final_displacement_l2")
         if row.get("status") == "ok" and value not in ("", None):
@@ -166,8 +168,8 @@ def update_references(rows: list[dict], default_rel_tols: dict[str, float]) -> N
                 "final_displacement_l2": float(value),
                 "rel_tol": old.get("rel_tol", default_rel_tols.get(row["problem"], 0.01)),
             }
-    references_path().write_text(json.dumps(references, indent=2) + "\n", encoding="utf-8")
-    print(f"updated {references_path()}")
+    references_path(args).write_text(json.dumps(references, indent=2) + "\n", encoding="utf-8")
+    print(f"updated {references_path(args)}")
 
 
 def default_build_dir(root: Path) -> Path:
@@ -249,6 +251,17 @@ def build_targets(build_dir: Path, jobs: int, dry_run: bool) -> None:
             raise SystemExit(f"Build failed for target {target} with return code {rc}")
 
 
+def problem_mesh_scale(args: argparse.Namespace, problem: Problem) -> float | None:
+    """Global --mesh-scale replaces the per-problem default; --mesh-scale-factor multiplies it
+    (proportional screening meshes for parameter searches)."""
+    if args.mesh_scale is not None:
+        return args.mesh_scale
+    base = problem.default_mesh_scale if problem.default_mesh_scale is not None else 1.0
+    if args.mesh_scale_factor is not None:
+        return base * args.mesh_scale_factor
+    return problem.default_mesh_scale
+
+
 def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
     common = [
         f"--preconditioner={args.preconditioner}",
@@ -272,7 +285,7 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         ("--tr-eta2", args.tr_eta2),
         ("--tr-eta3", args.tr_eta3),
         ("--tr-eta4", args.tr_eta4),
-        ("--mesh-scale", args.mesh_scale if args.mesh_scale is not None else problem.default_mesh_scale),
+        ("--mesh-scale", problem_mesh_scale(args, problem)),
     ):
         if value is not None:
             common.append(f"{flag}={value}")
@@ -498,6 +511,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tr-eta3", type=float, default=None)
     parser.add_argument("--tr-eta4", type=float, default=None)
     parser.add_argument("--mesh-scale", type=float, default=None)
+    parser.add_argument("--mesh-scale-factor", type=float, default=None,
+                        help="Multiply each problem's default mesh scale (screening meshes)")
+    parser.add_argument("--references-file", type=Path, default=None,
+                        help="Alternate references JSON (e.g. screening-scale references)")
     parser.add_argument("--cg-stagnation-tol", type=float, default=None)
     parser.add_argument("--cg-stagnation-window", type=int, default=None)
     parser.add_argument("--cg-eisenstat-walker", action="store_true")
@@ -543,8 +560,8 @@ def main() -> int:
     # selection is controlled.
     default_rel_tols = {"arch": 0.01, "block": 0.01, "contact": 0.01, "twist": 0.05}
     if args.update_references:
-        update_references(rows, default_rel_tols)
-    references = load_references()
+        update_references(rows, default_rel_tols, args)
+    references = load_references(args)
     for row in rows:
         check_answer(row, references)
 
