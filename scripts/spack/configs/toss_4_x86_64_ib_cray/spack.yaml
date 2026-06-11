@@ -34,6 +34,8 @@ spack:
             c: /opt/rocm-6.4.2/llvm/bin/amdclang
             cxx: /opt/rocm-6.4.2/llvm/bin/amdclang++
             fortran: /opt/rocm-6.4.2/llvm/bin/amdflang
+          flags:
+            fflags: --gcc-toolchain=/opt/rh/gcc-toolset-13/root/usr
 
     # Providers
     netlib-lapack:
