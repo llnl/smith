@@ -228,6 +228,17 @@ def run_search(args) -> None:
     log_path = root / "evals.jsonl"
     print(f"optimization root: {root}")
 
+    # Optional restriction of the search to a subset of genes (--genes a,b,c): frozen
+    # dimensions stay at their baseline value through init, mutation, and crossover.
+    free = [True] * dim
+    if args.genes:
+        requested = [g.strip() for g in args.genes.split(",") if g.strip()]
+        unknown = [g for g in requested if g not in names]
+        if unknown:
+            raise SystemExit(f"--genes: unknown parameter(s) {unknown}; valid: {names}")
+        free = [name in requested for name in names]
+        print(f"search restricted to genes: {requested} ({sum(free)} of {dim} dims)")
+
     # initial population: baseline, the hand-validated adaptive-cap point, + perturbations
     population: list[list[float]] = []
     base_u = [to_unit(name, baseline_params()[name]) for name in names]
@@ -235,7 +246,10 @@ def run_search(args) -> None:
     cap_params = baseline_params() | {"cg_cap_min": 60, "cg_cap_gamma": 0.7}
     population.append([to_unit(name, cap_params[name]) for name in names])
     while len(population) < args.population:
-        population.append([min(1.0, max(0.0, u + rng.gauss(0.0, 0.15))) for u in base_u])
+        population.append([
+            min(1.0, max(0.0, u + rng.gauss(0.0, 0.15))) if free[j] else u
+            for j, u in enumerate(base_u)
+        ])
 
     state = EvalState()
     scores: list[float] = []
@@ -252,8 +266,9 @@ def run_search(args) -> None:
         for i in range(args.population):
             a, b, c = rng.sample([j for j in range(args.population) if j != i], 3)
             trial = list(population[i])
-            j_rand = rng.randrange(dim)
-            for j in range(dim):
+            free_idx = [j for j in range(dim) if free[j]]
+            j_rand = rng.choice(free_idx)
+            for j in free_idx:
                 if j == j_rand or rng.random() < CR:
                     trial[j] = min(1.0, max(0.0, population[a][j] + F * (population[b][j] - population[c][j])))
             params = repair({name: from_unit(name, u) for name, u in zip(names, trial)})
@@ -303,6 +318,8 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--timeout-sec", type=int, default=120, help="per-problem timeout for screening evals")
     parser.add_argument("--mesh-scale-factor", type=float, default=0.6)
+    parser.add_argument("--genes", type=str, default=None,
+                        help="comma-separated subset of PARAM_SPACE names to search; others stay at baseline")
     parser.add_argument("--kill-factor", type=float, default=4.0,
                         help="per-problem timeout = kill_factor * best-known wall")
     parser.add_argument("--kill-margin", type=float, default=1.5,
