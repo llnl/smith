@@ -260,8 +260,8 @@ spack:
     cmake:
       buildable: false
       externals:
-      - spec: cmake@3.26.5
-        prefix: /usr
+      - spec: cmake@3.30.5
+        prefix: /usr/tce/packages/cmake/cmake-3.30.5
     cppcheck:
       version: [2.9]
       buildable: false
