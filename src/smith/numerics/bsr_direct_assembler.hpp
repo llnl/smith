@@ -47,10 +47,18 @@ class BSRDirectAssembler {
    */
   BSRDirectAssembler(mfem::ParFiniteElementSpace& fes, const mfem::Array<int>& ess_tdofs, mfem::HypreParMatrix* A,
                      const std::vector<int>& row_ptr, const std::vector<int>& col_ind,
-                     const std::vector<double>& values);
+                     const std::vector<double>& values, const mfem::HypreParMatrix* Ae_reference = nullptr);
 
   /// Route fresh local CSR values into the BSR operator (zero, route, halo exchange, eliminate).
   void update(const std::vector<double>& values);
+
+  /**
+   * @brief y = Ae * x on non-eliminated rows, where Ae holds the eliminated *columns* of the
+   * un-eliminated matrix: y_i = sum_{j in ess} A(i,j) x_j for i not in ess; y_i = 0 for i in ess.
+   * This is what mfem::EliminateBC needs to correct the RHS for inhomogeneous essential BCs
+   * (eliminated *rows* of Ae are irrelevant there — callers overwrite rhs[ess] afterwards).
+   */
+  void eliminatedColumnsAction(const mfem::Vector& x, mfem::Vector& y) const;
 
   /// The operator the solver consumes. GetHypreMatrix() returns the stale bootstrap matrix
   /// (structure-only; do not read its values).
@@ -77,10 +85,22 @@ class BSRDirectAssembler {
   std::vector<char> ess_owned_;             ///< per owned tdof
   std::vector<char> ess_offd_;              ///< per offd column (halo-exchanged)
 
-  /// per local CSR entry: >= 0 unified BSR data index; -1 drop / handled by a send list
+  /// per local CSR entry: >= 0 unified BSR data index; -1 drop / handled by a send list;
+  /// <= -2 routes into the Ae store at index (-2 - dest)
   std::vector<long long> local_dest_;
   /// eliminated diagonal slots set to 1.0 after accumulation
   std::vector<long long> unit_diag_slots_;
+
+  /// Ae (eliminated-columns) store. src >= 0: owned tdof index into x; src < 0: offd column
+  /// position ~src (halo value of x). Values are partial contributions refreshed by update();
+  /// duplicates (same row/col from several ranks) accumulate naturally in the action.
+  struct AeEntry {
+    int row = 0;
+    int src = 0;
+  };
+  std::vector<AeEntry> ae_entries_;
+  std::vector<double> ae_values_;
+  bool ae_has_halo_ = false;
 
   struct Peer {
     int rank = 0;

@@ -38,7 +38,7 @@
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/infrastructure/accelerator.hpp"
 #include "smith/infrastructure/profiling.hpp"
-#include "smith/numerics/bsr_direct_assembler.hpp"
+#include "smith/numerics/jacobian_assembly.hpp"
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/functional/differentiate_wrt.hpp"
 #include "smith/numerics/functional/functional.hpp"
@@ -1069,30 +1069,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
           SMITH_MARK_FUNCTION;
           auto [r, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(u), acceleration_,
                                         *parameters_[parameter_indices].state...);
-          if (use_direct_bsr_assembly_) {
-            // Steady-state path: kernels + scatter into the local CSR, then route values
-            // straight into the BSR operator (no hypre RAP / elimination / conversion).
-            // First call bootstraps structure from one legacy assembly; J_/J_e_ then hold
-            // that first assembly only (forward solves do not read them again).
-            if (!bsr_assembler_) {
-              J_.reset();
-              J_ = assemble(drdu);
-              J_e_.reset();
-              J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
-              bsr_assembler_ = std::make_unique<BSRDirectAssembler>(displacement_.space(), bcs_.allEssentialTrueDofs(),
-                                                                    J_.get(), drdu.localRowPtr(), drdu.localColInd(),
-                                                                    drdu.localValues());
-            } else {
-              drdu.assembleLocalCSR();
-              bsr_assembler_->update(drdu.localValues());
-            }
-            return bsr_assembler_->op();
-          }
-          J_.reset();
-          J_ = assemble(drdu);
-          J_e_.reset();
-          J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
-          return *J_;
+          return assembleJacobianVia(drdu);
         });
   }
 
@@ -1109,6 +1086,11 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    */
   std::pair<const mfem::HypreParMatrix&, const mfem::HypreParMatrix&> stiffnessMatrix() const
   {
+    if (jacobian_) {
+      // quasistatic path: the facade owns the Jacobian (throws in DirectBSR mode rather
+      // than returning stale matrices)
+      return {jacobian_->hypre(), jacobian_->hypreEliminatedEntries()};
+    }
     SLIC_ERROR_ROOT_IF(!J_ || !J_e_, "Stiffness matrix has not yet been assembled.");
 
     return {*J_, *J_e_};
@@ -1484,10 +1466,35 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
   /// the specific methods and tolerances specified to solve the nonlinear residual equations
   /// When true, quasistatic Jacobians after the first are routed directly into a BSR
-  /// operator (see BSRDirectAssembler). Forward-solve only: J_/J_e_/stiffnessMatrix()
-  /// hold the bootstrap (first) assembly.
+  /// operator (JacobianAssembly Mode::DirectBSR). Assumes a symmetric Jacobian (the
+  /// hyperelastic Hessian); covers forward, warm-start, and adjoint solves.
+  /// stiffnessMatrix() is unavailable in this mode (throws instead of returning stale data).
   bool use_direct_bsr_assembly_ = false;
-  std::unique_ptr<BSRDirectAssembler> bsr_assembler_;
+
+  /// Single owner of the quasistatic Jacobian state (forward / warm start / adjoint).
+  /// The dynamic path still manages J_/J_e_ directly.
+  std::unique_ptr<JacobianAssembly> jacobian_;
+
+  /// lazily construct the facade (essential BCs must be final by first use)
+  JacobianAssembly& jacobianAssembly()
+  {
+    if (!jacobian_) {
+      const auto mode = use_direct_bsr_assembly_ ? JacobianAssembly::Mode::DirectBSR : JacobianAssembly::Mode::Hypre;
+      // Hypre mode keeps the legacy explicit-transpose adjoint (symmetric=false);
+      // DirectBSR declares symmetry so the transpose is the operator itself.
+      jacobian_ = std::make_unique<JacobianAssembly>(mode, displacement_.space(), bcs_.allEssentialTrueDofs(),
+                                                     use_direct_bsr_assembly_);
+    }
+    return *jacobian_;
+  }
+
+  /// assemble the current Jacobian through the facade from a Functional Gradient
+  template <typename Grad>
+  mfem::Operator& assembleJacobianVia(Grad& drdu)
+  {
+    return jacobianAssembly().assemble([&]() { return assemble(drdu); }, [&]() { drdu.assembleLocalCSR(); },
+                                       drdu.localRowPtr(), drdu.localColInd(), drdu.localValues());
+  }
 
   std::unique_ptr<EquationSolver> nonlin_solver_;
 
@@ -1565,24 +1572,12 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   {
     auto [_, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(displacement_), acceleration_,
                                   *parameters_[parameter_indices].state...);
-    J_.reset();
-    J_ = assemble(drdu);
-
-    auto J_T = std::unique_ptr<mfem::HypreParMatrix>(J_->Transpose());
-
-    J_e_.reset();
-    J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
-
-    auto& constrained_dofs = bcs_.allEssentialTrueDofs();
-
-    mfem::EliminateBC(*J_T, *J_e_, constrained_dofs, reactions_adjoint_bcs_, displacement_adjoint_load_);
-    for (int i = 0; i < constrained_dofs.Size(); i++) {
-      int j = constrained_dofs[i];
-      displacement_adjoint_load_[j] = reactions_adjoint_bcs_[j];
-    }
+    assembleJacobianVia(drdu);
+    auto& J_T = jacobianAssembly().eliminatedTranspose();
+    jacobianAssembly().applyBCsToRHS(reactions_adjoint_bcs_, displacement_adjoint_load_, /*transpose=*/true);
 
     auto& lin_solver = nonlin_solver_->linearSolver();
-    lin_solver.SetOperator(*J_T);
+    lin_solver.SetOperator(J_T);
     lin_solver.Mult(displacement_adjoint_load_, adjoint_displacement_);
 
     // Reset the equation solver to use the full nonlinear residual operator.  MRT, is this needed?
@@ -1715,22 +1710,15 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
       // use the most recently evaluated Jacobian
       auto [_, drdu] = (*residual_)(time_, shapeDisplacement(), differentiate_wrt(displacement_), acceleration_,
                                     *parameters_[parameter_indices].previous_state...);
-      J_.reset();
-      J_ = assemble(drdu);
-      J_e_.reset();
-      J_e_ = bcs_.eliminateAllEssentialDofsFromMatrix(*J_);
+      auto& J = assembleJacobianVia(drdu);
 
       r *= -1.0;
 
-      mfem::EliminateBC(*J_, *J_e_, constrained_dofs, du_, r);
-      for (int i = 0; i < constrained_dofs.Size(); i++) {
-        int j = constrained_dofs[i];
-        r[j] = du_[j];
-      }
+      jacobianAssembly().applyBCsToRHS(du_, r);
 
       auto& lin_solver = nonlin_solver_->linearSolver();
 
-      lin_solver.SetOperator(*J_);
+      lin_solver.SetOperator(J);
 
       lin_solver.Mult(r, du_);
     }

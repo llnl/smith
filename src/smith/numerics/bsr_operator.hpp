@@ -50,6 +50,15 @@ class BSROperator : public mfem::Operator {
   /// Perform the matrix-vector multiplication y += A * x using the BSR representation
   void AddMult(const mfem::Vector& x, mfem::Vector& y, const double a = 1.0) const override;
 
+  /// y = A^T x. Supported when the operator is declared symmetric (y = A x); otherwise falls
+  /// back to the wrapped hypre matrix, which is only valid when its values are current.
+  void MultTranspose(const mfem::Vector& x, mfem::Vector& y) const override;
+
+  /// Declare A = A^T so MultTranspose can use the BSR Mult (no hypre dependency).
+  void SetSymmetric(bool symmetric) { symmetric_ = symmetric; }
+  /// @overload
+  bool IsSymmetric() const { return symmetric_; }
+
   /**
    * @brief Multi-RHS multiply: ys[j] = A * xs[j] for all j with a single packed halo
    * exchange and one sweep over the matrix (each loaded block is applied to every RHS).
@@ -89,6 +98,7 @@ class BSROperator : public mfem::Operator {
   mfem::HypreParMatrix* A_ = nullptr;
   int block_size_ = 3;
   bool enabled_ = false;
+  bool symmetric_ = false;
 
   BSRMatrix diag_bsr_;
   BSRMatrix offd_bsr_;

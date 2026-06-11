@@ -18,6 +18,7 @@ set(numerics_headers
     deflation.hpp
     batched_matvec.hpp
     bsr_direct_assembler.hpp
+    jacobian_assembly.hpp
     bsr_operator.hpp
     )
 
@@ -32,6 +33,7 @@ set(numerics_sources
     deflation.cpp
     batched_matvec.cpp
     bsr_direct_assembler.cpp
+    jacobian_assembly.cpp
     bsr_operator.cpp
     )
 

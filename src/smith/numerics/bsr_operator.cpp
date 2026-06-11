@@ -173,6 +173,16 @@ void BSROperator::Mult(const mfem::Vector& x, mfem::Vector& y) const
   AddMult(x, y, 1.0);
 }
 
+void BSROperator::MultTranspose(const mfem::Vector& x, mfem::Vector& y) const
+{
+  if (symmetric_) {
+    Mult(x, y);
+    return;
+  }
+  MFEM_VERIFY(A_, "BSROperator::MultTranspose: no hypre fallback available");
+  A_->MultTranspose(x, y);
+}
+
 void BSROperator::AddMult(const mfem::Vector& x, mfem::Vector& y, const double a) const
 {
   if (!enabled_) {

@@ -42,7 +42,8 @@ long long bsrEntryIndex(const BSRMatrix& M, int i, int C, int cj)
 
 BSRDirectAssembler::BSRDirectAssembler(mfem::ParFiniteElementSpace& fes, const mfem::Array<int>& ess_tdofs,
                                        mfem::HypreParMatrix* A, const std::vector<int>& row_ptr,
-                                       const std::vector<int>& col_ind, const std::vector<double>& values)
+                                       const std::vector<int>& col_ind, const std::vector<double>& values,
+                                       const mfem::HypreParMatrix* Ae_reference)
     : comm_(fes.GetComm())
 {
   // own a clone: the caller reassembles/frees its matrix (e.g. the warm-start path), but
@@ -61,6 +62,28 @@ BSRDirectAssembler::BSRDirectAssembler(mfem::ParFiniteElementSpace& fes, const m
 
   buildRouting(fes, ess_tdofs, row_ptr, col_ind);
   verify(values);
+
+  if (Ae_reference) {
+    // deterministic pseudo-random probe; compare Ae*x against the legacy eliminated-entries matrix
+    mfem::Vector x(my_tsize_), y_ref(my_tsize_), y_direct(my_tsize_);
+    for (int i = 0; i < my_tsize_; ++i) x(i) = std::sin(0.7 * (my_first_tdof_ + i) + 0.3);
+    Ae_reference->Mult(x, y_ref);
+    eliminatedColumnsAction(x, y_direct);
+    double max_diff = 0.0, scale = 1.0;
+    for (int i = 0; i < my_tsize_; ++i) {
+      if (ess_owned_[static_cast<size_t>(i)]) continue;  // eliminated rows are intentionally zero here
+      max_diff = std::max(max_diff, std::abs(y_ref(i) - y_direct(i)));
+      scale = std::max(scale, std::abs(y_ref(i)));
+    }
+    double global[2] = {max_diff, scale};
+    MPI_Allreduce(MPI_IN_PLACE, global, 2, MPI_DOUBLE, MPI_MAX, comm_);
+    if (global[0] > 1.0e-9 * global[1]) {
+      std::ostringstream os;
+      os << "BSRDirectAssembler: eliminatedColumnsAction disagrees with the legacy Ae (max diff " << global[0]
+         << ", scale " << global[1] << ")";
+      throw std::runtime_error(os.str());
+    }
+  }
 }
 
 long long BSRDirectAssembler::slotOf(HYPRE_BigInt gI, HYPRE_BigInt gJ) const
@@ -142,6 +165,27 @@ void BSRDirectAssembler::buildRouting(mfem::ParFiniteElementSpace& fes, const mf
     return pos < 0 ? 1 : ess_offd_[static_cast<size_t>(pos)];
   };
 
+  // Route an eliminated-column entry (row gI not ess, col gJ ess) into the Ae store; the
+  // returned destination code (<= -2) addresses ae_values_[-2 - code].
+  auto ae_dest = [&](HYPRE_BigInt gI, HYPRE_BigInt gJ) -> long long {
+    AeEntry entry;
+    entry.row = static_cast<int>(gI - my_first_tdof_);
+    if (gJ >= my_first_tdof_ && gJ < my_first_tdof_ + my_tsize_) {
+      entry.src = static_cast<int>(gJ - my_first_tdof_);
+    } else {
+      const int pos = offdPosition(col_map_offd_, gJ);
+      if (pos < 0) {
+        throw std::runtime_error(
+            "BSRDirectAssembler: eliminated halo column absent from the matrix structure; "
+            "cannot support eliminatedColumnsAction for it");
+      }
+      entry.src = ~pos;
+      ae_has_halo_ = true;
+    }
+    ae_entries_.push_back(entry);
+    return -2 - static_cast<long long>(ae_entries_.size() - 1);
+  };
+
   // route local entries; collect (gI, gJ) pairs destined for other ranks
   const int nnz = row_ptr.back();
   local_dest_.assign(static_cast<size_t>(nnz), -1);
@@ -153,7 +197,11 @@ void BSRDirectAssembler::buildRouting(mfem::ParFiniteElementSpace& fes, const mf
     for (int k = row_ptr[static_cast<size_t>(i)]; k < row_ptr[static_cast<size_t>(i) + 1]; ++k) {
       const HYPRE_BigInt gJ = gt[static_cast<size_t>(col_ind[static_cast<size_t>(k)])];
       if (owner == my_rank) {
-        if (ess_owned_[static_cast<size_t>(gI - my_first_tdof_)] || ess_of(gJ)) continue;  // dropped (eliminated)
+        if (ess_owned_[static_cast<size_t>(gI - my_first_tdof_)]) continue;  // eliminated row: dropped
+        if (ess_of(gJ)) {
+          local_dest_[static_cast<size_t>(k)] = ae_dest(gI, gJ);  // eliminated column: kept in the Ae store
+          continue;
+        }
         local_dest_[static_cast<size_t>(k)] = slotOf(gI, gJ);
         if (local_dest_[static_cast<size_t>(k)] < 0) {
           throw std::runtime_error("BSRDirectAssembler: non-eliminated local entry missing from BSR structure");
@@ -212,8 +260,12 @@ void BSRDirectAssembler::buildRouting(mfem::ParFiniteElementSpace& fes, const mf
         if (gI < my_first_tdof_ || gI >= my_first_tdof_ + my_tsize_) {
           throw std::runtime_error("BSRDirectAssembler: received a contribution for a row this rank does not own");
         }
-        if (ess_owned_[static_cast<size_t>(gI - my_first_tdof_)] || ess_of(gJ)) {
-          p.recv_slots[t] = -1;  // eliminated
+        if (ess_owned_[static_cast<size_t>(gI - my_first_tdof_)]) {
+          p.recv_slots[t] = -1;  // eliminated row: dropped
+          continue;
+        }
+        if (ess_of(gJ)) {
+          p.recv_slots[t] = ae_dest(gI, gJ);  // eliminated column: kept in the Ae store
           continue;
         }
         p.recv_slots[t] = slotOf(gI, gJ);
@@ -235,6 +287,14 @@ void BSRDirectAssembler::buildRouting(mfem::ParFiniteElementSpace& fes, const mf
     }
     unit_diag_slots_.push_back(slot);
   }
+
+  ae_values_.assign(ae_entries_.size(), 0.0);
+
+  // The Ae halo exchange is pairwise: every rank must participate whenever *any* rank
+  // needs halo values, or neighbors deadlock waiting for flags that never arrive.
+  int has_halo = ae_has_halo_ ? 1 : 0;
+  MPI_Allreduce(MPI_IN_PLACE, &has_halo, 1, MPI_INT, MPI_LOR, comm_);
+  ae_has_halo_ = has_halo != 0;
 }
 
 void BSRDirectAssembler::update(const std::vector<double>& values)
@@ -260,6 +320,8 @@ void BSRDirectAssembler::update(const std::vector<double>& values)
     reqs.push_back(req);
   }
 
+  std::fill(ae_values_.begin(), ae_values_.end(), 0.0);
+
   auto data_at = [&](long long s) -> double& {
     return s < static_cast<long long>(diag_data_size_) ? diag_data[static_cast<size_t>(s)]
                                                        : offd_data[static_cast<size_t>(s) - diag_data_size_];
@@ -268,7 +330,11 @@ void BSRDirectAssembler::update(const std::vector<double>& values)
   const size_t nnz = local_dest_.size();
   for (size_t k = 0; k < nnz; ++k) {
     const long long d = local_dest_[k];
-    if (d >= 0) data_at(d) += values[k];
+    if (d >= 0) {
+      data_at(d) += values[k];
+    } else if (d <= -2) {
+      ae_values_[static_cast<size_t>(-2 - d)] += values[k];
+    }
   }
 
   if (!reqs.empty()) MPI_Waitall(static_cast<int>(reqs.size()), reqs.data(), MPI_STATUSES_IGNORE);
@@ -276,12 +342,49 @@ void BSRDirectAssembler::update(const std::vector<double>& values)
   for (const auto& p : recv_peers_) {
     for (size_t t = 0; t < p.recv_slots.size(); ++t) {
       const long long s = p.recv_slots[t];
-      if (s >= 0) data_at(s) += p.buf[t];
+      if (s >= 0) {
+        data_at(s) += p.buf[t];
+      } else if (s <= -2) {
+        ae_values_[static_cast<size_t>(-2 - s)] += p.buf[t];
+      }
     }
   }
 
   for (long long s : unit_diag_slots_) {
     data_at(s) = 1.0;
+  }
+}
+
+void BSRDirectAssembler::eliminatedColumnsAction(const mfem::Vector& x, mfem::Vector& y) const
+{
+  y.SetSize(my_tsize_);
+  y = 0.0;
+  // note: no early return on empty ae_entries_ — the halo exchange below is pairwise and
+  // every rank must participate when ae_has_halo_ (a global flag) is set
+
+  const double* xd = x.GetData();
+
+  std::vector<double> recv;
+  if (ae_has_halo_) {
+    // halo exchange of x so neighbor-owned eliminated columns can be applied
+    auto* parA = static_cast<hypre_ParCSRMatrix*>(*A_);
+    hypre_ParCSRCommPkg* comm_pkg = hypre_ParCSRMatrixCommPkg(parA);
+    const int num_sends = hypre_ParCSRCommPkgNumSends(comm_pkg);
+    const int send_size = hypre_ParCSRCommPkgSendMapStart(comm_pkg, num_sends);
+    std::vector<double> send_buf(static_cast<size_t>(send_size));
+    for (int t = 0; t < send_size; ++t) {
+      send_buf[static_cast<size_t>(t)] = xd[hypre_ParCSRCommPkgSendMapElmt(comm_pkg, t)];
+    }
+    recv.assign(col_map_offd_.size(), 0.0);
+    hypre_ParCSRCommHandle* handle = hypre_ParCSRCommHandleCreate(1, comm_pkg, send_buf.data(), recv.data());
+    if (handle) hypre_ParCSRCommHandleDestroy(handle);
+  }
+
+  double* yd = y.GetData();
+  for (size_t e = 0; e < ae_entries_.size(); ++e) {
+    const AeEntry& entry = ae_entries_[e];
+    const double xv = entry.src >= 0 ? xd[entry.src] : recv[static_cast<size_t>(~entry.src)];
+    yd[entry.row] += ae_values_[e] * xv;
   }
 }
 
