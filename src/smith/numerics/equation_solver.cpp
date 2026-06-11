@@ -1103,6 +1103,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     real_t ew_prev_norm = norm;
     real_t ew_prev_eta = linear_options.cg_ew_eta_max;
 
+    // Adaptive CG cap state: full budget from the configured max, residual progress
+    // anchored at the running max norm, and the consecutive radius-shrink streak.
+    const size_t cap_max_full = settings.max_cg_iterations;
+    double max_norm_seen = norm;
+    int consecutive_tr_shrinks = 0;
+
     int it = 0;
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
@@ -1222,6 +1228,22 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         } else {
           settings.cg_tol = std::max(0.5 * norm_goal, nonlinear_options.cg_forcing_rel * norm);
         }
+        max_norm_seen = std::max(max_norm_seen, norm);
+        if (nonlinear_options.cg_cap_min > 0) {
+          // Adaptive CG budget (see NonlinearSolverOptions::cg_cap_min): geometric ramp from
+          // cap_min to the full max over the residual's log-progress toward the goal, cut by
+          // gamma per consecutive radius-shrinking step.
+          const double cap_min = std::min(static_cast<double>(nonlinear_options.cg_cap_min),
+                                          static_cast<double>(cap_max_full));
+          double frac = 1.0;
+          if (norm > norm_goal && max_norm_seen > norm_goal) {
+            frac = std::clamp(std::log(max_norm_seen / norm) / std::log(max_norm_seen / norm_goal), 0.0, 1.0);
+          }
+          const double cap = cap_min * std::pow(static_cast<double>(cap_max_full) / cap_min, frac) *
+                             std::pow(nonlinear_options.cg_cap_gamma, consecutive_tr_shrinks);
+          settings.max_cg_iterations =
+              static_cast<size_t>(std::clamp(cap, cap_min, static_cast<double>(cap_max_full)));
+        }
         // Push Lanczos eigvec approximations of the assembled Hessian's leftmost spectrum
         // into left_mosts as subspace candidates. Applies regardless of W choice.
         for (const auto& v : lanczos_evecs_) {
@@ -1262,6 +1284,18 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         }
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
+
+      // Adaptive-cap diagnostic (SMITH_TR_CAP_DIAG=1): one line per outer with the state the
+      // cap schedule would consume. norm/tr_size are unmodified between the model solve and
+      // the line search, so capturing here reflects what CG saw.
+      static const bool cap_diag_enabled = [] {
+        const char* v = std::getenv("SMITH_TR_CAP_DIAG");
+        return v && v[0] != '\0' && v[0] != '0';
+      }();
+      const double diag_norm_pre = norm;
+      const double diag_tr_pre = tr_size;
+      const size_t diag_cg_iters = trResults.cg_iterations_count;
+      double diag_rho = std::numeric_limits<double>::quiet_NaN();
 
       // === TIMING BEGIN === — per-outer-iter CG-count histogram + status tally
       {
@@ -1467,6 +1501,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         double realImprove = -realObjective;
 
         double rho = realImprove / modelImprove;
+        diag_rho = rho;
         if (modelObjective > 0) {
           if (print_level >= 2) {
             mfem::out << "Found a positive model objective increase.  Debug if you see this.\n";
@@ -1519,6 +1554,22 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         if (ls > line_search_retries_max_) line_search_retries_max_ = ls;
       }
       // === TIMING END ===
+
+      if (tr_size < diag_tr_pre) {
+        ++consecutive_tr_shrinks;
+      } else {
+        consecutive_tr_shrinks = 0;
+      }
+
+      if (cap_diag_enabled) {
+        // The line-search loop only exits via accept-break or retry exhaustion.
+        const bool diag_accepted = lineSearchIter <= nonlinear_options.max_line_search_iterations;
+        mfem::out << "[capdiag] it=" << it << " norm=" << diag_norm_pre << " norm_goal=" << norm_goal
+                  << " tr_pre=" << diag_tr_pre << " tr_post=" << tr_size << " cg=" << diag_cg_iters
+                  << " hit_max=" << trResults.cg_hit_max_iters << " stag=" << trResults.cg_model_stagnated
+                  << " status=" << static_cast<int>(trResults.interior_status) << " rho=" << diag_rho
+                  << " accepted=" << diag_accepted << " ls=" << lineSearchIter << "\n";
+      }
     }
 
     final_iter = it;

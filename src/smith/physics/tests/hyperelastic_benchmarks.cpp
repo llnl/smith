@@ -58,6 +58,8 @@ bool use_bsr_spmv = false;
 std::string deflation_smoother = "hypre";
 bool assemble_bsr = false;
 double cg_forcing_rel = 5.0e-5;
+int cg_cap_min = 0;
+double cg_cap_gamma = 0.7;
 double residual_growth_cap = 3.0;
 double tr_decrease_factor = 0.25;
 double tr_increase_factor = 1.75;
@@ -137,6 +139,8 @@ NonlinearSolverOptions nonlinearOptions()
           .trust_num_lanczos = trust_num_lanczos,
           .trust_num_lanczos_iters = trust_num_lanczos_iters,
           .cg_forcing_rel = cg_forcing_rel,
+          .cg_cap_min = cg_cap_min,
+          .cg_cap_gamma = cg_cap_gamma,
           .residual_growth_cap = residual_growth_cap,
           .tr_decrease_factor = tr_decrease_factor,
           .tr_increase_factor = tr_increase_factor,
@@ -235,6 +239,10 @@ void parseCommandLine(int& argc, char** argv)
       assemble_bsr = true;
     } else if (arg.rfind("--cg-forcing-rel=", 0) == 0) {
       cg_forcing_rel = std::stod(arg.substr(std::string("--cg-forcing-rel=").size()));
+    } else if (arg.rfind("--cg-cap-min=", 0) == 0) {
+      cg_cap_min = std::stoi(arg.substr(std::string("--cg-cap-min=").size()));
+    } else if (arg.rfind("--cg-cap-gamma=", 0) == 0) {
+      cg_cap_gamma = std::stod(arg.substr(std::string("--cg-cap-gamma=").size()));
     } else if (arg.rfind("--residual-growth-cap=", 0) == 0) {
       residual_growth_cap = std::stod(arg.substr(std::string("--residual-growth-cap=").size()));
     } else if (arg.rfind("--tr-decrease-factor=", 0) == 0) {

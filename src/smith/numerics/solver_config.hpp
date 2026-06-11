@@ -575,6 +575,18 @@ struct NonlinearSolverOptions {
   /// cg_tol = max(0.5 * outer_goal, cg_forcing_rel * ||r||).
   double cg_forcing_rel = 5.0e-5;
 
+  /// Adaptive CG iteration cap floor (0 disables). When > 0, each outer's CG budget is
+  ///   cap = clamp(cg_cap_min, max_cg, cg_cap_min * (max_cg/cg_cap_min)^frac * gamma^m)
+  /// where frac in [0,1] is the nonlinear residual's log-progress from the running max
+  /// toward the convergence goal, and m counts consecutive radius-shrinking outer steps.
+  /// Tight budget far from tolerance / after poor steps; full max_cg accuracy only when
+  /// the Newton model is trustworthy. Truncated solves remain globally safe (Steihaug)
+  /// and are routed to the subspace step.
+  int cg_cap_min = 0;
+
+  /// Budget decay per consecutive radius-shrinking step for the adaptive CG cap.
+  double cg_cap_gamma = 0.7;
+
   /// TrustRegion acceptance safeguard (only without an exact-energy callback): reject a
   /// candidate step whose predicted residual norm exceeds this multiple of the current one.
   double residual_growth_cap = 3.0;
