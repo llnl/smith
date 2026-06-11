@@ -39,3 +39,15 @@ packages:
   umpire:
     require:
     - spec: "~shared~examples~werror"
+
+  # Forward debug and shared variants to relevant tpls (listed in alphabetical order)
+  # NOTE: You can use build_type==Debug and ++shared to propagate variants instead, but it will affect external packages
+  # as well and therefore leads to lower chances of concretization
+  smith:
+    require:
+    - spec: "^axom build_type=Debug ^conduit build_type=Debug ^hdf5 build_type=Debug ^hypre+debug ^metis build_type=Debug ^mfem+debug ^parmetis build_type=Debug ^raja build_type=Debug ^strumpack build_type=Debug ^superlu-dist build_type=Debug ^umpire build_type=Debug"
+      when: "build_type=Debug"
+    - spec: "^tribol build_type=Debug"
+      when: "+tribol build_type=Debug"
+    - spec: "^axom+shared ^hdf5+shared ^hypre+shared ^metis+shared ^mfem+shared~static ^netcdf-c+shared ^parmetis+shared ^raja+shared ^strumpack+shared ^superlu-dist+shared ^umpire+shared"
+      when: "+shared"
