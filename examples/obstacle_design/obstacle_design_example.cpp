@@ -28,10 +28,54 @@
 #include "axom/sidre.hpp"
 
 auto element_shape = mfem::Element::QUADRILATERAL;
-static constexpr int dim = 3;
+static constexpr int dim = 2;
 static constexpr int order = 1;
 
-using StateSpace = smith::H1<order>;
+// StateSpace --> ScalarSpace
+using StateSpace = smith::H1<order, dim>;
+using ObstacleSpace = smith::H1<order, dim>;
+using TrialSpace = ObstacleSpace;
+using WeakFormT = smith::FunctionalWeakForm<dim, TrialSpace, smith::Parameters<ObstacleSpace>>;
+
+
+class ParaviewWriter {
+ public:
+  using StateVecs = std::vector<std::shared_ptr<smith::FiniteElementState>>;
+  using DualVecs = std::vector<std::shared_ptr<smith::FiniteElementDual>>;
+
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
+      : pv(std::move(pv_)), states(states_)
+  {
+  }
+
+  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
+      : pv(std::move(pv_)), states(states_), dual_states(duals_)
+  {
+  }
+
+  void write(int step, double time, const std::vector<smith::FiniteElementState const*>& current_states)
+  {
+    SMITH_MARK_FUNCTION;
+    SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
+
+    for (size_t n = 0; n < states.size(); ++n) {
+      auto& state = states[n];
+      *state = *current_states[n];
+      state->gridFunction();
+    }
+
+    pv->SetCycle(step);
+    pv->SetTime(time);
+    pv->Save();
+  }
+
+ private:
+  std::unique_ptr<mfem::ParaViewDataCollection> pv;
+  StateVecs states;
+  StateVecs dual_states;
+};
+
+
 //using SolidWeakFormT = smith::SolidWeakForm<disp_order, dim, smith::Parameters<DensitySpace>>;
 
 
@@ -45,28 +89,32 @@ int main(int argc, char* argv[])
 
   // Command line arguments
   // Mesh options
-  double xlength = 0.5;
-  double ylength = 0.7;
-  double zlength = 0.3;
-  int nx = 6;
-  int ny = 4;
-  int nz = 4;
+  double xlength = 1.0;
+  double ylength = 1.0;
+  //double zlength = 0.3;
+  int nx = 10;
+  int ny = 10;
+  //int nz = 4;
+  int visualize = 0;
 
   // Solver options
-  double nonlinear_absolute_tol = 1e-6;
-  int nonlinear_max_iterations = 50;
+  double nonlinear_solve_tol = 1e-5;
+  int nonlinear_solve_maxiter = 30;
   // Handle command line arguments
-  axom::CLI::App app{"Inertial relief."};
+  axom::CLI::App app{"Obstacle design."};
   // Mesh options
   app.add_option("--xlength", xlength, "extent along x-axis")
-      ->default_val("0.5")  // Matches value set above
+      ->default_val("1.0")  // Matches value set above
       ->check(axom::CLI::PositiveNumber);
   app.add_option("--ylength", ylength, "extent along y-axis")
-      ->default_val("0.7")  // Matches value set above
+      ->default_val("1.0")  // Matches value set above
       ->check(axom::CLI::PositiveNumber);
-  app.add_option("--zlength", zlength, "extent along z-axis")
-      ->default_val("0.3")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+  //app.add_option("--zlength", zlength, "extent along z-axis")
+  //    ->default_val("0.3")  // Matches value set above
+  //    ->check(axom::CLI::PositiveNumber);
+  app.add_option("--visualize", visualize, "solution visualization")
+      ->default_val("0")  // Matches value set above
+      ->check(axom::CLI::Range(0, 1));
   app.set_help_flag("--help");
 
   CLI11_PARSE(app, argc, argv);
@@ -80,22 +128,122 @@ int main(int argc, char* argv[])
   smith::StateManager::initialize(datastore, "solid_dynamics");
 
   std::shared_ptr<smith::Mesh> mesh;
-  //std::vector<smith::FiniteElementState> states;
-  //std::vector<smith::FiniteElementState> params;
-  //std::vector<std::shared_ptr<smith::ScalarObjective>> constraints;
 
+  bool generate_edges = false;
   mesh = std::make_shared<smith::Mesh>(
-      mfem::Mesh::MakeCartesian3D(nx, ny, nz, element_shape, xlength, ylength, zlength), "this_mesh_name", 0, 0);
+      mfem::Mesh::MakeCartesian2D(nx, ny, element_shape, generate_edges, xlength, ylength), "this_mesh_name", 0, 0);
+
+
+  /* TODO:
+   * 1) utilize a weak form to define the objective of the "lower level" obstacle problem
+   *    1/2 u^T K u - f^T u
+   * 2) utilize FunctionalObjective + WeakForm to define the "upper level" design objective + gradient + Hessian
+   * */
+  smith::FiniteElementState disp = smith::StateManager::newState(StateSpace{}, "displacement", mesh->tag());
+  smith::FiniteElementState obstacle = smith::StateManager::newState(ObstacleSpace{}, "obstacle", mesh->tag());
+  std::unique_ptr<smith::FiniteElementState> shape_disp =
+      std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
+
+
+  std::vector<smith::FiniteElementState> states;
+  std::vector<smith::FiniteElementState> params;
+  states = {disp};
+  params = {obstacle};
+  
+
+  //// weak_form to define the "lower level" obstacle problem
+  //std::string physics_name = "elasticity";
+  //auto elasticity_weak_form = std::make_shared<WeakFormT>(physics_name, mesh, states[0].space(), getSpaces(params));
+  //elasticity_weak_form->addBodyIntegral(mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
+  //    auto gradu = smith::get<smith::DERIVATIVE>(U);
+  ////  return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
+  //    return smith::tuple{0.5 * smith::inner(gradu, gradu), gradu}; // complete me!		  
+  //});  
+  // NOTE: not going to use this idea for now. It seems more questionable to me that this adds much value
+  // also does the solid weak form reduce to what we want in the case of a H1 field. Is it assumed
+  
+  // define objective in terms of displacement/deformation field and the obstacle
+  // challenge: how to incorporate the pressure as a design parameter into a functional objective
+  // given that it will  
+  using ObjectiveT =
+      smith::FunctionalObjective<dim, smith::Parameters<StateSpace, ObstacleSpace>>;  // functional objective on
+                                                                                      // displacement/density
+  double time = 0.0;
+  double dt = 1.0;
+  smith::TimeInfo time_info(time, dt, 0);
+  auto all_states = getConstFieldPointers(states, params);
+  auto objective_states = {all_states[0], all_states[1]};
+  ObjectiveT::SpacesT space_ptrs{&disp.space(), &obstacle.space()};
+
+  ObjectiveT design_objective("design objective", mesh, space_ptrs);
+
+  design_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
+                                 [](double /*t*/, auto /*X*/, auto OBSTACLE) { 
+				 return 0.5 * smith::get<smith::VALUE>(OBSTACLE) * smith::get<smith::VALUE>(OBSTACLE); });
+  
+  params[0] = 1.0;  
+  double J0 = design_objective.evaluate(time_info, shape_disp.get(), objective_states);
+  std::cout << "|| obstacle ||_M^2 = " << J0 << std::endl;
+  auto duJ = design_objective.gradient(time_info, shape_disp.get(), objective_states, 0);
+  auto dthJ = design_objective.gradient(time_info, shape_disp.get(), objective_states, 1);
+  for (int i = 0; i < duJ.Size(); i++)
+  {
+     std::cout << "(d/d(disp) || obstacle ||_M^2)_" << i << " = " << duJ(i) << std::endl;
+  }
+  for (int i = 0; i < dthJ.Size(); i++)
+  {
+     std::cout << "(d/d(obstacle) || obstacle ||_M^2)_" << i << " = " << dthJ(i) << std::endl;
+  }
+  // TODO:
+  //   1) a functional residual object for dJ/du   from which we can also obtain (d^2 J/ dth du) and (d^2 J / du^2)
+  //   2) a functional residual object for dJ/dth  from which we can compute (d^2 J / dth^2) and (d^2 J / du dth)
+  std::vector<const mfem::ParFiniteElementSpace *> weak_form_ptrs{&obstacle.space()}; 
+  auto f_weak_form = std::make_shared<WeakFormT>("fake_physics", mesh, obstacle.space(), weak_form_ptrs);
+//  f_weak_form->addBodySource(smith::DependsOn<0>{}, mesh->entireBodyName(), 
+//		   [](double /*t*/, double /*x*/, auto U)
+//		   {  
+//		   auto u = smith::get<smith::VALUE>(U);
+//		   return u[0]; });
+  f_weak_form->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(), [](double /*t*/, auto /*X*/, auto U) {
+		auto u = get<smith::VALUE>(U);
+		return smith::tuple{u, smith::zero{}};
+		  }); 
+  //f_weak_form->addBodySource(mesh->entireBodyName(), [](double /*t*/, auto x) { return 0.5 * x; });
+   auto input_fields = getConstFieldPointers(params);
+   auto res_vector = f_weak_form->residual(time_info, shape_disp.get(), input_fields); // input_fields? 0_o
+  for (int i = 0; i < res_vector.Size(); i++)
+  {
+     std::cout << "weak_form_" << i << " = " << res_vector(i) << std::endl;
+     std::cout << "(d/d(obstacle) || obstacle ||_M^2)_" << i << " = " << dthJ(i) << std::endl;
+  }
+  std::vector<double> jacobian_weights = {1.0};
+  auto jac = f_weak_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights);
+  //jac->Print("Jacobian");
+
+  //mfem::ParBilinearForm Mform(&obstacle.space()); 
+  //Mform.AddDomainIntegrator(new mfem::VectorMassIntegrator);
+  //Mform.Assemble();
+  //Mform.Finalize();
+  //mfem::HypreParMatrix M;
+  //mfem::Array<int> empty_list;
+  //Mform.FormSystemMatrix(empty_list, M);
+  //M.Print("Mass"); 
+  //auto diff = mfem::Add(1.0, *jac.get(), -1.0, M);
+  //double err = diff->FNorm();
+  //std::cout << "||jac - M||_F = " << err << std::endl;
+  exit(1); 
+
+
+
+  //std::string residual_name = "design gradient";
+  //auto design_residual_weak_form = std::make_shared<WeakFormT>(residual_name, mesh, obstacle.space(), getSpaces(params));
+  //design_residual_weak_form->addBodyIntegral(mesh->entireBodyName(), [](auto /*t*/, auto /*x*/, auto OBSTACLE) {
+  //    return smith::tuple{smith::get<smith::VALUE>(OBSTACLE), 0.0 * smith::get<smith::DERIVATIVE>(OBSTACLE)};
+  //});  
+
 
   auto [Vh, _] = smith::generateParFiniteElementSpace<StateSpace>(&mesh->mfemParMesh());
   mfem::Array<int> ess_tdof_list;
-  //mfem::Array<int> ess_bdr;
-  //if (mesh->mfemParMesh().bdr_attributes.Size())
-  //{
-  //   ess_bdr.SetSize(mesh->mfemParMesh().bdr_attributes.Max());
-  //   ess_bdr[0] = 1;
-  //   Vh->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
-  //}
   int dimU = Vh->GetTrueVSize();
   mfem::Vector uDC(dimU); uDC = 0.0;
   ParamObstacleProblem problem(Vh.get(), &fRhs, &flat_obstacle, ess_tdof_list, uDC);
@@ -105,13 +253,22 @@ int main(int argc, char* argv[])
   mfem::Vector X0(dimPrimal); X0 = 0.0;
   mfem::Vector Xf(dimPrimal); Xf = 0.0;
   MPECSolver designoptimizer(&designproblem);
-  designoptimizer.SetTol(1.e-5);
+  designoptimizer.SetTol(nonlinear_solve_tol);
   designoptimizer.SetBarrierParameter(1.e-3);
-  designoptimizer.SetMaxIter(30);
+  designoptimizer.SetMaxIter(nonlinear_solve_maxiter);
   designoptimizer.CheckLinearSystemResiduals();
   designoptimizer.RegularizePrimalHessian(1.e-10);
   designoptimizer.Mult(X0, Xf);
-  
+
+  //auto conststates = getConstFieldPointers(states, params);
+  //auto objective_states = {conststates[0]}; 
+  //auto writer = createParaviewWriter(mesh->mfemParMesh(), objective_states, "obstacledesign");
+
+  //if (visualize)  {
+  //  mfem::Vector xf(Xf, 0, dimU);
+  //  states[0] = xf;
+  //  writer.write(0, 0.0, objective_states);
+  //}
 
 
 
