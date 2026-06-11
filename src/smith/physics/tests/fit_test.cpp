@@ -98,13 +98,14 @@ void stress_extrapolation_test()
 
   Empty internal_variables{};
 
-  sigma_J2 = fit<dim, output_space(input_space)>(
+  auto fitted_sigma_J2 = fit<dim, output_space(input_space)>(
       [&](double /*t*/, [[maybe_unused]] auto position, [[maybe_unused]] auto displacement_) {
         mat3 du_dx = to_3x3(get_value(get<1>(displacement_)));
         auto stress = mat(internal_variables, du_dx);
         return tuple{I2(dev(stress)), zero{}};
       },
       mesh->mfemParMesh(), u);
+  sigma_J2 = fitted_sigma_J2;
 
   solid_solver.setParameter(0, sigma_J2);
 
