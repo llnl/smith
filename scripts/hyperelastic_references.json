@@ -1,18 +1,18 @@
 {
   "arch": {
-    "final_displacement_l2": 814.479978,
+    "final_displacement_l2": 820.826523,
     "rel_tol": 0.01
   },
   "block": {
-    "final_displacement_l2": 79.3236583,
+    "final_displacement_l2": 79.331942,
     "rel_tol": 0.01
   },
   "contact": {
-    "final_displacement_l2": 9.26084351,
+    "final_displacement_l2": 9.26049167,
     "rel_tol": 0.01
   },
   "twist": {
-    "final_displacement_l2": 49.536035,
+    "final_displacement_l2": 48.6712664,
     "rel_tol": 0.02
   }
 }
