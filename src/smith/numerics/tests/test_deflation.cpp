@@ -30,10 +30,10 @@ struct ProblemSetup {
   std::unique_ptr<mfem::HypreParMatrix> A;
 };
 
-ProblemSetup makeCube(mfem::Ordering::Type ordering, double translate = 0.0, int order = 1)
+ProblemSetup makeCube(mfem::Ordering::Type ordering, double translate = 0.0, int order = 1, int nxyz = 2)
 {
   ProblemSetup s;
-  auto serial_mesh = mfem::Mesh::MakeCartesian3D(2, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0);
+  auto serial_mesh = mfem::Mesh::MakeCartesian3D(nxyz, nxyz, nxyz, mfem::Element::HEXAHEDRON, 1.0, 1.0, 1.0);
   if (translate != 0.0) {
     for (int v = 0; v < serial_mesh.GetNV(); ++v) {
       double* coord = serial_mesh.GetVertex(v);
@@ -647,6 +647,92 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
   EXPECT_LT(iters_def_add, iters_jac) << "deflation should beat plain Jacobi";
   EXPECT_LE(std::abs(iters_def_add_bsr - iters_def_add), 2)
       << "BSR solver should keep the deflation iteration count essentially unchanged";
+}
+
+TEST(Lanczos, ExtremeEigenpairsMatchDense)
+{
+  // Symmetric banded indefinite matrix; compare the 2 smallest and 2 largest eigenpairs
+  // against the dense eigensolver.
+  const int n = 150;
+  mfem::DenseMatrix A(n, n);
+  A = 0.0;
+  unsigned long long state = 12345;
+  auto rnd = [&state]() {
+    state = state * 6364136223846793005ull + 1442695040888963407ull;
+    return static_cast<double>(state >> 11) * (1.0 / 9007199254740992.0) - 0.5;
+  };
+  for (int i = 0; i < n; ++i) {
+    A(i, i) = 4.0 * rnd();  // mixed-sign diagonal -> indefinite
+    for (int off = 1; off <= 3; ++off) {
+      if (i + off < n) {
+        const double v = rnd();
+        A(i, i + off) = A(i + off, i) = v;
+      }
+    }
+  }
+
+  mfem::DenseMatrixEigensystem dense_eig(A);
+  dense_eig.Eval();
+  const mfem::Vector& ref = dense_eig.Eigenvalues();  // ascending
+
+  auto apply = [&A](const double* x, double* y) {
+    const int n = A.Height();
+    for (int i = 0; i < n; ++i) {
+      double acc = 0.0;
+      for (int j = 0; j < n; ++j) acc += A(i, j) * x[j];
+      y[i] = acc;
+    }
+  };
+
+  std::vector<double> evals;
+  std::vector<mfem::Vector> evecs;
+  const int n_small = smith::lanczosExtremeEigenpairs(n, 2, apply, /*largest=*/false, evals, evecs, n, 1.0e-11);
+  ASSERT_EQ(n_small, 2);
+  EXPECT_NEAR(evals[0], ref(0), 1.0e-8 * std::abs(ref(0)));
+  EXPECT_NEAR(evals[1], ref(1), 1.0e-8 * std::abs(ref(1)));
+  // Residual check ||A v - lambda v||.
+  for (int q = 0; q < 2; ++q) {
+    mfem::Vector Av(n);
+    apply(evecs[static_cast<size_t>(q)].GetData(), Av.GetData());
+    Av.Add(-evals[static_cast<size_t>(q)], evecs[static_cast<size_t>(q)]);
+    EXPECT_LT(std::sqrt(Av * Av), 1.0e-7 * std::abs(evals[static_cast<size_t>(q)]));
+  }
+
+  const int n_large = smith::lanczosExtremeEigenpairs(n, 2, apply, /*largest=*/true, evals, evecs, n, 1.0e-11);
+  ASSERT_EQ(n_large, 2);
+  EXPECT_NEAR(evals[0], ref(n - 1), 1.0e-8 * std::abs(ref(n - 1)));
+  EXPECT_NEAR(evals[1], ref(n - 2), 1.0e-8 * std::abs(ref(n - 2)));
+}
+
+TEST(Deflation, SparseEigModeLeftmostMatchesDense)
+{
+  // Same operator, dense vs Lanczos (sparse-eig) leftmost: force the sparse mode by
+  // dropping the dense-eig threshold below m, then compare the leftmost eigenvalue.
+  // 4x4x4 so every rank's affine basis is full-rank (WtAW solidly SPD) up to np=6.
+  auto s = makeCube(mfem::Ordering::byVDIM, 0.0, 1, 4);
+
+  smith::DeflationPreconditioner defl_dense(*s.fes);
+  defl_dense.SetOperator(*s.A);
+  const double leftmost_dense = defl_dense.coarseLeftmostEigenvalue();
+
+  setenv("SMITH_DEFLATION_DENSE_EIG_MAX", "1", 1);
+  smith::DeflationPreconditioner defl_sparse(*s.fes);
+  defl_sparse.SetOperator(*s.A);
+  const double leftmost_lanczos = defl_sparse.coarseLeftmostEigenvalue();
+  unsetenv("SMITH_DEFLATION_DENSE_EIG_MAX");
+
+  EXPECT_GT(std::abs(leftmost_dense), 0.0);
+  // Note: the operator is component-symmetric, so the leftmost eigenvalue is (near-)
+  // degenerate; comparing eigenvalues is well-defined, individual eigenvectors are not.
+  EXPECT_NEAR(leftmost_lanczos, leftmost_dense, 1.0e-7 * std::abs(leftmost_dense));
+
+  // coarseSmallestDirections must produce the same leftmost eigenvalue through the
+  // Lanczos path and a direction of matching W-coefficient norm.
+  std::vector<mfem::Vector> dirs_sparse;
+  std::vector<double> evals_sparse;
+  defl_sparse.coarseSmallestDirections(1, dirs_sparse, evals_sparse);
+  ASSERT_EQ(evals_sparse.size(), 1u);
+  EXPECT_NEAR(evals_sparse[0], leftmost_dense, 1.0e-6 * std::abs(leftmost_dense));
 }
 
 int main(int argc, char* argv[])

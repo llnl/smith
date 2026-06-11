@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -29,6 +30,16 @@
 #include "smith/numerics/batched_matvec.hpp"
 
 namespace smith {
+
+/// Compute up to `k` extreme eigenpairs (algebraically smallest, or largest when `largest`)
+/// of a symmetric operator by Lanczos with full reorthogonalization. Serial/replicated: the
+/// start vector is deterministic, so every rank computes identical results. `apply(x, y)`
+/// evaluates y = A x on length-n arrays. Returns the converged count (<= k); `evals` come
+/// back in extremity order (ascending for smallest, descending for largest) with matching
+/// unit `evecs`. max_iters = 0 picks min(n, max(60, 10k)).
+int lanczosExtremeEigenpairs(int n, int k, const std::function<void(const double*, double*)>& apply, bool largest,
+                             std::vector<double>& evals, std::vector<mfem::Vector>& evecs, int max_iters = 0,
+                             double tol = 1.0e-10);
 
 class DeflationIndefiniteCoarseException : public std::runtime_error {
  public:
@@ -220,6 +231,10 @@ class DeflationPreconditioner : public mfem::Solver {
   void computeCoarseSpectralData();
   void spectralCoarseSolve(const mfem::Vector& rhs, mfem::Vector& alpha) const;
   void ensureLeftmostComputed() const;
+  /// Leftmost-k eigenpairs of sym(WtAW) without a dense eigendecomposition (m > dense-eig
+  /// threshold): shift-invert Lanczos through `skylineSolve` when the Cholesky succeeded,
+  /// plain Lanczos on the symmetrized matrix otherwise.
+  void lanczosLeftmost(int k, std::vector<double>& evals, std::vector<mfem::Vector>& evecs) const;
   void verifyWtAWAssembly() const;
 
   mfem::ParFiniteElementSpace* fes_ = nullptr;
@@ -262,6 +277,11 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable int coarse_spectral_rank_ = 0;
   mutable double coarse_spectral_tol_ = 0.0;
   mutable bool coarse_is_spd_ = true;
+  /// True when m exceeds SMITH_DEFLATION_DENSE_EIG_MAX (default 512): skip the replicated
+  /// dense eigendecomposition; SPD comes from the skyline Cholesky, leftmost eigenpairs from
+  /// Lanczos on demand, and the rank-revealing pseudo-inverse fallback degrades to
+  /// smoother-only Mult on an indefinite coarse matrix.
+  mutable bool coarse_sparse_eig_mode_ = false;
   mutable mfem::DenseMatrix WtAW_pp_;  // diagonal block (p, p) — for AdditiveLocal mode.
   mutable mfem::DenseMatrix WtAW_pp_cholesky_;
   mutable mfem::CholeskyFactors WtAW_pp_cholesky_factors_;

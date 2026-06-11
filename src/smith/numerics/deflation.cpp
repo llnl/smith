@@ -78,6 +78,103 @@ DeflationIndefiniteCoarseException::DeflationIndefiniteCoarseException(double ei
 {
 }
 
+int lanczosExtremeEigenpairs(int n, int k, const std::function<void(const double*, double*)>& apply, bool largest,
+                             std::vector<double>& evals, std::vector<mfem::Vector>& evecs, int max_iters, double tol)
+{
+  evals.clear();
+  evecs.clear();
+  if (n <= 0 || k <= 0) return 0;
+  k = std::min(k, n);
+  const int maxit = std::min(n, (max_iters > 0) ? max_iters : std::max(100, 20 * k));
+
+  // Deterministic pseudo-random start vector (fixed LCG): identical on every rank, and
+  // generically non-orthogonal to the target eigenvectors.
+  std::vector<mfem::Vector> V;
+  V.reserve(static_cast<size_t>(maxit) + 1);
+  {
+    mfem::Vector v0(n);
+    unsigned long long state = 0x9E3779B97F4A7C15ull;
+    for (int i = 0; i < n; ++i) {
+      state = state * 6364136223846793005ull + 1442695040888963407ull;
+      v0(i) = static_cast<double>(state >> 11) * (1.0 / 9007199254740992.0) - 0.5;
+    }
+    v0 /= std::sqrt(v0 * v0);
+    V.emplace_back(std::move(v0));
+  }
+
+  std::vector<double> alpha;
+  std::vector<double> beta;
+  mfem::Vector w(n);
+  mfem::DenseMatrix ritz_vectors;  // columns of the last tridiagonal eigensystem
+  mfem::Vector ritz_values;
+  int steps = 0;
+  bool converged = false;
+
+  for (int it = 0; it < maxit; ++it) {
+    apply(V[static_cast<size_t>(it)].GetData(), w.GetData());
+    const double a = V[static_cast<size_t>(it)] * w;
+    alpha.push_back(a);
+    w.Add(-a, V[static_cast<size_t>(it)]);
+    if (it > 0) w.Add(-beta[static_cast<size_t>(it) - 1], V[static_cast<size_t>(it) - 1]);
+    // Full reorthogonalization, two passes for robustness.
+    for (int pass = 0; pass < 2; ++pass) {
+      for (int j = 0; j <= it; ++j) {
+        const double proj = V[static_cast<size_t>(j)] * w;
+        w.Add(-proj, V[static_cast<size_t>(j)]);
+      }
+    }
+    const double b = std::sqrt(w * w);
+    steps = it + 1;
+
+    // Eigensystem of the current tridiagonal T (tiny: steps x steps).
+    mfem::DenseMatrix T(steps, steps);
+    T = 0.0;
+    for (int i = 0; i < steps; ++i) {
+      T(i, i) = alpha[static_cast<size_t>(i)];
+      if (i + 1 < steps) T(i, i + 1) = T(i + 1, i) = beta[static_cast<size_t>(i)];
+    }
+    mfem::DenseMatrixEigensystem eig(T);
+    eig.Eval();
+    ritz_values = eig.Eigenvalues();    // ascending
+    ritz_vectors = eig.Eigenvectors();  // columns
+
+    if (steps >= k) {
+      // Residual of Ritz pair (theta, y): ||A y - theta y|| = |b * S(last, idx)|.
+      converged = true;
+      double scale = 0.0;
+      for (int i = 0; i < steps; ++i) scale = std::max(scale, std::abs(ritz_values(i)));
+      for (int q = 0; q < k; ++q) {
+        const int idx = largest ? steps - 1 - q : q;
+        if (std::abs(b * ritz_vectors(steps - 1, idx)) > tol * std::max(scale, 1.0e-300)) {
+          converged = false;
+          break;
+        }
+      }
+    }
+    if (converged || b <= 1.0e-14) break;  // invariant subspace found if b ~ 0
+
+    beta.push_back(b);
+    mfem::Vector vnext(w);
+    vnext *= 1.0 / b;
+    V.emplace_back(std::move(vnext));
+  }
+
+  const int kk = std::min(k, steps);
+  evals.reserve(static_cast<size_t>(kk));
+  evecs.reserve(static_cast<size_t>(kk));
+  for (int q = 0; q < kk; ++q) {
+    const int idx = largest ? steps - 1 - q : q;
+    evals.push_back(ritz_values(idx));
+    mfem::Vector y(n);
+    y = 0.0;
+    for (int j = 0; j < steps; ++j) y.Add(ritz_vectors(j, idx), V[static_cast<size_t>(j)]);
+    const double nrm = std::sqrt(y * y);
+    if (nrm > 0.0) y *= 1.0 / nrm;
+    evecs.emplace_back(std::move(y));
+  }
+  return kk;
+}
+
 DeflationPreconditioner::DeflationPreconditioner(mfem::ParFiniteElementSpace& fes, bool use_smoother,
                                                  mfem::HypreSmoother::Type smoother_type)
     : mfem::Solver(fes.GetTrueVSize()), smoother_type_(smoother_type), use_smoother_(use_smoother)
@@ -419,7 +516,21 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
   if (!WtAW_uses_cholesky_) {
     ++wtaw_cholesky_failures_;
   }
-  computeCoarseSpectralData();
+  coarse_sparse_eig_mode_ = m_ > static_cast<int>(envDoubleOrDefault("SMITH_DEFLATION_DENSE_EIG_MAX", 512.0));
+  if (!coarse_sparse_eig_mode_) {
+    computeCoarseSpectralData();
+  } else {
+    // Scale-out path: no replicated dense eigendecomposition. SPD follows from the skyline
+    // Cholesky (all pivots positive); leftmost eigenpairs come from Lanczos on demand; the
+    // rank-revealing pseudo-inverse fallback is unavailable, so an indefinite coarse matrix
+    // runs smoother-only in Mult (its negative-curvature role is served by the Lanczos
+    // leftmost directions routed to the trust region).
+    coarse_is_spd_ = WtAW_uses_cholesky_;
+    coarse_spectral_rank_ = WtAW_uses_cholesky_ ? m_ : 0;
+    coarse_spectral_tol_ = 0.0;
+    coarse_evals_kept_.SetSize(0);
+    coarse_evecs_kept_.SetSize(m_, 0);
+  }
 
   // Diagonal block (my_offset, my_offset) used by the AdditiveLocal mode. Only the owner
   // contributes to its own (p,p) block during assembleWtAW, so post-Allreduce this is
@@ -797,8 +908,41 @@ void DeflationPreconditioner::computeCoarseSpectralData()
   }
 }
 
+void DeflationPreconditioner::lanczosLeftmost(int k, std::vector<double>& evals,
+                                              std::vector<mfem::Vector>& evecs) const
+{
+  if (WtAW_uses_cholesky_) {
+    // SPD: shift-invert about 0 — the largest eigenvalues of A^{-1} (applied via the skyline
+    // factor) are the smallest of A; eigenvectors coincide.
+    auto apply = [this](const double* x, double* y) {
+      mfem::Vector xv(const_cast<double*>(x), m_);
+      mfem::Vector yv(y, m_);
+      skylineSolve(xv, yv);
+    };
+    std::vector<double> mu;
+    const int conv = lanczosExtremeEigenpairs(m_, k, apply, /*largest=*/true, mu, evecs);
+    evals.resize(static_cast<size_t>(conv));
+    for (int i = 0; i < conv; ++i) evals[static_cast<size_t>(i)] = 1.0 / mu[static_cast<size_t>(i)];
+  } else {
+    // Indefinite: plain Lanczos on sym(WtAW) for the algebraically smallest eigenpairs.
+    auto apply = [this](const double* x, double* y) {
+      for (int i = 0; i < m_; ++i) {
+        double acc = 0.0;
+        for (int j = 0; j < m_; ++j) acc += 0.5 * (WtAW_(i, j) + WtAW_(j, i)) * x[j];
+        y[i] = acc;
+      }
+    };
+    lanczosExtremeEigenpairs(m_, k, apply, /*largest=*/false, evals, evecs);
+  }
+}
+
 void DeflationPreconditioner::spectralCoarseSolve(const mfem::Vector& rhs, mfem::Vector& alpha) const
 {
+  if (coarse_sparse_eig_mode_) {
+    throw std::runtime_error(
+        "DeflationPreconditioner: rank-revealing spectral coarse solve requires the dense "
+        "eigendecomposition (m <= SMITH_DEFLATION_DENSE_EIG_MAX)");
+  }
   alpha.SetSize(m_);
   alpha = 0.0;
   if (coarse_spectral_rank_ == 0) return;
@@ -814,6 +958,21 @@ void DeflationPreconditioner::ensureLeftmostComputed() const
 {
   if (leftmost_valid_) return;
   if (!factored_) throw std::runtime_error("DeflationPreconditioner::leftmost: SetOperator not called");
+  if (coarse_sparse_eig_mode_) {
+    std::vector<double> evals;
+    std::vector<mfem::Vector> evecs;
+    lanczosLeftmost(1, evals, evecs);
+    if (!evals.empty()) {
+      leftmost_eval_ = evals[0];
+      leftmost_evec_ = evecs[0];
+    } else {
+      leftmost_eval_ = 0.0;
+      leftmost_evec_.SetSize(m_);
+      leftmost_evec_ = 0.0;
+    }
+    leftmost_valid_ = true;
+    return;
+  }
   if (coarse_spectral_rank_ == 0) {
     leftmost_eval_ = 0.0;
     leftmost_evec_.SetSize(m_);
@@ -852,6 +1011,20 @@ void DeflationPreconditioner::coarseSmallestDirections(int k, std::vector<mfem::
   dirs.clear();
   evals_out.clear();
   if (!factored_ || k <= 0) return;
+  if (coarse_sparse_eig_mode_) {
+    std::vector<mfem::Vector> evecs;
+    lanczosLeftmost(k, evals_out, evecs);
+    const int n = fes_->GetTrueVSize();
+    dirs.reserve(evecs.size());
+    for (const mfem::Vector& v : evecs) {
+      mfem::Vector d(n);
+      d = 0.0;
+      mfem::Vector v_local(const_cast<double*>(v.GetData()) + my_col_offset_, modes_per_rank_);
+      W_mat_->AddMult(v_local, d, 1.0);
+      dirs.emplace_back(std::move(d));
+    }
+    return;
+  }
   std::vector<int> order(static_cast<size_t>(coarse_spectral_rank_));
   for (int i = 0; i < coarse_spectral_rank_; ++i) order[static_cast<size_t>(i)] = i;
   std::sort(order.begin(), order.end(), [&](int a, int b) { return coarse_evals_kept_(a) < coarse_evals_kept_(b); });
