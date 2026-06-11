@@ -168,7 +168,9 @@ double computeSolidMechanicsQoi(BasePhysics& solid_solver, const TimeSteppingInf
 {
   auto dts = ts_info.dts;
   solid_solver.resetStates();
+  solid_solver.outputStateToDisk("paraview_contact");
   solid_solver.advanceTimestep(1.0);
+  solid_solver.outputStateToDisk("paraview_contact");
   return computeStepQoi(solid_solver.state("displacement"));
 }
 
