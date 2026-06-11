@@ -38,20 +38,26 @@ SCREEN_REFS = REPO / "scripts" / "hyperelastic_references_screening.json"
 PROBLEMS = ("arch", "block", "contact", "twist")
 
 # name: (kind, low, high, baseline)   kind: lin | log | int | cat
+# Baselines = the current suite defaults (Track-B winner adopted 858c6dd62), so the
+# seeded member 0 and the confirm-stage "baseline" are today's best known config.
 PARAM_SPACE = {
-    "cg_stagnation_tol": ("log", 10**-4.5, 10**-1.5, 1e-3),
-    "cg_stagnation_window": ("int", 2, 12, 5),
-    "trust_num_leftmost": ("int", 0, 4, 2),
+    "cg_stagnation_tol": ("log", 10**-4.5, 10**-1.5, 7.53e-4),
+    "cg_stagnation_window": ("int", 2, 12, 2),
+    "trust_num_leftmost": ("int", 0, 4, 1),
     "trust_num_previous_steps": ("int", 0, 8, 4),
-    "max_cg_iterations": ("int", 100, 3000, 1000),
-    "cg_forcing_rel": ("log", 1e-6, 1e-3, 5e-5),
-    "residual_growth_cap": ("lin", 1.2, 10.0, 3.0),
-    "tr_decrease_factor": ("lin", 0.1, 0.5, 0.25),
-    "tr_increase_factor": ("lin", 1.2, 3.5, 1.75),
-    "tr_eta2": ("lin", 0.01, 0.3, 0.1),
-    "tr_eta3": ("lin", 0.3, 0.95, 0.6),
-    "tr_eta4": ("lin", 1.5, 10.0, 4.2),
+    "max_cg_iterations": ("int", 100, 3000, 723),
+    "cg_forcing_rel": ("log", 1e-6, 1e-3, 1.512e-5),
+    "residual_growth_cap": ("lin", 1.2, 10.0, 5.654),
+    "tr_decrease_factor": ("lin", 0.1, 0.5, 0.437),
+    "tr_increase_factor": ("lin", 1.2, 3.5, 1.786),
+    "tr_eta2": ("lin", 0.01, 0.3, 0.1534),
+    "tr_eta3": ("lin", 0.3, 0.95, 0.59996),
+    "tr_eta4": ("lin", 1.5, 10.0, 3.408),
     "deflation_smoother": ("cat", ("jacobi", "block"), None, "jacobi"),
+    # Adaptive CG cap (commit 11c9625bb): cap_min = 0 disables; gamma = 1 disables the
+    # rejection brake. Hand-validated point: 60 / 0.7 (suite -6.4%), seeded explicitly.
+    "cg_cap_min": ("int", 0, 300, 0),
+    "cg_cap_gamma": ("lin", 0.3, 1.0, 0.7),
 }
 
 
@@ -118,6 +124,8 @@ def suite_command(params: dict, args, out_dir: Path, screening: bool, problem: s
         f"--tr-eta3={params['tr_eta3']:.4g}",
         f"--tr-eta4={params['tr_eta4']:.4g}",
         f"--deflation-smoother={params['deflation_smoother']}",
+        f"--cg-cap-min={params['cg_cap_min']}",
+        f"--cg-cap-gamma={params['cg_cap_gamma']:.4g}",
     ]
     if screening:
         cmd += [f"--mesh-scale-factor={args.mesh_scale_factor}", f"--references-file={SCREEN_REFS}"]
@@ -220,10 +228,12 @@ def run_search(args) -> None:
     log_path = root / "evals.jsonl"
     print(f"optimization root: {root}")
 
-    # initial population: baseline + perturbations
+    # initial population: baseline, the hand-validated adaptive-cap point, + perturbations
     population: list[list[float]] = []
     base_u = [to_unit(name, baseline_params()[name]) for name in names]
     population.append(base_u)
+    cap_params = baseline_params() | {"cg_cap_min": 60, "cg_cap_gamma": 0.7}
+    population.append([to_unit(name, cap_params[name]) for name in names])
     while len(population) < args.population:
         population.append([min(1.0, max(0.0, u + rng.gauss(0.0, 0.15))) for u in base_u])
 

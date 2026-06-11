@@ -289,6 +289,9 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
     ):
         if value is not None:
             common.append(f"{flag}={value}")
+    if args.cg_cap_min:
+        common.append(f"--cg-cap-min={args.cg_cap_min}")
+        common.append(f"--cg-cap-gamma={args.cg_cap_gamma}")
     if args.cg_stagnation_tol is not None:
         common.append(f"--cg-stagnation-tol={args.cg_stagnation_tol}")
     if args.cg_stagnation_window is not None:
@@ -503,6 +506,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trust-num-lanczos-iters", type=int, default=0)
     parser.add_argument("--max-cg-iterations", type=int, default=723)
     parser.add_argument("--cg-forcing-rel", type=float, default=1.512e-05)
+    parser.add_argument("--cg-cap-min", type=int, default=0, help="adaptive CG cap floor (0 = off)")
+    parser.add_argument("--cg-cap-gamma", type=float, default=0.7)
     parser.add_argument("--residual-growth-cap", type=float, default=5.654)
     parser.add_argument("--tr-decrease-factor", type=float, default=0.437)
     parser.add_argument("--tr-increase-factor", type=float, default=1.786)
