@@ -11,7 +11,7 @@ class Mfem(BuiltinMfem):
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    version("4.9.0.2", commit="dbbd425a225b2ad0c3e1dc0e2b3992899e27556a")
+    version("4.9.0.3", commit="596b75282d0641a46de1286c95753bab257e326d")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 

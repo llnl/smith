@@ -8,7 +8,7 @@ packages:
     - spec: "@0.4.1"
   caliper:
     require:
-    - spec: "@2.12.1"
+    - spec: "@2.14.0"
   camp:
     require:
     - spec: "@2025.12.0"
@@ -21,7 +21,7 @@ packages:
     - spec: "@2.33.0"
   mfem:
     require:
-    - spec: "@4.9.0.2"
+    - spec: "@4.9.0.3"
   petsc:
     require:
     - spec: "@3.21.6"
@@ -33,7 +33,7 @@ packages:
     - spec: "@7.7.0"
   tribol:
     require:
-    - spec: "@0.1.0.26"
+    - spec: "@0.1.0.27"
   umpire:
     require:
     - spec: "@2025.12.0"
