@@ -256,6 +256,56 @@ void DeflationPreconditioner::packWMatrix()
   for (int j = 0; j < modes_per_rank_; ++j) {
     for (int i = 0; i < n; ++i) W_dense_(i, j) = W_local_[static_cast<size_t>(j)](i);
   }
+
+  // Compact per-row layout: each tdof row is nonzero only inside its component's contiguous
+  // mode block [comp*per_comp, (comp+1)*per_comp). Fully-masked rows store zeros (comp 0).
+  const int per_comp = modes_per_rank_ / dim_;
+  w_compact_.assign(static_cast<size_t>(n) * static_cast<size_t>(per_comp), 0.0);
+  w_row_comp_.assign(static_cast<size_t>(n), 0);
+  for (int i = 0; i < n; ++i) {
+    int comp = 0;
+    for (int j = 0; j < modes_per_rank_; ++j) {
+      if (W_local_[static_cast<size_t>(j)](i) != 0.0) {
+        comp = j / per_comp;
+        break;
+      }
+    }
+    w_row_comp_[static_cast<size_t>(i)] = comp;
+    for (int k = 0; k < per_comp; ++k) {
+      w_compact_[static_cast<size_t>(i) * static_cast<size_t>(per_comp) + static_cast<size_t>(k)] =
+          W_local_[static_cast<size_t>(comp * per_comp + k)](i);
+    }
+  }
+}
+
+void DeflationPreconditioner::wTransposeCompact(const mfem::Vector& r, mfem::Vector& rhs) const
+{
+  const int n = fes_->GetTrueVSize();
+  const int pc = modes_per_rank_ / dim_;
+  rhs.SetSize(modes_per_rank_);
+  rhs = 0.0;
+  double* out = rhs.GetData();
+  const double* rd = r.GetData();
+  for (int i = 0; i < n; ++i) {
+    const double ri = rd[i];
+    const double* wrow = &w_compact_[static_cast<size_t>(i) * static_cast<size_t>(pc)];
+    double* dst = out + w_row_comp_[static_cast<size_t>(i)] * pc;
+    for (int k = 0; k < pc; ++k) dst[k] += wrow[k] * ri;
+  }
+}
+
+void DeflationPreconditioner::wAddMultCompact(const double* alpha_local, mfem::Vector& y, double scale) const
+{
+  const int n = fes_->GetTrueVSize();
+  const int pc = modes_per_rank_ / dim_;
+  double* yd = y.GetData();
+  for (int i = 0; i < n; ++i) {
+    const double* wrow = &w_compact_[static_cast<size_t>(i) * static_cast<size_t>(pc)];
+    const double* ab = alpha_local + w_row_comp_[static_cast<size_t>(i)] * pc;
+    double d = 0.0;
+    for (int k = 0; k < pc; ++k) d += wrow[k] * ab[k];
+    yd[i] += scale * d;
+  }
 }
 
 void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
@@ -687,7 +737,8 @@ void DeflationPreconditioner::spectralCoarseSolve(const mfem::Vector& rhs, mfem:
   alpha = 0.0;
   if (coarse_spectral_rank_ == 0) return;
 
-  mfem::Vector coeff(coarse_spectral_rank_);
+  cc_spectral_coeff_.SetSize(coarse_spectral_rank_);
+  mfem::Vector& coeff = cc_spectral_coeff_;
   coarse_evecs_kept_.MultTranspose(rhs, coeff);
   for (int i = 0; i < coarse_spectral_rank_; ++i) coeff(i) /= coarse_evals_kept_(i);
   coarse_evecs_kept_.Mult(coeff, alpha);
@@ -908,7 +959,57 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
   z.SetSize(n);
   const bool have_smoother = smoother_ || (smoother_variant_ == DeflationSmoother::BlockJacobi && !block_jacobi_inv_.empty()) ||
                              (smoother_variant_ == DeflationSmoother::PointJacobi && !point_diag_.empty());
-  if (use_smoother_ && have_smoother) {
+  const bool do_smoother = use_smoother_ && have_smoother;
+
+  // Hot path: Additive coarse correction with the rhs Allgather overlapped with the (local)
+  // smoother apply. Arithmetic is identical to the generic path below — the compact W kernels
+  // and the smoother produce bitwise-identical results; only the comm is nonblocking.
+  if (coarse_is_spd_ && coarse_mode_ == CoarseMode::Additive && factored_) {
+    ++cc_calls_;
+    double tw0 = MPI_Wtime();
+    wTransposeCompact(r, cc_rhs_local_);
+    double tw1 = MPI_Wtime();
+    cc_wt_time_ += tw1 - tw0;
+
+    cc_rhs_global_.SetSize(m_);
+    MPI_Request gather_req;
+    MPI_Iallgather(cc_rhs_local_.GetData(), modes_per_rank_, MPI_DOUBLE, cc_rhs_global_.GetData(), modes_per_rank_,
+                   MPI_DOUBLE, fes_->GetComm(), &gather_req);
+
+    if (do_smoother) {
+      applySmoother(r, z);
+    } else {
+      z = 0.0;
+    }
+    double ts = MPI_Wtime();
+    mult_smoother_time_ += ts - tw1;
+
+    MPI_Wait(&gather_req, MPI_STATUS_IGNORE);
+    double ta = MPI_Wtime();
+    cc_allgather_time_ += ta - ts;
+
+    // Per-apply m x m factor solve kept deliberately: replacing it with precomputed
+    // (WtAW)^{-1} rows (a mpr x m GEMV) saves only ~0.4 s/300k applies on arch but
+    // perturbs roundoff enough to change the nonlinear trajectory and fail the arch
+    // answer assert (relerr 3.6%) — see performance_plan.md, 2026-06-11.
+    if (WtAW_uses_cholesky_) {
+      choleskySolve(WtAW_cholesky_factors_, WtAW_lu_inv_, true, m_, cc_rhs_global_, cc_alpha_);
+    } else {
+      spectralCoarseSolve(cc_rhs_global_, cc_alpha_);
+    }
+    double tsv = MPI_Wtime();
+    cc_solve_time_ += tsv - ta;
+
+    wAddMultCompact(cc_alpha_.GetData() + my_col_offset_, z, 1.0);
+    double tend = MPI_Wtime();
+    cc_w_time_ += tend - tsv;
+    mult_coarse_time_ += (tw1 - tw0) + (tend - ts);
+    mult_total_time_ += tend - t0;
+    ++mult_calls_;
+    return;
+  }
+
+  if (do_smoother) {
     applySmoother(r, z);
   } else {
     z = 0.0;

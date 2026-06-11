@@ -208,6 +208,10 @@ class DeflationPreconditioner : public mfem::Solver {
   void applyEssentialDofMask();
   void packWMatrix();
   void addScaledCoarseCorrection(const mfem::Vector& r, mfem::Vector& y, double scale) const;
+  /// rhs = W^T r via the compact layout (bitwise == W_mat_->MultTranspose).
+  void wTransposeCompact(const mfem::Vector& r, mfem::Vector& rhs) const;
+  /// y += scale * W * alpha_local via the compact layout (bitwise == W_mat_->AddMult).
+  void wAddMultCompact(const double* alpha_local, mfem::Vector& y, double scale) const;
   void computeCoarseSpectralData();
   void spectralCoarseSolve(const mfem::Vector& rhs, mfem::Vector& alpha) const;
   void ensureLeftmostComputed() const;
@@ -230,6 +234,13 @@ class DeflationPreconditioner : public mfem::Solver {
   // or 3 (2D) since each col is nonzero only on its component's tdofs. Used in the per-iter
   // coarse correction (W_mat_ MultTranspose + AddMult).
   std::unique_ptr<mfem::SparseMatrix> W_mat_;
+  // Compact per-row view of the same matrix for the hot Additive coarse apply: row i can only
+  // touch its component's contiguous mode block, so w_compact_[i*per_comp + k] holds those
+  // per_comp = modes_per_rank_/dim_ weights and w_row_comp_[i] the block index. Kernels using
+  // it accumulate in the same row-ascending order as the CSR Mult/MultTranspose (structural
+  // zeros contribute exact zeros), so results are bitwise-identical to W_mat_.
+  std::vector<double> w_compact_;
+  std::vector<int> w_row_comp_;
   // Dense packed view of the same columns. Used by `assembleWtAW` in SetOperator.
   mfem::DenseMatrix W_dense_;
 
@@ -255,6 +266,12 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable bool leftmost_valid_ = false;
   CoarseMode coarse_mode_ = CoarseMode::Additive;
   mutable mfem::Vector mult_tmp_;  // buffer for A·z in Multiplicative mode.
+
+  // Hot-path scratch for the per-CG-iteration coarse apply (avoids per-call allocation).
+  mutable mfem::Vector cc_rhs_local_;
+  mutable mfem::Vector cc_rhs_global_;
+  mutable mfem::Vector cc_alpha_;
+  mutable mfem::Vector cc_spectral_coeff_;
 
   // AdditiveSchwarz: cached neighbor list + off-diag WtAW blocks (mpr × mpr each).
   mutable std::vector<int> schwarz_neighbors_;
