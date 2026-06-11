@@ -143,7 +143,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("mfem+openmp", when="+openmp")
     depends_on("mfem+enzyme", when="+enzyme")
 
-    depends_on("netcdf-c@4.7.4")
+    depends_on("netcdf-c")
 
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
