@@ -1,7 +1,7 @@
 From 4abfeff5f7a7a38050b1cf2cb41fa76e5e9c7b73 Mon Sep 17 00:00:00 2001
 From: Michael Tupek <mrtupek@gmail.com>
 Date: Sun, 17 May 2026 16:46:01 -0600
-Subject: [PATCH 5/6] Fix cache indexing in DerivativeSetup and DerivativeApply
+Subject: [PATCH 3/4] Fix cache indexing in DerivativeSetup and DerivativeApply
 
 Reconcile the per-QP Jacobian cache layout between DerivativeSetup
 (which writes the cache) and DerivativeApply (which reads it). The

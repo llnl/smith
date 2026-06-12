@@ -32,26 +32,68 @@ dfem-multiple-outputs
 
 ### Vendored MFEM Patch Status
 
-The current local patch is:
+The current minimal local patch series is in `mfem_patches/` and applies
+cleanly to `mfem` branch `dfem-multiple-outputs`.
 
-- `mfem/0001-Some-attempt-at-patching-dfem-for-smith-use-cases.patch`
+Required patches:
 
-That patch effectively contains the earlier `dfem_patches` series needed to get
-the non-boundary cached derivative path usable:
+- `0001-Fix-DerivativeOperator-Mult-MultTranspose-height-and.patch`
+  - adds single-vector `Mult` / `MultTranspose` dispatch
+  - sets `DifferentiableOperator::height`
+  - adds the backend template parameter for `AddBoundaryIntegrator`
+  - omission test: Smith no longer builds because
+    `AddBoundaryIntegrator<LocalQFBackend>` is missing
+- `0002-Fix-nfields-loop-bounds-to-use-ctx.unionfds.size.patch`
+  - changes derivative loops from compile-time `nfields` to runtime
+    `ctx.unionfds.size()` where an operator's union can be larger than one
+    integrator's referenced fields
+  - omission test: supported DFEM subset fails; `test_dfem_thermal_static`
+    segfaults
+- `0003-Fix-cache-indexing-in-DerivativeSetup-and-Derivative.patch`
+  - standardizes cached Jacobian layout across setup, apply, and assembly for
+    multi-output/multi-field nonlinear operators
+  - omission test: `test_dfem_bugs` cached derivative/transpose checks fail
+- `0004-Fix-cached-MultTranspose-for-multi-dependent-input-r.patch`
+  - fixes cached `MultTranspose` for multiple dependent inputs from the same
+    field, e.g. `Value<0>` plus `Gradient<0>`
+  - omission test: `Bug12_NonlinearJacobianAndTranspose` and `Bug13_*`
+    transpose checks fail
 
-- fixed broken dFEM relative includes
-- guarded Enzyme-only helper templates with `MFEM_USE_ENZYME`
-- set `DifferentiableOperator::height`
-- stopped leaking/reallocating `SparseMatrix` on repeated `Assemble()`
-- changed LocalQF derivative loops from compile-time `nfields` to runtime
-  `ctx.unionfds.size()` where the operator union can be larger than one
-  integrator's referenced fields
-- standardized cached Jacobian layout across setup, apply, transpose apply, and
-  assembly for multi-output/multi-field nonlinear operators
-- added MFEM-side Neo-Hookean QoI/reverse tests and timing miniapp scaffolding
+Not carried:
 
-Keep this patch carried until those changes are either upstreamed or replaced
-by a clean vendored MFEM commit.
+- The old SparseMatrix leak patch is intentionally excluded. It is a useful
+  cleanup, but it is not needed for the initial DFEM integration tests.
+- F-bar / augmented-Lagrangian work is out of scope for this DFEM path.
+
+Keep this patch series carried until the changes are either upstreamed or
+replaced by a clean vendored MFEM commit.
+
+### Smith-Side Implementation Notes
+
+The MFEM patches are not sufficient by themselves. The current Smith-side DFEM
+path also depends on:
+
+- `src/smith/differentiable_numerics/dfem_reverse_derivative.hpp`
+  collecting every field-operator position for each differentiated field id.
+  Reverse mode is wrong if it only differentiates the first matching FOp; for
+  example a residual depending on both `Value<0>` and `Gradient<0>` must output
+  both contributions. Omission test: `test_dfem_reverse_vs_transpose` fails
+  with `rev.Mult({u,v}) != J^T v`.
+- `src/smith/differentiable_numerics/tests/test_dfem_bugs.cpp`
+  keeps the boundary-integrator reproducer disabled as
+  `DISABLED_Bug1_2_BoundaryIntegrator`. The test documents a real remaining
+  MFEM entity-routing bug, but it is not part of the initial supported DFEM
+  scope.
+
+Current supported DFEM verification:
+
+- `test_dfem_weak_form`
+- `test_dfem_explicit_dynamics`
+- `test_dfem_thermal_static`
+- `test_dfem_solid_static`
+- `test_dfem_shallow_arch_buckling`
+- `test_dfem_bugs`
+- `test_dfem_reverse_vs_transpose`
 
 ## Priority Order
 
@@ -193,9 +235,9 @@ Needed:
 
 ### 5. Cached derivative and transpose confidence
 
-The carried MFEM patch fixes the non-boundary cached derivative bugs that were
-blocking assembled Jacobian use. Keep the regression coverage alive because
-this area is fragile:
+The carried MFEM patch series fixes the non-boundary cached derivative bugs
+that were blocking assembled Jacobian use. Keep the regression coverage alive
+because this area is fragile:
 
 - `Bug12_JacobianMismatch`
 - `Bug12_MultipleFields`
@@ -379,8 +421,9 @@ Work:
 
 ## References
 
-- `mfem/0001-Some-attempt-at-patching-dfem-for-smith-use-cases.patch`
+- `mfem_patches/`
 - `mfem/dfem_current_bugs.md`
 - `dfem_bugs.md`
 - `mfem/dfem_index.md`
 - `src/smith/differentiable_numerics/tests/test_dfem_bugs.cpp`
+- `src/smith/differentiable_numerics/dfem_reverse_derivative.hpp`

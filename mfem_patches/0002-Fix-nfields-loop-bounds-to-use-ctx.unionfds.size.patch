@@ -1,7 +1,7 @@
 From a6b73cd642a796f3501c7125a460540773e79fd3 Mon Sep 17 00:00:00 2001
 From: Michael Tupek <mrtupek@gmail.com>
 Date: Sun, 17 May 2026 16:44:45 -0600
-Subject: [PATCH 4/6] Fix nfields loop bounds to use ctx.unionfds.size()
+Subject: [PATCH 2/4] Fix nfields loop bounds to use ctx.unionfds.size()
 
 Several loops in the LocalQFBackend derivative classes iterate up to
 the compile-time nfields (unique field ids in this integrator's tuples)

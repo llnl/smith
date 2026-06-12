@@ -170,9 +170,10 @@ int main(int argc, char* argv[])
       [=] SMITH_HOST_DEVICE(const mfem::future::tensor<mfem::real_t, dim>&,
                             const mfem::future::tensor<mfem::real_t, dim>&,
                             const mfem::future::tensor<mfem::real_t, dim>&,
-                            const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight, double) {
+                            const mfem::future::tensor<mfem::real_t, dim, dim>& dX_dxi, mfem::real_t weight, double,
+                            mfem::future::tensor<mfem::real_t, dim>& out) {
         auto J = mfem::future::det(dX_dxi) * weight;
-        return mfem::future::tuple{g * J};
+        out = g * J;
       },
       g_inputs, g_outputs, displacement_ir, std::index_sequence<>{});
 

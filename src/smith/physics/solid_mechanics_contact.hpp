@@ -494,10 +494,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       amgf_prec->SetFilteredSubspaceTransferOperator(*(contact_dof_prolongation_.get()));
       // set the filteredsubspace solver component of AMGF
       // better solution: retrieve print level from .preconditioner_print_level from linear_solver_options
+#ifdef MFEM_USE_STRUMPACK
       int filter_solver_print_level = 0;
       filter_solver_ =
           std::make_unique<StrumpackSolver>(filter_solver_print_level, contact_dof_prolongation_->GetComm());
       amgf_prec->SetFilteredSubspaceSolver(*filter_solver_.get());
+#endif
 
       auto& lin_solver = nonlin_solver_->linearSolver();
       auto iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&lin_solver);

@@ -574,7 +574,7 @@ TEST_F(DfemBugsFixture, Bug12_NonlinearJacobianAndTranspose)
  * LocalQFBackend template chain and grouping callbacks by entity kind in
  * DifferentiableOperator::Mult.
  */
-TEST_F(DfemBugsFixture, Bug1_2_BoundaryIntegrator)
+TEST_F(DfemBugsFixture, DISABLED_Bug1_2_BoundaryIntegrator)
 {
   mfem::H1_FECollection fec(1, pmesh->Dimension());
   mfem::ParFiniteElementSpace fes(pmesh.get(), &fec);

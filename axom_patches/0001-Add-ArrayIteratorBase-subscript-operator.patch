@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Michael Tupek <mrtupek@gmail.com>
+Date: Fri, 12 Jun 2026 00:00:00 -0600
+Subject: [PATCH] Add ArrayIteratorBase subscript operator
+
+libc++'s std::sort requires random-access iterators to provide operator[].
+ArrayIteratorBase advertises random-access traversal but lacked the subscript
+operator, which breaks Axom polynomial solver compilation when sorting an
+axom::Array of roots.
+---
+ src/axom/core/ArrayIteratorBase.hpp |  6 ++++++
+ src/axom/core/tests/core_array.hpp  | 22 ++++++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/src/axom/core/ArrayIteratorBase.hpp b/src/axom/core/ArrayIteratorBase.hpp
+index 4e144453e..6313a2ebf 100644
+--- a/src/axom/core/ArrayIteratorBase.hpp
++++ b/src/axom/core/ArrayIteratorBase.hpp
+@@ -52,6 +52,12 @@ public:
+   AXOM_HOST_DEVICE
+   ValueType& operator*() const { return m_arrayPtr->flatIndex(BaseType::m_pos); }
+ 
++  /**
++   * \brief Returns the iterator value at an offset from the current position
++   */
++  AXOM_HOST_DEVICE
++  ValueType& operator[](IndexType n) const { return m_arrayPtr->flatIndex(BaseType::m_pos + n); }
++
+ protected:
+   /** Implementation of advance() as required by IteratorBase */
+   AXOM_HOST_DEVICE
+diff --git a/src/axom/core/tests/core_array.hpp b/src/axom/core/tests/core_array.hpp
+index 36a971594..7a547c4f8 100644
+--- a/src/axom/core/tests/core_array.hpp
++++ b/src/axom/core/tests/core_array.hpp
+@@ -2348,6 +2348,28 @@ TEST(core_array, checkConstConversion)
+ 
+ //------------------------------------------------------------------------------
+ 
++TEST(core_array, iteratorSubscript)
++{
++  axom::Array<int> values {3, 1, 2};
++
++  auto it = values.begin();
++  EXPECT_EQ(it[0], 3);
++  EXPECT_EQ(it[1], 1);
++  EXPECT_EQ((it + 2)[0], 2);
++
++  std::sort(values.begin(), values.end());
++  EXPECT_EQ(values[0], 1);
++  EXPECT_EQ(values[1], 2);
++  EXPECT_EQ(values[2], 3);
++
++  const axom::Array<int>& const_values = values;
++  auto const_it = const_values.begin();
++  EXPECT_EQ(const_it[0], 1);
++  EXPECT_EQ(const_it[2], 3);
++}
++
++//------------------------------------------------------------------------------
++
+ TEST(core_array, checkVariadicCtors)
+ {
+   int i = 5;
+-- 
+2.39.5
+

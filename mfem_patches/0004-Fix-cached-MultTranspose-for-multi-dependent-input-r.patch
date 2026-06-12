@@ -1,7 +1,7 @@
 From 83294ac1df1c7bcbafcbe56f8df75013435bb739 Mon Sep 17 00:00:00 2001
 From: Michael Tupek <mrtupek@gmail.com>
 Date: Sun, 17 May 2026 21:24:41 -0600
-Subject: [PATCH 6/6] Fix cached MultTranspose for multi-dependent-input
+Subject: [PATCH 4/4] Fix cached MultTranspose for multi-dependent-input
  residuals
 
 Rewrite the transpose contraction in DerivativeApplyTranspose to

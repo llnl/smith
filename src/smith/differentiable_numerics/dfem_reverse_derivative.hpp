@@ -162,6 +162,62 @@ constexpr std::size_t fop_index_for_id()
    return static_cast<std::size_t>(-1);
 }
 
+template <typename... Seqs> struct concat_index_sequences;
+
+template <>
+struct concat_index_sequences<>
+{
+   using type = std::index_sequence<>;
+};
+
+template <std::size_t... Is>
+struct concat_index_sequences<std::index_sequence<Is...>>
+{
+   using type = std::index_sequence<Is...>;
+};
+
+template <std::size_t... Is, std::size_t... Js, typename... Rest>
+struct concat_index_sequences<std::index_sequence<Is...>,
+                              std::index_sequence<Js...>,
+                              Rest...>
+   : concat_index_sequences<std::index_sequence<Is..., Js...>, Rest...>
+{};
+
+template <typename... Seqs>
+using concat_index_sequences_t = typename concat_index_sequences<Seqs...>::type;
+
+template <int Id, std::size_t Pos, typename... FOps>
+struct fop_positions_for_id_impl;
+
+template <int Id, std::size_t Pos>
+struct fop_positions_for_id_impl<Id, Pos>
+{
+   using type = std::index_sequence<>;
+   static constexpr bool found = false;
+};
+
+template <int Id, std::size_t Pos, typename FOp, typename... Rest>
+struct fop_positions_for_id_impl<Id, Pos, FOp, Rest...>
+{
+private:
+   using tail = fop_positions_for_id_impl<Id, Pos + 1, Rest...>;
+
+public:
+   using type = std::conditional_t<
+      FOp::GetFieldId() == Id,
+      concat_index_sequences_t<std::index_sequence<Pos>, typename tail::type>,
+      typename tail::type>;
+   static constexpr bool found = (FOp::GetFieldId() == Id) || tail::found;
+};
+
+template <int Id, typename... FOps>
+using fop_positions_for_id =
+   typename fop_positions_for_id_impl<Id, 0, FOps...>::type;
+
+template <int Id, typename... FOps>
+inline constexpr bool fop_has_id =
+   fop_positions_for_id_impl<Id, 0, FOps...>::found;
+
 } // namespace detail
 
 // --- ReverseAdapter qfunction -----------------------------------------------
@@ -405,21 +461,21 @@ void AddReverseGradientIntegrator(
    // Compile-time positions of DiffFieldIds in the augmented input FOp tuple.
    static_assert(((DiffFieldIds != static_cast<std::size_t>(VFieldId)) && ...),
                  "VFieldId must not be one of the differentiated field ids");
-   static_assert(((detail::fop_index_for_id<DiffFieldIds,
-                   PhysInputFOps..., detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>()
-                   != static_cast<std::size_t>(-1)) && ...),
+   static_assert(((detail::fop_has_id<DiffFieldIds,
+                   PhysInputFOps..., detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>) && ...),
                  "a requested diff field id does not appear in physics_input_fops");
 
    DensityQF density_qf{ std::move(physics_qf) };
+   using DiffPositions = detail::concat_index_sequences_t<
+                         detail::fop_positions_for_id<DiffFieldIds,
+                         PhysInputFOps...,
+                         detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>...>;
    add_with_positions(
              dop,
              std::move(density_qf),
              augmented_input_fops,
              ir, domain_attrs,
-             std::index_sequence<
-             detail::fop_index_for_id<DiffFieldIds,
-             PhysInputFOps...,
-             detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>() ...> {});
+             DiffPositions {});
 }
 
 // --- Boundary variant of AddReverseGradientIntegrator -----------------------
@@ -455,21 +511,21 @@ void AddReverseBoundaryGradientIntegrator(
 
    static_assert(((DiffFieldIds != static_cast<std::size_t>(VFieldId)) && ...),
                  "VFieldId must not be one of the differentiated field ids");
-   static_assert(((detail::fop_index_for_id<DiffFieldIds,
-                   PhysInputFOps..., detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>()
-                   != static_cast<std::size_t>(-1)) && ...),
+   static_assert(((detail::fop_has_id<DiffFieldIds,
+                   PhysInputFOps..., detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>) && ...),
                  "a requested diff field id does not appear in physics_input_fops");
 
    DensityQF density_qf{ std::move(physics_qf) };
+   using DiffPositions = detail::concat_index_sequences_t<
+                         detail::fop_positions_for_id<DiffFieldIds,
+                         PhysInputFOps...,
+                         detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>...>;
    add_boundary_with_positions(
              dop,
              std::move(density_qf),
              augmented_input_fops,
              ir, boundary_attrs,
-             std::index_sequence<
-             detail::fop_index_for_id<DiffFieldIds,
-             PhysInputFOps...,
-             detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>() ...> {});
+             DiffPositions {});
 }
 
 template <int VFieldId, int... DiffFieldIds,
@@ -603,19 +659,19 @@ std::unique_ptr<DifferentiableOperator> MakeReverseScalarSumOperator(
 
    using DensityQF = ScalarSumDensityQF<PhysicsQF, PhysInsTuple, PhysOutsTuple>;
 
-   static_assert(((detail::fop_index_for_id<DiffFieldIds,
-                   PhysInputFOps...>()
-                   != static_cast<std::size_t>(-1)) && ...),
+   static_assert(((detail::fop_has_id<DiffFieldIds,
+                   PhysInputFOps...>) && ...),
                  "a requested diff field id does not appear in physics_input_fops");
 
    DensityQF density_qf{ std::move(physics_qf) };
+   using DiffPositions = detail::concat_index_sequences_t<
+                         detail::fop_positions_for_id<DiffFieldIds,
+                         PhysInputFOps...>...>;
    return make_with_positions(
              std::move(density_qf),
              physics_input_fops,
              inputs, ir, domain_attrs, pmesh,
-             std::index_sequence<
-             detail::fop_index_for_id<DiffFieldIds,
-             PhysInputFOps...>() ...> {});
+             DiffPositions {});
 }
 
 } // namespace mfem::future::reverse
