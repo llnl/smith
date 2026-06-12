@@ -32,14 +32,15 @@ class Problem:
     # Per-problem refinement calibrated so each case runs ~60 s at np=6 with the
     # current best options (see performance_plan.md). Global --mesh-scale overrides.
     default_mesh_scale: float | None = None
-    # Per-problem deflation pieces (s(n,dofs) rule + iteration-bound/branch-stability
-    # gates; see performance_plan.md). Global --deflation-pieces overrides.
-    default_pieces: int = 1
+    # Deflation pieces: 0 = the adaptive v4 ratchet (sustained cap-saturation trigger +
+    # pow2 size-rule target; see performance_plan.md) — the uniform no-knowledge default.
+    # Global --deflation-pieces overrides.
+    default_pieces: int = 0
 
 
 PROBLEM_TABLE = {
-    "arch": Problem("arch", "tests/shallow_arch_buckling", default_mesh_scale=1.2, default_pieces=2),
-    "block": Problem("block", "tests/hyperelastic_benchmarks", "block", default_mesh_scale=1.6, default_pieces=2),
+    "arch": Problem("arch", "tests/shallow_arch_buckling", default_mesh_scale=1.2),
+    "block": Problem("block", "tests/hyperelastic_benchmarks", "block", default_mesh_scale=1.6),
     "contact": Problem("contact", "tests/hyperelastic_benchmarks", "contact", default_mesh_scale=0.8),
     "twist": Problem("twist", "tests/hyperelastic_benchmarks", "twist", default_steps=6, default_mesh_scale=0.9),
 }

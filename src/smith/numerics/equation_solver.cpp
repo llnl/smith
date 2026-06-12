@@ -544,13 +544,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     bool locked = false;
     int current_s = 1;
     size_t cumulative_cap_hits = 0;
-    /// Ratchet to the size-rule s once this many outers have saturated a deep CG cap.
-    /// Deep-cap saturation is the preconditioner-limited signature (arch-class);
-    /// iteration counts alone cannot separate twist-class (no benefit) from arch-class.
-    static constexpr size_t cap_hit_trigger = 2;
-    /// A cap hit only counts when the binding budget was at least this many iterations
-    /// (small early-solve adaptive-cap budgets are saturated by every problem).
-    static constexpr size_t deep_cap_iters = 300;
+    /// Ratchet to the size-rule s after this many CONSECUTIVE cap-saturated outers.
+    /// Sustained saturation is the preconditioner-limited signature; transients (twist's
+    /// snap-through spike: 6 in a row; contact's cold start: 3) stay below it while
+    /// arch (262) and block (35) clear it early.
+    static constexpr size_t cap_hit_trigger = 12;
   };
   mutable AdaptivePiecesState adapt_pieces_;
   mutable size_t window_cg_iters_ = 0;
@@ -1594,17 +1592,18 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         consecutive_tr_shrinks = 0;
       }
 
-      // Adaptive pieces v3: deterministic one-way ratchet, no experiments. The arch-class
-      // signal is CG-cap saturation (the preconditioner-limited signature; iters/outer
-      // alone cannot separate twist from arch). On the ratchet, commit to the size-rule
-      // target once, permanently. All inputs are replicated integers — decisions are
-      // bitwise-deterministic across ranks and runs (no wall clock).
+      // Adaptive pieces v4: deterministic one-way ratchet on SUSTAINED CG-cap saturation.
+      // Run-length of consecutive cap-saturated outers separates the classes with ~2x
+      // margins (measured at the suite defaults: arch max-run 262, block 35 vs twist 6,
+      // contact 3): snap-through spikes and cold starts are short transients, a
+      // preconditioner-limited solve saturates for dozens of outers in a row. On trigger,
+      // commit once to the pow2-floored size-rule target. All inputs are replicated
+      // integers — decisions are bitwise-deterministic across ranks and runs.
       if (adapt_pieces_.enabled && !adapt_pieces_.locked && deflation_precond_) {
-        // Deep hits only: saturating a small early-solve adaptive-cap budget is normal for
-        // every problem; grinding out >=300 iterations and still hitting the cap is the
-        // preconditioner-limited signature.
-        if (trResults.cg_hit_max_iters && settings.max_cg_iterations >= AdaptivePiecesState::deep_cap_iters) {
+        if (trResults.cg_hit_max_iters) {
           ++adapt_pieces_.cumulative_cap_hits;
+        } else {
+          adapt_pieces_.cumulative_cap_hits = 0;  // consecutive-run counter
         }
         if (adapt_pieces_.cumulative_cap_hits >= AdaptivePiecesState::cap_hit_trigger) {
           const int target = deflation_precond_->suggestedMaxPieces();

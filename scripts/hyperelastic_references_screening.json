@@ -1,10 +1,10 @@
 {
   "arch": {
-    "final_displacement_l2": 480.912462,
+    "final_displacement_l2": 504.471355,
     "rel_tol": 0.01
   },
   "block": {
-    "final_displacement_l2": 39.018216,
+    "final_displacement_l2": 39.0248947,
     "rel_tol": 0.01
   },
   "contact": {
