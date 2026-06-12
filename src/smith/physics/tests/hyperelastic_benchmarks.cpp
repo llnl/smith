@@ -31,6 +31,7 @@ namespace smith {
 namespace {
 
 constexpr int p = 2;
+int sim_order = 2;  // runtime polynomial order for the block case (E* study); other cases stay p=2
 constexpr int dim = 3;
 constexpr int max_benchmark_elements = 200000;
 
@@ -169,7 +170,8 @@ void checkElementCount(const std::string& name, const Mesh& mesh)
       std::format("{} has {} elements, exceeding the benchmark cap of {}", name, elements, max_benchmark_elements));
 }
 
-void advance(SolidMechanics<p, dim>& solid, const std::string& output_name)
+template <int P>
+void advance(SolidMechanics<P, dim>& solid, const std::string& output_name)
 {
   if (write_output) {
     solid.outputStateToDisk(output_name);
@@ -188,7 +190,8 @@ void advance(SolidMechanics<p, dim>& solid, const std::string& output_name)
   }
 }
 
-void checkDisplacement(const std::string& name, const SolidMechanics<p, dim>& solid)
+template <int P>
+void checkDisplacement(const std::string& name, const SolidMechanics<P, dim>& solid)
 {
   const double displacement_norm = mfem::ParNormlp(solid.displacement(), 2, MPI_COMM_WORLD);
   SLIC_INFO_ROOT(std::format("{}: final displacement l2 = {:.8e}", name, displacement_norm));
@@ -213,6 +216,8 @@ void parseCommandLine(int& argc, char** argv)
       deflation_coarse_mode_name = arg.substr(std::string("--deflation-coarse-mode=").size());
     } else if (arg.rfind("--deflation-pieces=", 0) == 0) {
       deflation_pieces = std::stoi(arg.substr(std::string("--deflation-pieces=").size()));
+    } else if (arg.rfind("--order=", 0) == 0) {
+      sim_order = std::stoi(arg.substr(std::string("--order=").size()));
     } else if (arg.rfind("--nonlinear-max-iterations=", 0) == 0) {
       nonlinear_max_iterations = std::stoi(arg.substr(std::string("--nonlinear-max-iterations=").size()));
     } else if (arg.rfind("--linear-max-iterations=", 0) == 0) {
@@ -285,7 +290,8 @@ void parseCommandLine(int& argc, char** argv)
 
 }  // namespace
 
-void runNearIncompressibleBlockCompression()
+template <int P>
+void runNearIncompressibleBlockCompressionT()
 {
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "hyperelastic_block_compression");
@@ -307,7 +313,7 @@ void runNearIncompressibleBlockCompression()
   mesh->addDomainOfBoundaryElements("fixed_face", by_attr<dim>(5));
   mesh->addDomainOfBoundaryElements("driven_face", by_attr<dim>(3));
 
-  SolidMechanics<p, dim> solid(nonlinearOptions(), linearOptions(), solid_mechanics::default_quasistatic_options,
+  SolidMechanics<P, dim> solid(nonlinearOptions(), linearOptions(), solid_mechanics::default_quasistatic_options,
                                "hyperelastic_block", mesh);
   if (assemble_bsr) solid.enableDirectBSRAssembly();
   solid_mechanics::NeoHookean material{.density = 1.0, .K = 1000.0, .G = 1.0};
@@ -324,6 +330,15 @@ void runNearIncompressibleBlockCompression()
   solid.completeSetup();
   advance(solid, "hyperelastic_block_compression");
   checkDisplacement("near-incompressible block", solid);
+}
+
+void runNearIncompressibleBlockCompression()
+{
+  if (sim_order == 1) {
+    runNearIncompressibleBlockCompressionT<1>();
+  } else {
+    runNearIncompressibleBlockCompressionT<2>();
+  }
 }
 
 void runSpherePenaltyContact()
