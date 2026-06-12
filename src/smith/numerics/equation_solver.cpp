@@ -529,6 +529,27 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   /// (when the SLEPc subspace path is active) is appended to `left_mosts`.
   mutable DeflationPreconditioner* deflation_precond_ = nullptr;
   mutable bool deflation_precond_checked_ = false;
+
+  /// Adaptive deflation-pieces ladder (enabled by deflation_pieces == 0): start at s=1,
+  /// probe a doubling every window; accept on a clear wall/outer improvement, otherwise
+  /// revert and lock. Decisions use an allreduced window wall so every rank decides
+  /// identically. State persists across load steps (the solver object is reused).
+  struct AdaptivePiecesState {
+    bool enabled = false;
+    bool locked = false;
+    bool probing = false;          // current window is evaluating a freshly doubled s
+    int current_s = 1;
+    int previous_s = 1;
+    double previous_metric = 0.0;  // accepted-config wall/outer to beat
+    size_t window_outers = 0;
+    double window_t0 = 0.0;
+    static constexpr size_t window = 25;            // outers per decision window
+    static constexpr double improve_margin = 0.95;  // accept doubling on a >5% wall/outer win
+    static constexpr double attempt_gate = 50.0;    // only experiment if iters/outer >= this
+  };
+  mutable AdaptivePiecesState adapt_pieces_;
+  mutable size_t window_cg_iters_ = 0;
+  mutable bool force_precond_refresh_ = false;
   /// Cached coarse leftmost direction and eigenvalue, refreshed each precond rebuild.
   mutable mfem::Vector deflation_leftmost_w_;
   mutable double deflation_leftmost_lambda_ = 0.0;
@@ -1109,6 +1130,20 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double max_norm_seen = norm;
     int consecutive_tr_shrinks = 0;
 
+    // Adaptive pieces: (re)arm per solve; ladder state (current_s/locked) persists across
+    // load steps. Enabled by deflation_pieces == 0.
+    adapt_pieces_.enabled = (linear_options.deflation_pieces == 0);
+    adapt_pieces_.window_outers = 0;
+    window_cg_iters_ = 0;
+    adapt_pieces_.window_t0 = MPI_Wtime();
+    if (adapt_pieces_.probing && deflation_precond_) {
+      // A probe interrupted by the load-step boundary is unverified: roll it back (the
+      // ladder may retry within the new step). The it==0 refresh rebuilds the basis.
+      deflation_precond_->setNumPieces(adapt_pieces_.previous_s);
+      adapt_pieces_.current_s = adapt_pieces_.previous_s;
+      adapt_pieces_.probing = false;
+    }
+
     int it = 0;
     for (; true; it++) {
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
@@ -1144,8 +1179,10 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         grad_is_current_ = true;
       }
 
-      if (it == 0 || (trResults.cg_iterations_count >= settings.max_cg_iterations ||
-                      cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
+      if (it == 0 || force_precond_refresh_ ||
+          (trResults.cg_iterations_count >= settings.max_cg_iterations ||
+           cumulative_cg_iters_from_last_precond_update >= settings.max_cumulative_iteration)) {
+        force_precond_refresh_ = false;
         ++num_precond_setops_;
         double tps0 = MPI_Wtime();
         tr_precond.SetOperator(*grad);
@@ -1559,6 +1596,59 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         ++consecutive_tr_shrinks;
       } else {
         consecutive_tr_shrinks = 0;
+      }
+
+      // Adaptive pieces ladder: every `window` outers, decide using the allreduced window
+      // wall (identical on every rank — decisions must not diverge) and the replicated
+      // iteration count. Baseline window: attempt a doubling only if the solve looks
+      // iteration-bound and the suggested cap allows. Probe window: keep the doubling on a
+      // clear improvement, otherwise revert and lock.
+      if (adapt_pieces_.enabled && !adapt_pieces_.locked && deflation_precond_) {
+        ++adapt_pieces_.window_outers;
+        window_cg_iters_ += diag_cg_iters;
+        if (adapt_pieces_.window_outers >= AdaptivePiecesState::window) {
+          double window_wall = MPI_Wtime() - adapt_pieces_.window_t0;
+          MPI_Comm comm = GetComm() != MPI_COMM_NULL ? GetComm() : MPI_COMM_WORLD;
+          MPI_Allreduce(MPI_IN_PLACE, &window_wall, 1, MPI_DOUBLE, MPI_MAX, comm);
+          const double metric = window_wall / static_cast<double>(adapt_pieces_.window_outers);
+          const double iters_per_outer =
+              static_cast<double>(window_cg_iters_) / static_cast<double>(adapt_pieces_.window_outers);
+          auto announce = [&](const char* what, int s_from, int s_to) {
+            if (print_level >= 1) {
+              mfem::out << "[adaptive-pieces] " << what << ": s " << s_from << " -> " << s_to
+                        << " (wall/outer=" << metric << " s, iters/outer=" << iters_per_outer << ")\n";
+            }
+          };
+          if (adapt_pieces_.probing) {
+            if (metric < AdaptivePiecesState::improve_margin * adapt_pieces_.previous_metric) {
+              announce("keep", adapt_pieces_.previous_s, adapt_pieces_.current_s);
+              adapt_pieces_.previous_s = adapt_pieces_.current_s;
+              adapt_pieces_.previous_metric = metric;
+              adapt_pieces_.probing = false;  // next window may attempt a further doubling
+            } else {
+              announce("revert+lock", adapt_pieces_.current_s, adapt_pieces_.previous_s);
+              deflation_precond_->setNumPieces(adapt_pieces_.previous_s);
+              adapt_pieces_.current_s = adapt_pieces_.previous_s;
+              adapt_pieces_.probing = false;
+              adapt_pieces_.locked = true;
+              force_precond_refresh_ = true;
+            }
+          } else if (iters_per_outer >= AdaptivePiecesState::attempt_gate &&
+                     2 * adapt_pieces_.current_s <= deflation_precond_->suggestedMaxPieces()) {
+            announce("probe", adapt_pieces_.current_s, 2 * adapt_pieces_.current_s);
+            adapt_pieces_.previous_metric = metric;
+            adapt_pieces_.previous_s = adapt_pieces_.current_s;
+            adapt_pieces_.current_s *= 2;
+            deflation_precond_->setNumPieces(adapt_pieces_.current_s);
+            adapt_pieces_.probing = true;
+            force_precond_refresh_ = true;
+          } else {
+            adapt_pieces_.previous_metric = metric;  // keep the baseline fresh
+          }
+          adapt_pieces_.window_outers = 0;
+          window_cg_iters_ = 0;
+          adapt_pieces_.window_t0 = MPI_Wtime();
+        }
       }
 
       if (cap_diag_enabled) {

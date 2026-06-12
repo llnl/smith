@@ -278,6 +278,25 @@ void DeflationPreconditioner::setDeflationOrder(DeflationOrder order)
   }
 }
 
+int DeflationPreconditioner::suggestedMaxPieces() const
+{
+  if (suggested_max_pieces_ > 0) return suggested_max_pieces_;
+  if (!fes_) throw std::runtime_error("DeflationPreconditioner::suggestedMaxPieces: attachFES not called");
+  constexpr double dofs_per_piece_target = 3000.0;  // D* from the E* study
+  constexpr int coarse_size_ceiling = 500;          // m = pieces * ranks * mpr
+  constexpr int min_elements_per_piece = 64;
+  const long long global_dofs = fes_->GlobalTrueVSize();
+  const int s_rule =
+      static_cast<int>(std::llround(static_cast<double>(global_dofs) / (n_ranks_ * dofs_per_piece_target)));
+  const int modes_per_piece = modes_per_rank_ / num_pieces_;
+  const int s_coarse = coarse_size_ceiling / std::max(1, n_ranks_ * modes_per_piece);
+  int ne_min = fes_->GetMesh()->GetNE();
+  MPI_Allreduce(MPI_IN_PLACE, &ne_min, 1, MPI_INT, MPI_MIN, fes_->GetComm());
+  const int s_elems = ne_min / min_elements_per_piece;
+  suggested_max_pieces_ = std::max(1, std::min({s_rule, s_coarse, s_elems}));
+  return suggested_max_pieces_;
+}
+
 void DeflationPreconditioner::setNumPieces(int s)
 {
   s = std::max(1, s);

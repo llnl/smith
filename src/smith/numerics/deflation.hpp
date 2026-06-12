@@ -221,6 +221,12 @@ class DeflationPreconditioner : public mfem::Solver {
   void setNumPieces(int s);
   int numPieces() const { return num_pieces_; }
 
+  /// Upper bound for adaptive piece selection (see performance_plan.md, E* study):
+  /// min of the size rule dofs/(ranks·D*) with D* = 3000 dofs/piece, the coarse-size
+  /// ceiling m = pieces·ranks·mpr ≤ 500, and ≥ 64 elements/piece on every rank.
+  /// Collective on first call (global dof count + min local element count); cached.
+  int suggestedMaxPieces() const;
+
  private:
   void buildBasis();
   void applyEssentialDofMask();
@@ -248,6 +254,7 @@ class DeflationPreconditioner : public mfem::Solver {
   int dim_ = 0;
   int modes_per_rank_ = 0;
   int num_pieces_ = 1;
+  mutable int suggested_max_pieces_ = 0;  // 0 = not yet computed
   DeflationOrder order_ = DeflationOrder::Affine;
   /// Element-volume centroid of this rank's mesh; used to center linear and
   /// quadratic monomials for conditioning of W^T A W.
