@@ -79,6 +79,8 @@ last 4 days of build directories:
 
 .. code-block:: bash
 
+   MAILTO="youremail@here.com"
+   
    0 2 * * * /usr/bin/env bash ${HOME}/bin/cleanup_gitlab_builds.sh -d 4 -f
 
 This will email you what got deleted and which machine the cleanup ran on. Keep
