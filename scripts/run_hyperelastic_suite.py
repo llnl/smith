@@ -32,11 +32,14 @@ class Problem:
     # Per-problem refinement calibrated so each case runs ~60 s at np=6 with the
     # current best options (see performance_plan.md). Global --mesh-scale overrides.
     default_mesh_scale: float | None = None
+    # Per-problem deflation pieces (s(n,dofs) rule + iteration-bound/branch-stability
+    # gates; see performance_plan.md). Global --deflation-pieces overrides.
+    default_pieces: int = 1
 
 
 PROBLEM_TABLE = {
-    "arch": Problem("arch", "tests/shallow_arch_buckling", default_mesh_scale=1.2),
-    "block": Problem("block", "tests/hyperelastic_benchmarks", "block", default_mesh_scale=1.6),
+    "arch": Problem("arch", "tests/shallow_arch_buckling", default_mesh_scale=1.2, default_pieces=2),
+    "block": Problem("block", "tests/hyperelastic_benchmarks", "block", default_mesh_scale=1.6, default_pieces=2),
     "contact": Problem("contact", "tests/hyperelastic_benchmarks", "contact", default_mesh_scale=0.8),
     "twist": Problem("twist", "tests/hyperelastic_benchmarks", "twist", default_steps=6, default_mesh_scale=0.9),
 }
@@ -267,7 +270,7 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         f"--preconditioner={args.preconditioner}",
         f"--deflation-order={args.deflation_order}",
         f"--deflation-coarse-mode={args.deflation_coarse_mode}",
-        f"--deflation-pieces={args.deflation_pieces}",
+        f"--deflation-pieces={args.deflation_pieces if args.deflation_pieces is not None else problem.default_pieces}",
         f"--trust-subspace-option={args.trust_subspace_option}",
         f"--trust-num-leftmost={args.trust_num_leftmost}",
         f"--trust-num-previous-steps={args.trust_num_previous_steps}",
@@ -499,7 +502,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preconditioner", default="Deflation")
     parser.add_argument("--deflation-order", choices=("affine", "quadratic"), default="affine")
     parser.add_argument("--deflation-coarse-mode", choices=("global", "local", "schwarz"), default="global")
-    parser.add_argument("--deflation-pieces", type=int, default=1)
+    parser.add_argument("--deflation-pieces", type=int, default=None,
+                        help="override the per-problem default deflation pieces")
     parser.add_argument("--trust-subspace-option", type=int, default=2)
     parser.add_argument("--trust-num-leftmost", type=int, default=1)
     parser.add_argument("--trust-num-previous-steps", type=int, default=4)
