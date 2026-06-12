@@ -31,7 +31,8 @@ namespace smith {
 namespace {
 
 constexpr int p = 2;
-int sim_order = 2;  // runtime polynomial order for the block case (E* study); other cases stay p=2
+int sim_order = 2;
+bool no_warm_start = false;  // runtime polynomial order for the block case (E* study); other cases stay p=2
 constexpr int dim = 3;
 constexpr int max_benchmark_elements = 200000;
 
@@ -218,6 +219,8 @@ void parseCommandLine(int& argc, char** argv)
       deflation_pieces = std::stoi(arg.substr(std::string("--deflation-pieces=").size()));
     } else if (arg.rfind("--order=", 0) == 0) {
       sim_order = std::stoi(arg.substr(std::string("--order=").size()));
+    } else if (arg == "--no-warm-start") {
+      no_warm_start = true;
     } else if (arg.rfind("--nonlinear-max-iterations=", 0) == 0) {
       nonlinear_max_iterations = std::stoi(arg.substr(std::string("--nonlinear-max-iterations=").size()));
     } else if (arg.rfind("--linear-max-iterations=", 0) == 0) {
@@ -314,7 +317,7 @@ void runNearIncompressibleBlockCompressionT()
   mesh->addDomainOfBoundaryElements("driven_face", by_attr<dim>(3));
 
   SolidMechanics<P, dim> solid(nonlinearOptions(), linearOptions(), solid_mechanics::default_quasistatic_options,
-                               "hyperelastic_block", mesh);
+                               "hyperelastic_block", mesh, {}, 0, 0.0, false, !no_warm_start);
   if (assemble_bsr) solid.enableDirectBSRAssembly();
   solid_mechanics::NeoHookean material{.density = 1.0, .K = 1000.0, .G = 1.0};
   solid.setMaterial(material, mesh->entireBody());
@@ -367,7 +370,7 @@ void runSpherePenaltyContact()
   mesh->addDomainOfBoundaryElements("contact_face", by_attr<dim>(1));
 
   SolidMechanics<p, dim> solid(nonlinearOptions(), linearOptions(), solid_mechanics::default_quasistatic_options,
-                               "hyperelastic_contact", mesh);
+                               "hyperelastic_contact", mesh, {}, 0, 0.0, false, !no_warm_start);
   if (assemble_bsr) solid.enableDirectBSRAssembly();
   solid_mechanics::NeoHookean material{.density = 1.0, .K = 100.0, .G = 1.0};
   solid.setMaterial(material, mesh->entireBody());
@@ -462,7 +465,7 @@ void runTwistedBeam()
   mesh->addDomainOfBoundaryElements("twist_face", by_attr<dim>(3));
 
   SolidMechanics<p, dim> solid(nonlinearOptions(), linearOptions(), solid_mechanics::default_quasistatic_options,
-                               "hyperelastic_twisted_beam", mesh);
+                               "hyperelastic_twisted_beam", mesh, {}, 0, 0.0, false, !no_warm_start);
   if (assemble_bsr) solid.enableDirectBSRAssembly();
   solid_mechanics::NeoHookean material{.density = 1.0, .K = 50.0, .G = 1.0};
   solid.setMaterial(material, mesh->entireBody());
