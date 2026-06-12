@@ -181,6 +181,8 @@ FiniteElementState createDualDirection(const BasePhysics& physics, std::shared_p
 
 void updateStaticInputs(BasePhysics& physics)
 {
+  // Re-apply upstream parameter fields, matching what a host code would do before a solve.
+  // This generic test deep-copies the existing fields because arbitrary physics may have different valid parameter values.
   const auto parameter_names = physics.parameterNames();
   for (std::size_t i = 0; i < parameter_names.size(); ++i) {
     FiniteElementState parameter_value(physics.parameter(i));
@@ -194,6 +196,7 @@ void updateStaticInputs(BasePhysics& physics)
 
 void setStaticStateGuesses(BasePhysics& physics)
 {
+  // Zero out each state field for the static solve's initial guess.
   for (const auto& state_name : physics.stateNames()) {
     FiniteElementState state_guess(physics.state(state_name).space(), state_name + "_state_guess");
     state_guess = 0.0;
