@@ -56,7 +56,7 @@ PARAM_SPACE = {
     "deflation_smoother": ("cat", ("jacobi", "block"), None, "jacobi"),
     # Adaptive CG cap (commit 11c9625bb): cap_min = 0 disables; gamma = 1 disables the
     # rejection brake. Hand-validated point: 60 / 0.7 (suite -6.4%), seeded explicitly.
-    "cg_cap_min": ("int", 0, 300, 0),
+    "cg_cap_min": ("int", 0, 300, 60),
     "cg_cap_gamma": ("lin", 0.3, 1.0, 0.7),
 }
 

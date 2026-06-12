@@ -506,7 +506,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trust-num-lanczos-iters", type=int, default=0)
     parser.add_argument("--max-cg-iterations", type=int, default=723)
     parser.add_argument("--cg-forcing-rel", type=float, default=1.512e-05)
-    parser.add_argument("--cg-cap-min", type=int, default=0, help="adaptive CG cap floor (0 = off)")
+    parser.add_argument("--cg-cap-min", type=int, default=60, help="adaptive CG cap floor (0 = off)")
     parser.add_argument("--cg-cap-gamma", type=float, default=0.7)
     parser.add_argument("--residual-growth-cap", type=float, default=5.654)
     parser.add_argument("--tr-decrease-factor", type=float, default=0.437)
