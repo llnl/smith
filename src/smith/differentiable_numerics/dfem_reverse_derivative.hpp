@@ -69,10 +69,10 @@ namespace mfem::future::reverse
 // --- map the head N types of a dfem tuple into a std::tuple -----------------
 namespace detail
 {
-template <typename DFEMTuple, typename Seq> struct head_std_tuple_impl;
+template <typename DFEMTuple, typename Seq> struct get_first_N_types_as_std_tuple_impl;
 
 template <typename... Ts, std::size_t... Is>
-struct head_std_tuple_impl<mfem::future::tuple<Ts...>, std::index_sequence<Is...>>
+struct get_first_N_types_as_std_tuple_impl<mfem::future::tuple<Ts...>, std::index_sequence<Is...>>
 {
    using type = std::tuple<
       typename mfem::future::tuple_element<Is,
@@ -80,7 +80,7 @@ struct head_std_tuple_impl<mfem::future::tuple<Ts...>, std::index_sequence<Is...
 };
 
 template <typename DFEMTuple, std::size_t N>
-using head_std_tuple = typename head_std_tuple_impl<
+using get_first_N_types_as_std_tuple = typename get_first_N_types_as_std_tuple_impl<
                        DFEMTuple, std::make_index_sequence<N>>::type;
 
 // Slice [Start, Start+Count) of a dfem tuple into a std::tuple.
@@ -136,19 +136,19 @@ auto weak_inner(const tensor<S, m, n> &a, const tensor<T, m, n> &b)
 // Rebind a FieldOperator's field id (Gradient<U> with NewId=V → Gradient<V>).
 // Only Value, Gradient, Sum, Identity carry a field id; Weight does not and
 // is rejected by static_assert (it has no v-dual interpretation).
-template <typename Op, int NewId> struct rebind_field_id;
+template <typename Op, int NewId> struct replace_field_operator_id;
 
 template <int OldId, int NewId>
-struct rebind_field_id<Value<OldId>, NewId>     { using type = Value<NewId>; };
+struct replace_field_operator_id<Value<OldId>, NewId>     { using type = Value<NewId>; };
 template <int OldId, int NewId>
-struct rebind_field_id<Gradient<OldId>, NewId>  { using type = Gradient<NewId>; };
+struct replace_field_operator_id<Gradient<OldId>, NewId>  { using type = Gradient<NewId>; };
 template <int OldId, int NewId>
-struct rebind_field_id<Sum<OldId>, NewId>       { using type = Sum<NewId>; };
+struct replace_field_operator_id<Sum<OldId>, NewId>       { using type = Sum<NewId>; };
 template <int OldId, int NewId>
-struct rebind_field_id<Identity<OldId>, NewId>  { using type = Identity<NewId>; };
+struct replace_field_operator_id<Identity<OldId>, NewId>  { using type = Identity<NewId>; };
 
 template <typename Op, int NewId>
-using rebind_field_id_t = typename rebind_field_id<Op, NewId>::type;
+using replace_field_operator_id_t = typename replace_field_operator_id<Op, NewId>::type;
 
 // Find the position of a field-id `Id` in a pack of FOp types.
 template <int Id, typename... FOps>
@@ -187,20 +187,20 @@ template <typename... Seqs>
 using concat_index_sequences_t = typename concat_index_sequences<Seqs...>::type;
 
 template <int Id, std::size_t Pos, typename... FOps>
-struct fop_positions_for_id_impl;
+struct find_parameter_indices_for_field_id_impl;
 
 template <int Id, std::size_t Pos>
-struct fop_positions_for_id_impl<Id, Pos>
+struct find_parameter_indices_for_field_id_impl<Id, Pos>
 {
    using type = std::index_sequence<>;
    static constexpr bool found = false;
 };
 
 template <int Id, std::size_t Pos, typename FOp, typename... Rest>
-struct fop_positions_for_id_impl<Id, Pos, FOp, Rest...>
+struct find_parameter_indices_for_field_id_impl<Id, Pos, FOp, Rest...>
 {
 private:
-   using tail = fop_positions_for_id_impl<Id, Pos + 1, Rest...>;
+   using tail = find_parameter_indices_for_field_id_impl<Id, Pos + 1, Rest...>;
 
 public:
    using type = std::conditional_t<
@@ -211,12 +211,36 @@ public:
 };
 
 template <int Id, typename... FOps>
-using fop_positions_for_id =
-   typename fop_positions_for_id_impl<Id, 0, FOps...>::type;
+using find_parameter_indices_for_field_id =
+   typename find_parameter_indices_for_field_id_impl<Id, 0, FOps...>::type;
 
 template <int Id, typename... FOps>
 inline constexpr bool fop_has_id =
-   fop_positions_for_id_impl<Id, 0, FOps...>::found;
+   find_parameter_indices_for_field_id_impl<Id, 0, FOps...>::found;
+
+template <int... DiffFieldIds>
+std::vector<FieldDescriptor> get_field_descriptors_for_ids(const std::vector<FieldDescriptor> &inputs)
+{
+   constexpr int diff_ids[] = { DiffFieldIds... };
+   std::vector<FieldDescriptor> outputs;
+   outputs.reserve(sizeof...(DiffFieldIds));
+   for (int id : diff_ids)
+   {
+      bool found = false;
+      for (const auto &fd : inputs)
+      {
+         if (static_cast<int>(fd.id) == id)
+         {
+            outputs.push_back(fd);
+            found = true;
+            break;
+         }
+      }
+      MFEM_VERIFY(found, "diff field id has no matching FieldDescriptor "
+                  "in inputs vector");
+   }
+   return outputs;
+}
 
 } // namespace detail
 
@@ -357,7 +381,7 @@ private:
 template <typename DensityQF,
           typename... InputFOps,
           std::size_t... DiffPositions>
-void add_with_positions(
+void add_domain_integrator_using_indices(
    mfem::future::DifferentiableOperator& dop,
    DensityQF density_qf,
    mfem::future::tuple<InputFOps...> input_fops,
@@ -369,7 +393,7 @@ void add_with_positions(
    using qf_params = typename qf_sig::parameter_ts;
    constexpr std::size_t NIn = sizeof...(InputFOps);
 
-   using ins_std_tuple = detail::head_std_tuple<qf_params, NIn>;
+   using ins_std_tuple = detail::get_first_N_types_as_std_tuple<qf_params, NIn>;
    using AdapterT = ReverseAdapter<DensityQF,
                                    std::index_sequence<DiffPositions...>,
                                    ins_std_tuple>;
@@ -386,12 +410,12 @@ void add_with_positions(
       ir, domain_attrs, std::integer_sequence<size_t> {});
 }
 
-// --- Boundary variant of add_with_positions ---------------------------------
+// --- Boundary variant of add_domain_integrator_using_indices ---------------------------------
 
 template <typename DensityQF,
           typename... InputFOps,
           std::size_t... DiffPositions>
-void add_boundary_with_positions(
+void add_boundary_integrator_using_indices(
    mfem::future::DifferentiableOperator& dop,
    DensityQF density_qf,
    mfem::future::tuple<InputFOps...> input_fops,
@@ -403,7 +427,7 @@ void add_boundary_with_positions(
    using qf_params = typename qf_sig::parameter_ts;
    constexpr std::size_t NIn = sizeof...(InputFOps);
 
-   using ins_std_tuple = detail::head_std_tuple<qf_params, NIn>;
+   using ins_std_tuple = detail::get_first_N_types_as_std_tuple<qf_params, NIn>;
    using AdapterT = ReverseAdapter<DensityQF,
                                    std::index_sequence<DiffPositions...>,
                                    ins_std_tuple>;
@@ -443,7 +467,7 @@ void AddReverseGradientIntegrator(
    constexpr std::size_t NPhysOut = sizeof...(PhysOutputFOps);
 
    // Split phys_params into (head NPhysIn) and (next NPhysOut), both decayed.
-   using PhysInsRaw  = detail::head_std_tuple<phys_params, NPhysIn>;
+   using PhysInsRaw  = detail::get_first_N_types_as_std_tuple<phys_params, NPhysIn>;
    using PhysOutsRaw = detail::slice_std_tuple<phys_params, NPhysIn, NPhysOut>;
    using PhysInsTuple  = detail::decay_std_tuple_t<PhysInsRaw>;
    using PhysOutsTuple = detail::decay_std_tuple_t<PhysOutsRaw>;
@@ -456,21 +480,21 @@ void AddReverseGradientIntegrator(
    // ::tuple has no tuple_cat.)
    (void)physics_input_fops;
    mfem::future::tuple<PhysInputFOps...,
-       detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...> augmented_input_fops{};
+       detail::replace_field_operator_id_t<PhysOutputFOps, VFieldId>...> augmented_input_fops{};
 
    // Compile-time positions of DiffFieldIds in the augmented input FOp tuple.
    static_assert(((DiffFieldIds != static_cast<std::size_t>(VFieldId)) && ...),
                  "VFieldId must not be one of the differentiated field ids");
    static_assert(((detail::fop_has_id<DiffFieldIds,
-                   PhysInputFOps..., detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>) && ...),
+                   PhysInputFOps..., detail::replace_field_operator_id_t<PhysOutputFOps, VFieldId>...>) && ...),
                  "a requested diff field id does not appear in physics_input_fops");
 
    DensityQF density_qf{ std::move(physics_qf) };
    using DiffPositions = detail::concat_index_sequences_t<
-                         detail::fop_positions_for_id<DiffFieldIds,
+                         detail::find_parameter_indices_for_field_id<DiffFieldIds,
                          PhysInputFOps...,
-                         detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>...>;
-   add_with_positions(
+                         detail::replace_field_operator_id_t<PhysOutputFOps, VFieldId>...>...>;
+   add_domain_integrator_using_indices(
              dop,
              std::move(density_qf),
              augmented_input_fops,
@@ -498,7 +522,7 @@ void AddReverseBoundaryGradientIntegrator(
    constexpr std::size_t NPhysIn  = sizeof...(PhysInputFOps);
    constexpr std::size_t NPhysOut = sizeof...(PhysOutputFOps);
 
-   using PhysInsRaw  = detail::head_std_tuple<phys_params, NPhysIn>;
+   using PhysInsRaw  = detail::get_first_N_types_as_std_tuple<phys_params, NPhysIn>;
    using PhysOutsRaw = detail::slice_std_tuple<phys_params, NPhysIn, NPhysOut>;
    using PhysInsTuple  = detail::decay_std_tuple_t<PhysInsRaw>;
    using PhysOutsTuple = detail::decay_std_tuple_t<PhysOutsRaw>;
@@ -507,20 +531,20 @@ void AddReverseBoundaryGradientIntegrator(
 
    (void)physics_input_fops;
    mfem::future::tuple<PhysInputFOps...,
-       detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...> augmented_input_fops{};
+       detail::replace_field_operator_id_t<PhysOutputFOps, VFieldId>...> augmented_input_fops{};
 
    static_assert(((DiffFieldIds != static_cast<std::size_t>(VFieldId)) && ...),
                  "VFieldId must not be one of the differentiated field ids");
    static_assert(((detail::fop_has_id<DiffFieldIds,
-                   PhysInputFOps..., detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>) && ...),
+                   PhysInputFOps..., detail::replace_field_operator_id_t<PhysOutputFOps, VFieldId>...>) && ...),
                  "a requested diff field id does not appear in physics_input_fops");
 
    DensityQF density_qf{ std::move(physics_qf) };
    using DiffPositions = detail::concat_index_sequences_t<
-                         detail::fop_positions_for_id<DiffFieldIds,
+                         detail::find_parameter_indices_for_field_id<DiffFieldIds,
                          PhysInputFOps...,
-                         detail::rebind_field_id_t<PhysOutputFOps, VFieldId>...>...>;
-   add_boundary_with_positions(
+                         detail::replace_field_operator_id_t<PhysOutputFOps, VFieldId>...>...>;
+   add_boundary_integrator_using_indices(
              dop,
              std::move(density_qf),
              augmented_input_fops,
@@ -541,24 +565,7 @@ std::unique_ptr<DifferentiableOperator> MakeReverseGradientOperator(
    const Array<int> &domain_attrs,
    ParMesh &pmesh)
 {
-   constexpr int diff_ids[] = { DiffFieldIds... };
-   std::vector<FieldDescriptor> outputs;
-   outputs.reserve(sizeof...(DiffFieldIds));
-   for (int id : diff_ids)
-   {
-      bool found = false;
-      for (const auto &fd : inputs)
-      {
-         if (static_cast<int>(fd.id) == id)
-         {
-            outputs.push_back(fd);
-            found = true;
-            break;
-         }
-      }
-      MFEM_VERIFY(found, "diff field id has no matching FieldDescriptor "
-                  "in inputs vector");
-   }
+   std::vector<FieldDescriptor> outputs = detail::get_field_descriptors_for_ids<DiffFieldIds...>(inputs);
 
    auto dop = std::make_unique<DifferentiableOperator>(inputs, outputs, pmesh);
    AddReverseGradientIntegrator<VFieldId>(*dop, std::move(physics_qf),
@@ -652,7 +659,7 @@ std::unique_ptr<DifferentiableOperator> MakeReverseScalarSumOperator(
    constexpr std::size_t NPhysIn  = sizeof...(PhysInputFOps);
    constexpr std::size_t NPhysOut = sizeof...(PhysOutputFOps);
 
-   using PhysInsRaw  = detail::head_std_tuple<phys_params, NPhysIn>;
+   using PhysInsRaw  = detail::get_first_N_types_as_std_tuple<phys_params, NPhysIn>;
    using PhysOutsRaw = detail::slice_std_tuple<phys_params, NPhysIn, NPhysOut>;
    using PhysInsTuple  = detail::decay_std_tuple_t<PhysInsRaw>;
    using PhysOutsTuple = detail::decay_std_tuple_t<PhysOutsRaw>;
@@ -663,15 +670,20 @@ std::unique_ptr<DifferentiableOperator> MakeReverseScalarSumOperator(
                    PhysInputFOps...>) && ...),
                  "a requested diff field id does not appear in physics_input_fops");
 
+   std::vector<FieldDescriptor> outputs = detail::get_field_descriptors_for_ids<DiffFieldIds...>(inputs);
+   auto dop = std::make_unique<DifferentiableOperator>(inputs, outputs, pmesh);
+
    DensityQF density_qf{ std::move(physics_qf) };
    using DiffPositions = detail::concat_index_sequences_t<
-                         detail::fop_positions_for_id<DiffFieldIds,
+                         detail::find_parameter_indices_for_field_id<DiffFieldIds,
                          PhysInputFOps...>...>;
-   return make_with_positions(
+   add_domain_integrator_using_indices(
+             *dop,
              std::move(density_qf),
              physics_input_fops,
-             inputs, ir, domain_attrs, pmesh,
+             ir, domain_attrs,
              DiffPositions {});
+   return dop;
 }
 
 } // namespace mfem::future::reverse
