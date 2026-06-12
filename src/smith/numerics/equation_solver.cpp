@@ -2108,6 +2108,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
       defl = std::make_unique<DeflationPreconditioner>();
     }
     defl->setDeflationOrder(linear_opts.deflation_order);
+    defl->setNumPieces(linear_opts.deflation_pieces);
     defl->setCoarseMode(linear_opts.deflation_coarse_mode);
     if (linear_opts.deflation_smoother == "block") {
       defl->setSmootherVariant(DeflationSmoother::BlockJacobi);

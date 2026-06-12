@@ -437,6 +437,12 @@ struct LinearSolverOptions {
   /// using Preconditioner::Deflation.
   CoarseMode deflation_coarse_mode = CoarseMode::Additive;
 
+  /// Sub-rank pieces for the deflation basis: each rank's elements are split into this
+  /// many geometric pieces (recursive coordinate bisection), each with an independent
+  /// piecewise-affine basis. Enriches the coarse space at low processor counts
+  /// (m = pieces * ranks * mpr). 1 = the classic per-rank basis.
+  int deflation_pieces = 1;
+
   /// PETSc preconditioner type
   PetscPCType petsc_preconditioner = PetscPCType::JACOBI;
 

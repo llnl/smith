@@ -39,6 +39,7 @@ std::string linear_solver_name = "GMRES";
 std::string preconditioner_name = "HypreAMG";
 std::string deflation_order_name = "affine";
 std::string deflation_coarse_mode_name = "global";
+int deflation_pieces = 1;
 int nonlinear_max_iterations = 30;
 int linear_max_iterations = 800;
 int print_level = 1;
@@ -114,6 +115,7 @@ LinearSolverOptions linearOptions()
           .preconditioner = parseEnum(preconditionerMap, preconditioner_name, "--preconditioner"),
           .deflation_order = selectedDeflationOrder(),
           .deflation_coarse_mode = selectedCoarseMode(),
+          .deflation_pieces = deflation_pieces,
           .relative_tol = 1.0e-7,
           .absolute_tol = 1.0e-14,
           .max_iterations = linear_max_iterations,
@@ -209,6 +211,8 @@ void parseCommandLine(int& argc, char** argv)
       deflation_order_name = arg.substr(std::string("--deflation-order=").size());
     } else if (arg.rfind("--deflation-coarse-mode=", 0) == 0) {
       deflation_coarse_mode_name = arg.substr(std::string("--deflation-coarse-mode=").size());
+    } else if (arg.rfind("--deflation-pieces=", 0) == 0) {
+      deflation_pieces = std::stoi(arg.substr(std::string("--deflation-pieces=").size()));
     } else if (arg.rfind("--nonlinear-max-iterations=", 0) == 0) {
       nonlinear_max_iterations = std::stoi(arg.substr(std::string("--nonlinear-max-iterations=").size()));
     } else if (arg.rfind("--linear-max-iterations=", 0) == 0) {

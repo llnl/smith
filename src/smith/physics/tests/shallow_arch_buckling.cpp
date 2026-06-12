@@ -64,6 +64,7 @@ double mesh_scale = 1.0;
 std::string preconditioner_name = "HypreJacobi";
 std::string deflation_order_name = "affine";
 std::string deflation_coarse_mode_name = "global";
+int deflation_pieces = 1;
 
 NonlinearSolver selectedNonlinearSolver()
 {
@@ -144,6 +145,8 @@ void parseCommandLine(int& argc, char** argv)
       deflation_order_name = arg.substr(std::string("--deflation-order=").size());
     } else if (arg.rfind("--deflation-coarse-mode=", 0) == 0) {
       deflation_coarse_mode_name = arg.substr(std::string("--deflation-coarse-mode=").size());
+    } else if (arg.rfind("--deflation-pieces=", 0) == 0) {
+      deflation_pieces = std::stoi(arg.substr(std::string("--deflation-pieces=").size()));
     } else {
       argv[write_arg] = argv[read_arg];
       ++write_arg;
@@ -210,6 +213,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
                                             .preconditioner = selected_pc,
                                             .deflation_order = selected_order,
                                             .deflation_coarse_mode = selected_coarse_mode,
+                                            .deflation_pieces = deflation_pieces,
                                             .relative_tol = 1.0e-8,
                                             .absolute_tol = 1.0e-14,
                                             .max_iterations = max_cg_iterations,

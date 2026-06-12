@@ -267,6 +267,7 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         f"--preconditioner={args.preconditioner}",
         f"--deflation-order={args.deflation_order}",
         f"--deflation-coarse-mode={args.deflation_coarse_mode}",
+        f"--deflation-pieces={args.deflation_pieces}",
         f"--trust-subspace-option={args.trust_subspace_option}",
         f"--trust-num-leftmost={args.trust_num_leftmost}",
         f"--trust-num-previous-steps={args.trust_num_previous_steps}",
@@ -498,6 +499,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preconditioner", default="Deflation")
     parser.add_argument("--deflation-order", choices=("affine", "quadratic"), default="affine")
     parser.add_argument("--deflation-coarse-mode", choices=("global", "local", "schwarz"), default="global")
+    parser.add_argument("--deflation-pieces", type=int, default=1)
     parser.add_argument("--trust-subspace-option", type=int, default=2)
     parser.add_argument("--trust-num-leftmost", type=int, default=1)
     parser.add_argument("--trust-num-previous-steps", type=int, default=4)

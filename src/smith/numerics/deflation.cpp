@@ -7,6 +7,7 @@
 #include "smith/numerics/deflation.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
@@ -59,6 +60,41 @@ double envDoubleOrDefault(const char* name, double default_value)
   char* end = nullptr;
   const double parsed = std::strtod(value, &end);
   return (end != value && std::isfinite(parsed) && parsed >= 0.0) ? parsed : default_value;
+}
+
+/// Recursive coordinate bisection of element centroids into `s` pieces: split the index
+/// range along the longest bounding-box axis at the proportional median. Deterministic
+/// (stable ordering, no randomness) so every run produces the same partition.
+void recursiveBisect(const std::vector<std::array<double, 3>>& centroids, std::vector<int>& idx, int begin, int end,
+                     int s, int& next_piece, std::vector<int>& piece_of_element)
+{
+  if (s <= 1 || end - begin <= 1) {
+    const int p = next_piece++;
+    for (int i = begin; i < end; ++i) piece_of_element[static_cast<size_t>(idx[static_cast<size_t>(i)])] = p;
+    return;
+  }
+  double lo[3] = {1e300, 1e300, 1e300};
+  double hi[3] = {-1e300, -1e300, -1e300};
+  for (int i = begin; i < end; ++i) {
+    const auto& c = centroids[static_cast<size_t>(idx[static_cast<size_t>(i)])];
+    for (int d = 0; d < 3; ++d) {
+      lo[d] = std::min(lo[d], c[static_cast<size_t>(d)]);
+      hi[d] = std::max(hi[d], c[static_cast<size_t>(d)]);
+    }
+  }
+  int axis = 0;
+  for (int d = 1; d < 3; ++d) {
+    if (hi[d] - lo[d] > hi[axis] - lo[axis]) axis = d;
+  }
+  std::stable_sort(idx.begin() + begin, idx.begin() + end, [&](int a, int b) {
+    return centroids[static_cast<size_t>(a)][static_cast<size_t>(axis)] <
+           centroids[static_cast<size_t>(b)][static_cast<size_t>(axis)];
+  });
+  const int sl = s / 2;
+  const int sr = s - sl;
+  const int mid = begin + static_cast<int>((static_cast<long long>(end - begin) * sl) / s);
+  recursiveBisect(centroids, idx, begin, mid, sl, next_piece, piece_of_element);
+  recursiveBisect(centroids, idx, mid, end, sr, next_piece, piece_of_element);
 }
 
 void symmetrize(mfem::DenseMatrix& matrix)
@@ -200,7 +236,7 @@ void DeflationPreconditioner::attachFES(mfem::ParFiniteElementSpace& fes)
   const int per_comp_affine = 1 + dim_;
   const int per_comp_quadratic = per_comp_affine + dim_ * (dim_ + 1) / 2;
   const int per_comp = (order_ == DeflationOrder::Quadratic) ? per_comp_quadratic : per_comp_affine;
-  modes_per_rank_ = dim_ * per_comp;
+  modes_per_rank_ = num_pieces_ * dim_ * per_comp;
   MPI_Comm comm = fes_->GetComm();
   MPI_Comm_rank(comm, &my_rank_);
   MPI_Comm_size(comm, &n_ranks_);
@@ -239,6 +275,16 @@ void DeflationPreconditioner::setDeflationOrder(DeflationOrder order)
   if (fes_) {
     // Re-run sizing + centroid + invalidate basis.
     attachFES(*fes_);
+  }
+}
+
+void DeflationPreconditioner::setNumPieces(int s)
+{
+  s = std::max(1, s);
+  if (num_pieces_ == s) return;
+  num_pieces_ = s;
+  if (fes_) {
+    attachFES(*fes_);  // re-run sizing + invalidate basis
   }
 }
 
@@ -287,6 +333,63 @@ void DeflationPreconditioner::buildBasis()
       W_local_.emplace_back(std::move(col));
     }
   }
+
+  // Sub-rank pieces: replicate each rank-wide column into num_pieces_ piece-masked copies
+  // (column order piece-major, then component, then monomial — every tdof row still touches
+  // exactly one contiguous per_comp block, which packWMatrix's compact layout requires).
+  // Shared interface nodes are assigned to the lowest adjacent piece id; per-(piece,comp)
+  // MGS below re-centers and orthonormalizes each piece's monomials.
+  if (num_pieces_ > 1) {
+    mfem::Mesh* mesh = fes_->GetMesh();
+    const int ne = mesh->GetNE();
+    std::vector<std::array<double, 3>> centroids(static_cast<size_t>(ne), {0.0, 0.0, 0.0});
+    mfem::Vector center(dim_);
+    for (int e = 0; e < ne; ++e) {
+      mfem::ElementTransformation* T = mesh->GetElementTransformation(e);
+      T->Transform(mfem::Geometries.GetCenter(mesh->GetElementBaseGeometry(e)), center);
+      for (int d = 0; d < dim_; ++d) centroids[static_cast<size_t>(e)][static_cast<size_t>(d)] = center(d);
+    }
+    std::vector<int> idx(static_cast<size_t>(ne));
+    for (int e = 0; e < ne; ++e) idx[static_cast<size_t>(e)] = e;
+    std::vector<int> piece_of_element(static_cast<size_t>(ne), 0);
+    int next_piece = 0;
+    recursiveBisect(centroids, idx, 0, ne, num_pieces_, next_piece, piece_of_element);
+
+    const int n = fes_->GetTrueVSize();
+    std::vector<int> piece_of_tdof(static_cast<size_t>(n), std::numeric_limits<int>::max());
+    mfem::Array<int> vdofs;
+    for (int e = 0; e < ne; ++e) {
+      const int p = piece_of_element[static_cast<size_t>(e)];
+      fes_->GetElementVDofs(e, vdofs);
+      for (int v = 0; v < vdofs.Size(); ++v) {
+        const int ldof = (vdofs[v] >= 0) ? vdofs[v] : -1 - vdofs[v];
+        const int tdof = fes_->GetLocalTDofNumber(ldof);
+        if (tdof >= 0) {
+          piece_of_tdof[static_cast<size_t>(tdof)] = std::min(piece_of_tdof[static_cast<size_t>(tdof)], p);
+        }
+      }
+    }
+    for (int i = 0; i < n; ++i) {
+      if (piece_of_tdof[static_cast<size_t>(i)] == std::numeric_limits<int>::max()) {
+        piece_of_tdof[static_cast<size_t>(i)] = 0;
+      }
+    }
+
+    const int base_modes = dim_ * static_cast<int>(monomials.size());
+    std::vector<mfem::Vector> base_cols(std::make_move_iterator(W_local_.begin()),
+                                        std::make_move_iterator(W_local_.end()));
+    W_local_.clear();
+    W_local_.reserve(static_cast<size_t>(num_pieces_ * base_modes));
+    for (int p = 0; p < num_pieces_; ++p) {
+      for (int j = 0; j < base_modes; ++j) {
+        mfem::Vector col(base_cols[static_cast<size_t>(j)]);
+        for (int i = 0; i < n; ++i) {
+          if (piece_of_tdof[static_cast<size_t>(i)] != p) col(i) = 0.0;
+        }
+        W_local_.emplace_back(std::move(col));
+      }
+    }
+  }
   applyEssentialDofMask();
   // Per-component modified Gram-Schmidt over the local tdof inner product.
   // Columns belonging to different components have disjoint support, so we only
@@ -301,7 +404,8 @@ void DeflationPreconditioner::buildBasis()
   // and corrupts W^T A W.
   const int per_comp = static_cast<int>(monomials.size());
   constexpr double rank_drop_tol = 1.0e-12;
-  for (int c = 0; c < dim_; ++c) {
+  const int n_blocks = modes_per_rank_ / per_comp;  // dim_ blocks per piece
+  for (int c = 0; c < n_blocks; ++c) {
     for (int k = 0; k < per_comp; ++k) {
       mfem::Vector& vk = W_local_[static_cast<size_t>(c * per_comp + k)];
       const double init_nrm = std::sqrt(vk * vk);
@@ -354,9 +458,10 @@ void DeflationPreconditioner::packWMatrix()
     for (int i = 0; i < n; ++i) W_dense_(i, j) = W_local_[static_cast<size_t>(j)](i);
   }
 
-  // Compact per-row layout: each tdof row is nonzero only inside its component's contiguous
-  // mode block [comp*per_comp, (comp+1)*per_comp). Fully-masked rows store zeros (comp 0).
-  const int per_comp = modes_per_rank_ / dim_;
+  // Compact per-row layout: each tdof row is nonzero only inside its (piece, component)
+  // contiguous monomial block [b*per_comp, (b+1)*per_comp). Fully-masked rows store zeros
+  // (block 0).
+  const int per_comp = modes_per_rank_ / (dim_ * num_pieces_);
   w_compact_.assign(static_cast<size_t>(n) * static_cast<size_t>(per_comp), 0.0);
   w_row_comp_.assign(static_cast<size_t>(n), 0);
   for (int i = 0; i < n; ++i) {
@@ -378,7 +483,7 @@ void DeflationPreconditioner::packWMatrix()
 void DeflationPreconditioner::wTransposeCompact(const mfem::Vector& r, mfem::Vector& rhs) const
 {
   const int n = fes_->GetTrueVSize();
-  const int pc = modes_per_rank_ / dim_;
+  const int pc = modes_per_rank_ / (dim_ * num_pieces_);
   rhs.SetSize(modes_per_rank_);
   rhs = 0.0;
   double* out = rhs.GetData();
@@ -394,7 +499,7 @@ void DeflationPreconditioner::wTransposeCompact(const mfem::Vector& r, mfem::Vec
 void DeflationPreconditioner::wAddMultCompact(const double* alpha_local, mfem::Vector& y, double scale) const
 {
   const int n = fes_->GetTrueVSize();
-  const int pc = modes_per_rank_ / dim_;
+  const int pc = modes_per_rank_ / (dim_ * num_pieces_);
   double* yd = y.GetData();
   for (int i = 0; i < n; ++i) {
     const double* wrow = &w_compact_[static_cast<size_t>(i) * static_cast<size_t>(pc)];

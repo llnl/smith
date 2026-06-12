@@ -214,6 +214,13 @@ class DeflationPreconditioner : public mfem::Solver {
   void setDeflationOrder(DeflationOrder order);
   DeflationOrder deflationOrder() const { return order_; }
 
+  /// Sub-rank pieces: split this rank's elements into `s` geometric pieces (recursive
+  /// coordinate bisection on element centroids) and build an independent affine basis per
+  /// piece. Enriches the coarse space at low processor counts (modes_per_rank = s * mpr).
+  /// 1 (default) reproduces the classic per-rank basis bitwise. Forces a basis rebuild.
+  void setNumPieces(int s);
+  int numPieces() const { return num_pieces_; }
+
  private:
   void buildBasis();
   void applyEssentialDofMask();
@@ -240,6 +247,7 @@ class DeflationPreconditioner : public mfem::Solver {
   mfem::ParFiniteElementSpace* fes_ = nullptr;
   int dim_ = 0;
   int modes_per_rank_ = 0;
+  int num_pieces_ = 1;
   DeflationOrder order_ = DeflationOrder::Affine;
   /// Element-volume centroid of this rank's mesh; used to center linear and
   /// quadratic monomials for conditioning of W^T A W.
