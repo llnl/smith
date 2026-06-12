@@ -33,9 +33,11 @@ static constexpr int order = 1;
 
 using StateSpace = smith::H1<order>;
 using ObstacleSpace = smith::H1<order>;
+using VectorSpace = smith::H1<order, dim>;
 using TrialSpace = ObstacleSpace;
 using ObjectiveT = smith::FunctionalObjective<dim, smith::Parameters<StateSpace, ObstacleSpace>>;
 using WeakFormT = smith::FunctionalWeakForm<dim, TrialSpace, smith::Parameters<StateSpace, ObstacleSpace>>;
+using WeakFormT2 = smith::FunctionalWeakForm<dim, VectorSpace, smith::Parameters<StateSpace, ObstacleSpace>>;
 
 class ParaviewWriter {
  public:
@@ -76,22 +78,26 @@ class ParaviewWriter {
 
 class SmithObstacleDesignProblem : public ObstacleDesignProblem {
  protected:
-  std::vector<double> jacobian_weights_ = {0.0, 0.0};
-  smith::TimeInfo time_info_;
+  std::vector<double> jacobian_weights_ = {0.0, 0.0};  // weights for weak_form_->jacobian calls
+  smith::TimeInfo time_info_;                          // time info for constraint and weak_form function calls
   std::shared_ptr<smith::Mesh> mesh_;
-  std::shared_ptr<ObjectiveT> design_objective_;
-  std::shared_ptr<WeakFormT> residual_displacement_;
-  std::shared_ptr<WeakFormT> residual_obstacle_;
-  std::vector<smith::FiniteElementState*> states_;
+  std::shared_ptr<ObjectiveT> design_objective_;  // obstacle design objective function
+  std::shared_ptr<WeakFormT>
+      objective_grad_displacement_;  // obstacle design objective gradient with respect to displacement
+  std::shared_ptr<WeakFormT>
+      objective_grad_obstacle_;  // obstacle design objective gradient with respect to obstacle design field
+  std::vector<smith::FiniteElementState*> states_;         // optimization state variables
   std::unique_ptr<smith::FiniteElementState> shape_disp_;  // shape displacement
-  std::shared_ptr<mfem::HypreParMatrix> HuuE_;
-  std::shared_ptr<mfem::HypreParMatrix> HuthE_;
-  std::shared_ptr<mfem::HypreParMatrix> HththE_;
+  std::shared_ptr<mfem::HypreParMatrix> HuuE_;  // Hessian (u,u) of obstacle design objective, u = "displacement"
+  std::shared_ptr<mfem::HypreParMatrix>
+      HuthE_;  // Hessian (u, th) of obstacle design objective, th = "theta" = "obstacle design variable"
+  std::shared_ptr<mfem::HypreParMatrix> HththE_;  // Hessian (th, th) of obstacle design objective
 
  public:
   SmithObstacleDesignProblem(ParamOptProblem* paramopt, std::vector<smith::FiniteElementState*> states,
                              std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<ObjectiveT> design_objective,
-                             std::shared_ptr<WeakFormT> residual_displacement, std::shared_ptr<WeakFormT> residual_obstacle);
+                             std::shared_ptr<WeakFormT> objective_grad_displacement,
+                             std::shared_ptr<WeakFormT> objective_grad_obstacle);
   double E(const mfem::Vector& u, const mfem::Vector& p, const mfem::Vector& theta, int& eval_err) override;
   void DuE(const mfem::Vector& u, const mfem::Vector& p, const mfem::Vector& theta, mfem::Vector& gradE) override;
   void DthE(const mfem::Vector& u, const mfem::Vector& p, const mfem::Vector& theta, mfem::Vector& gradE) override;
@@ -166,6 +172,7 @@ int main(int argc, char* argv[])
    * */
   smith::FiniteElementState disp = smith::StateManager::newState(StateSpace{}, "displacement", mesh->tag());
   smith::FiniteElementState obstacle = smith::StateManager::newState(ObstacleSpace{}, "obstacle", mesh->tag());
+  smith::FiniteElementState grad = smith::StateManager::newState(VectorSpace{}, "gradient", mesh->tag());
   std::unique_ptr<smith::FiniteElementState> shape_disp =
       std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 
@@ -173,27 +180,31 @@ int main(int argc, char* argv[])
   states = {disp, obstacle};
   std::vector<smith::FiniteElementState*> state_ptrs = {&disp, &obstacle};
 
+  double time = 0.0;
+  double dt = 1.0;
+  smith::TimeInfo time_info(time, dt, 0);
+  auto const_state_ptrs = getConstFieldPointers(states);
+  ObjectiveT::SpacesT space_ptrs{&disp.space(), &obstacle.space()};
 
-
-  //// weak_form to define the "lower level" obstacle problem
+  // weak_form to define the "lower level" obstacle problem
   // std::string physics_name = "elasticity";
-  // auto elasticity_weak_form = std::make_shared<WeakFormT>(physics_name, mesh, states[0].space(), getSpaces(params));
-  // elasticity_weak_form->addBodyIntegral(mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
-  //     auto gradu = smith::get<smith::DERIVATIVE>(U);
-  ////  return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
-  //    return smith::tuple{0.5 * smith::inner(gradu, gradu), gradu}; // complete me!
+  // auto elasticity_weak_form = std::make_shared<WeakFormT2>(physics_name, mesh, grad.space(), space_ptrs);
+  // elasticity_weak_form->addBodyIntegral(smith::DependsOn<0>{},
+  //     	   mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
+  //   auto gradu = smith::get<smith::DERIVATIVE>(U);
+  //   return smith::tuple{gradu, smith::zero{}}; // complete me!
   //});
+  // std::vector<double> jacobian_weights = {1.0, 0.0};
+  // auto res_vector = elasticity_weak_form->residual(time_info, shape_disp.get(), const_state_ptrs);
+  // auto H = elasticity_weak_form->jacobian(time_info, shape_disp.get(), const_state_ptrs, jacobian_weights);
+  // H->Print("Hmat");
+
   // NOTE: not going to use this idea for now. It seems more questionable to me that this adds much value
   // also does the solid weak form reduce to what we want in the case of a H1 field. Is it assumed
 
   // define objective in terms of displacement/deformation field and the obstacle
   // challenge: how to incorporate the pressure as a design parameter into a functional objective
   // given that the pressure is a dual field?
-  double time = 0.0;
-  double dt = 1.0;
-  smith::TimeInfo time_info(time, dt, 0);
-  auto const_state_ptrs = getConstFieldPointers(states);
-  ObjectiveT::SpacesT space_ptrs{&disp.space(), &obstacle.space()};
 
   auto design_objective = std::make_shared<ObjectiveT>("design_objective", mesh, space_ptrs);
 
@@ -206,30 +217,33 @@ int main(int argc, char* argv[])
   states[1] = 1.0;
 
   // WeakFormT: name, mesh, trial space, const space pointers to those spaces that the weak form can depend on
-  auto dEdth_weak_form = std::make_shared<WeakFormT>("design_obj_design_residual", mesh, obstacle.space(), space_ptrs);
-  auto dEdu_weak_form = std::make_shared<WeakFormT>("design_obj_disp_residual", mesh, disp.space(), space_ptrs);
-  dEdth_weak_form->addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
-                                   [](double /*t*/, auto /*X*/, auto OBSTACLE) {
-                                     auto obstacle = smith::get<smith::VALUE>(OBSTACLE);
-                                     return smith::tuple{obstacle, smith::zero{}};
-                                   });
+  auto weak_form_objective_grad_design =
+      std::make_shared<WeakFormT>("design_obj_design_residual", mesh, obstacle.space(), space_ptrs);
+  auto weak_form_objective_grad_displacement =
+      std::make_shared<WeakFormT>("design_obj_disp_residual", mesh, disp.space(), space_ptrs);
+  weak_form_objective_grad_design->addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
+                                                   [](double /*t*/, auto /*X*/, auto OBSTACLE) {
+                                                     auto obstacle = smith::get<smith::VALUE>(OBSTACLE);
+                                                     return smith::tuple{obstacle, smith::zero{}};
+                                                   });
 
-  dEdu_weak_form->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(),
-                                  [](double /*t*/, auto /*X*/, auto DISP) { 
-				  auto disp = smith::get<smith::VALUE>(DISP);
-				  return smith::tuple{disp, smith::zero{}}; });
+  weak_form_objective_grad_displacement->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(),
+                                                         [](double /*t*/, auto /*X*/, auto DISP) {
+                                                           auto disp = smith::get<smith::VALUE>(DISP);
+                                                           return smith::tuple{disp, smith::zero{}};
+                                                         });
 
   auto [Vh, _] = smith::generateParFiniteElementSpace<StateSpace>(&mesh->mfemParMesh());
   mfem::Array<int> ess_tdof_list;
   int dimU = Vh->GetTrueVSize();
   mfem::Vector uDC(dimU);
   uDC = 0.0;
-  // TODO: 
+  // TODO:
   // 1) Add a SmithParamObstacleProblem that will take smith types such as a H1 space, FiniteElementState
   //    equivalents of fRhs and flat_obstacle
   ParamObstacleProblem problem(Vh.get(), &fRhs, &flat_obstacle, ess_tdof_list, uDC);
-  SmithObstacleDesignProblem smithdesignproblem(&problem, state_ptrs, mesh, design_objective, dEdu_weak_form,
-                                                dEdth_weak_form);
+  SmithObstacleDesignProblem smithdesignproblem(&problem, state_ptrs, mesh, design_objective,
+                                                weak_form_objective_grad_displacement, weak_form_objective_grad_design);
   int dimPrimal = smithdesignproblem.GetDimU();
   mfem::Vector X0(dimPrimal);
   X0 = 0.0;
@@ -237,9 +251,9 @@ int main(int argc, char* argv[])
   Xf = 0.0;
   MPECSolver designoptimizer(&smithdesignproblem);
   designoptimizer.SetTol(nonlinear_solve_tol);
-  //designoptimizer.SetBarrierParameter(1.e-3);
+  designoptimizer.SetBarrierParameter(1.e-3);
   designoptimizer.SetMaxIter(nonlinear_solve_maxiter);
-  //designoptimizer.RegularizePrimalHessian(1.e-10);
+  designoptimizer.RegularizePrimalHessian(1.e-10);
   // TODO: the specfic barrier parameter and primal Hessian regularization values
   //       should be given by an option
   designoptimizer.Mult(X0, Xf);
@@ -268,8 +282,8 @@ SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamOptProblem* paramopt
                                                        std::vector<smith::FiniteElementState*> states,
                                                        std::shared_ptr<smith::Mesh> mesh,
                                                        std::shared_ptr<ObjectiveT> design_objective,
-                                                       std::shared_ptr<WeakFormT> residual_displacement,
-                                                       std::shared_ptr<WeakFormT> residual_obstacle)
+                                                       std::shared_ptr<WeakFormT> objective_grad_displacement,
+                                                       std::shared_ptr<WeakFormT> objective_grad_obstacle)
     : ObstacleDesignProblem(paramopt), time_info_(0.0, 0.0, 0)
 {
   states_.resize(states.size());
@@ -277,8 +291,8 @@ SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamOptProblem* paramopt
   mesh_ = mesh;
   shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh_->newShapeDisplacement());
   design_objective_ = design_objective;
-  residual_displacement_ = residual_displacement;
-  residual_obstacle_ = residual_obstacle;
+  objective_grad_displacement_ = objective_grad_displacement;
+  objective_grad_obstacle_ = objective_grad_obstacle;
 }
 
 double SmithObstacleDesignProblem::E(const mfem::Vector& u, const mfem::Vector& /*p*/, const mfem::Vector& theta,
@@ -295,7 +309,8 @@ void SmithObstacleDesignProblem::DuE(const mfem::Vector& u, const mfem::Vector& 
 {
   states_[0]->Set(1.0, u);
   states_[1]->Set(1.0, theta);
-  auto res_vector = residual_displacement_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_));
+  auto res_vector =
+      objective_grad_displacement_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_));
   gradE.Add(1.0, res_vector);
 }
 
@@ -304,7 +319,8 @@ void SmithObstacleDesignProblem::DthE(const mfem::Vector& u, const mfem::Vector&
 {
   states_[0]->Set(1.0, u);
   states_[1]->Set(1.0, theta);
-  auto res_vector = residual_obstacle_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_));
+  auto res_vector =
+      objective_grad_obstacle_->residual(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_));
   gradE.Add(1.0, res_vector);
   gradE = 0.0;
 }
@@ -316,8 +332,8 @@ mfem::Operator* SmithObstacleDesignProblem::DththE(const mfem::Vector& u, const 
   states_[1]->Set(1.0, theta);
   jacobian_weights_[0] = 0.0;
   jacobian_weights_[1] = 1.0;
-  auto HE_thth_uniq =
-      residual_obstacle_->jacobian(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_), jacobian_weights_);
+  auto HE_thth_uniq = objective_grad_obstacle_->jacobian(time_info_, shape_disp_.get(),
+                                                         smith::getConstFieldPointers(states_), jacobian_weights_);
   HththE_.reset(HE_thth_uniq.release());
   return HththE_.get();
 }
@@ -329,8 +345,8 @@ mfem::Operator* SmithObstacleDesignProblem::DuthE(const mfem::Vector& u, const m
   states_[1]->Set(1.0, theta);
   jacobian_weights_[0] = 0.0;
   jacobian_weights_[1] = 1.0;
-  auto HE_uth_uniq =
-      residual_displacement_->jacobian(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_), jacobian_weights_);
+  auto HE_uth_uniq = objective_grad_displacement_->jacobian(time_info_, shape_disp_.get(),
+                                                            smith::getConstFieldPointers(states_), jacobian_weights_);
   HuthE_.reset(HE_uth_uniq.release());
   return HuthE_.get();
 }
@@ -342,8 +358,8 @@ mfem::Operator* SmithObstacleDesignProblem::DuuE(const mfem::Vector& u, const mf
   states_[1]->Set(1.0, theta);
   jacobian_weights_[0] = 1.0;
   jacobian_weights_[1] = 0.0;
-  auto HE_uu_uniq =
-      residual_displacement_->jacobian(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_), jacobian_weights_);
+  auto HE_uu_uniq = objective_grad_displacement_->jacobian(time_info_, shape_disp_.get(),
+                                                           smith::getConstFieldPointers(states_), jacobian_weights_);
   HuuE_.reset(HE_uu_uniq.release());
   return HuuE_.get();
 }
