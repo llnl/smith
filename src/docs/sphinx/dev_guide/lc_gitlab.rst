@@ -6,7 +6,7 @@
 .. _lc_gitlab-label:
 
 =====================
-Smith LC GitLab Setup
+LC GitLab Setup
 =====================
 
 Smith has a Gitlab mirror repository here
