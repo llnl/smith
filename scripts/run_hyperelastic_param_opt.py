@@ -194,18 +194,18 @@ def evaluate(params: dict, args, out_dir: Path, screening: bool, state: EvalStat
         if state and state.best_score < float("inf"):
             done = [walls[q] for q in order[: idx + 1]]
             optimistic = done + [state.best_walls.get(q, 1.0) for q in order[idx + 1 :]]
-            bound = math.exp(sum(math.log(max(1e-3, w)) for w in optimistic) / len(PROBLEMS))
+            bound = math.exp(sum(math.log(max(1e-3, w)) for w in optimistic) / len(problems))
             if bound > args.kill_margin * state.best_score:
                 aborted = True
                 break
 
-    for p in PROBLEMS:
+    for p in problems:
         if p not in statuses:
             statuses[p] = "skipped"
             # pessimistic fill so aborted evals rank behind everything that finished
             walls[p] = float(args.timeout_sec)
-    n_bad = sum(1 for p in PROBLEMS if statuses.get(p) not in ("ok", "skipped"))
-    geomean = math.exp(sum(math.log(max(1e-3, walls[p])) for p in PROBLEMS) / len(PROBLEMS))
+    n_bad = sum(1 for p in problems if statuses.get(p) not in ("ok", "skipped"))
+    geomean = math.exp(sum(math.log(max(1e-3, walls[p])) for p in problems) / len(problems))
     score = geomean * (4.0**n_bad) * (2.0 if aborted else 1.0)
     result = {"score": score, "geomean": geomean, "n_bad": n_bad, "walls": walls, "statuses": statuses,
               "aborted": aborted}
