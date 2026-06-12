@@ -21,20 +21,14 @@ LC GitLab jobs run through Jacamar and create working directories under
 to move the real storage for this directory to a file system with more space and
 leave ``${HOME}/.jacamar-ci`` as a symlink.
 
-Choose a directory on a file system, we recommend either ```/usr/workspace``
-or ``/p/vast``, appropriate for build artifacts, then run:
+Choose a directory on a file system, we recommend either ``/usr/workspace``,
+appropriate for build artifacts, then run:
 
 .. code-block:: bash
 
-   LARGE_FILE_SYSTEM_PARENT=/usr/workspace/${USER}
-
-   if [[ -e "${HOME}/.jacamar-ci" && ! -L "${HOME}/.jacamar-ci" ]]; then
-       mv "${HOME}/.jacamar-ci" "${LARGE_FILE_SYSTEM_PARENT}/.jacamar-ci"
-   else
-       mkdir -p "${LARGE_FILE_SYSTEM_PARENT}/.jacamar-ci"
-   fi
-
-   ln -sfn "${LARGE_FILE_SYSTEM_PARENT}/.jacamar-ci" "${HOME}/.jacamar-ci"
+   rm -rf ${HOME}/.jacamar-ci
+   mkdir /usr/workspace/${USER}/gitlab-runner
+   ln -s /usr/workspace/${USER}/gitlab-runner ${HOME}/.jacamar-ci
 
 .. note::
 
