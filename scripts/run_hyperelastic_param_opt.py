@@ -45,7 +45,7 @@ PARAM_SPACE = {
     "cg_stagnation_window": ("int", 2, 12, 2),
     "trust_num_leftmost": ("int", 0, 4, 1),
     "trust_num_previous_steps": ("int", 0, 8, 4),
-    "max_cg_iterations": ("int", 100, 3000, 723),
+    "max_cg_iterations": ("int", 300, 3000, 723),
     "cg_forcing_rel": ("log", 1e-6, 1e-3, 1.512e-5),
     "residual_growth_cap": ("lin", 1.2, 10.0, 5.654),
     "tr_decrease_factor": ("lin", 0.1, 0.5, 0.437),
@@ -126,9 +126,13 @@ def suite_command(params: dict, args, out_dir: Path, screening: bool, problem: s
         f"--deflation-smoother={params['deflation_smoother']}",
         f"--cg-cap-min={params['cg_cap_min']}",
         f"--cg-cap-gamma={params['cg_cap_gamma']:.4g}",
+        f"--deflation-pieces={args.deflation_pieces}",
     ]
     if screening:
-        cmd += [f"--mesh-scale-factor={args.mesh_scale_factor}", f"--references-file={SCREEN_REFS}"]
+        screen_refs = args.screen_references_file if args.screen_references_file else SCREEN_REFS
+        cmd += [f"--mesh-scale-factor={args.mesh_scale_factor}", f"--references-file={screen_refs}"]
+    elif args.full_references_file:
+        cmd += [f"--references-file={args.full_references_file}"]
     if problem is not None:
         cmd += ["--problems", problem]
     return cmd
@@ -148,9 +152,9 @@ class EvalState:
         if result["n_bad"] == 0:
             self.best_score = min(self.best_score, result["score"])
 
-    def problem_order(self):
+    def problem_order(self, problems=PROBLEMS):
         # cheapest-first so hopeless configs die fast
-        return sorted(PROBLEMS, key=lambda p: self.best_walls.get(p, 0.0))
+        return sorted(problems, key=lambda p: self.best_walls.get(p, 0.0))
 
     def timeout_for(self, p: str, args) -> int:
         best = self.best_walls.get(p)
@@ -167,7 +171,8 @@ def evaluate(params: dict, args, out_dir: Path, screening: bool, state: EvalStat
     out_dir.mkdir(parents=True, exist_ok=True)
     walls, statuses = {}, {}
     aborted = False
-    order = state.problem_order() if state else list(PROBLEMS)
+    problems = tuple(args.problems) if getattr(args, "problems", None) else PROBLEMS
+    order = state.problem_order(problems) if state else list(problems)
     for idx, p in enumerate(order):
         timeout = state.timeout_for(p, args) if state else args.timeout_sec
         cmd = suite_command(params, args, out_dir / p, screening, problem=p, timeout_sec=timeout)
@@ -318,6 +323,13 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--timeout-sec", type=int, default=120, help="per-problem timeout for screening evals")
     parser.add_argument("--mesh-scale-factor", type=float, default=0.6)
+    parser.add_argument("--problems", nargs="+", choices=PROBLEMS, default=list(PROBLEMS),
+                        help="subset of problems to evaluate/score")
+    parser.add_argument("--deflation-pieces", type=int, default=1,
+                        help="fixed (non-gene) deflation pieces passed to every eval")
+    parser.add_argument("--screen-references-file", type=Path, default=None)
+    parser.add_argument("--full-references-file", type=Path, default=None,
+                        help="references for full-size confirm evals (e.g. an s=2-consistent file)")
     parser.add_argument("--genes", type=str, default=None,
                         help="comma-separated subset of PARAM_SPACE names to search; others stay at baseline")
     parser.add_argument("--kill-factor", type=float, default=4.0,
