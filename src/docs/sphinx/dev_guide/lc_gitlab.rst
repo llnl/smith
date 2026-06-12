@@ -9,8 +9,7 @@
 LC GitLab Setup
 =====================
 
-Smith has a Gitlab mirror repository here
-`lc.llnl.gov/gitlab/smith/smith <https://lc.llnl.gov/gitlab/smith/smith>`_.
+Smith has a `Gitlab mirror repository <https://lc.llnl.gov/gitlab/smith/smith>`_.
 This repository is for running CI pipelines including PR checks.
 
 
