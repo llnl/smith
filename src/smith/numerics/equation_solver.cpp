@@ -530,22 +530,27 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable DeflationPreconditioner* deflation_precond_ = nullptr;
   mutable bool deflation_precond_checked_ = false;
 
-  /// Adaptive deflation-pieces ladder (enabled by deflation_pieces == 0): start at s=1,
-  /// probe a doubling every window; accept on a clear wall/outer improvement, otherwise
-  /// revert and lock. Decisions use an allreduced window wall so every rank decides
-  /// identically. State persists across load steps (the solver object is reused).
+  /// Adaptive deflation-pieces ladder v2 (enabled by deflation_pieces == 0), A-B-A
+  /// bracketed: measure a window at s (A1), probe a window at 2s (B), revert and re-measure
+  /// at s (A2); accept the doubling only if B beats the bracket average — cancels linear
+  /// phase drift (v1's failure). The metric is the allreduced window wall per decade of
+  /// residual progress: per-outer metrics are blind to outer-count inflation (contact at
+  /// s=2 improves wall/outer AND iters/outer while doubling total wall). Windows with no
+  /// progress (snap-through excursions) are extended, and a probe that cannot measure
+  /// progress is abandoned. Decisions are identical on every rank (one allreduce/window).
+  /// State persists across load steps; an interrupted probe rolls back.
   struct AdaptivePiecesState {
     bool enabled = false;
     bool locked = false;
-    bool probing = false;          // current window is evaluating a freshly doubled s
     int current_s = 1;
-    int previous_s = 1;
-    double previous_metric = 0.0;  // accepted-config wall/outer to beat
-    size_t window_outers = 0;
-    double window_t0 = 0.0;
-    static constexpr size_t window = 25;            // outers per decision window
-    static constexpr double improve_margin = 0.95;  // accept doubling on a >5% wall/outer win
-    static constexpr double attempt_gate = 50.0;    // only experiment if iters/outer >= this
+    size_t cumulative_cap_hits = 0;
+    /// Ratchet to the size-rule s once this many outers have saturated a deep CG cap.
+    /// Deep-cap saturation is the preconditioner-limited signature (arch-class);
+    /// iteration counts alone cannot separate twist-class (no benefit) from arch-class.
+    static constexpr size_t cap_hit_trigger = 2;
+    /// A cap hit only counts when the binding budget was at least this many iterations
+    /// (small early-solve adaptive-cap budgets are saturated by every problem).
+    static constexpr size_t deep_cap_iters = 300;
   };
   mutable AdaptivePiecesState adapt_pieces_;
   mutable size_t window_cg_iters_ = 0;
@@ -1133,16 +1138,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     // Adaptive pieces: (re)arm per solve; ladder state (current_s/locked) persists across
     // load steps. Enabled by deflation_pieces == 0.
     adapt_pieces_.enabled = (linear_options.deflation_pieces == 0);
-    adapt_pieces_.window_outers = 0;
-    window_cg_iters_ = 0;
-    adapt_pieces_.window_t0 = MPI_Wtime();
-    if (adapt_pieces_.probing && deflation_precond_) {
-      // A probe interrupted by the load-step boundary is unverified: roll it back (the
-      // ladder may retry within the new step). The it==0 refresh rebuilds the basis.
-      deflation_precond_->setNumPieces(adapt_pieces_.previous_s);
-      adapt_pieces_.current_s = adapt_pieces_.previous_s;
-      adapt_pieces_.probing = false;
-    }
+    // Ratchet state (current_s, cumulative cap hits, locked) persists across load steps.
 
     int it = 0;
     for (; true; it++) {
@@ -1598,56 +1594,30 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         consecutive_tr_shrinks = 0;
       }
 
-      // Adaptive pieces ladder: every `window` outers, decide using the allreduced window
-      // wall (identical on every rank — decisions must not diverge) and the replicated
-      // iteration count. Baseline window: attempt a doubling only if the solve looks
-      // iteration-bound and the suggested cap allows. Probe window: keep the doubling on a
-      // clear improvement, otherwise revert and lock.
+      // Adaptive pieces v3: deterministic one-way ratchet, no experiments. The arch-class
+      // signal is CG-cap saturation (the preconditioner-limited signature; iters/outer
+      // alone cannot separate twist from arch). On the ratchet, commit to the size-rule
+      // target once, permanently. All inputs are replicated integers — decisions are
+      // bitwise-deterministic across ranks and runs (no wall clock).
       if (adapt_pieces_.enabled && !adapt_pieces_.locked && deflation_precond_) {
-        ++adapt_pieces_.window_outers;
-        window_cg_iters_ += diag_cg_iters;
-        if (adapt_pieces_.window_outers >= AdaptivePiecesState::window) {
-          double window_wall = MPI_Wtime() - adapt_pieces_.window_t0;
-          MPI_Comm comm = GetComm() != MPI_COMM_NULL ? GetComm() : MPI_COMM_WORLD;
-          MPI_Allreduce(MPI_IN_PLACE, &window_wall, 1, MPI_DOUBLE, MPI_MAX, comm);
-          const double metric = window_wall / static_cast<double>(adapt_pieces_.window_outers);
-          const double iters_per_outer =
-              static_cast<double>(window_cg_iters_) / static_cast<double>(adapt_pieces_.window_outers);
-          auto announce = [&](const char* what, int s_from, int s_to) {
+        // Deep hits only: saturating a small early-solve adaptive-cap budget is normal for
+        // every problem; grinding out >=300 iterations and still hitting the cap is the
+        // preconditioner-limited signature.
+        if (trResults.cg_hit_max_iters && settings.max_cg_iterations >= AdaptivePiecesState::deep_cap_iters) {
+          ++adapt_pieces_.cumulative_cap_hits;
+        }
+        if (adapt_pieces_.cumulative_cap_hits >= AdaptivePiecesState::cap_hit_trigger) {
+          const int target = deflation_precond_->suggestedMaxPieces();
+          if (target > adapt_pieces_.current_s) {
             if (print_level >= 1) {
-              mfem::out << "[adaptive-pieces] " << what << ": s " << s_from << " -> " << s_to
-                        << " (wall/outer=" << metric << " s, iters/outer=" << iters_per_outer << ")\n";
+              mfem::out << "[adaptive-pieces] ratchet -> s=" << target << " (cap hits "
+                        << adapt_pieces_.cumulative_cap_hits << " at outer " << it << ")\n";
             }
-          };
-          if (adapt_pieces_.probing) {
-            if (metric < AdaptivePiecesState::improve_margin * adapt_pieces_.previous_metric) {
-              announce("keep", adapt_pieces_.previous_s, adapt_pieces_.current_s);
-              adapt_pieces_.previous_s = adapt_pieces_.current_s;
-              adapt_pieces_.previous_metric = metric;
-              adapt_pieces_.probing = false;  // next window may attempt a further doubling
-            } else {
-              announce("revert+lock", adapt_pieces_.current_s, adapt_pieces_.previous_s);
-              deflation_precond_->setNumPieces(adapt_pieces_.previous_s);
-              adapt_pieces_.current_s = adapt_pieces_.previous_s;
-              adapt_pieces_.probing = false;
-              adapt_pieces_.locked = true;
-              force_precond_refresh_ = true;
-            }
-          } else if (iters_per_outer >= AdaptivePiecesState::attempt_gate &&
-                     2 * adapt_pieces_.current_s <= deflation_precond_->suggestedMaxPieces()) {
-            announce("probe", adapt_pieces_.current_s, 2 * adapt_pieces_.current_s);
-            adapt_pieces_.previous_metric = metric;
-            adapt_pieces_.previous_s = adapt_pieces_.current_s;
-            adapt_pieces_.current_s *= 2;
-            deflation_precond_->setNumPieces(adapt_pieces_.current_s);
-            adapt_pieces_.probing = true;
+            deflation_precond_->setNumPieces(target);
+            adapt_pieces_.current_s = target;
             force_precond_refresh_ = true;
-          } else {
-            adapt_pieces_.previous_metric = metric;  // keep the baseline fresh
           }
-          adapt_pieces_.window_outers = 0;
-          window_cg_iters_ = 0;
-          adapt_pieces_.window_t0 = MPI_Wtime();
+          adapt_pieces_.locked = true;
         }
       }
 

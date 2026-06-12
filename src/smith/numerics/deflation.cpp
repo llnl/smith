@@ -286,8 +286,13 @@ int DeflationPreconditioner::suggestedMaxPieces() const
   constexpr int coarse_size_ceiling = 500;          // m = pieces * ranks * mpr
   constexpr int min_elements_per_piece = 64;
   const long long global_dofs = fes_->GlobalTrueVSize();
-  const int s_rule =
+  // Round the dof rule, then floor to a power of two: piece counts are bisection-shaped,
+  // and the E* study's wall optima sit at or below the rounded rule (block: rule 2.55,
+  // optimum 2).
+  const int s_round =
       static_cast<int>(std::llround(static_cast<double>(global_dofs) / (n_ranks_ * dofs_per_piece_target)));
+  int s_rule = 1;
+  while (2 * s_rule <= s_round) s_rule *= 2;
   const int modes_per_piece = modes_per_rank_ / num_pieces_;
   const int s_coarse = coarse_size_ceiling / std::max(1, n_ranks_ * modes_per_piece);
   int ne_min = fes_->GetMesh()->GetNE();
