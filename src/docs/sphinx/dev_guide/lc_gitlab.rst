@@ -21,8 +21,8 @@ LC GitLab jobs run through Jacamar and create working directories under
 to move the real storage for this directory to a file system with more space and
 leave ``${HOME}/.jacamar-ci`` as a symlink.
 
-Choose a directory on a file system, we recommend either ``/usr/workspace``,
-appropriate for build artifacts, then run:
+Choose a directory on a file system appropriate for build artifacts, we recommend 
+``/usr/workspace``, then run:
 
 .. code-block:: bash
 
