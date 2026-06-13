@@ -548,7 +548,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     /// Sustained saturation is the preconditioner-limited signature; transients (twist's
     /// snap-through spike: 6 in a row; contact's cold start: 3) stay below it while
     /// arch (262) and block (35) clear it early.
-    static constexpr size_t cap_hit_trigger = 12;
+    static constexpr size_t cap_hit_trigger = 8;
   };
   mutable AdaptivePiecesState adapt_pieces_;
   mutable size_t window_cg_iters_ = 0;
