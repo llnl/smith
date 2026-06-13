@@ -309,8 +309,17 @@ def run_confirm(args) -> None:
     log_path = root / "evals.jsonl"
     confirm_args = argparse.Namespace(**vars(args))
     confirm_args.timeout_sec = args.confirm_timeout_sec
+    def _clamp_params(p: dict) -> dict:
+        p = dict(p)
+        if p.get("cg_cap_min", 1) < 1:
+            p["cg_cap_min"] = 1  # 0 disables adaptive cap; enforce minimum of 1
+        return p
+
     # always include the baseline for a fair same-day comparison
-    for i, candidate in enumerate([{"params": baseline_params(), "tag": "baseline"}] + candidates[: args.confirm]):
+    confirm_list = [{"params": baseline_params(), "tag": "baseline"}] + candidates[: args.confirm]
+    for c in confirm_list:
+        c["params"] = _clamp_params(c["params"])
+    for i, candidate in enumerate(confirm_list):
         result = evaluate(candidate["params"], confirm_args, root / f"confirm-{i:02d}", screening=False)
         log_eval(log_path, f"confirm/{candidate.get('tag', i)}", candidate["params"], result, root / f"confirm-{i:02d}")
 
