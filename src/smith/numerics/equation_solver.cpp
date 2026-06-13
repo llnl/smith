@@ -612,6 +612,13 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   /// Sum of line-search retries per outer iter.
   mutable size_t line_search_retries_total_ = 0;
   mutable size_t line_search_retries_max_ = 0;
+  /// Sync-vs-skew probe (SMITH_CG_SYNC_DIAG=1): split each in-CG dot_many's MPI cost into the
+  /// pre-reduce barrier wait (rank skew / load imbalance) and the bare MPI_Allreduce (latency).
+  /// Diagnostic only — the barrier is skipped entirely when the env var is unset, so default
+  /// runs are bitwise- and timing-unaffected.
+  mutable bool cg_sync_diag_ = (std::getenv("SMITH_CG_SYNC_DIAG") != nullptr);
+  mutable double dot_barrier_time_ = 0.0;
+  mutable double dot_allreduce_time_ = 0.0;
   // === TIMING END ===
 
   std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
@@ -668,8 +675,20 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     const MPI_Comm dot_comm = GetComm();
     if (dot_comm != MPI_COMM_NULL) {
       std::vector<mfem::real_t> global_products(pairs.size());
-      MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T, MPI_SUM,
-                    dot_comm);
+      if (cg_sync_diag_) {
+        // Barrier first: every rank parks here until the slowest arrives, so the barrier wall
+        // is the rank-skew component and the subsequent Allreduce is (near) pure latency.
+        double t0 = MPI_Wtime();
+        MPI_Barrier(dot_comm);
+        double t1 = MPI_Wtime();
+        MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T,
+                      MPI_SUM, dot_comm);
+        dot_barrier_time_ += t1 - t0;
+        dot_allreduce_time_ += MPI_Wtime() - t1;
+      } else {
+        MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T,
+                      MPI_SUM, dot_comm);
+      }
       products.assign(global_products.begin(), global_products.end());
     }
 #endif
@@ -1104,6 +1123,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     num_subspace_prepares_ = num_subspace_solves_ = 0;
     num_batch_hess_vec_calls_ = num_batch_hess_vec_actions_ = 0;
     cg_profile_ = CGProfile{};
+    dot_barrier_time_ = dot_allreduce_time_ = 0.0;
     cg_iter_hist_.fill(0);
     cg_status_hist_.fill(0);
     cg_outer_count_ = cg_iter_sum_ = cg_iter_max_ = 0;
@@ -1672,6 +1692,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double t_cg_H = rmax(cg_profile_.H_mult_time);
     double t_cg_P = rmax(cg_profile_.P_mult_time);
     double t_cg_dots = rmax(cg_profile_.dots_time);
+    double t_cg_barrier = rmax(dot_barrier_time_);
+    double t_cg_allred = rmax(dot_allreduce_time_);
     if (rank == 0) {
       mfem::out << "\n========= TrustRegion solve timing (max across ranks) =========\n"
                 << "  total solve            : " << t_total << " s\n"
@@ -1693,6 +1715,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                 << "  in-CG H.Mult           : " << t_cg_H << " s  (" << cg_profile_.H_mult_count << " calls)\n"
                 << "  in-CG P.Mult           : " << t_cg_P << " s  (" << cg_profile_.P_mult_count << " calls)\n"
                 << "  in-CG dot_many (+Allred): " << t_cg_dots << " s  (" << cg_profile_.dot_call_count << " calls)\n"
+                << (cg_sync_diag_ ? std::format("    skew (barrier wait)  : {:.4f} s\n    allreduce (latency)  : {:.4f} s\n",
+                                                 t_cg_barrier, t_cg_allred)
+                                  : std::string{})
                 << "  --- CG iter histogram (per outer; " << cg_outer_count_ << " outers) ---\n"
                 << "  [0,10)   : " << cg_iter_hist_[0] << "\n"
                 << "  [10,50)  : " << cg_iter_hist_[1] << "\n"
