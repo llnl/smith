@@ -80,7 +80,7 @@ TEST_P(ContactFiniteDiff, patch)
 #endif
 
   // Do a single iteration per timestep to check gradient for each iteration
-  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
+  NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
                                            .relative_tol = 1.0e-15,
                                            .absolute_tol = 1.0e-15,
                                            .max_iterations = 1,
