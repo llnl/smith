@@ -292,9 +292,9 @@ AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const AdjointSe
     dual_adjoint_loads.push_back(std::move(load));
   }
 
-  // These unit DOF seeds are synthetic downstream gradients using the same FE spaces LiDO discovers from stateNames()
-  // and dualNames(). They test port plumbing, not physical sensitivity accuracy; parameter and shape sensitivity values
-  // should be validated with separate finite-difference checks for physics-specific scalar QoIs.
+  // These unit DOF seeds are synthetic downstream gradients using the same FE spaces a host code would discover from
+  // stateNames() and dualNames(). They test port plumbing, not physical sensitivity accuracy; parameter and shape
+  // sensitivity values should be validated with separate finite-difference checks for physics-specific scalar QoIs.
   physics.setAdjointLoad(state_adjoint_load_refs);
   if (!dual_adjoint_load_refs.empty()) {
     physics.setDualAdjointBcs(dual_adjoint_load_refs);
@@ -345,8 +345,8 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveCanRepeatForBasePhysicsTypes)
     SCOPED_TRACE(test_case.name);
     auto& physics = *test_case.physics;
 
-    // LiDO reuses the last static solution as a warm-start guess. This generic repeatability check intentionally
-    // resets to zero guesses each time so both forward passes start from the same cold state.
+    // A host code might reuse the last static solution as a warm-start guess. This generic repeatability check
+    // intentionally resets to zero guesses each time so both forward passes start from the same cold state.
     const auto first_forward = runStaticForwardPass(physics);
     const auto second_forward = runStaticForwardPass(physics);
     expectNearL2Norms(first_forward.state_l2_norms, second_forward.state_l2_norms);
