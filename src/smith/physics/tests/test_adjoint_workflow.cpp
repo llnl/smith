@@ -61,10 +61,15 @@ const std::string mesh_tag{"mesh"};
 const std::string physics_prefix{"solid"};
 
 struct AdjointWorkflowResult {
-  std::vector<double> state_norms;
-  std::vector<double> dual_norms;
-  std::vector<double> parameter_norms;
-  double shape_norm{};
+  std::vector<double> state_l2_norms;
+  std::vector<double> dual_l2_norms;
+  std::vector<double> parameter_l2_norms;
+  double shape_l2_norm{};
+};
+
+struct StaticForwardResult {
+  std::vector<double> state_l2_norms;
+  std::vector<double> dual_l2_norms;
 };
 
 enum class AdjointSeedKind
@@ -215,6 +220,39 @@ std::vector<AdjointSeed> adjointSeeds(const BasePhysics& physics)
   return seeds;
 }
 
+StaticForwardResult runStaticForwardPass(BasePhysics& physics)
+{
+  updateStaticInputs(physics);
+  physics.resetStates();
+  setStaticStateGuesses(physics);
+  physics.advanceTimestep(time_step);
+  EXPECT_EQ(1, physics.cycle());
+  EXPECT_NEAR(time_step, physics.time(), 1.0e-14);
+
+  StaticForwardResult result;
+
+  // Make sure the forward solve did not produce NaNs or Infs in any advertised output port.
+  for (const auto& state_name : physics.stateNames()) {
+    result.state_l2_norms.push_back(physics.state(state_name).Norml2());
+    EXPECT_TRUE(std::isfinite(result.state_l2_norms.back())) << state_name;
+  }
+
+  for (const auto& dual_name : physics.dualNames()) {
+    result.dual_l2_norms.push_back(physics.dual(dual_name).Norml2());
+    EXPECT_TRUE(std::isfinite(result.dual_l2_norms.back())) << dual_name;
+  }
+
+  return result;
+}
+
+void expectNearL2Norms(const std::vector<double>& first, const std::vector<double>& second)
+{
+  ASSERT_EQ(first.size(), second.size());
+  for (std::size_t i = 0; i < first.size(); ++i) {
+    EXPECT_NEAR(first[i], second[i], 1.0e-12);
+  }
+}
+
 AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const AdjointSeed& seed)
 {
   updateStaticInputs(physics);
@@ -268,15 +306,15 @@ AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const AdjointSe
 
   AdjointWorkflowResult result;
   for (const auto& state_name : physics.stateNames()) {
-    result.state_norms.push_back(physics.state(state_name).Norml2());
+    result.state_l2_norms.push_back(physics.state(state_name).Norml2());
   }
   for (const auto& dual_name : physics.dualNames()) {
-    result.dual_norms.push_back(physics.dual(dual_name).Norml2());
+    result.dual_l2_norms.push_back(physics.dual(dual_name).Norml2());
   }
   for (std::size_t parameter_index = 0; parameter_index < physics.parameterNames().size(); ++parameter_index) {
-    result.parameter_norms.push_back(physics.computeTimestepSensitivity(parameter_index).Norml2());
+    result.parameter_l2_norms.push_back(physics.computeTimestepSensitivity(parameter_index).Norml2());
   }
-  result.shape_norm = shape_sensitivity.Norml2();
+  result.shape_l2_norm = shape_sensitivity.Norml2();
   return result;
 }
 
@@ -307,51 +345,33 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveCanRepeatForBasePhysicsTypes)
     SCOPED_TRACE(test_case.name);
     auto& physics = *test_case.physics;
 
-    updateStaticInputs(physics);
-    physics.resetStates();
-    setStaticStateGuesses(physics);
-    physics.advanceTimestep(time_step);
-    EXPECT_EQ(1, physics.cycle());
-    EXPECT_NEAR(time_step, physics.time(), 1.0e-14);
-
-    // Make sure the forward solve did not produce NaNs or Infs in any advertised output port.
-    for (const auto& state_name : physics.stateNames()) {
-      EXPECT_TRUE(std::isfinite(physics.state(state_name).Norml2())) << state_name;
-    }
-
-    for (const auto& dual_name : physics.dualNames()) {
-      EXPECT_TRUE(std::isfinite(physics.dual(dual_name).Norml2())) << dual_name;
-    }
+    // LiDO reuses the last static solution as a warm-start guess. This generic repeatability check intentionally
+    // resets to zero guesses each time so both forward passes start from the same cold state.
+    const auto first_forward = runStaticForwardPass(physics);
+    const auto second_forward = runStaticForwardPass(physics);
+    expectNearL2Norms(first_forward.state_l2_norms, second_forward.state_l2_norms);
+    expectNearL2Norms(first_forward.dual_l2_norms, second_forward.dual_l2_norms);
 
     for (const auto& seed : adjointSeeds(physics)) {
       SCOPED_TRACE(seedLabel(seed));
       const auto first = runStaticAdjointPass(physics, seed);
       const auto second = runStaticAdjointPass(physics, seed);
 
-      ASSERT_EQ(first.state_norms.size(), second.state_norms.size());
-      for (std::size_t state_index = 0; state_index < first.state_norms.size(); ++state_index) {
-        EXPECT_NEAR(first.state_norms[state_index], second.state_norms[state_index], 1.0e-12);
-      }
-      ASSERT_EQ(first.dual_norms.size(), second.dual_norms.size());
-      for (std::size_t dual_index = 0; dual_index < first.dual_norms.size(); ++dual_index) {
-        EXPECT_NEAR(first.dual_norms[dual_index], second.dual_norms[dual_index], 1.0e-12);
-      }
-      ASSERT_EQ(first.parameter_norms.size(), second.parameter_norms.size());
-      for (std::size_t parameter_index = 0; parameter_index < first.parameter_norms.size(); ++parameter_index) {
-        EXPECT_NEAR(first.parameter_norms[parameter_index], second.parameter_norms[parameter_index], 1.0e-12);
-      }
-      EXPECT_NEAR(first.shape_norm, second.shape_norm, 1.0e-12);
+      expectNearL2Norms(first.state_l2_norms, second.state_l2_norms);
+      expectNearL2Norms(first.dual_l2_norms, second.dual_l2_norms);
+      expectNearL2Norms(first.parameter_l2_norms, second.parameter_l2_norms);
+      EXPECT_NEAR(first.shape_l2_norm, second.shape_l2_norm, 1.0e-12);
 
-      for (const auto state_norm : first.state_norms) {
+      for (const auto state_norm : first.state_l2_norms) {
         EXPECT_TRUE(std::isfinite(state_norm));
       }
-      for (const auto dual_norm : first.dual_norms) {
+      for (const auto dual_norm : first.dual_l2_norms) {
         EXPECT_TRUE(std::isfinite(dual_norm));
       }
-      for (const auto parameter_norm : first.parameter_norms) {
+      for (const auto parameter_norm : first.parameter_l2_norms) {
         EXPECT_TRUE(std::isfinite(parameter_norm));
       }
-      EXPECT_TRUE(std::isfinite(first.shape_norm));
+      EXPECT_TRUE(std::isfinite(first.shape_l2_norm));
     }
   }
 }
