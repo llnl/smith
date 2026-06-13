@@ -45,7 +45,7 @@ PARAM_SPACE = {
     "cg_stagnation_window": ("int", 2, 12, 2),
     "trust_num_leftmost": ("int", 0, 4, 1),
     "trust_num_previous_steps": ("int", 0, 8, 4),
-    "max_cg_iterations": ("int", 300, 3000, 723),
+    "max_cg_iterations": ("int", 550, 3000, 723),
     "cg_forcing_rel": ("log", 1e-6, 1e-3, 1.512e-5),
     "residual_growth_cap": ("lin", 1.2, 10.0, 5.654),
     "tr_decrease_factor": ("lin", 0.1, 0.5, 0.437),
@@ -56,8 +56,8 @@ PARAM_SPACE = {
     "deflation_smoother": ("cat", ("jacobi", "block"), None, "jacobi"),
     # Adaptive CG cap (commit 11c9625bb): cap_min = 0 disables; gamma = 1 disables the
     # rejection brake. Hand-validated point: 60 / 0.7 (suite -6.4%), seeded explicitly.
-    "cg_cap_min": ("int", 0, 300, 60),
-    "cg_cap_gamma": ("lin", 0.3, 1.0, 0.7),
+    "cg_cap_min": ("int", 60, 300, 60),
+    "cg_cap_gamma": ("lin", 0.5, 1.0, 0.7),
 }
 
 
