@@ -488,6 +488,53 @@ void runTwistedBeam()
   checkDisplacement("twisted beam", solid);
 }
 
+// Bending-dominated thin-shell-like cantilever: a thin rectangular plate (thin in z)
+// clamped along x=0 and driven by a large transverse (z) tip deflection at x=L. The thin
+// section makes the response bending- rather than stretch-dominated, and the large tip
+// rotation gives geometric nonlinearity without the snap-through/branch sensitivity of the
+// arch/twist cases -- a smoother, fast (~20 s) generalization probe for the solver.
+void runThinShellBending()
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "hyperelastic_thin_shell");
+
+  constexpr int nx = 64;
+  constexpr int ny = 16;
+  constexpr int nz = 2;
+  constexpr double length = 10.0;
+  constexpr double width = 2.0;
+  constexpr double thickness = 0.25;
+  constexpr double tip_deflection = 2.0;
+
+  auto mesh = std::make_shared<Mesh>(
+      mfem::Mesh(
+          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
+                                      thickness)),
+      "hyperelastic_thin_shell_mesh", 0, 0);
+  checkElementCount("thin shell bending", *mesh);
+
+  mesh->addDomainOfBoundaryElements("clamped_face", by_attr<dim>(5));
+  mesh->addDomainOfBoundaryElements("tip_face", by_attr<dim>(3));
+
+  SolidMechanics<p, dim> solid(nonlinearOptions(), linearOptions(), solid_mechanics::default_quasistatic_options,
+                               "hyperelastic_thin_shell", mesh, {}, 0, 0.0, false, !no_warm_start);
+  if (assemble_bsr) solid.enableDirectBSRAssembly();
+  solid_mechanics::NeoHookean material{.density = 1.0, .K = 100.0, .G = 1.0};
+  solid.setMaterial(material, mesh->entireBody());
+  solid.setFixedBCs(mesh->domain("clamped_face"));
+  solid.setDisplacementBCs(
+      [=](tensor<double, dim>, double time) {
+        tensor<double, dim> displacement{};
+        displacement[2] = -tip_deflection * time;
+        return displacement;
+      },
+      mesh->domain("tip_face"), Component::Z);
+
+  solid.completeSetup();
+  advance(solid, "hyperelastic_thin_shell");
+  checkDisplacement("thin shell bending", solid);
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
@@ -503,8 +550,12 @@ int main(int argc, char* argv[])
   if (smith::selected_case == "all" || smith::selected_case == "twist") {
     smith::runTwistedBeam();
   }
+  if (smith::selected_case == "all" || smith::selected_case == "shell") {
+    smith::runThinShellBending();
+  }
   SLIC_ERROR_ROOT_IF(smith::selected_case != "all" && smith::selected_case != "block" &&
-                         smith::selected_case != "contact" && smith::selected_case != "twist",
-                     "Unknown --case value '" + smith::selected_case + "'; use all, block, contact, or twist");
+                         smith::selected_case != "contact" && smith::selected_case != "twist" &&
+                         smith::selected_case != "shell",
+                     "Unknown --case value '" + smith::selected_case + "'; use all, block, contact, twist, or shell");
   return 0;
 }

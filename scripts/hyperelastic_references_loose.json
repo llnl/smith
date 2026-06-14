@@ -1,0 +1,22 @@
+{
+  "arch": {
+    "final_displacement_l2": 1.0,
+    "rel_tol": 1000000000.0
+  },
+  "block": {
+    "final_displacement_l2": 1.0,
+    "rel_tol": 1000000000.0
+  },
+  "contact": {
+    "final_displacement_l2": 1.0,
+    "rel_tol": 1000000000.0
+  },
+  "twist": {
+    "final_displacement_l2": 1.0,
+    "rel_tol": 1000000000.0
+  },
+  "shell": {
+    "final_displacement_l2": 1.0,
+    "rel_tol": 1000000000.0
+  }
+}

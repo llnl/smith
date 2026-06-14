@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-PROBLEMS = ("arch", "block", "contact", "twist")
+PROBLEMS = ("arch", "block", "contact", "twist", "shell")
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,9 @@ PROBLEM_TABLE = {
     "block": Problem("block", "tests/hyperelastic_benchmarks", "block", default_mesh_scale=1.6),
     "contact": Problem("contact", "tests/hyperelastic_benchmarks", "contact", default_mesh_scale=0.8),
     "twist": Problem("twist", "tests/hyperelastic_benchmarks", "twist", default_steps=6, default_mesh_scale=0.9),
+    # Bending-dominated thin-shell cantilever (~20 s at np6/full); smooth, branch-stable
+    # generalization probe added 2026-06-13.
+    "shell": Problem("shell", "tests/hyperelastic_benchmarks", "shell", default_mesh_scale=1.0),
 }
 
 
@@ -307,6 +310,8 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         common.append(f"--deflation-smoother={args.deflation_smoother}")
     if args.assemble_bsr:
         common.append("--assemble-bsr")
+    if args.write_output:
+        common.append("--write-output")
 
     if problem.name == "arch":
         arch = [
@@ -505,29 +510,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--deflation-coarse-mode", choices=("global", "local", "schwarz"), default="global")
     parser.add_argument("--deflation-pieces", type=int, default=None,
                         help="override the per-problem default deflation pieces")
+    parser.add_argument("--write-output", action="store_true",
+                        help="write ParaView/restart output for each problem (off by default)")
     parser.add_argument("--trust-subspace-option", type=int, default=2)
     parser.add_argument("--trust-num-leftmost", type=int, default=1)
-    parser.add_argument("--trust-num-previous-steps", type=int, default=4)
+    parser.add_argument("--trust-num-previous-steps", type=int, default=5)
     parser.add_argument("--trust-work-quadrature", type=int, default=2)
     parser.add_argument("--trust-num-lanczos", type=int, default=0)
     parser.add_argument("--trust-num-lanczos-iters", type=int, default=0)
-    parser.add_argument("--max-cg-iterations", type=int, default=723)
-    parser.add_argument("--cg-forcing-rel", type=float, default=1.512e-05)
-    parser.add_argument("--cg-cap-min", type=int, default=60, help="adaptive CG cap floor (0 = off)")
-    parser.add_argument("--cg-cap-gamma", type=float, default=0.7)
-    parser.add_argument("--residual-growth-cap", type=float, default=5.654)
-    parser.add_argument("--tr-decrease-factor", type=float, default=0.437)
-    parser.add_argument("--tr-increase-factor", type=float, default=1.786)
+    parser.add_argument("--max-cg-iterations", type=int, default=747)
+    parser.add_argument("--cg-forcing-rel", type=float, default=1.2981521889723316e-05)
+    parser.add_argument("--cg-cap-min", type=int, default=103, help="adaptive CG cap floor (0 = off)")
+    parser.add_argument("--cg-cap-gamma", type=float, default=0.7638340304667752)
+    parser.add_argument("--residual-growth-cap", type=float, default=8.195074738257377)
+    parser.add_argument("--tr-decrease-factor", type=float, default=0.38624275583816037)
+    parser.add_argument("--tr-increase-factor", type=float, default=1.9742659010008659)
     parser.add_argument("--tr-eta1", type=float, default=None)
-    parser.add_argument("--tr-eta2", type=float, default=0.1534)
-    parser.add_argument("--tr-eta3", type=float, default=0.59996)
-    parser.add_argument("--tr-eta4", type=float, default=3.408)
+    parser.add_argument("--tr-eta2", type=float, default=0.12631113528152121)
+    parser.add_argument("--tr-eta3", type=float, default=0.5494445482814023)
+    parser.add_argument("--tr-eta4", type=float, default=1.8368324568136323)
     parser.add_argument("--mesh-scale", type=float, default=None)
     parser.add_argument("--mesh-scale-factor", type=float, default=None,
                         help="Multiply each problem's default mesh scale (screening meshes)")
     parser.add_argument("--references-file", type=Path, default=None,
                         help="Alternate references JSON (e.g. screening-scale references)")
-    parser.add_argument("--cg-stagnation-tol", type=float, default=0.000753)
+    parser.add_argument("--cg-stagnation-tol", type=float, default=0.0010638500842686796)
     parser.add_argument("--cg-stagnation-window", type=int, default=2)
     parser.add_argument("--cg-eisenstat-walker", action="store_true")
     parser.add_argument("--use-bsr-spmv", action=argparse.BooleanOptionalAction, default=True)

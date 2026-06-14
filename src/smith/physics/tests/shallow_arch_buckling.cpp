@@ -41,6 +41,7 @@ int trust_num_leftmost = 1;
 int trust_num_previous_steps = 1;
 int trust_work_quadrature_points = 2;
 bool use_exact_energy = false;
+bool write_output = false;  // gate ParaView/restart output (off by default; --write-output enables)
 int trust_num_lanczos = 0;
 int trust_num_lanczos_iters = 0;
 int max_cg_iterations = 100000;
@@ -99,6 +100,8 @@ void parseCommandLine(int& argc, char** argv)
       trust_work_quadrature_points = std::stoi(arg.substr(std::string("--trust-work-quadrature=").size()));
     } else if (arg == "--use-exact-energy") {
       use_exact_energy = true;
+    } else if (arg == "--write-output") {
+      write_output = true;
     } else if (arg.rfind("--trust-num-lanczos=", 0) == 0) {
       trust_num_lanczos = std::stoi(arg.substr(std::string("--trust-num-lanczos=").size()));
     } else if (arg.rfind("--trust-num-lanczos-iters=", 0) == 0) {
@@ -259,7 +262,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   solid.setTraction([](auto, auto, double t) { return vec2{{0.0, -bending_traction * t}}; }, mesh->domain("top_face"));
 
   solid.completeSetup();
-  solid.outputStateToDisk("shallow_arch_buckling");
+  if (write_output) solid.outputStateToDisk("shallow_arch_buckling");
 
   // --- Exact-energy callback (optional, enable with --use-exact-energy) ---
   // E(u, t) = ∫ψ(∇u) dΩ  +  ∫(-t·u) dΓ_traction.   r = ∂E/∂u must hold for the energy
@@ -350,7 +353,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     cumulative_step_time += tstep;
     SLIC_INFO_ROOT(std::format("Load step {}/{} — wall = {:.3f} s  (cumulative {:.3f} s)", step + 1, num_steps, tstep,
                                cumulative_step_time));
-    solid.outputStateToDisk("shallow_arch_buckling");
+    if (write_output) solid.outputStateToDisk("shallow_arch_buckling");
   }
   SLIC_INFO_ROOT(std::format("Total advanceTimestep wall = {:.3f} s over {} steps", cumulative_step_time, num_steps));
 

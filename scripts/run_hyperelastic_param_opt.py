@@ -28,14 +28,21 @@ import math
 import random
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SUITE = REPO / "scripts" / "run_hyperelastic_suite.py"
 SCREEN_REFS = REPO / "scripts" / "hyperelastic_references_screening.json"
+# Matrix mode (--matrix): score robustness across size x rank by running every candidate on
+# several (np, mesh-scale) configs and taking the geomean over all config x problem cells.
+# Answers use a deliberately loose references file (huge rel_tol) so branch drift between
+# configs is not penalized -- a candidate only needs to CONVERGE to a finite solution; runs
+# that diverge (non-finite) or fail to converge in time (timeout) are caught as non-ok.
+LOOSE_REFS = REPO / "scripts" / "hyperelastic_references_loose.json"
 
-PROBLEMS = ("arch", "block", "contact", "twist")
+PROBLEMS = ("arch", "block", "contact", "twist", "shell")
 
 # name: (kind, low, high, baseline)   kind: lin | log | int | cat
 # Baselines = the current suite defaults (Track-B winner adopted 858c6dd62), so the
@@ -101,14 +108,16 @@ def baseline_params() -> dict:
 
 
 def suite_command(params: dict, args, out_dir: Path, screening: bool, problem: str | None = None,
-                  timeout_sec: int | None = None) -> list[str]:
+                  timeout_sec: int | None = None, np_override: int | None = None,
+                  scale_override: float | None = None, refs_override: Path | None = None) -> list[str]:
+    procs = np_override if np_override is not None else args.np
     cmd = [
         sys.executable,
         str(SUITE),
         "--skip-build",
         "--use-bsr-spmv",
         "--assemble-bsr",
-        f"--procs={args.np}",
+        f"--procs={procs}",
         f"--timeout-sec={timeout_sec if timeout_sec is not None else args.timeout_sec}",
         f"--output-dir={out_dir}",
         f"--cg-stagnation-tol={params['cg_stagnation_tol']:.6g}",
@@ -128,7 +137,10 @@ def suite_command(params: dict, args, out_dir: Path, screening: bool, problem: s
         f"--cg-cap-gamma={params['cg_cap_gamma']:.4g}",
         f"--deflation-pieces={args.deflation_pieces}",
     ]
-    if screening:
+    if scale_override is not None:
+        # Matrix mode: explicit (np, scale) cell with a caller-supplied references file.
+        cmd += [f"--mesh-scale-factor={scale_override}", f"--references-file={refs_override}"]
+    elif screening:
         screen_refs = args.screen_references_file if args.screen_references_file else SCREEN_REFS
         cmd += [f"--mesh-scale-factor={args.mesh_scale_factor}", f"--references-file={screen_refs}"]
     elif args.full_references_file:
@@ -163,49 +175,77 @@ class EvalState:
         return int(min(args.timeout_sec, max(15.0, args.kill_factor * best)))
 
 
+def matrix_tasks(args) -> list[tuple[str, int, float]]:
+    """Parse --matrix-configs "np:scale,np:scale,..." into (label, np, scale) configs."""
+    tasks = []
+    for spec in args.matrix_configs.split(","):
+        n, s = spec.split(":")
+        tasks.append((f"np{int(n)}s{s}", int(n), float(s)))
+    return tasks
+
+
+def build_units(args) -> list[tuple[str, int, float | None, str]]:
+    """The cells scored by one evaluation: (key, np, mesh_scale, problem).
+
+    Matrix mode crosses every (np, scale) config with every problem and scores the geomean
+    over all cells, so a winning candidate must be fast AND convergent across sizes and rank
+    counts -- the screening exploit (cheap mesh only) cannot survive. Legacy mode is one cell
+    per problem at args.np."""
+    problems = tuple(args.problems) if getattr(args, "problems", None) else PROBLEMS
+    if getattr(args, "matrix", False):
+        return [(f"{label}:{p}", np_, scale, p)
+                for (label, np_, scale) in matrix_tasks(args) for p in problems]
+    return [(p, args.np, None, p) for p in problems]
+
+
 def evaluate(params: dict, args, out_dir: Path, screening: bool, state: EvalState | None = None) -> dict:
-    """Run the suite one problem at a time, killing the eval early when it cannot win:
-    (a) any non-ok problem (the 4x penalty is unrecoverable), (b) per-problem adaptive
+    """Run the suite one cell at a time, killing the eval early when it cannot win:
+    (a) any non-ok cell (the 4x penalty is unrecoverable), (b) per-cell adaptive
     timeout = kill_factor * best-known wall, (c) an optimistic bound on the final score
-    (remaining problems at their best-known walls) already exceeding kill_margin * best."""
+    (remaining cells at their best-known walls) already exceeding kill_margin * best."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    units = build_units(args)
+    keys = [u[0] for u in units]
+    by_key = {u[0]: u for u in units}
     walls, statuses = {}, {}
     aborted = False
-    problems = tuple(args.problems) if getattr(args, "problems", None) else PROBLEMS
-    order = state.problem_order(problems) if state else list(problems)
-    for idx, p in enumerate(order):
-        timeout = state.timeout_for(p, args) if state else args.timeout_sec
-        cmd = suite_command(params, args, out_dir / p, screening, problem=p, timeout_sec=timeout)
+    order = state.problem_order(keys) if state else keys
+    for idx, key in enumerate(order):
+        _, np_, scale, p = by_key[key]
+        timeout = state.timeout_for(key, args) if state else args.timeout_sec
+        refs = LOOSE_REFS if scale is not None else None
+        cmd = suite_command(params, args, out_dir / key.replace(":", "_"), screening, problem=p,
+                            timeout_sec=timeout, np_override=np_, scale_override=scale, refs_override=refs)
         subprocess.run(cmd, cwd=REPO, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        summary = out_dir / p / "summary.csv"
-        statuses[p] = "failed"
-        walls[p] = float(timeout)
+        summary = out_dir / key.replace(":", "_") / "summary.csv"
+        statuses[key] = "failed"
+        walls[key] = float(timeout)
         if summary.exists():
             with summary.open() as stream:
                 for row in csv.DictReader(stream):
-                    statuses[p] = row["status"]
+                    statuses[key] = row["status"]
                     try:
-                        walls[p] = float(row["wall_s"])
+                        walls[key] = float(row["wall_s"])
                     except ValueError:
                         pass
-        if statuses[p] != "ok":
+        if statuses[key] != "ok":
             aborted = True  # unrecoverable: score *= 4
             break
         if state and state.best_score < float("inf"):
             done = [walls[q] for q in order[: idx + 1]]
             optimistic = done + [state.best_walls.get(q, 1.0) for q in order[idx + 1 :]]
-            bound = math.exp(sum(math.log(max(1e-3, w)) for w in optimistic) / len(problems))
+            bound = math.exp(sum(math.log(max(1e-3, w)) for w in optimistic) / len(keys))
             if bound > args.kill_margin * state.best_score:
                 aborted = True
                 break
 
-    for p in problems:
-        if p not in statuses:
-            statuses[p] = "skipped"
+    for key in keys:
+        if key not in statuses:
+            statuses[key] = "skipped"
             # pessimistic fill so aborted evals rank behind everything that finished
-            walls[p] = float(args.timeout_sec)
-    n_bad = sum(1 for p in problems if statuses.get(p) not in ("ok", "skipped"))
-    geomean = math.exp(sum(math.log(max(1e-3, walls[p])) for p in problems) / len(problems))
+            walls[key] = float(args.timeout_sec)
+    n_bad = sum(1 for key in keys if statuses.get(key) not in ("ok", "skipped"))
+    geomean = math.exp(sum(math.log(max(1e-3, walls[key])) for key in keys) / len(keys))
     score = geomean * (4.0**n_bad) * (2.0 if aborted else 1.0)
     result = {"score": score, "geomean": geomean, "n_bad": n_bad, "walls": walls, "statuses": statuses,
               "aborted": aborted}
@@ -218,9 +258,10 @@ def log_eval(log_path: Path, tag: str, params: dict, result: dict, out_dir: Path
     record = {"tag": tag, "params": params, **result, "dir": str(out_dir), "time": datetime.now().isoformat()}
     with log_path.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(record) + "\n")
-    walls = " ".join(f"{p}={result['walls'].get(p, float('nan')):.1f}" for p in PROBLEMS)
+    walls = " ".join(f"{k}={result['walls'].get(k, float('nan')):.1f}" for k in sorted(result["walls"]))
     aborted = " ABORTED" if result.get("aborted") else ""
-    print(f"[{tag}] score={result['score']:.2f} bad={result['n_bad']}{aborted} {walls}", flush=True)
+    print(f"[{tag}] score={result['score']:.2f} geo={result.get('geomean', float('nan')):.2f} "
+          f"bad={result['n_bad']}{aborted} {walls}", flush=True)
 
 
 def run_search(args) -> None:
@@ -256,6 +297,11 @@ def run_search(args) -> None:
             for j, u in enumerate(base_u)
         ])
 
+    t0 = time.time()
+    budget = args.wall_budget_sec
+    def over_budget() -> bool:
+        return budget and (time.time() - t0) > budget
+
     state = EvalState()
     scores: list[float] = []
     eval_count = 0
@@ -265,9 +311,18 @@ def run_search(args) -> None:
         log_eval(log_path, f"gen0/{i}", params, result, root / f"eval-{eval_count:04d}")
         scores.append(result["score"])
         eval_count += 1
+        if over_budget():
+            print(f"== wall budget {budget}s reached during gen0 (eval {eval_count}) ==", flush=True)
+            break
+    # pad any unevaluated initial members so DE indexing stays valid if gen0 was cut short
+    while len(scores) < args.population:
+        scores.append(float("inf"))
 
     F, CR = 0.6, 0.85
     for gen in range(1, args.generations + 1):
+        if over_budget():
+            print(f"== wall budget {budget}s reached; stopping before gen {gen} ==", flush=True)
+            break
         for i in range(args.population):
             a, b, c = rng.sample([j for j in range(args.population) if j != i], 3)
             trial = list(population[i])
@@ -283,8 +338,11 @@ def run_search(args) -> None:
                 population[i] = trial
                 scores[i] = result["score"]
             eval_count += 1
+            if over_budget():
+                print(f"== wall budget {budget}s reached mid-gen {gen} (eval {eval_count}) ==", flush=True)
+                break
         best = min(range(args.population), key=lambda k: scores[k])
-        print(f"== gen {gen} best score {scores[best]:.2f} ==", flush=True)
+        print(f"== gen {gen} best score {scores[best]:.2f}  elapsed {(time.time()-t0)/3600:.2f}h ==", flush=True)
 
     best = min(range(args.population), key=lambda k: scores[k])
     best_params = repair({name: from_unit(name, u) for name, u in zip(names, population[best])})
@@ -345,6 +403,12 @@ def main() -> int:
                         help="per-problem timeout = kill_factor * best-known wall")
     parser.add_argument("--kill-margin", type=float, default=1.5,
                         help="abort the eval when its optimistic score bound exceeds kill_margin * best score")
+    parser.add_argument("--matrix", action="store_true",
+                        help="score the geomean over the (np x mesh-scale) config matrix x problems")
+    parser.add_argument("--matrix-configs", type=str, default="6:1.0,4:1.0,6:0.75,4:0.75",
+                        help="comma-separated np:mesh-scale cells for --matrix mode")
+    parser.add_argument("--wall-budget-sec", type=int, default=0,
+                        help="stop launching new evals after this many seconds (0 = run all generations)")
     parser.add_argument("--confirm", type=int, default=0, help="confirm top-N configs from --log at full size")
     parser.add_argument("--confirm-timeout-sec", type=int, default=240)
     parser.add_argument("--log", type=Path, default=None, help="evals.jsonl from a screening run (for --confirm)")
