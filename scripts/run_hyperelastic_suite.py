@@ -300,8 +300,8 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
     if args.cg_cap_min:
         common.append(f"--cg-cap-min={args.cg_cap_min}")
         common.append(f"--cg-cap-gamma={args.cg_cap_gamma}")
-    if args.cg_stagnation_tol is not None:
-        common.append(f"--cg-stagnation-tol={args.cg_stagnation_tol}")
+    if args.cg_model_energy_stagnation_reltol is not None:
+        common.append(f"--cg-model-energy-stagnation-reltol={args.cg_model_energy_stagnation_reltol}")
     if args.cg_stagnation_window is not None:
         common.append(f"--cg-stagnation-window={args.cg_stagnation_window}")
     if args.cg_eisenstat_walker:
@@ -534,7 +534,7 @@ def parse_args() -> argparse.Namespace:
                         help="Multiply each problem's default mesh scale (screening meshes)")
     parser.add_argument("--references-file", type=Path, default=None,
                         help="Alternate references JSON (e.g. screening-scale references)")
-    parser.add_argument("--cg-stagnation-tol", type=float, default=0.0010638500842686796)
+    parser.add_argument("--cg-model-energy-stagnation-reltol", type=float, default=0.0010638500842686796)
     parser.add_argument("--cg-stagnation-window", type=int, default=2)
     parser.add_argument("--cg-eisenstat-walker", action="store_true")
     parser.add_argument("--use-bsr-spmv", action=argparse.BooleanOptionalAction, default=True)

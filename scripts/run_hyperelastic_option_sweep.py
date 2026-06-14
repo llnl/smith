@@ -27,7 +27,7 @@ PRESETS = [
     ("lanczos4", ["--trust-num-lanczos", "4", "--trust-num-lanczos-iters", "12"]),
     ("cg500", ["--max-cg-iterations", "500"]),
     ("cg2000", ["--max-cg-iterations", "2000"]),
-    ("stagnation", ["--cg-stagnation-tol", "1e-3", "--cg-stagnation-window", "5"]),
+    ("stagnation", ["--cg-model-energy-stagnation-reltol", "1e-3", "--cg-stagnation-window", "5"]),
     ("simpson", ["--trust-work-quadrature", "3"]),
 ]
 

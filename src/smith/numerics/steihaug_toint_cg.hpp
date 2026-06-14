@@ -25,7 +25,7 @@ struct TrustRegionSettings {
   size_t max_cg_iterations = 10000;  //
   /// Relative quadratic-model-decrease threshold below which a CG iter counts as "stagnant".
   /// 0 disables the check. Typical: 1e-3. Compared against per-iter decrement / |cumulative model|.
-  double model_stagnation_tol = 0.0;
+  double model_energy_stagnation_reltol = 0.0;
   /// Consecutive stagnant iters required to exit CG early. 0 disables.
   size_t model_stagnation_window = 0;
   /// max cumulative iterations

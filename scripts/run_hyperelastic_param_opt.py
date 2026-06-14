@@ -48,7 +48,7 @@ PROBLEMS = ("arch", "block", "contact", "twist", "shell")
 # Baselines = the current suite defaults (Track-B winner adopted 858c6dd62), so the
 # seeded member 0 and the confirm-stage "baseline" are today's best known config.
 PARAM_SPACE = {
-    "cg_stagnation_tol": ("log", 10**-4.5, 10**-1.5, 7.53e-4),
+    "cg_model_energy_stagnation_reltol": ("log", 10**-4.5, 10**-1.5, 7.53e-4),
     "cg_stagnation_window": ("int", 2, 12, 2),
     "trust_num_leftmost": ("int", 0, 4, 1),
     "trust_num_previous_steps": ("int", 0, 8, 4),
@@ -120,7 +120,7 @@ def suite_command(params: dict, args, out_dir: Path, screening: bool, problem: s
         f"--procs={procs}",
         f"--timeout-sec={timeout_sec if timeout_sec is not None else args.timeout_sec}",
         f"--output-dir={out_dir}",
-        f"--cg-stagnation-tol={params['cg_stagnation_tol']:.6g}",
+        f"--cg-model-energy-stagnation-reltol={params['cg_model_energy_stagnation_reltol']:.6g}",
         f"--cg-stagnation-window={params['cg_stagnation_window']}",
         f"--trust-num-leftmost={params['trust_num_leftmost']}",
         f"--trust-num-previous-steps={params['trust_num_previous_steps']}",

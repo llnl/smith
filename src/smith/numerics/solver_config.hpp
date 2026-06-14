@@ -459,7 +459,7 @@ struct LinearSolverOptions {
   /// Inner CG exits when per-iter model decrement / |model| stays below this for
   /// `cg_model_stagnation_window` consecutive iters. Adaptive alternative to a
   /// hand-picked `max_iterations` cap. Typical: 1e-3.
-  double cg_model_stagnation_tol = 0.0;
+  double cg_model_energy_stagnation_reltol = 0.0;
 
   /// Consecutive stagnant iters required to trigger model-stagnation exit (0 disables).
   /// Typical: 5.

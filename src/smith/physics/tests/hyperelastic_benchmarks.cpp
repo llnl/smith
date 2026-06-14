@@ -54,7 +54,7 @@ int trust_num_previous_steps = 4;
 int trust_work_quadrature_points = 2;
 int trust_num_lanczos = 0;
 int trust_num_lanczos_iters = 0;
-double cg_model_stagnation_tol = 0.0;
+double cg_model_energy_stagnation_reltol = 0.0;
 int cg_model_stagnation_window = 0;
 bool cg_eisenstat_walker = false;
 bool use_bsr_spmv = false;
@@ -121,7 +121,7 @@ LinearSolverOptions linearOptions()
           .relative_tol = 1.0e-7,
           .absolute_tol = 1.0e-14,
           .max_iterations = linear_max_iterations,
-          .cg_model_stagnation_tol = cg_model_stagnation_tol,
+          .cg_model_energy_stagnation_reltol = cg_model_energy_stagnation_reltol,
           .cg_model_stagnation_window = cg_model_stagnation_window,
           .cg_eisenstat_walker = cg_eisenstat_walker,
           .print_level = 0,
@@ -237,8 +237,8 @@ void parseCommandLine(int& argc, char** argv)
       trust_num_lanczos = std::stoi(arg.substr(std::string("--trust-num-lanczos=").size()));
     } else if (arg.rfind("--trust-num-lanczos-iters=", 0) == 0) {
       trust_num_lanczos_iters = std::stoi(arg.substr(std::string("--trust-num-lanczos-iters=").size()));
-    } else if (arg.rfind("--cg-stagnation-tol=", 0) == 0) {
-      cg_model_stagnation_tol = std::stod(arg.substr(std::string("--cg-stagnation-tol=").size()));
+    } else if (arg.rfind("--cg-model-energy-stagnation-reltol=", 0) == 0) {
+      cg_model_energy_stagnation_reltol = std::stod(arg.substr(std::string("--cg-model-energy-stagnation-reltol=").size()));
     } else if (arg.rfind("--cg-stagnation-window=", 0) == 0) {
       cg_model_stagnation_window = std::stoi(arg.substr(std::string("--cg-stagnation-window=").size()));
     } else if (arg == "--cg-eisenstat-walker") {

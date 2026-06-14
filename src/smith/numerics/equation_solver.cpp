@@ -1102,7 +1102,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     TrustRegionSettings settings;
     settings.min_cg_iterations = static_cast<size_t>(nonlinear_options.min_iterations);
     settings.max_cg_iterations = static_cast<size_t>(linear_options.max_iterations);
-    settings.model_stagnation_tol = linear_options.cg_model_stagnation_tol;
+    settings.model_energy_stagnation_reltol = linear_options.cg_model_energy_stagnation_reltol;
     settings.model_stagnation_window = static_cast<size_t>(std::max(0, linear_options.cg_model_stagnation_window));
     settings.cg_tol = 0.5 * norm_goal;
     settings.t1 = nonlinear_options.tr_decrease_factor;

@@ -119,7 +119,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   // Per-iter decrement = 0.5 * alpha_k * rPr_k (standard PCG identity).
   double model_value = 0.0;
   size_t stagnant_count = 0;
-  const bool stagnation_enabled = settings.model_stagnation_window > 0 && settings.model_stagnation_tol > 0.0;
+  const bool stagnation_enabled = settings.model_stagnation_window > 0 && settings.model_energy_stagnation_reltol > 0.0;
 
   for (cgIter = 1; cgIter <= settings.max_cg_iterations; ++cgIter) {
     if (!isDescentDirection(descent_check)) {
@@ -167,7 +167,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
       const double decrement = 0.5 * alphaCg * rPr;
       model_value -= decrement;
       const double abs_m = std::abs(model_value);
-      if (abs_m > 0.0 && decrement < settings.model_stagnation_tol * abs_m) {
+      if (abs_m > 0.0 && decrement < settings.model_energy_stagnation_reltol * abs_m) {
         ++stagnant_count;
         if (stagnant_count >= settings.model_stagnation_window) {
           results.cg_model_stagnated = true;
