@@ -338,6 +338,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             set(MFEM_USE_UMPIRE OFF CACHE BOOL "")
         endif()
 
+        # Temporarily unset compiler and linker flags when configuring MFEM, in order to avoid conflicts with fortran and asan.
+        if(APPLE AND ENABLE_ASAN)
+            set(TMP_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
+            set(TMP_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+            set(TMP_CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS})
+
+            unset(CMAKE_C_FLAGS)
+            unset(CMAKE_CXX_FLAGS)
+            unset(CMAKE_EXE_LINKER_FLAGS)
+        endif()
+
         #### MFEM Configuration Options
 
         # Prefix the "check" targets
@@ -403,6 +414,16 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         target_include_directories(mfem SYSTEM INTERFACE ${_mfem_includes})
         target_include_directories(mfem SYSTEM INTERFACE $<BUILD_INTERFACE:${SMITH_SOURCE_DIR}>)
         target_include_directories(mfem SYSTEM INTERFACE $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/mfem>)
+
+        # Restore flags and apply asan to mfem target directly
+        if(APPLE AND ENABLE_ASAN)
+            target_compile_options(mfem PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+            target_link_options(mfem PRIVATE -fsanitize=address)
+
+            set(CMAKE_C_FLAGS ${TMP_CMAKE_C_FLAGS})
+            set(CMAKE_CXX_FLAGS ${TMP_CMAKE_CXX_FLAGS})
+            set(CMAKE_EXE_LINKER_FLAGS ${TMP_CMAKE_EXE_LINKER_FLAGS})
+        endif()
 
         #### Restore previously stored data
         foreach(_tpl ${tpls_to_save})
@@ -714,19 +735,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
     endif()
 
-    # On Apple, Spack-built cmake configs embed literal -Wl,-rpath,... entries in
-    # INTERFACE_LINK_LIBRARIES. These duplicate CMake's own rpath management
-    # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings.
+    # Prevent unhelpful warnings by removing duplicate rpaths set in MFEM's config.mk MFEM_EXT_LIBS
     if(APPLE)
         foreach(_target ${_mfem_targets})
             if(TARGET ${_target})
-                get_target_property(_link_libs ${_target} INTERFACE_LINK_LIBRARIES)
-                if(_link_libs)
-                    list(FILTER _link_libs EXCLUDE REGEX "^-Wl,-rpath,")
-                    set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
-                endif()
+                get_target_property(_link_str ${_target} INTERFACE_LINK_LIBRARIES)
+                separate_arguments(_link_list UNIX_COMMAND "${_link_str}")
+                list(REMOVE_DUPLICATES _link_list)
+                set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_list}")
             endif()
         endforeach()
+        unset(_link_str)
         unset(_link_libs)
     endif()
     unset(_mfem_targets)

@@ -50,10 +50,6 @@ class NonlinearBlockSolverBase {
   using DualPtr = std::shared_ptr<FieldD>;                  ///< using
   using MatrixPtr = std::unique_ptr<mfem::HypreParMatrix>;  ///< using
 
-  /// @brief Required for certain solvers/preconditions, e.g. when multigrid algorithms want a near null-space
-  /// For these cases, it should be called before solve
-  virtual void completeSetup(const std::vector<FieldT>& us) = 0;
-
   /// @brief Solve a set of equations with a vector of FiniteElementState as unknown
   /// @param u_guesses initial guess for solver
   /// @param residuals std::vector<std::function> for equations to be solved
@@ -103,6 +99,7 @@ class NonlinearBlockSolverBase {
   virtual void setInnerToleranceMultiplier(double multiplier) = 0;
 
  protected:
+  mutable bool is_setup_ = false;  ///< Records if this block solver has its preconditioner initialized.
   mutable NonlinearConvergenceContext convergence_context_ = {};  ///< Solver-owned convergence state for one solve.
 };
 
@@ -120,12 +117,10 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
                        std::optional<LinearSolverOptions> retained_linear_options = std::nullopt);
 
   /// @overload
-  void completeSetup(const std::vector<FieldT>& us) override;
-
-  /// @overload
   ConvergenceStatus convergenceStatus(double tolerance_multiplier, const std::vector<mfem::Vector>& residuals,
                                       NonlinearConvergenceContext& context) const override;
 
+  /// @overload
   void primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
                                NonlinearConvergenceContext& context) const override;
 
@@ -138,6 +133,9 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// @overload
   std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>& u_bars,
                                      std::vector<std::vector<MatrixPtr>>& jacobian_transposed) const override;
+
+  /// @brief Initialize the preconditioner in case of vector problems
+  void completeSetup(const std::vector<FieldPtr>& us) const;
 
   /// @brief Set the inner tolerance multiplier.
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }

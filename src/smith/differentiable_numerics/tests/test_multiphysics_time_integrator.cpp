@@ -29,8 +29,6 @@ namespace {
 
 class NoOpNonlinearBlockSolver : public NonlinearBlockSolverBase {
  public:
-  void completeSetup(const std::vector<FieldT>&) override {}
-
   std::vector<FieldPtr> solve(
       const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
