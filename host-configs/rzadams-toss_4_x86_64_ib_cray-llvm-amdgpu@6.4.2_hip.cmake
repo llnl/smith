@@ -37,6 +37,9 @@ else()
 
 endif()
 
+# Keep amdflang on the same libstdc++ toolchain as amdclang++.
+set(CMAKE_Fortran_FLAGS "--gcc-toolchain=/opt/rh/gcc-toolset-13/root/usr" CACHE STRING "")
+
 #------------------------------------------------------------------------------
 # MPI
 #------------------------------------------------------------------------------
@@ -144,5 +147,4 @@ set(ENABLE_CLANGFORMAT OFF CACHE BOOL "")
 set(ENABLE_CLANGTIDY OFF CACHE BOOL "")
 
 set(ENABLE_DOCS OFF CACHE BOOL "")
-
 

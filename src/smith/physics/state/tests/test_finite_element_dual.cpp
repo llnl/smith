@@ -23,9 +23,9 @@
 
 namespace smith {
 
-TEST(FiniteELementDual, MoveAssignment)
+TEST(FiniteElementDual, MoveConstruction)
 {
-  /* Check that move assignment operator does deep copy of values */
+  /* Check that move construction transfers values */
   int serial_refinement = 0;
   int parallel_refinement = 0;
   constexpr int spatial_dim{3};
@@ -39,7 +39,7 @@ TEST(FiniteELementDual, MoveAssignment)
   FiniteElementDual dual0(*mesh, H1<1>{}, "dual0");
   dual0 = 1.0;
 
-  FiniteElementDual dual1 = std::move(dual0);
+  FiniteElementDual dual1(std::move(dual0));
 
   for (const mfem::real_t* d = dual1.begin(); d != dual1.end(); ++d) {
     EXPECT_EQ(*d, 1.0);
