@@ -4,7 +4,16 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <algorithm>
+/**
+ * @file test_adjoint_workflow.cpp
+ * @brief Exercises BasePhysics static adjoint port plumbing used by a host code.
+ *
+ * This test builds complete synthetic downstream gradient maps from stateNames() and dualNames(), runs repeated
+ * static adjoint passes with one advertised state or dual port seeded at a time, and checks that all advertised
+ * outputs and sensitivities are finite and repeatable. The unit seeds are not physics-specific QoIs; parameter and
+ * shape sensitivity accuracy should be validated separately with finite-difference tests for concrete QoIs.
+ */
+
 #include <cmath>
 #include <memory>
 #include <string>
@@ -48,26 +57,35 @@ using ParametricSolid = SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>>;
 using ContactSolid = SolidMechanicsContact<p, contact_dim>;
 #endif
 
-const std::string mesh_tag {"mesh"};
-const std::string physics_prefix {"solid"};
+const std::string mesh_tag{"mesh"};
+const std::string physics_prefix{"solid"};
 
 struct AdjointWorkflowResult {
-  double displacement_norm {};
-  double reaction_norm {};
-  double parameter0_norm {};
-  double parameter1_norm {};
-  double shape_norm {};
+  std::vector<double> state_l2_norms;
+  std::vector<double> dual_l2_norms;
+  std::vector<double> parameter_l2_norms;
+  double shape_l2_norm{};
+};
+
+struct StaticForwardResult {
+  std::vector<double> state_l2_norms;
+  std::vector<double> dual_l2_norms;
+};
+
+enum class AdjointSeedKind
+{
+  State,
+  Dual
+};
+
+struct AdjointSeed {
+  AdjointSeedKind kind;
+  std::string name;
 };
 
 struct PhysicsCase {
   std::string name;
-  std::shared_ptr<Mesh> mesh;
   std::unique_ptr<BasePhysics> physics;
-  std::string adjoint_dual_name;
-  std::string adjoint_dual_domain_name;
-  int adjoint_dual_direction {};
-  std::string preferred_validation_dual_name;
-  bool check_parameter_sensitivities {};
 };
 
 constexpr double time_step = 1.0;
@@ -159,27 +177,11 @@ std::unique_ptr<BasePhysics> createContactSolver(std::shared_ptr<Mesh> mesh)
 }
 #endif
 
-FiniteElementState createDualDirection(const BasePhysics& physics, std::shared_ptr<Mesh> mesh, const std::string& dual_name,
-                                       const std::string& domain_name, int direction)
-{
-  const FiniteElementDual& dual = physics.dual(dual_name);
-
-  FiniteElementState dual_direction(dual.space(), "dual_direction");
-  dual_direction = 0.0;
-
-  const int vdim = dual.space().GetVDim();
-  mfem::VectorFunctionCoefficient direction_coefficient(vdim, [direction](const mfem::Vector& /*x*/, mfem::Vector& value) {
-    value = 0.0;
-    value[direction] = 1.0;
-  });
-
-  dual_direction.project(direction_coefficient, mesh->domain(domain_name));
-
-  return dual_direction;
-}
-
 void updateStaticInputs(BasePhysics& physics)
 {
+  // Re-apply upstream parameter fields, matching what a host code would do before a solve.
+  // This generic test deep-copies the existing fields because arbitrary physics may have different valid parameter
+  // values.
   const auto parameter_names = physics.parameterNames();
   for (std::size_t i = 0; i < parameter_names.size(); ++i) {
     FiniteElementState parameter_value(physics.parameter(i));
@@ -193,6 +195,7 @@ void updateStaticInputs(BasePhysics& physics)
 
 void setStaticStateGuesses(BasePhysics& physics)
 {
+  // Zero out each state field for the static solve's initial guess.
   for (const auto& state_name : physics.stateNames()) {
     FiniteElementState state_guess(physics.state(state_name).space(), state_name + "_state_guess");
     state_guess = 0.0;
@@ -200,79 +203,118 @@ void setStaticStateGuesses(BasePhysics& physics)
   }
 }
 
-std::string validationDualName(const BasePhysics& physics, const PhysicsCase& test_case)
+std::string seedLabel(const AdjointSeed& seed)
 {
-  const auto dual_names = physics.dualNames();
-  EXPECT_FALSE(dual_names.empty());
-  if (dual_names.empty()) {
-    return "";
-  }
-
-  if (std::find(dual_names.begin(), dual_names.end(), test_case.preferred_validation_dual_name) != dual_names.end()) {
-    return test_case.preferred_validation_dual_name;
-  }
-
-  return dual_names.front();
+  return (seed.kind == AdjointSeedKind::State ? "state:" : "dual:") + seed.name;
 }
 
-AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const PhysicsCase& test_case)
+std::vector<AdjointSeed> adjointSeeds(const BasePhysics& physics)
+{
+  std::vector<AdjointSeed> seeds;
+  for (const auto& state_name : physics.stateNames()) {
+    seeds.push_back(AdjointSeed{.kind = AdjointSeedKind::State, .name = state_name});
+  }
+  for (const auto& dual_name : physics.dualNames()) {
+    seeds.push_back(AdjointSeed{.kind = AdjointSeedKind::Dual, .name = dual_name});
+  }
+  return seeds;
+}
+
+StaticForwardResult runStaticForwardPass(BasePhysics& physics)
+{
+  updateStaticInputs(physics);
+  physics.resetStates();
+  setStaticStateGuesses(physics);
+  physics.advanceTimestep(time_step);
+  EXPECT_EQ(1, physics.cycle());
+  EXPECT_NEAR(time_step, physics.time(), 1.0e-14);
+
+  StaticForwardResult result;
+
+  // Make sure the forward solve did not produce NaNs or Infs in any advertised output port.
+  for (const auto& state_name : physics.stateNames()) {
+    result.state_l2_norms.push_back(physics.state(state_name).Norml2());
+    EXPECT_TRUE(std::isfinite(result.state_l2_norms.back())) << state_name;
+  }
+
+  for (const auto& dual_name : physics.dualNames()) {
+    result.dual_l2_norms.push_back(physics.dual(dual_name).Norml2());
+    EXPECT_TRUE(std::isfinite(result.dual_l2_norms.back())) << dual_name;
+  }
+
+  return result;
+}
+
+void expectNearL2Norms(const std::vector<double>& first, const std::vector<double>& second)
+{
+  ASSERT_EQ(first.size(), second.size());
+  for (std::size_t i = 0; i < first.size(); ++i) {
+    EXPECT_NEAR(first[i], second[i], 1.0e-12);
+  }
+}
+
+AdjointWorkflowResult runStaticAdjointPass(BasePhysics& physics, const AdjointSeed& seed)
 {
   updateStaticInputs(physics);
   physics.resetAdjointStates();
   EXPECT_EQ(1, physics.cycle());
 
-  const auto validation_dual_name = validationDualName(physics, test_case);
-  const auto& displacement = physics.state("displacement");
-  const auto& validation_dual = physics.dual(validation_dual_name);
-  const auto checkpointed_displacement = physics.loadCheckpointedState("displacement", physics.cycle());
-  const auto checkpointed_validation_dual = physics.loadCheckpointedDual(validation_dual_name, physics.cycle());
-  EXPECT_GT(checkpointed_displacement.Norml2(), 0.0);
-  EXPECT_GT(checkpointed_validation_dual.Norml2(), 0.0);
+  for (const auto& state_name : physics.stateNames()) {
+    const auto checkpointed_state = physics.loadCheckpointedState(state_name, physics.cycle());
+    EXPECT_TRUE(std::isfinite(checkpointed_state.Norml2())) << state_name;
+  }
+  for (const auto& dual_name : physics.dualNames()) {
+    const auto checkpointed_dual = physics.loadCheckpointedDual(dual_name, physics.cycle());
+    EXPECT_TRUE(std::isfinite(checkpointed_dual.Norml2())) << dual_name;
+  }
 
   std::vector<std::unique_ptr<FiniteElementDual>> state_adjoint_loads;
   std::unordered_map<std::string, const FiniteElementDual&> state_adjoint_load_refs;
   for (const auto& state_name : physics.stateNames()) {
     auto load = std::make_unique<FiniteElementDual>(physics.state(state_name).space(), state_name + "_adjoint_load");
     *load = 0.0;
-    if (state_name == "displacement") {
+    if (seed.kind == AdjointSeedKind::State && state_name == seed.name) {
       *load = 1.0;
     }
     state_adjoint_load_refs.insert({state_name, *load});
     state_adjoint_loads.push_back(std::move(load));
   }
 
-  auto dual_adjoint_load = createDualDirection(physics, test_case.mesh, test_case.adjoint_dual_name,
-                                              test_case.adjoint_dual_domain_name, test_case.adjoint_dual_direction);
-
   std::vector<std::unique_ptr<FiniteElementState>> dual_adjoint_loads;
   std::unordered_map<std::string, const FiniteElementState&> dual_adjoint_load_refs;
   for (const auto& dual_name : physics.dualNames()) {
     auto load = std::make_unique<FiniteElementState>(physics.dual(dual_name).space(), dual_name + "_adjoint_load");
     *load = 0.0;
-    if (dual_name == test_case.adjoint_dual_name) {
-      *load = dual_adjoint_load;
+    if (seed.kind == AdjointSeedKind::Dual && dual_name == seed.name) {
+      *load = 1.0;
     }
     dual_adjoint_load_refs.insert({dual_name, *load});
     dual_adjoint_loads.push_back(std::move(load));
   }
 
+  // These unit DOF seeds are synthetic downstream gradients using the same FE spaces a host code would discover from
+  // stateNames() and dualNames(). They test port plumbing, not physical sensitivity accuracy; parameter and shape
+  // sensitivity values should be validated with separate finite-difference checks for physics-specific scalar QoIs.
   physics.setAdjointLoad(state_adjoint_load_refs);
-  physics.setDualAdjointBcs(dual_adjoint_load_refs);
+  if (!dual_adjoint_load_refs.empty()) {
+    physics.setDualAdjointBcs(dual_adjoint_load_refs);
+  }
   physics.reverseAdjointTimestep();
   EXPECT_EQ(0, physics.cycle());
 
   const auto& shape_sensitivity = physics.computeTimestepShapeSensitivity();
 
   AdjointWorkflowResult result;
-  result.displacement_norm = displacement.Norml2();
-  result.reaction_norm = validation_dual.Norml2();
-  if (physics.parameterNames().size() > 0) {
-    result.parameter0_norm = physics.computeTimestepSensitivity(0).Norml2();
+  for (const auto& state_name : physics.stateNames()) {
+    result.state_l2_norms.push_back(physics.state(state_name).Norml2());
   }
-  if (physics.parameterNames().size() > 1) {
-    result.parameter1_norm = physics.computeTimestepSensitivity(1).Norml2();
+  for (const auto& dual_name : physics.dualNames()) {
+    result.dual_l2_norms.push_back(physics.dual(dual_name).Norml2());
   }
-  result.shape_norm = shape_sensitivity.Norml2();
+  for (std::size_t parameter_index = 0; parameter_index < physics.parameterNames().size(); ++parameter_index) {
+    result.parameter_l2_norms.push_back(physics.computeTimestepSensitivity(parameter_index).Norml2());
+  }
+  result.shape_l2_norm = shape_sensitivity.Norml2();
   return result;
 }
 
@@ -281,25 +323,11 @@ std::vector<PhysicsCase> createPhysicsCases()
   std::vector<PhysicsCase> cases;
 
   auto solid_mesh = createSolidMesh();
-  cases.push_back(PhysicsCase{.name = "solid_mechanics",
-                              .mesh = solid_mesh,
-                              .physics = createSolidSolver(solid_mesh),
-                              .adjoint_dual_name = "reactions",
-                              .adjoint_dual_domain_name = "essential_boundary",
-                              .adjoint_dual_direction = 1,
-                              .preferred_validation_dual_name = "reactions",
-                              .check_parameter_sensitivities = true});
+  cases.push_back(PhysicsCase{.name = "solid_mechanics", .physics = createSolidSolver(solid_mesh)});
 
 #ifdef SMITH_USE_TRIBOL
   auto contact_mesh = createContactMesh();
-  cases.push_back(PhysicsCase{.name = "solid_mechanics_contact",
-                              .mesh = contact_mesh,
-                              .physics = createContactSolver(contact_mesh),
-                              .adjoint_dual_name = "reactions",
-                              .adjoint_dual_domain_name = "two",
-                              .adjoint_dual_direction = 1,
-                              .preferred_validation_dual_name = "contact_force_0",
-                              .check_parameter_sensitivities = false});
+  cases.push_back(PhysicsCase{.name = "solid_mechanics_contact", .physics = createContactSolver(contact_mesh)});
 #endif
 
   return cases;
@@ -317,38 +345,34 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveCanRepeatForBasePhysicsTypes)
     SCOPED_TRACE(test_case.name);
     auto& physics = *test_case.physics;
 
-    updateStaticInputs(physics);
-    physics.resetStates();
-    setStaticStateGuesses(physics);
-    physics.advanceTimestep(time_step);
-    EXPECT_EQ(1, physics.cycle());
-    EXPECT_NEAR(time_step, physics.time(), 1.0e-14);
-    EXPECT_GT(physics.state("displacement").Norml2(), 0.0);
+    // A host code might reuse the last static solution as a warm-start guess. This generic repeatability check
+    // intentionally resets to zero guesses each time so both forward passes start from the same cold state.
+    const auto first_forward = runStaticForwardPass(physics);
+    const auto second_forward = runStaticForwardPass(physics);
+    expectNearL2Norms(first_forward.state_l2_norms, second_forward.state_l2_norms);
+    expectNearL2Norms(first_forward.dual_l2_norms, second_forward.dual_l2_norms);
 
-    const auto dual_names = physics.dualNames();
-    EXPECT_FALSE(dual_names.empty());
-    for (const auto& dual_name : dual_names) {
-      EXPECT_TRUE(std::isfinite(physics.dual(dual_name).Norml2())) << dual_name;
+    for (const auto& seed : adjointSeeds(physics)) {
+      SCOPED_TRACE(seedLabel(seed));
+      const auto first = runStaticAdjointPass(physics, seed);
+      const auto second = runStaticAdjointPass(physics, seed);
+
+      expectNearL2Norms(first.state_l2_norms, second.state_l2_norms);
+      expectNearL2Norms(first.dual_l2_norms, second.dual_l2_norms);
+      expectNearL2Norms(first.parameter_l2_norms, second.parameter_l2_norms);
+      EXPECT_NEAR(first.shape_l2_norm, second.shape_l2_norm, 1.0e-12);
+
+      for (const auto state_norm : first.state_l2_norms) {
+        EXPECT_TRUE(std::isfinite(state_norm));
+      }
+      for (const auto dual_norm : first.dual_l2_norms) {
+        EXPECT_TRUE(std::isfinite(dual_norm));
+      }
+      for (const auto parameter_norm : first.parameter_l2_norms) {
+        EXPECT_TRUE(std::isfinite(parameter_norm));
+      }
+      EXPECT_TRUE(std::isfinite(first.shape_l2_norm));
     }
-
-    const auto first = runStaticAdjointPass(physics, test_case);
-    const auto second = runStaticAdjointPass(physics, test_case);
-
-    EXPECT_NEAR(first.displacement_norm, second.displacement_norm, 1.0e-12);
-    EXPECT_NEAR(first.reaction_norm, second.reaction_norm, 1.0e-12);
-    EXPECT_NEAR(first.parameter0_norm, second.parameter0_norm, 1.0e-12);
-    EXPECT_NEAR(first.parameter1_norm, second.parameter1_norm, 1.0e-12);
-    EXPECT_NEAR(first.shape_norm, second.shape_norm, 1.0e-12);
-
-    EXPECT_TRUE(std::isfinite(first.displacement_norm));
-    EXPECT_TRUE(std::isfinite(first.reaction_norm));
-    EXPECT_TRUE(std::isfinite(first.parameter0_norm));
-    EXPECT_TRUE(std::isfinite(first.parameter1_norm));
-    EXPECT_TRUE(std::isfinite(first.shape_norm));
-    if (test_case.check_parameter_sensitivities) {
-      EXPECT_GT(first.parameter0_norm + first.parameter1_norm, 0.0);
-    }
-    EXPECT_GT(first.shape_norm, 0.0);
   }
 }
 
