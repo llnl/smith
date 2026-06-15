@@ -45,26 +45,26 @@ LOOSE_REFS = REPO / "scripts" / "hyperelastic_references_loose.json"
 PROBLEMS = ("arch", "block", "contact", "twist", "shell")
 
 # name: (kind, low, high, baseline)   kind: lin | log | int | cat
-# Baselines = the current suite defaults (Track-B winner adopted 858c6dd62), so the
-# seeded member 0 and the confirm-stage "baseline" are today's best known config.
+# Baselines = the current suite defaults (multi-config matrix winner adopted 2026-06-14),
+# so the seeded member 0 and the confirm-stage "baseline" are today's best known config.
 PARAM_SPACE = {
-    "cg_model_energy_stagnation_reltol": ("log", 10**-4.5, 10**-1.5, 7.53e-4),
+    "cg_model_energy_stagnation_reltol": ("log", 10**-4.5, 10**-1.5, 0.0010638500842686796),
     "cg_stagnation_window": ("int", 2, 12, 2),
     "trust_num_leftmost": ("int", 0, 4, 1),
-    "trust_num_previous_steps": ("int", 0, 8, 4),
-    "max_cg_iterations": ("int", 550, 3000, 723),
-    "cg_forcing_rel": ("log", 1e-6, 1e-3, 1.512e-5),
-    "residual_growth_cap": ("lin", 1.2, 10.0, 5.654),
-    "tr_decrease_factor": ("lin", 0.1, 0.5, 0.437),
-    "tr_increase_factor": ("lin", 1.2, 3.5, 1.786),
-    "tr_eta2": ("lin", 0.01, 0.3, 0.1534),
-    "tr_eta3": ("lin", 0.3, 0.95, 0.59996),
-    "tr_eta4": ("lin", 1.5, 10.0, 3.408),
+    "trust_num_previous_steps": ("int", 0, 8, 5),
+    "max_cg_iterations": ("int", 550, 3000, 747),
+    "cg_forcing_rel": ("log", 1e-6, 1e-3, 1.2981521889723316e-05),
+    "residual_growth_cap": ("lin", 1.2, 10.0, 8.195074738257377),
+    "tr_decrease_factor": ("lin", 0.1, 0.5, 0.38624275583816037),
+    "tr_increase_factor": ("lin", 1.2, 3.5, 1.9742659010008659),
+    "tr_eta2": ("lin", 0.01, 0.3, 0.12631113528152121),
+    "tr_eta3": ("lin", 0.3, 0.95, 0.5494445482814023),
+    "tr_eta4": ("lin", 1.5, 10.0, 1.8368324568136323),
     "deflation_smoother": ("cat", ("jacobi", "block"), None, "jacobi"),
     # Adaptive CG cap (commit 11c9625bb): cap_min = 0 disables; gamma = 1 disables the
-    # rejection brake. Hand-validated point: 60 / 0.7 (suite -6.4%), seeded explicitly.
-    "cg_cap_min": ("int", 60, 300, 60),
-    "cg_cap_gamma": ("lin", 0.5, 1.0, 0.7),
+    # rejection brake. Adopted: 103 / 0.764.
+    "cg_cap_min": ("int", 60, 300, 103),
+    "cg_cap_gamma": ("lin", 0.5, 1.0, 0.7638340304667752),
 }
 
 
@@ -165,8 +165,11 @@ class EvalState:
             self.best_score = min(self.best_score, result["score"])
 
     def problem_order(self, problems=PROBLEMS):
-        # cheapest-first so hopeless configs die fast
-        return sorted(problems, key=lambda p: self.best_walls.get(p, 0.0))
+        # cheapest-first so hopeless configs die fast. Cells with no known-good wall yet
+        # (e.g. ones that never completed for ANY candidate) sort LAST: defaulting them to 0.0
+        # would run the most expensive/unrunnable cell first and abort every eval there
+        # (observed with full-size arch under HypreAMG, which never completes in budget).
+        return sorted(problems, key=lambda p: self.best_walls.get(p, float("inf")))
 
     def timeout_for(self, p: str, args) -> int:
         best = self.best_walls.get(p)

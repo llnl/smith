@@ -272,15 +272,12 @@ def problem_mesh_scale(args: argparse.Namespace, problem: Problem) -> float | No
 def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
     common = [
         f"--preconditioner={args.preconditioner}",
-        f"--deflation-order={args.deflation_order}",
         f"--deflation-coarse-mode={args.deflation_coarse_mode}",
         f"--deflation-pieces={args.deflation_pieces if args.deflation_pieces is not None else problem.default_pieces}",
         f"--trust-subspace-option={args.trust_subspace_option}",
         f"--trust-num-leftmost={args.trust_num_leftmost}",
         f"--trust-num-previous-steps={args.trust_num_previous_steps}",
         f"--trust-work-quadrature={args.trust_work_quadrature}",
-        f"--trust-num-lanczos={args.trust_num_lanczos}",
-        f"--trust-num-lanczos-iters={args.trust_num_lanczos_iters}",
         f"--print-level={args.print_level}",
         f"--nonlinear-max-iterations={args.nonlinear_max_iterations}",
     ]
@@ -304,8 +301,6 @@ def solver_args(args: argparse.Namespace, problem: Problem) -> list[str]:
         common.append(f"--cg-model-energy-stagnation-reltol={args.cg_model_energy_stagnation_reltol}")
     if args.cg_stagnation_window is not None:
         common.append(f"--cg-stagnation-window={args.cg_stagnation_window}")
-    if args.cg_eisenstat_walker:
-        common.append("--cg-eisenstat-walker")
     if args.deflation_smoother is not None:
         common.append(f"--deflation-smoother={args.deflation_smoother}")
     if args.assemble_bsr:
@@ -461,7 +456,6 @@ def write_markdown(rows: list[dict], path: Path, args: argparse.Namespace) -> No
         stream.write("# Hyperelastic Performance Suite\n\n")
         stream.write(f"- procs: {args.procs}\n")
         stream.write(f"- preconditioner: `{args.preconditioner}`\n")
-        stream.write(f"- deflation order: `{args.deflation_order}`\n")
         stream.write(f"- deflation coarse mode: `{args.deflation_coarse_mode}`\n")
         stream.write(f"- leftmost / previous steps: {args.trust_num_leftmost} / {args.trust_num_previous_steps}\n\n")
         cols = [
@@ -506,8 +500,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nonlinear-solver", default="TrustRegion")
     parser.add_argument("--linear-solver", default="CG")
     parser.add_argument("--preconditioner", default="Deflation")
-    parser.add_argument("--deflation-order", choices=("affine", "quadratic"), default="affine")
-    parser.add_argument("--deflation-coarse-mode", choices=("global", "local", "schwarz"), default="global")
+    parser.add_argument("--deflation-coarse-mode", choices=("global", "schwarz"), default="global")
     parser.add_argument("--deflation-pieces", type=int, default=None,
                         help="override the per-problem default deflation pieces")
     parser.add_argument("--write-output", action="store_true",
@@ -516,8 +509,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trust-num-leftmost", type=int, default=1)
     parser.add_argument("--trust-num-previous-steps", type=int, default=5)
     parser.add_argument("--trust-work-quadrature", type=int, default=2)
-    parser.add_argument("--trust-num-lanczos", type=int, default=0)
-    parser.add_argument("--trust-num-lanczos-iters", type=int, default=0)
     parser.add_argument("--max-cg-iterations", type=int, default=747)
     parser.add_argument("--cg-forcing-rel", type=float, default=1.2981521889723316e-05)
     parser.add_argument("--cg-cap-min", type=int, default=103, help="adaptive CG cap floor (0 = off)")
@@ -536,7 +527,6 @@ def parse_args() -> argparse.Namespace:
                         help="Alternate references JSON (e.g. screening-scale references)")
     parser.add_argument("--cg-model-energy-stagnation-reltol", type=float, default=0.0010638500842686796)
     parser.add_argument("--cg-stagnation-window", type=int, default=2)
-    parser.add_argument("--cg-eisenstat-walker", action="store_true")
     parser.add_argument("--use-bsr-spmv", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--deflation-smoother", choices=("hypre", "jacobi", "block"), default="jacobi")
     parser.add_argument("--assemble-bsr", action=argparse.BooleanOptionalAction, default=True)
