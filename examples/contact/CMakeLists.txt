@@ -10,10 +10,15 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
         ironing.cpp
         sphere.cpp
         twist.cpp
+    )
+
+    if(ENZYME_FOUND)
+        list(APPEND CONTACT_EXAMPLES_SOURCES
         ironing_2D.cpp
         ironing_2D_circle.cpp
         twisted_ironing_2D.cpp
-    )
+        )
+    endif()
 
     foreach(filename ${CONTACT_EXAMPLES_SOURCES})
         get_filename_component(example_name ${filename} NAME_WE)

@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "smith/smith_config.hpp"
+
 namespace smith {
 
 /**
@@ -20,7 +22,9 @@ namespace smith {
 enum class ContactMethod
 {
   SingleMortar, /**< Puso and Laursen 2004 */
+#ifdef SMITH_USE_ENZYME
   EnergyMortar
+#endif
 };
 
 /**
