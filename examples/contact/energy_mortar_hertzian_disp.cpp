@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
                                                   .absolute_tol = 1.0e-8,
                                                   .max_iterations = 5000,
                                                   .max_line_search_iterations = 10,
-                                                  .print_level = 3};
+                                                  .print_level = 1};
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,

@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
 
   if (!std::filesystem::exists(mesh_file)) {
     SLIC_ERROR_ROOT("Missing mesh file: " << mesh_file << ". Generate it with: cubitx --nogui -batch "
-                                          << SMITH_REPO_DIR "/examples/contact/single_square_hole_frame.jou");
+                                          << SMITH_REPO_DIR "/data/meshes/single_square_hole_frame.jou");
   }
 
   std::filesystem::create_directories(output_dir);
@@ -130,8 +130,7 @@ int main(int argc, char* argv[])
       .absolute_tol = 1.0e-9,
       .max_iterations = 2000,
       .max_line_search_iterations = 10,
-      .print_level = 2,
-      //, smith::SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY
+      .print_level = 1,
   };
 
   smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,

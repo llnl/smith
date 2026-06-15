@@ -11,7 +11,6 @@ if(TRIBOL_FOUND)
         sphere.cpp
         twist.cpp
         ironing_2D.cpp
-        #ironing_2D_circle.cpp
         twisted_ironing_2D.cpp
         energy_mortar_hertzian_disp.cpp
         energy_mortar_hertzian_traction.cpp
