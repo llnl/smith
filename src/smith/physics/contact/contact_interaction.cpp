@@ -72,7 +72,6 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
   if (getContactOptions().method == ContactMethod::EnergyMortar) {
     contact_opts_.enforcement = ContactEnforcement::NotRequired;
     tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
-    // contact_opts_.type = ContactType::TiedNormal;
   }
 
   // set up Tribol to compute exact Jacobian if requested
@@ -135,6 +134,11 @@ std::unique_ptr<mfem::BlockOperator> ContactInteraction::jacobianContribution() 
   auto offsets = mfem::Array<int>({0, disp_size, disp_size + pressure_size});
   auto out = std::make_unique<mfem::BlockOperator>(offsets);
   out->owns_blocks = true;
+
+  if (getContactOptions().enforcement == ContactEnforcement::NotRequired) {
+    out->SetBlock(0, 0, tribol::getMfemJacobian(getInteractionId()).release());
+    return out;
+  }
 
   auto interaction_J = jacobian();
   interaction_J->owns_blocks = false;  // manage block ownership explicitly
