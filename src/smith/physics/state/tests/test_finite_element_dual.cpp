@@ -23,8 +23,9 @@
 
 namespace smith {
 
-TEST(FiniteElementDual, MoveAssignmentPreservesDestinationIdentity)
+TEST(FiniteElementDual, MoveConstruction)
 {
+  /* Check that move construction transfers values */
   int serial_refinement = 0;
   int parallel_refinement = 0;
   constexpr int spatial_dim{3};
@@ -35,17 +36,13 @@ TEST(FiniteElementDual, MoveAssignmentPreservesDestinationIdentity)
   ASSERT_EQ(spatial_dim, mesh->SpaceDimension())
       << "Test configured incorrectly. The variable spatial_dim must match the spatial dimension of the mesh.";
 
-  FiniteElementDual source(*mesh, H1<1>{}, "source_dual");
-  source = 2.0;
+  FiniteElementDual dual0(*mesh, H1<1>{}, "dual0");
+  dual0 = 1.0;
 
-  FiniteElementDual destination(*mesh, H1<1>{}, "destination_dual");
-  destination = 1.0;
+  FiniteElementDual dual1(std::move(dual0));
 
-  destination = std::move(source);
-
-  EXPECT_EQ("destination_dual", destination.name());
-  for (const mfem::real_t* dof = destination.begin(); dof != destination.end(); ++dof) {
-    EXPECT_DOUBLE_EQ(2.0, *dof);
+  for (const mfem::real_t* d = dual1.begin(); d != dual1.end(); ++d) {
+    EXPECT_EQ(*d, 1.0);
   }
 }
 

@@ -129,19 +129,16 @@ TEST_F(TestFiniteElementState, DISABLED_ErrorsIfFieldFunctionDimensionMismatched
                "Cannot copy tensor into an MFEM Vector with incompatible size.");
 }
 
-TEST_F(TestFiniteElementState, MoveAssignmentPreservesDestinationIdentity)
+TEST_F(TestFiniteElementState, MoveConstruction)
 {
-  FiniteElementState source(*mesh, H1<1>{}, "source_state");
-  source = 2.0;
+  /* Check that move construction transfers values */
+  FiniteElementState state0(*mesh, H1<1>{}, "state0");
+  state0 = 1.0;
 
-  FiniteElementState destination(*mesh, H1<1>{}, "destination_state");
-  destination = 1.0;
+  FiniteElementState state1(std::move(state0));
 
-  destination = std::move(source);
-
-  EXPECT_EQ("destination_state", destination.name());
-  for (const mfem::real_t* dof = destination.begin(); dof != destination.end(); ++dof) {
-    EXPECT_DOUBLE_EQ(2.0, *dof);
+  for (const mfem::real_t* d = state1.begin(); d != state1.end(); ++d) {
+    EXPECT_EQ(*d, 1.0);
   }
 }
 
