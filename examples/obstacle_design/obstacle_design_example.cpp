@@ -94,7 +94,7 @@ class SmithObstacleDesignProblem : public ObstacleDesignProblem {
   std::shared_ptr<mfem::HypreParMatrix> HththE_;  // Hessian (th, th) of obstacle design objective
 
  public:
-  SmithObstacleDesignProblem(ParamOptProblem* paramopt, std::vector<smith::FiniteElementState*> states,
+  SmithObstacleDesignProblem(ParamOptProblem* parametrized_opt_problem, std::vector<smith::FiniteElementState*> states,
                              std::shared_ptr<smith::Mesh> mesh, std::shared_ptr<ObjectiveT> design_objective,
                              std::shared_ptr<WeakFormT> objective_grad_displacement,
                              std::shared_ptr<WeakFormT> objective_grad_obstacle);
@@ -170,21 +170,21 @@ int main(int argc, char* argv[])
    * 1) utilize a weak form to define the objective of the "lower level" obstacle problem
    *    1/2 u^T K u - f^T u
    * */
-  smith::FiniteElementState disp = smith::StateManager::newState(StateSpace{}, "displacement", mesh->tag());
+  smith::FiniteElementState displacement = smith::StateManager::newState(StateSpace{}, "displacement", mesh->tag());
   smith::FiniteElementState obstacle = smith::StateManager::newState(ObstacleSpace{}, "obstacle", mesh->tag());
   smith::FiniteElementState grad = smith::StateManager::newState(VectorSpace{}, "gradient", mesh->tag());
   std::unique_ptr<smith::FiniteElementState> shape_disp =
       std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 
   std::vector<smith::FiniteElementState> states;
-  states = {disp, obstacle};
-  std::vector<smith::FiniteElementState*> state_ptrs = {&disp, &obstacle};
+  states = {displacement, obstacle};
+  std::vector<smith::FiniteElementState*> state_ptrs = {&displacement, &obstacle};
 
   double time = 0.0;
   double dt = 1.0;
   smith::TimeInfo time_info(time, dt, 0);
   auto const_state_ptrs = getConstFieldPointers(states);
-  ObjectiveT::SpacesT space_ptrs{&disp.space(), &obstacle.space()};
+  ObjectiveT::SpacesT space_ptrs{&displacement.space(), &obstacle.space()};
 
   // weak_form to define the "lower level" obstacle problem
   // std::string physics_name = "elasticity";
@@ -220,11 +220,11 @@ int main(int argc, char* argv[])
   auto weak_form_objective_grad_design =
       std::make_shared<WeakFormT>("design_obj_design_residual", mesh, obstacle.space(), space_ptrs);
   auto weak_form_objective_grad_displacement =
-      std::make_shared<WeakFormT>("design_obj_disp_residual", mesh, disp.space(), space_ptrs);
+      std::make_shared<WeakFormT>("design_obj_disp_residual", mesh, displacement.space(), space_ptrs);
   weak_form_objective_grad_design->addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
                                                    [](double /*t*/, auto /*X*/, auto OBSTACLE) {
-                                                     auto obstacle = smith::get<smith::VALUE>(OBSTACLE);
-                                                     return smith::tuple{obstacle, smith::zero{}};
+                                                     auto obst = smith::get<smith::VALUE>(OBSTACLE);
+                                                     return smith::tuple{obst, smith::zero{}};
                                                    });
 
   weak_form_objective_grad_displacement->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(),
@@ -278,13 +278,13 @@ double fRhs(const mfem::Vector& x)
 
 double flat_obstacle(const mfem::Vector& /*x*/) { return 0.0; }
 
-SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamOptProblem* paramopt,
+SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamOptProblem* parametrized_opt_problem,
                                                        std::vector<smith::FiniteElementState*> states,
                                                        std::shared_ptr<smith::Mesh> mesh,
                                                        std::shared_ptr<ObjectiveT> design_objective,
                                                        std::shared_ptr<WeakFormT> objective_grad_displacement,
                                                        std::shared_ptr<WeakFormT> objective_grad_obstacle)
-    : ObstacleDesignProblem(paramopt), time_info_(0.0, 0.0, 0)
+    : ObstacleDesignProblem(parametrized_opt_problem), time_info_(0.0, 0.0, 0)
 {
   states_.resize(states.size());
   std::copy(states.begin(), states.end(), states_.begin());
