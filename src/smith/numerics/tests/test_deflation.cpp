@@ -634,15 +634,13 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
   int iters_def_add = runCG(smith::Preconditioner::Deflation, "Deflation_Add", smith::CoarseMode::Additive);
   int iters_def_add_bsr =
       runCG(smith::Preconditioner::Deflation, "Deflation_Add_BSR", smith::CoarseMode::Additive, true);
-  int iters_def_loc = runCG(smith::Preconditioner::Deflation, "Deflation_AddLocal", smith::CoarseMode::AdditiveLocal);
   int iters_def_sch = runCG(smith::Preconditioner::Deflation, "Deflation_Schwarz", smith::CoarseMode::AdditiveSchwarz);
   int iters_def_mul = runCG(smith::Preconditioner::Deflation, "Deflation_Mult", smith::CoarseMode::Multiplicative);
 
   if (my_rank == 0) {
     std::cout << "[Beam summary] ranks=" << n_ranks << " Jacobi=" << iters_jac << " AMG=" << iters_amg
               << " Def_Add=" << iters_def_add << " Def_Add_BSR=" << iters_def_add_bsr
-              << " Def_AddLocal=" << iters_def_loc << " Def_Schwarz=" << iters_def_sch << " Def_Mult=" << iters_def_mul
-              << "\n";
+              << " Def_Schwarz=" << iters_def_sch << " Def_Mult=" << iters_def_mul << "\n";
   }
   EXPECT_LT(iters_def_add, iters_jac) << "deflation should beat plain Jacobi";
   EXPECT_LE(std::abs(iters_def_add_bsr - iters_def_add), 2)

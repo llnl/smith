@@ -329,8 +329,8 @@ void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_loca
   }
 }
 
-void assembleWtAW(const BSROperator& bsr, const mfem::DenseMatrix& W_local, int modes_per_rank,
-                  mfem::DenseMatrix& WtAW, AssembleWtAWTimings* timings)
+void assembleWtAW(const BSROperator& bsr, const mfem::DenseMatrix& W_local, int modes_per_rank, mfem::DenseMatrix& WtAW,
+                  AssembleWtAWTimings* timings)
 {
   if (!bsr.Enabled()) {
     assembleWtAW(*bsr.GetHypreMatrix(), W_local, modes_per_rank, WtAW, timings);

@@ -39,7 +39,6 @@ constexpr int max_benchmark_elements = 200000;
 std::string nonlinear_solver_name = "NewtonLineSearch";
 std::string linear_solver_name = "GMRES";
 std::string preconditioner_name = "HypreAMG";
-std::string deflation_order_name = "affine";
 std::string deflation_coarse_mode_name = "global";
 int deflation_pieces = 1;
 int nonlinear_max_iterations = 30;
@@ -52,11 +51,8 @@ int trust_subspace_option = static_cast<int>(SubSpaceOptions::WHEN_INDEFINITE_OR
 int trust_num_leftmost = 2;
 int trust_num_previous_steps = 4;
 int trust_work_quadrature_points = 2;
-int trust_num_lanczos = 0;
-int trust_num_lanczos_iters = 0;
 double cg_model_energy_stagnation_reltol = 0.0;
 int cg_model_stagnation_window = 0;
-bool cg_eisenstat_walker = false;
 bool use_bsr_spmv = false;
 std::string deflation_smoother = "hypre";
 bool assemble_bsr = false;
@@ -86,24 +82,10 @@ T parseEnum(const std::map<std::string, T>& values, const std::string& value, co
   return found->second;
 }
 
-DeflationOrder selectedDeflationOrder()
-{
-  if (deflation_order_name == "affine") {
-    return DeflationOrder::Affine;
-  }
-  if (deflation_order_name == "quadratic") {
-    return DeflationOrder::Quadratic;
-  }
-  throw std::runtime_error("Unknown --deflation-order value '" + deflation_order_name + "'");
-}
-
 CoarseMode selectedCoarseMode()
 {
   if (deflation_coarse_mode_name == "global") {
     return CoarseMode::Additive;
-  }
-  if (deflation_coarse_mode_name == "local") {
-    return CoarseMode::AdditiveLocal;
   }
   if (deflation_coarse_mode_name == "schwarz") {
     return CoarseMode::AdditiveSchwarz;
@@ -115,7 +97,7 @@ LinearSolverOptions linearOptions()
 {
   return {.linear_solver = parseEnum(linearSolverMap, linear_solver_name, "--linear-solver"),
           .preconditioner = parseEnum(preconditionerMap, preconditioner_name, "--preconditioner"),
-          .deflation_order = selectedDeflationOrder(),
+          .deflation_order = DeflationOrder::Affine,
           .deflation_coarse_mode = selectedCoarseMode(),
           .deflation_pieces = deflation_pieces,
           .relative_tol = 1.0e-7,
@@ -123,7 +105,6 @@ LinearSolverOptions linearOptions()
           .max_iterations = linear_max_iterations,
           .cg_model_energy_stagnation_reltol = cg_model_energy_stagnation_reltol,
           .cg_model_stagnation_window = cg_model_stagnation_window,
-          .cg_eisenstat_walker = cg_eisenstat_walker,
           .print_level = 0,
           .use_bsr_spmv = use_bsr_spmv,
           .deflation_smoother = deflation_smoother};
@@ -140,8 +121,6 @@ NonlinearSolverOptions nonlinearOptions()
           .num_leftmost = trust_num_leftmost,
           .num_previous_steps = trust_num_previous_steps,
           .trust_work_quadrature_points = trust_work_quadrature_points,
-          .trust_num_lanczos = trust_num_lanczos,
-          .trust_num_lanczos_iters = trust_num_lanczos_iters,
           .cg_forcing_rel = cg_forcing_rel,
           .cg_cap_min = cg_cap_min,
           .cg_cap_gamma = cg_cap_gamma,
@@ -211,8 +190,6 @@ void parseCommandLine(int& argc, char** argv)
       linear_solver_name = arg.substr(std::string("--linear-solver=").size());
     } else if (arg.rfind("--preconditioner=", 0) == 0) {
       preconditioner_name = arg.substr(std::string("--preconditioner=").size());
-    } else if (arg.rfind("--deflation-order=", 0) == 0) {
-      deflation_order_name = arg.substr(std::string("--deflation-order=").size());
     } else if (arg.rfind("--deflation-coarse-mode=", 0) == 0) {
       deflation_coarse_mode_name = arg.substr(std::string("--deflation-coarse-mode=").size());
     } else if (arg.rfind("--deflation-pieces=", 0) == 0) {
@@ -233,16 +210,11 @@ void parseCommandLine(int& argc, char** argv)
       trust_num_previous_steps = std::stoi(arg.substr(std::string("--trust-num-previous-steps=").size()));
     } else if (arg.rfind("--trust-work-quadrature=", 0) == 0) {
       trust_work_quadrature_points = std::stoi(arg.substr(std::string("--trust-work-quadrature=").size()));
-    } else if (arg.rfind("--trust-num-lanczos=", 0) == 0) {
-      trust_num_lanczos = std::stoi(arg.substr(std::string("--trust-num-lanczos=").size()));
-    } else if (arg.rfind("--trust-num-lanczos-iters=", 0) == 0) {
-      trust_num_lanczos_iters = std::stoi(arg.substr(std::string("--trust-num-lanczos-iters=").size()));
     } else if (arg.rfind("--cg-model-energy-stagnation-reltol=", 0) == 0) {
-      cg_model_energy_stagnation_reltol = std::stod(arg.substr(std::string("--cg-model-energy-stagnation-reltol=").size()));
+      cg_model_energy_stagnation_reltol =
+          std::stod(arg.substr(std::string("--cg-model-energy-stagnation-reltol=").size()));
     } else if (arg.rfind("--cg-stagnation-window=", 0) == 0) {
       cg_model_stagnation_window = std::stoi(arg.substr(std::string("--cg-stagnation-window=").size()));
-    } else if (arg == "--cg-eisenstat-walker") {
-      cg_eisenstat_walker = true;
     } else if (arg == "--use-bsr-spmv") {
       use_bsr_spmv = true;
     } else if (arg.rfind("--deflation-smoother=", 0) == 0) {
@@ -285,6 +257,12 @@ void parseCommandLine(int& argc, char** argv)
     }
   }
   argc = write_arg;
+  // HypreBoomerAMG::SetOperator requires a HypreParMatrix, which direct-BSR assembly / BSR
+  // SpMV do not produce. AMG therefore runs on the legacy hypre-assembled operator.
+  if (preconditioner_name == "HypreAMG") {
+    assemble_bsr = false;
+    use_bsr_spmv = false;
+  }
   // the hypre smoother would read stale matrix values under direct-BSR assembly
   if (assemble_bsr && deflation_smoother == "hypre") {
     deflation_smoother = "jacobi";
@@ -306,11 +284,10 @@ void runNearIncompressibleBlockCompressionT()
   constexpr double width = 0.8;
   constexpr double height = 0.8;
 
-  auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh(
-          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
-                                      height)),
-      "hyperelastic_block_mesh", 0, 0);
+  auto mesh =
+      std::make_shared<Mesh>(mfem::Mesh(mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz),
+                                                                    mfem::Element::HEXAHEDRON, length, width, height)),
+                             "hyperelastic_block_mesh", 0, 0);
   checkElementCount("near-incompressible block", *mesh);
 
   mesh->addDomainOfBoundaryElements("fixed_face", by_attr<dim>(5));
@@ -359,11 +336,10 @@ void runSpherePenaltyContact()
   constexpr double contact_penalty = 1.0e5;
   const vec3 sphere_center{{0.5 * length, 0.5 * width, -0.26}};
 
-  auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh(
-          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
-                                      height)),
-      "hyperelastic_contact_mesh", 0, 0);
+  auto mesh =
+      std::make_shared<Mesh>(mfem::Mesh(mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz),
+                                                                    mfem::Element::HEXAHEDRON, length, width, height)),
+                             "hyperelastic_contact_mesh", 0, 0);
   checkElementCount("sphere penalty contact", *mesh);
 
   mesh->addDomainOfBoundaryElements("driven_face", by_attr<dim>(6));
@@ -454,11 +430,10 @@ void runTwistedBeam()
   // which made the final answer scatter 8-13% across reduction-order changes.
   constexpr double transverse_imperfection = 1.0e-2;
 
-  auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh(
-          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
-                                      height)),
-      "hyperelastic_twisted_beam_mesh", 0, 0);
+  auto mesh =
+      std::make_shared<Mesh>(mfem::Mesh(mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz),
+                                                                    mfem::Element::HEXAHEDRON, length, width, height)),
+                             "hyperelastic_twisted_beam_mesh", 0, 0);
   checkElementCount("twisted beam", *mesh);
 
   mesh->addDomainOfBoundaryElements("fixed_face", by_attr<dim>(5));
@@ -507,9 +482,8 @@ void runThinShellBending()
   constexpr double tip_deflection = 2.0;
 
   auto mesh = std::make_shared<Mesh>(
-      mfem::Mesh(
-          mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length, width,
-                                      thickness)),
+      mfem::Mesh(mfem::Mesh::MakeCartesian3D(scaled(nx), scaled(ny), scaled(nz), mfem::Element::HEXAHEDRON, length,
+                                             width, thickness)),
       "hyperelastic_thin_shell_mesh", 0, 0);
   checkElementCount("thin shell bending", *mesh);
 

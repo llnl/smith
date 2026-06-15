@@ -34,38 +34,34 @@ constexpr double thickness = 0.025;
 constexpr double end_tol = 1.0e-8;
 constexpr double top_tol = 1.0e-8;
 std::string solver_name = "TrustRegion";
-int print_level = 2;
+int print_level = 1;
 int nonlinear_max_iterations = 300000;
-int trust_subspace_option = static_cast<int>(SubSpaceOptions::NEVER);
+int trust_subspace_option = static_cast<int>(SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY);
 int trust_num_leftmost = 1;
-int trust_num_previous_steps = 1;
+int trust_num_previous_steps = 5;
 int trust_work_quadrature_points = 2;
 bool use_exact_energy = false;
 bool write_output = false;  // gate ParaView/restart output (off by default; --write-output enables)
-int trust_num_lanczos = 0;
-int trust_num_lanczos_iters = 0;
-int max_cg_iterations = 100000;
-double cg_model_energy_stagnation_reltol = 0.0;
-int cg_model_stagnation_window = 0;
-bool cg_eisenstat_walker = false;
-bool use_bsr_spmv = false;
-std::string deflation_smoother = "hypre";
-bool assemble_bsr = false;
-double cg_forcing_rel = 5.0e-5;
-int cg_cap_min = 0;
-double cg_cap_gamma = 0.7;
-double residual_growth_cap = 3.0;
-double tr_decrease_factor = 0.25;
-double tr_increase_factor = 1.75;
+int max_cg_iterations = 747;
+double cg_model_energy_stagnation_reltol = 0.0010638500842686796;
+int cg_model_stagnation_window = 2;
+bool use_bsr_spmv = true;
+std::string deflation_smoother = "jacobi";
+bool assemble_bsr = true;
+double cg_forcing_rel = 1.2981521889723316e-05;
+int cg_cap_min = 103;
+double cg_cap_gamma = 0.7638340304667752;
+double residual_growth_cap = 8.195074738257377;
+double tr_decrease_factor = 0.38624275583816037;
+double tr_increase_factor = 1.9742659010008659;
 double tr_eta1 = 1.0e-9;
-double tr_eta2 = 0.1;
-double tr_eta3 = 0.6;
-double tr_eta4 = 4.2;
-double mesh_scale = 1.0;
-std::string preconditioner_name = "HypreJacobi";
-std::string deflation_order_name = "affine";
+double tr_eta2 = 0.12631113528152121;
+double tr_eta3 = 0.5494445482814023;
+double tr_eta4 = 1.8368324568136323;
+double mesh_scale = 0.3;
+std::string preconditioner_name = "Deflation";
 std::string deflation_coarse_mode_name = "global";
-int deflation_pieces = 1;
+int deflation_pieces = 0;
 
 NonlinearSolver selectedNonlinearSolver()
 {
@@ -102,18 +98,13 @@ void parseCommandLine(int& argc, char** argv)
       use_exact_energy = true;
     } else if (arg == "--write-output") {
       write_output = true;
-    } else if (arg.rfind("--trust-num-lanczos=", 0) == 0) {
-      trust_num_lanczos = std::stoi(arg.substr(std::string("--trust-num-lanczos=").size()));
-    } else if (arg.rfind("--trust-num-lanczos-iters=", 0) == 0) {
-      trust_num_lanczos_iters = std::stoi(arg.substr(std::string("--trust-num-lanczos-iters=").size()));
     } else if (arg.rfind("--max-cg-iterations=", 0) == 0) {
       max_cg_iterations = std::stoi(arg.substr(std::string("--max-cg-iterations=").size()));
     } else if (arg.rfind("--cg-model-energy-stagnation-reltol=", 0) == 0) {
-      cg_model_energy_stagnation_reltol = std::stod(arg.substr(std::string("--cg-model-energy-stagnation-reltol=").size()));
+      cg_model_energy_stagnation_reltol =
+          std::stod(arg.substr(std::string("--cg-model-energy-stagnation-reltol=").size()));
     } else if (arg.rfind("--cg-stagnation-window=", 0) == 0) {
       cg_model_stagnation_window = std::stoi(arg.substr(std::string("--cg-stagnation-window=").size()));
-    } else if (arg == "--cg-eisenstat-walker") {
-      cg_eisenstat_walker = true;
     } else if (arg == "--use-bsr-spmv") {
       use_bsr_spmv = true;
     } else if (arg.rfind("--deflation-smoother=", 0) == 0) {
@@ -144,8 +135,6 @@ void parseCommandLine(int& argc, char** argv)
       mesh_scale = std::stod(arg.substr(std::string("--mesh-scale=").size()));
     } else if (arg.rfind("--preconditioner=", 0) == 0) {
       preconditioner_name = arg.substr(std::string("--preconditioner=").size());
-    } else if (arg.rfind("--deflation-order=", 0) == 0) {
-      deflation_order_name = arg.substr(std::string("--deflation-order=").size());
     } else if (arg.rfind("--deflation-coarse-mode=", 0) == 0) {
       deflation_coarse_mode_name = arg.substr(std::string("--deflation-coarse-mode=").size());
     } else if (arg.rfind("--deflation-pieces=", 0) == 0) {
@@ -156,6 +145,12 @@ void parseCommandLine(int& argc, char** argv)
     }
   }
   argc = write_arg;
+  // HypreBoomerAMG::SetOperator requires a HypreParMatrix, which direct-BSR assembly / BSR
+  // SpMV do not produce. AMG therefore runs on the legacy hypre-assembled operator.
+  if (preconditioner_name == "HypreAMG") {
+    assemble_bsr = false;
+    use_bsr_spmv = false;
+  }
   // the hypre smoother would read stale matrix values under direct-BSR assembly
   if (assemble_bsr && deflation_smoother == "hypre") {
     deflation_smoother = "jacobi";
@@ -199,22 +194,15 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
     selected_pc = Preconditioner::HypreAMG;
   else if (preconditioner_name != "HypreJacobi")
     throw std::runtime_error("Unknown --preconditioner '" + preconditioner_name + "'");
-  DeflationOrder selected_order = DeflationOrder::Affine;
-  if (deflation_order_name == "quadratic")
-    selected_order = DeflationOrder::Quadratic;
-  else if (deflation_order_name != "affine")
-    throw std::runtime_error("Unknown --deflation-order '" + deflation_order_name + "' (affine|quadratic)");
   CoarseMode selected_coarse_mode = CoarseMode::Additive;
-  if (deflation_coarse_mode_name == "local")
-    selected_coarse_mode = CoarseMode::AdditiveLocal;
-  else if (deflation_coarse_mode_name == "schwarz")
+  if (deflation_coarse_mode_name == "schwarz")
     selected_coarse_mode = CoarseMode::AdditiveSchwarz;
   else if (deflation_coarse_mode_name != "global")
     throw std::runtime_error("Unknown --deflation-coarse-mode '" + deflation_coarse_mode_name +
-                             "' (global|local|schwarz)");
+                             "' (global|schwarz)");
   smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
                                             .preconditioner = selected_pc,
-                                            .deflation_order = selected_order,
+                                            .deflation_order = DeflationOrder::Affine,
                                             .deflation_coarse_mode = selected_coarse_mode,
                                             .deflation_pieces = deflation_pieces,
                                             .relative_tol = 1.0e-8,
@@ -222,10 +210,9 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
                                             .max_iterations = max_cg_iterations,
                                             .cg_model_energy_stagnation_reltol = cg_model_energy_stagnation_reltol,
                                             .cg_model_stagnation_window = cg_model_stagnation_window,
-                                            .cg_eisenstat_walker = cg_eisenstat_walker,
                                             .print_level = 0,
                                             .use_bsr_spmv = use_bsr_spmv,
-          .deflation_smoother = deflation_smoother};
+                                            .deflation_smoother = deflation_smoother};
 
   smith::NonlinearSolverOptions nonlinear_options{
       .nonlin_solver = selectedNonlinearSolver(),
@@ -237,8 +224,6 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
       .num_leftmost = trust_num_leftmost,
       .num_previous_steps = trust_num_previous_steps,
       .trust_work_quadrature_points = trust_work_quadrature_points,
-      .trust_num_lanczos = trust_num_lanczos,
-      .trust_num_lanczos_iters = trust_num_lanczos_iters,
       .cg_forcing_rel = cg_forcing_rel,
       .cg_cap_min = cg_cap_min,
       .cg_cap_gamma = cg_cap_gamma,
@@ -338,9 +323,9 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 
   SLIC_INFO_ROOT(std::format(
       "Compressed thin beam snap-through run: solver = {}, trust_subspace_option = {}, trust_num_leftmost = {}, "
-      "trust_num_previous_steps = {}, max_cg_iterations = {}, preconditioner = {}, deflation_order = {}",
+      "trust_num_previous_steps = {}, max_cg_iterations = {}, preconditioner = {}",
       solver_name, trust_subspace_option, trust_num_leftmost, trust_num_previous_steps, max_cg_iterations,
-      preconditioner_name, deflation_order_name));
+      preconditioner_name));
 
   constexpr int num_steps = 1;
   double cumulative_step_time = 0.0;

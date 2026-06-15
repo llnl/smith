@@ -661,8 +661,8 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
     coarse_evecs_kept_.SetSize(m_, 0);
   }
 
-  // Diagonal block (my_offset, my_offset) used by the AdditiveLocal mode. Only the owner
-  // contributes to its own (p,p) block during assembleWtAW, so post-Allreduce this is
+  // Diagonal block (my_offset, my_offset) used by AdditiveSchwarz local solves. Only the
+  // owner contributes to its own (p,p) block during assembleWtAW, so post-Allreduce this is
   // already exactly W_p^T A_diag|_p W_p.
   WtAW_pp_.SetSize(modes_per_rank_, modes_per_rank_);
   for (int j = 0; j < modes_per_rank_; ++j) {
@@ -864,17 +864,6 @@ void DeflationPreconditioner::addScaledCoarseCorrection(const mfem::Vector& r, m
   double tcc1 = MPI_Wtime();
   cc_wt_time_ += tcc1 - tcc0;
 
-  if (coarse_mode_ == CoarseMode::AdditiveLocal) {
-    mfem::Vector alpha_local(modes_per_rank_);
-    choleskySolve(WtAW_pp_cholesky_factors_, WtAW_pp_lu_inv_, WtAW_pp_uses_cholesky_, modes_per_rank_, rhs_local,
-                  alpha_local);
-    double tcc2 = MPI_Wtime();
-    cc_solve_time_ += tcc2 - tcc1;
-    W_mat_->AddMult(alpha_local, y, scale);
-    cc_w_time_ += MPI_Wtime() - tcc2;
-    return;
-  }
-
   if (coarse_mode_ == CoarseMode::AdditiveSchwarz) {
     // K=1 multi-step block-Jacobi-Schwarz. Replaces Allgather with one neighbor-only round.
     //   u = WtAW_pp^{-1} c
@@ -1037,8 +1026,7 @@ void DeflationPreconditioner::computeCoarseSpectralData()
   }
 }
 
-void DeflationPreconditioner::lanczosLeftmost(int k, std::vector<double>& evals,
-                                              std::vector<mfem::Vector>& evecs) const
+void DeflationPreconditioner::lanczosLeftmost(int k, std::vector<double>& evals, std::vector<mfem::Vector>& evecs) const
 {
   if (WtAW_uses_cholesky_) {
     // SPD: shift-invert about 0 — the largest eigenvalues of A^{-1} (applied via the skyline
@@ -1325,7 +1313,8 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
   // === TIMING END ===
   const int n = fes_->GetTrueVSize();
   z.SetSize(n);
-  const bool have_smoother = smoother_ || (smoother_variant_ == DeflationSmoother::BlockJacobi && !block_jacobi_inv_.empty()) ||
+  const bool have_smoother = smoother_ ||
+                             (smoother_variant_ == DeflationSmoother::BlockJacobi && !block_jacobi_inv_.empty()) ||
                              (smoother_variant_ == DeflationSmoother::PointJacobi && !point_diag_.empty());
   const bool do_smoother = use_smoother_ && have_smoother;
 

@@ -133,8 +133,7 @@ void BSRDirectAssembler::buildRouting(mfem::ParFiniteElementSpace& fes, const mf
       send_flags[static_cast<size_t>(t)] =
           static_cast<double>(ess_owned_[static_cast<size_t>(hypre_ParCSRCommPkgSendMapElmt(comm_pkg, t))]);
     }
-    hypre_ParCSRCommHandle* handle =
-        hypre_ParCSRCommHandleCreate(1, comm_pkg, send_flags.data(), recv_flags.data());
+    hypre_ParCSRCommHandle* handle = hypre_ParCSRCommHandleCreate(1, comm_pkg, send_flags.data(), recv_flags.data());
     if (handle) hypre_ParCSRCommHandleDestroy(handle);
     for (int c = 0; c < n_offd; ++c) {
       ess_offd_[static_cast<size_t>(c)] = recv_flags[static_cast<size_t>(c)] != 0.0 ? 1 : 0;
@@ -432,7 +431,8 @@ void BSRDirectAssembler::verify(const std::vector<double>& values)
     if (max_in_diag) {
       const BSRMatrix& D = bsr_->DiagBSR();
       for (int R = 0; R < D.nb_rows; ++R) {
-        if (D.I[static_cast<size_t>(R)] <= static_cast<int>(block) && static_cast<int>(block) < D.I[static_cast<size_t>(R) + 1]) {
+        if (D.I[static_cast<size_t>(R)] <= static_cast<int>(block) &&
+            static_cast<int>(block) < D.I[static_cast<size_t>(R) + 1]) {
           dbg_row = R * b_ + static_cast<int>((max_k % static_cast<size_t>(bb)) / static_cast<size_t>(b_));
           dbg_col = D.J[block] * b_ + static_cast<int>(max_k % static_cast<size_t>(b_));
           dbg_ess_row = ess_owned_[static_cast<size_t>(dbg_row)];
@@ -446,9 +446,8 @@ void BSRDirectAssembler::verify(const std::vector<double>& values)
     os << "BSRDirectAssembler: routed values disagree with the legacy assembly (max diff " << global[0]
        << ", matrix scale " << global[1] << "); local worst: " << (max_in_diag ? "diag" : "offd") << " data[" << max_k
        << "] block " << block << " sub(" << (max_k % static_cast<size_t>(bb)) / static_cast<size_t>(b_) << ","
-       << max_k % static_cast<size_t>(b_) << ") routed "
-       << (max_in_diag ? diag_data[max_k] : offd_data[max_k]) << " ref "
-       << (max_in_diag ? ref_diag[max_k] : ref_offd[max_k]) << "; " << n_bad << " bad entries of "
+       << max_k % static_cast<size_t>(b_) << ") routed " << (max_in_diag ? diag_data[max_k] : offd_data[max_k])
+       << " ref " << (max_in_diag ? ref_diag[max_k] : ref_offd[max_k]) << "; " << n_bad << " bad entries of "
        << ref_diag.size() + ref_offd.size();
     throw std::runtime_error(os.str());
   }

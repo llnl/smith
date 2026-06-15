@@ -69,9 +69,6 @@ enum class CoarseMode
 {
   /// z = M_J^{-1} r + W (WtAW)^{-1} W^T r   (default — global Galerkin coarse solve via Allgather)
   Additive,
-  /// z = M_J^{-1} r + W (WtAW_pp)^{-1} W^T r
-  /// Uses only the diagonal block of WtAW (= W_p^T A_diag|_p W_p). No MPI comm in the coarse step.
-  AdditiveLocal,
   /// K=1 multi-step block-Jacobi-Schwarz approximation of (WtAW)^{-1}. One neighbor-only
   /// exchange of mpr doubles per neighbor (replaces the Allgather). Symmetric by construction.
   ///   u = WtAW_pp^{-1} c_local
@@ -297,7 +294,7 @@ class DeflationPreconditioner : public mfem::Solver {
   /// Lanczos on demand, and the rank-revealing pseudo-inverse fallback degrades to
   /// smoother-only Mult on an indefinite coarse matrix.
   mutable bool coarse_sparse_eig_mode_ = false;
-  mutable mfem::DenseMatrix WtAW_pp_;  // diagonal block (p, p) — for AdditiveLocal mode.
+  mutable mfem::DenseMatrix WtAW_pp_;  // diagonal block (p, p) for AdditiveSchwarz local solves.
   mutable mfem::DenseMatrix WtAW_pp_cholesky_;
   mutable mfem::CholeskyFactors WtAW_pp_cholesky_factors_;
   mutable mfem::DenseMatrixInverse WtAW_pp_lu_inv_;

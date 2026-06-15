@@ -104,9 +104,9 @@ class BSRDirectAssembler {
 
   struct Peer {
     int rank = 0;
-    std::vector<int> entries;            ///< sender: L-CSR entry indices, in send order
-    std::vector<long long> recv_slots;   ///< receiver: unified data index per incoming value (-1 drop)
-    std::vector<double> buf;             ///< send or recv value buffer
+    std::vector<int> entries;           ///< sender: L-CSR entry indices, in send order
+    std::vector<long long> recv_slots;  ///< receiver: unified data index per incoming value (-1 drop)
+    std::vector<double> buf;            ///< send or recv value buffer
   };
   std::vector<Peer> send_peers_;
   std::vector<Peer> recv_peers_;

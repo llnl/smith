@@ -35,99 +35,6 @@ namespace smith {
 
 namespace {
 
-/// Symmetric Lanczos with full reorthogonalization. Computes `n_evecs` approximate leftmost
-/// eigenvalues/eigenvectors of the symmetric operator `A` using `n_iter` Krylov iterations
-/// (n_iter ≥ n_evecs). `dots` is the MPI-aware dot helper. Start vector is `b_seed` if its
-/// size matches; otherwise a deterministic non-zero pattern.
-///
-/// Returns the approximate eigenpairs sorted ascending by eigenvalue. Approximations to the
-/// true leftmost eigenpairs of A converge as `n_iter` grows beyond `n_evecs`; in practice
-/// 2×n_evecs Krylov iterations give useful approximations for extreme eigenvalues even on
-/// indefinite operators.
-void lanczosLeftmostEigvecs(const mfem::Operator& A, int n_iter, int n_evecs, const mfem::Vector& b_seed,
-                            std::vector<mfem::Vector>& evecs_out, std::vector<double>& evals_out,
-                            const DotManyFunction& dots)
-{
-  evecs_out.clear();
-  evals_out.clear();
-  const int N = A.Height();
-  n_iter = std::min(std::max(n_iter, n_evecs), N);
-  if (n_iter <= 0) return;
-
-  std::vector<mfem::Vector> V;
-  V.reserve(static_cast<size_t>(n_iter));
-  std::vector<double> alpha(static_cast<size_t>(n_iter), 0.0);
-  std::vector<double> beta(static_cast<size_t>(n_iter), 0.0);
-
-  // Seed vector: use b_seed if size matches, else a deterministic non-trivial pattern.
-  mfem::Vector v(N);
-  if (b_seed.Size() == N) {
-    v = b_seed;
-  } else {
-    for (int i = 0; i < N; ++i) v(i) = std::sin(0.137 * i + 1.7);
-  }
-  double vv = dots({{&v, &v}})[0];
-  if (vv <= 0.0) return;
-  v *= 1.0 / std::sqrt(vv);
-  V.emplace_back(v);
-
-  mfem::Vector w(N), vprev(N);
-  vprev = 0.0;
-
-  for (int j = 0; j < n_iter; ++j) {
-    A.Mult(V[static_cast<size_t>(j)], w);
-    alpha[static_cast<size_t>(j)] = dots({{&V[static_cast<size_t>(j)], &w}})[0];
-    if (j > 0) w.Add(-beta[static_cast<size_t>(j - 1)], V[static_cast<size_t>(j - 1)]);
-    w.Add(-alpha[static_cast<size_t>(j)], V[static_cast<size_t>(j)]);
-    // Full reorthogonalization (numerical hygiene; small for the n_iter sizes here).
-    for (const auto& vi : V) {
-      const double c = dots({{&vi, &w}})[0];
-      w.Add(-c, vi);
-    }
-    const double ww = dots({{&w, &w}})[0];
-    if (ww <= 1e-30 || j == n_iter - 1) {
-      beta[static_cast<size_t>(j)] = std::sqrt(std::max(ww, 0.0));
-      break;
-    }
-    beta[static_cast<size_t>(j)] = std::sqrt(ww);
-    w *= 1.0 / beta[static_cast<size_t>(j)];
-    V.emplace_back(w);
-  }
-  const int m = static_cast<int>(V.size());
-  if (m == 0) return;
-
-  // Symmetric tridiagonal eigensystem via dense LAPACK (mfem::DenseMatrixEigensystem).
-  mfem::DenseMatrix T(m, m);
-  T = 0.0;
-  for (int i = 0; i < m; ++i) {
-    T(i, i) = alpha[static_cast<size_t>(i)];
-    if (i + 1 < m) {
-      T(i, i + 1) = beta[static_cast<size_t>(i)];
-      T(i + 1, i) = beta[static_cast<size_t>(i)];
-    }
-  }
-  mfem::DenseMatrixEigensystem eig(T);
-  eig.Eval();
-  const mfem::Vector& evals = eig.Eigenvalues();
-  const mfem::DenseMatrix& evecs_T = eig.Eigenvectors();
-
-  std::vector<int> order(static_cast<size_t>(m));
-  for (int i = 0; i < m; ++i) order[static_cast<size_t>(i)] = i;
-  std::sort(order.begin(), order.end(), [&](int a, int b) { return evals(a) < evals(b); });
-
-  const int kk = std::min(n_evecs, m);
-  for (int q = 0; q < kk; ++q) {
-    const int idx = order[static_cast<size_t>(q)];
-    evals_out.push_back(evals(idx));
-    mfem::Vector full(N);
-    full = 0.0;
-    for (int i = 0; i < m; ++i) {
-      full.Add(evecs_T(i, idx), V[static_cast<size_t>(i)]);
-    }
-    evecs_out.emplace_back(std::move(full));
-  }
-}
-
 size_t rootOnlyPrintLevel(const mfem::NewtonSolver& solver, size_t level)
 {
 #ifdef MFEM_USE_MPI
@@ -557,13 +464,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable mfem::Vector deflation_leftmost_w_;
   mutable double deflation_leftmost_lambda_ = 0.0;
 
-  /// Lanczos approximate leftmost eigvecs of the assembled Hessian, refreshed each outer
-  /// iter (when `trust_num_lanczos > 0`). Pushed into `left_mosts` before solveModelProblem.
-  mutable std::vector<mfem::Vector> lanczos_evecs_;
-  mutable std::vector<double> lanczos_evals_;
-  mutable double lanczos_time_ = 0.0;
-  mutable size_t num_lanczos_calls_ = 0;
-
   /// reconstructed smith print level
   mutable size_t print_level = 0;
 
@@ -681,13 +581,13 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         double t0 = MPI_Wtime();
         MPI_Barrier(dot_comm);
         double t1 = MPI_Wtime();
-        MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T,
-                      MPI_SUM, dot_comm);
+        MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T, MPI_SUM,
+                      dot_comm);
         dot_barrier_time_ += t1 - t0;
         dot_allreduce_time_ += MPI_Wtime() - t1;
       } else {
-        MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T,
-                      MPI_SUM, dot_comm);
+        MPI_Allreduce(products.data(), global_products.data(), static_cast<int>(pairs.size()), MFEM_MPI_REAL_T, MPI_SUM,
+                      dot_comm);
       }
       products.assign(global_products.begin(), global_products.end());
     }
@@ -1142,11 +1042,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double tr_size = nonlinear_options.trust_region_scaling * std::sqrt(Dot(scratch, scratch));
     size_t cumulative_cg_iters_from_last_precond_update = 0;
 
-    // Eisenstat–Walker state. prev_norm starts at the initial residual norm;
-    // prev_eta seeds at eta_max so the first outer iter uses the cap directly.
-    real_t ew_prev_norm = norm;
-    real_t ew_prev_eta = linear_options.cg_ew_eta_max;
-
     // Adaptive CG cap state: full budget from the configured max, residual progress
     // anchored at the running max norm, and the consecutive radius-shrink streak.
     const size_t cap_max_full = settings.max_cg_iterations;
@@ -1204,24 +1099,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         cumulative_cg_iters_from_last_precond_update = 0;
         detectDeflationPrecond();
         refreshDeflationLeftmost();
-        // Lanczos enrichment: compute approximate leftmost eigvecs of the assembled Hessian
-        // directly. Independent of the deflation basis; surfaces the true negative-curvature
-        // mode that per-rank polynomial W projections often miss in snap-through problems.
-        if (nonlinear_options.trust_num_lanczos > 0) {
-          const int n_evecs = nonlinear_options.trust_num_lanczos;
-          const int n_iter =
-              nonlinear_options.trust_num_lanczos_iters > 0 ? nonlinear_options.trust_num_lanczos_iters : 3 * n_evecs;
-          auto dots_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
-          double t_lz = MPI_Wtime();
-          lanczosLeftmostEigvecs(*grad, n_iter, n_evecs, r, lanczos_evecs_, lanczos_evals_, dots_lambda);
-          lanczos_time_ += MPI_Wtime() - t_lz;
-          ++num_lanczos_calls_;
-          if (print_level >= 2 && !lanczos_evals_.empty()) {
-            mfem::out << "  [lanczos] " << lanczos_evals_.size() << " evals:";
-            for (double e : lanczos_evals_) mfem::out << " " << e;
-            mfem::out << "\n";
-          }
-        }
       }
 
       auto hess_vec_func = [&](const mfem::Vector& x_, mfem::Vector& v_) { hessVec(x_, v_); };
@@ -1258,52 +1135,21 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         trResults.cg_iterations_count = 1;
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
-        if (linear_options.cg_eisenstat_walker) {
-          // Eisenstat–Walker choice 2 with the standard safeguard.
-          const double gamma = linear_options.cg_ew_gamma;
-          const double alpha = linear_options.cg_ew_alpha;
-          const double eta_max = linear_options.cg_ew_eta_max;
-          double eta_k = eta_max;
-          if (it > 0 && ew_prev_norm > 0.0) {
-            eta_k = gamma * std::pow(norm / ew_prev_norm, alpha);
-            const double safeguard = gamma * std::pow(ew_prev_eta, alpha);
-            if (safeguard > 0.1) {
-              eta_k = std::max(eta_k, safeguard);
-            }
-            eta_k = std::min(eta_k, eta_max);
-          }
-          // Absolute floor: don't solve past the outer convergence goal.
-          settings.cg_tol = std::max(eta_k * norm, 0.5 * norm_goal);
-          ew_prev_norm = norm;
-          ew_prev_eta = eta_k;
-        } else {
-          settings.cg_tol = std::max(0.5 * norm_goal, nonlinear_options.cg_forcing_rel * norm);
-        }
+        settings.cg_tol = std::max(0.5 * norm_goal, nonlinear_options.cg_forcing_rel * norm);
         max_norm_seen = std::max(max_norm_seen, norm);
         if (nonlinear_options.cg_cap_min > 0) {
           // Adaptive CG budget (see NonlinearSolverOptions::cg_cap_min): geometric ramp from
           // cap_min to the full max over the residual's log-progress toward the goal, cut by
           // gamma per consecutive radius-shrinking step.
-          const double cap_min = std::min(static_cast<double>(nonlinear_options.cg_cap_min),
-                                          static_cast<double>(cap_max_full));
+          const double cap_min =
+              std::min(static_cast<double>(nonlinear_options.cg_cap_min), static_cast<double>(cap_max_full));
           double frac = 1.0;
           if (norm > norm_goal && max_norm_seen > norm_goal) {
             frac = std::clamp(std::log(max_norm_seen / norm) / std::log(max_norm_seen / norm_goal), 0.0, 1.0);
           }
           const double cap = cap_min * std::pow(static_cast<double>(cap_max_full) / cap_min, frac) *
                              std::pow(nonlinear_options.cg_cap_gamma, consecutive_tr_shrinks);
-          settings.max_cg_iterations =
-              static_cast<size_t>(std::clamp(cap, cap_min, static_cast<double>(cap_max_full)));
-        }
-        // Push Lanczos eigvec approximations of the assembled Hessian's leftmost spectrum
-        // into left_mosts as subspace candidates. Applies regardless of W choice.
-        for (const auto& v : lanczos_evecs_) {
-          if (v.Size() != r.Size()) continue;
-          const int k = std::max(1, nonlinear_options.num_leftmost + nonlinear_options.trust_num_lanczos);
-          while (left_mosts.size() >= static_cast<size_t>(k)) {
-            left_mosts.erase(left_mosts.begin());
-          }
-          left_mosts.emplace_back(std::make_shared<mfem::Vector>(v));
+          settings.max_cg_iterations = static_cast<size_t>(std::clamp(cap, cap_min, static_cast<double>(cap_max_full)));
         }
         // Indefinite-coarse path: push the WtAW lowest mode into left_mosts as a candidate
         // negative-curvature subspace basis vector. Mult itself applies smoother only (PD)
@@ -1462,8 +1308,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           predicted_status = evaluateConvergence(x_pred, r_pred);
           normPred = predicted_status.global_norm;
           // Real work along the step. Preferred path: exact ΔE via user-supplied energy
-          // callback (`setEnergyFunction`). Fallback: integrated `∫₀¹ r·d dτ` via 2/3/5-point
-          // quadrature (trapezoid/Simpson/Boole). The exact-energy path guarantees energy
+          // callback (`setEnergyFunction`). Fallback: integrated `∫₀¹ r·d dτ` via trapezoid
+          // or Simpson quadrature. The exact-energy path guarantees energy
           // descent on accepted steps — no limit cycles possible for potential systems.
           const double rd_a = Dot(r, trResults.d);
           const double rd_b = Dot(r_pred, trResults.d);
@@ -1499,25 +1345,16 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
             }
           } else {
             const int qpts = nonlinear_options.trust_work_quadrature_points;
-            if (qpts == 3 || qpts == 5) {
+            if (qpts != 2 && qpts != 3) {
+              throw std::runtime_error("trust_work_quadrature_points must be 2 (trapezoid) or 3 (Simpson)");
+            }
+            if (qpts == 3) {
               // Simpson: 1 extra eval at midpoint, weights (1,4,1)/6.
               mfem::Vector x_q(X.Size()), r_q(r.Size());
               add(X, 0.5, trResults.d, x_q);
               oper->Mult(x_q, r_q);
               const double rd_mid = Dot(r_q, trResults.d);
               real_work = (1.0 / 6.0) * (rd_a + 4.0 * rd_mid + rd_b) - roundOffTol;
-              if (qpts == 5) {
-                // Boole's 5-point closed Newton-Cotes: nodes 0, 1/4, 1/2, 3/4, 1;
-                // weights (7,32,12,32,7)/90. Need r at 1/4 and 3/4 (already have 0, 1/2, 1).
-                add(X, 0.25, trResults.d, x_q);
-                oper->Mult(x_q, r_q);
-                const double rd_q1 = Dot(r_q, trResults.d);
-                add(X, 0.75, trResults.d, x_q);
-                oper->Mult(x_q, r_q);
-                const double rd_q3 = Dot(r_q, trResults.d);
-                real_work = (1.0 / 90.0) * (7.0 * rd_a + 32.0 * rd_q1 + 12.0 * rd_mid + 32.0 * rd_q3 + 7.0 * rd_b) -
-                            roundOffTol;
-              }
               if (print_level >= 2 && std::abs(real_work - obj1) > 0.5 * std::max(std::abs(obj1), 1e-12)) {
                 mfem::out << "  [work quadrature: trapezoid=" << obj1 << "  qpt-" << qpts << "=" << real_work << "]\n";
               }
@@ -1662,84 +1499,85 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       mfem::out << "TrustRegion: No convergence!\n";
     }
 
-    // === TIMING BEGIN ===
-    double solve_total = MPI_Wtime() - solve_t0;
-    MPI_Comm comm = MPI_COMM_WORLD;
+    if (nonlinear_options.print_level >= 3) {
+      double solve_total = MPI_Wtime() - solve_t0;
+      MPI_Comm comm = MPI_COMM_WORLD;
 #ifdef MFEM_USE_MPI
-    if (GetComm() != MPI_COMM_NULL) comm = GetComm();
+      if (GetComm() != MPI_COMM_NULL) comm = GetComm();
 #endif
-    int rank = 0;
-    MPI_Comm_rank(comm, &rank);
-    auto rmax = [comm](double v) {
-      double out = 0.0;
-      MPI_Reduce(&v, &out, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-      return out;
-    };
-    double t_hv = rmax(hess_vec_time_);
-    double t_pc = rmax(precond_time_);
-    double t_ag = rmax(augment_time_);
-    double t_aj = rmax(assemble_jacobian_time_);
-    double t_ag_grad = rmax(assemble_gradient_time_);
-    double t_bsr = rmax(bsr_convert_time_);
-    double t_asm_kernels = rmax(gradient_assemble_timers.kernels);
-    double t_asm_scatter = rmax(gradient_assemble_timers.scatter);
-    double t_asm_rap = rmax(gradient_assemble_timers.rap);
-    double t_ps = rmax(precond_setop_time_);
-    double t_sp = rmax(subspace_prepare_time_);
-    double t_ss = rmax(subspace_solve_time_);
-    double t_bh = rmax(batch_hess_vec_time_);
-    double t_total = rmax(solve_total);
-    double t_cg_H = rmax(cg_profile_.H_mult_time);
-    double t_cg_P = rmax(cg_profile_.P_mult_time);
-    double t_cg_dots = rmax(cg_profile_.dots_time);
-    double t_cg_barrier = rmax(dot_barrier_time_);
-    double t_cg_allred = rmax(dot_allreduce_time_);
-    if (rank == 0) {
-      mfem::out << "\n========= TrustRegion solve timing (max across ranks) =========\n"
-                << "  total solve            : " << t_total << " s\n"
-                << "  assembleJacobian       : " << t_aj << " s  (" << num_jacobian_assembles_ << " calls)\n"
-                << "    GetGradient          : " << t_ag_grad << " s\n"
-                << "      element kernels    : " << t_asm_kernels << " s\n"
-                << "      scatter (SearchRow): " << t_asm_scatter << " s\n"
-                << "      hypre + RAP        : " << t_asm_rap << " s\n"
-                << "    CSR->BSR convert     : " << t_bsr << " s\n"
-                << "  precond SetOperator    : " << t_ps << " s  (" << num_precond_setops_ << " calls)\n"
-                << "  hess_vec total         : " << t_hv << " s  (" << num_hess_vecs_ << " calls)\n"
-                << "  precond Mult total     : " << t_pc << " s  (" << num_preconds_ << " calls)\n"
-                << "  batched hess_vec       : " << t_bh << " s  (" << num_batch_hess_vec_calls_ << " calls; "
-                << num_batch_hess_vec_actions_ << " H-actions)\n"
-                << "  subspace prepare       : " << t_sp << " s  (" << num_subspace_prepares_ << " calls)\n"
-                << "  subspace solve         : " << t_ss << " s  (" << num_subspace_solves_ << " calls)\n"
-                << "  augment-direction      : " << t_ag << " s  (" << num_augments_ << " calls)\n"
-                << "  --- in-CG breakdown ---\n"
-                << "  in-CG H.Mult           : " << t_cg_H << " s  (" << cg_profile_.H_mult_count << " calls)\n"
-                << "  in-CG P.Mult           : " << t_cg_P << " s  (" << cg_profile_.P_mult_count << " calls)\n"
-                << "  in-CG dot_many (+Allred): " << t_cg_dots << " s  (" << cg_profile_.dot_call_count << " calls)\n"
-                << (cg_sync_diag_ ? std::format("    skew (barrier wait)  : {:.4f} s\n    allreduce (latency)  : {:.4f} s\n",
-                                                 t_cg_barrier, t_cg_allred)
-                                  : std::string{})
-                << "  --- CG iter histogram (per outer; " << cg_outer_count_ << " outers) ---\n"
-                << "  [0,10)   : " << cg_iter_hist_[0] << "\n"
-                << "  [10,50)  : " << cg_iter_hist_[1] << "\n"
-                << "  [50,200) : " << cg_iter_hist_[2] << "\n"
-                << "  [200,1k) : " << cg_iter_hist_[3] << "\n"
-                << "  [1k,+)   : " << cg_iter_hist_[4] << "\n"
-                << "  mean = " << (cg_outer_count_ ? cg_iter_sum_ / cg_outer_count_ : 0) << "  max = " << cg_iter_max_
-                << "  total = " << cg_iter_sum_ << "\n"
-                << "  --- CG exit status ---\n"
-                << "  Interior   : " << cg_status_hist_[0] << "\n"
-                << "  NegCurv    : " << cg_status_hist_[1] << "\n"
-                << "  OnBoundary : " << cg_status_hist_[2] << "\n"
-                << "  NonDescent : " << cg_status_hist_[3] << "\n"
-                << "  cg_hit_max : " << cg_hit_max_iters_count_ << " (subset of Interior; routed to subspace)\n"
-                << "  --- line-search retries ---\n"
-                << "  total = " << line_search_retries_total_
-                << "  mean = " << (cg_outer_count_ ? line_search_retries_total_ / cg_outer_count_ : 0)
-                << "  max = " << line_search_retries_max_ << "\n"
-                << "===============================================================\n\n";
+      int rank = 0;
+      MPI_Comm_rank(comm, &rank);
+      auto rmax = [comm](double v) {
+        double out = 0.0;
+        MPI_Reduce(&v, &out, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+        return out;
+      };
+      double t_hv = rmax(hess_vec_time_);
+      double t_pc = rmax(precond_time_);
+      double t_ag = rmax(augment_time_);
+      double t_aj = rmax(assemble_jacobian_time_);
+      double t_ag_grad = rmax(assemble_gradient_time_);
+      double t_bsr = rmax(bsr_convert_time_);
+      double t_asm_kernels = rmax(gradient_assemble_timers.kernels);
+      double t_asm_scatter = rmax(gradient_assemble_timers.scatter);
+      double t_asm_rap = rmax(gradient_assemble_timers.rap);
+      double t_ps = rmax(precond_setop_time_);
+      double t_sp = rmax(subspace_prepare_time_);
+      double t_ss = rmax(subspace_solve_time_);
+      double t_bh = rmax(batch_hess_vec_time_);
+      double t_total = rmax(solve_total);
+      double t_cg_H = rmax(cg_profile_.H_mult_time);
+      double t_cg_P = rmax(cg_profile_.P_mult_time);
+      double t_cg_dots = rmax(cg_profile_.dots_time);
+      double t_cg_barrier = rmax(dot_barrier_time_);
+      double t_cg_allred = rmax(dot_allreduce_time_);
+      if (rank == 0) {
+        mfem::out << "\n========= TrustRegion solve timing (max across ranks) =========\n"
+                  << "  total solve            : " << t_total << " s\n"
+                  << "  assembleJacobian       : " << t_aj << " s  (" << num_jacobian_assembles_ << " calls)\n"
+                  << "    GetGradient          : " << t_ag_grad << " s\n"
+                  << "      element kernels    : " << t_asm_kernels << " s\n"
+                  << "      scatter (SearchRow): " << t_asm_scatter << " s\n"
+                  << "      hypre + RAP        : " << t_asm_rap << " s\n"
+                  << "    CSR->BSR convert     : " << t_bsr << " s\n"
+                  << "  precond SetOperator    : " << t_ps << " s  (" << num_precond_setops_ << " calls)\n"
+                  << "  hess_vec total         : " << t_hv << " s  (" << num_hess_vecs_ << " calls)\n"
+                  << "  precond Mult total     : " << t_pc << " s  (" << num_preconds_ << " calls)\n"
+                  << "  batched hess_vec       : " << t_bh << " s  (" << num_batch_hess_vec_calls_ << " calls; "
+                  << num_batch_hess_vec_actions_ << " H-actions)\n"
+                  << "  subspace prepare       : " << t_sp << " s  (" << num_subspace_prepares_ << " calls)\n"
+                  << "  subspace solve         : " << t_ss << " s  (" << num_subspace_solves_ << " calls)\n"
+                  << "  augment-direction      : " << t_ag << " s  (" << num_augments_ << " calls)\n"
+                  << "  --- in-CG breakdown ---\n"
+                  << "  in-CG H.Mult           : " << t_cg_H << " s  (" << cg_profile_.H_mult_count << " calls)\n"
+                  << "  in-CG P.Mult           : " << t_cg_P << " s  (" << cg_profile_.P_mult_count << " calls)\n"
+                  << "  in-CG dot_many (+Allred): " << t_cg_dots << " s  (" << cg_profile_.dot_call_count << " calls)\n"
+                  << (cg_sync_diag_
+                          ? std::format("    skew (barrier wait)  : {:.4f} s\n    allreduce (latency)  : {:.4f} s\n",
+                                        t_cg_barrier, t_cg_allred)
+                          : std::string{})
+                  << "  --- CG iter histogram (per outer; " << cg_outer_count_ << " outers) ---\n"
+                  << "  [0,10)   : " << cg_iter_hist_[0] << "\n"
+                  << "  [10,50)  : " << cg_iter_hist_[1] << "\n"
+                  << "  [50,200) : " << cg_iter_hist_[2] << "\n"
+                  << "  [200,1k) : " << cg_iter_hist_[3] << "\n"
+                  << "  [1k,+)   : " << cg_iter_hist_[4] << "\n"
+                  << "  mean = " << (cg_outer_count_ ? cg_iter_sum_ / cg_outer_count_ : 0)
+                  << "  max = " << cg_iter_max_ << "  total = " << cg_iter_sum_ << "\n"
+                  << "  --- CG exit status ---\n"
+                  << "  Interior   : " << cg_status_hist_[0] << "\n"
+                  << "  NegCurv    : " << cg_status_hist_[1] << "\n"
+                  << "  OnBoundary : " << cg_status_hist_[2] << "\n"
+                  << "  NonDescent : " << cg_status_hist_[3] << "\n"
+                  << "  cg_hit_max : " << cg_hit_max_iters_count_ << " (subset of Interior; routed to subspace)\n"
+                  << "  --- line-search retries ---\n"
+                  << "  total = " << line_search_retries_total_
+                  << "  mean = " << (cg_outer_count_ ? line_search_retries_total_ / cg_outer_count_ : 0)
+                  << "  max = " << line_search_retries_max_ << "\n"
+                  << "===============================================================\n\n";
+      }
+      if (auto* defl = dynamic_cast<DeflationPreconditioner*>(&tr_precond)) defl->printTimingSummary(comm);
     }
-    if (auto* defl = dynamic_cast<DeflationPreconditioner*>(&tr_precond)) defl->printTimingSummary(comm);
-    // === TIMING END ===
   }
 };
 /// @endcond

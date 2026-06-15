@@ -465,22 +465,6 @@ struct LinearSolverOptions {
   /// Typical: 5.
   int cg_model_stagnation_window = 0;
 
-  /// Enable Eisenstat–Walker choice-2 adaptive forcing term:
-  /// `eta_k = gamma * (||F_k||/||F_{k-1}||)^alpha`, capped at eta_max, with the
-  /// standard safeguard `eta_k = max(eta_k, gamma * eta_{k-1}^alpha)` when the
-  /// previous term wasn't already small. Replaces the fixed `cg_tol`. When
-  /// disabled (default), the legacy `max(0.5*norm_goal, 5e-5*norm)` rule is used.
-  bool cg_eisenstat_walker = false;
-
-  /// EW gamma (in (0, 1]). Standard value 0.9.
-  double cg_ew_gamma = 0.9;
-
-  /// EW alpha (exponent). Standard value (1+sqrt(5))/2 ≈ 1.618.
-  double cg_ew_alpha = 1.618033988749895;
-
-  /// EW upper bound on the forcing term. Standard value 0.5.
-  double cg_ew_eta_max = 0.5;
-
   /// Debugging print level for the linear solver
   int print_level = 0;
 
@@ -559,23 +543,8 @@ struct NonlinearSolverOptions {
 
   /// Quadrature points used to estimate the real work ∫₀¹ r(x+τd)·d dτ along an
   /// accepted trust-region step. Default 2 = trapezoid (endpoints only, no extra
-  /// residual evals). 3 = Simpson (one extra eval at midpoint). 5 = Boole
-  /// (three extra evals at τ = 1/4, 1/2, 3/4). Higher-order rules cost extra
-  /// residual evaluations per outer iter but give a much more accurate ΔE
-  /// estimate for strongly nonlinear functions near indefinite Hessians.
+  /// residual evals). 3 = Simpson (one extra eval at midpoint).
   int trust_work_quadrature_points = 2;
-
-  /// Number of leftmost eigvecs of the assembled Hessian to compute via symmetric Lanczos at
-  /// each TR SetOperator, and to push into `left_mosts` as subspace candidates. 0 disables.
-  /// Independent of the deflation basis — applies to Jacobi/Affine/Quadratic alike. Cost is
-  /// roughly `trust_num_lanczos_iters` matvecs per outer iter; typical 5-10 for good
-  /// approximation of the dominant negative eigenmode in buckling problems.
-  int trust_num_lanczos = 0;
-
-  /// Krylov dimension for the Lanczos pass. Should be ≥ `trust_num_lanczos`; 2-3× gives
-  /// better convergence to extreme eigenvalues. Defaults to 0 (use 3× `trust_num_lanczos`
-  /// when active).
-  int trust_num_lanczos_iters = 0;
 
   /// Relative CG forcing term: each TrustRegion model solve uses
   /// cg_tol = max(0.5 * outer_goal, cg_forcing_rel * ||r||).

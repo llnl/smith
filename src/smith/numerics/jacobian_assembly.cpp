@@ -20,8 +20,7 @@ JacobianAssembly::JacobianAssembly(Mode mode, mfem::ParFiniteElementSpace& fes, 
   }
 }
 
-mfem::Operator& JacobianAssembly::assemble(const LegacyAssemble& legacy,
-                                           const std::function<void()>& refresh_local_csr,
+mfem::Operator& JacobianAssembly::assemble(const LegacyAssemble& legacy, const std::function<void()>& refresh_local_csr,
                                            const std::vector<int>& row_ptr, const std::vector<int>& col_ind,
                                            const std::vector<double>& values)
 {
@@ -36,8 +35,8 @@ mfem::Operator& JacobianAssembly::assemble(const LegacyAssemble& legacy,
   if (!assembler_) {
     auto J_boot = legacy();  // refreshes the local CSR as a side effect
     std::unique_ptr<mfem::HypreParMatrix> Je_boot(J_boot->EliminateRowsCols(ess_tdofs_));
-    assembler_ = std::make_unique<BSRDirectAssembler>(fes_, ess_tdofs_, J_boot.get(), row_ptr, col_ind, values,
-                                                      Je_boot.get());
+    assembler_ =
+        std::make_unique<BSRDirectAssembler>(fes_, ess_tdofs_, J_boot.get(), row_ptr, col_ind, values, Je_boot.get());
     assembler_->op().SetSymmetric(symmetric_);
     bootstrap_nnz_ = static_cast<size_t>(row_ptr.back());
   } else {

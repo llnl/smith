@@ -961,10 +961,9 @@ class Functional<test(trials...), exec> {
       std::vector<int> col_ind_copy = col_ind;
       std::vector<double> values_copy = values_;
 
-      auto A_local = mfem::SparseMatrix(row_ptr.data(), col_ind_copy.data(), values_copy.data(),
-                                        form_.output_L_.Size(), form_.input_L_[which_argument].Size(),
-                                        sparse_matrix_frees_graph_ptrs, sparse_matrix_frees_values_ptr,
-                                        col_ind_is_sorted);
+      auto A_local = mfem::SparseMatrix(row_ptr.data(), col_ind_copy.data(), values_copy.data(), form_.output_L_.Size(),
+                                        form_.input_L_[which_argument].Size(), sparse_matrix_frees_graph_ptrs,
+                                        sparse_matrix_frees_values_ptr, col_ind_is_sorted);
 
       double t_rap0 = MPI_Wtime();
       auto* R = form_.test_space_->Dof_TrueDof_Matrix();
