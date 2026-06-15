@@ -23,6 +23,22 @@
 
 namespace {
 
+bool run_benchmarks = false;
+
+void parseCommandLine(int& argc, char** argv)
+{
+  int write_arg = 1;
+  for (int read_arg = 1; read_arg < argc; ++read_arg) {
+    const std::string arg = argv[read_arg];
+    if (arg == "--run-benchmarks") {
+      run_benchmarks = true;
+    } else {
+      argv[write_arg++] = argv[read_arg];
+    }
+  }
+  argc = write_arg;
+}
+
 struct ProblemSetup {
   std::unique_ptr<mfem::ParMesh> pmesh;
   std::unique_ptr<mfem::H1_FECollection> fec;
@@ -492,14 +508,15 @@ mfem::Mesh makeBeamMesh(int nx, int ny, int nz, double Lx, double Ly, double Lz)
 // launched with.
 TEST(Deflation, CantileverBeam_PreconditionerComparison)
 {
+  if (!run_benchmarks) GTEST_SKIP() << "benchmark case; rerun with --run-benchmarks";
+
   int my_rank, n_ranks;
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
 
-  // === TIMING BEGIN === Slenderer beam (Lx/Ly = 16) ~98k dofs (3 * 193 * 13 * 13 = 97851).
+  // Slender beam, about 98k dofs at order 1.
   constexpr int nx = 192, ny = 12, nz = 12;
   constexpr double Lx = 16.0, Ly = 1.0, Lz = 1.0;
-  // === TIMING END ===
   auto serial_mesh = makeBeamMesh(nx, ny, nz, Lx, Ly, Lz);
   auto pmesh = std::make_unique<mfem::ParMesh>(MPI_COMM_WORLD, serial_mesh);
 
@@ -571,27 +588,19 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
       op = bsr_op.get();
     }
 
-    // === TIMING BEGIN ===
     MPI_Barrier(MPI_COMM_WORLD);
     double t_setop = MPI_Wtime();
-    // === TIMING END ===
     iter->SetOperator(*op);
-    // === TIMING BEGIN ===
     MPI_Barrier(MPI_COMM_WORLD);
     t_setop = MPI_Wtime() - t_setop;
-    // === TIMING END ===
 
     mfem::Vector Xs(X.Size());
     Xs = 0.0;
-    // === TIMING BEGIN ===
     MPI_Barrier(MPI_COMM_WORLD);
     double t_solve = MPI_Wtime();
-    // === TIMING END ===
     iter->Mult(B, Xs);
-    // === TIMING BEGIN ===
     MPI_Barrier(MPI_COMM_WORLD);
     t_solve = MPI_Wtime() - t_solve;
-    // === TIMING END ===
 
     // True (unpreconditioned) residual ||B - A*X|| for apples-to-apples comparison across
     // different preconditioners (mfem CG's abs_tol is on the M-norm, not the 2-norm).
@@ -608,22 +617,15 @@ TEST(Deflation, CantileverBeam_PreconditionerComparison)
     if (my_rank == 0) {
       std::cout << "[Beam " << label << "] ranks=" << n_ranks << " dofs=" << fes.GlobalTrueVSize()
                 << " ess_tdofs=" << n_ess_global << " iters=" << iter->GetNumIterations()
-                << " converged=" << iter->GetConverged() << " ||r||="
-                << true_rnorm
-                // === TIMING BEGIN ===
-                << " t_setop=" << t_setop << "s t_solve=" << t_solve << "s"
-                << " t_per_iter=" << (iter->GetNumIterations() > 0 ? t_solve / iter->GetNumIterations() : 0.0)
-                << "s"
-                // === TIMING END ===
-                << "\n";
-      // === TIMING BEGIN === deflation internal breakdown
+                << " converged=" << iter->GetConverged() << " ||r||=" << true_rnorm << " t_setop=" << t_setop
+                << "s t_solve=" << t_solve << "s"
+                << " t_per_iter=" << (iter->GetNumIterations() > 0 ? t_solve / iter->GetNumIterations() : 0.0) << "s\n";
       if (dp) {
         std::cout << "  [Deflation breakdown] setop: matvec=" << dp->setopMatvecTime()
                   << "s factor=" << dp->setopFactorTime() << "s smoother_setup=" << dp->setopSmootherTime() << "s"
                   << " | mult(" << dp->multCalls() << " calls): total=" << dp->multTotalTime()
                   << "s smoother=" << dp->multSmootherTime() << "s coarse=" << dp->multCoarseTime() << "s\n";
       }
-      // === TIMING END ===
     }
     EXPECT_TRUE(iter->GetConverged()) << label;
     return iter->GetNumIterations();
@@ -735,6 +737,7 @@ TEST(Deflation, SparseEigModeLeftmostMatchesDense)
 
 int main(int argc, char* argv[])
 {
+  parseCommandLine(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   smith::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();

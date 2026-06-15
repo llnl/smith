@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <memory>
+#include <string>
 
 #include "gtest/gtest.h"
 #include "mfem.hpp"
@@ -13,6 +14,22 @@
 #include "smith/infrastructure/application_manager.hpp"
 
 namespace {
+
+bool run_benchmarks = false;
+
+void parseCommandLine(int& argc, char** argv)
+{
+  int write_arg = 1;
+  for (int read_arg = 1; read_arg < argc; ++read_arg) {
+    const std::string arg = argv[read_arg];
+    if (arg == "--run-benchmarks") {
+      run_benchmarks = true;
+    } else {
+      argv[write_arg++] = argv[read_arg];
+    }
+  }
+  argc = write_arg;
+}
 
 struct Setup {
   std::unique_ptr<mfem::ParMesh> pmesh;
@@ -147,6 +164,8 @@ TEST(BatchedMatvec, PackedDenseColumnDistributed)
 // in owner rank's local rows). Reports Loop vs PackedDense wall time.
 TEST(BatchedMatvec, BeamTiming)
 {
+  if (!run_benchmarks) GTEST_SKIP() << "benchmark case; rerun with --run-benchmarks";
+
   int rank = 0, nproc = 1;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
@@ -308,6 +327,8 @@ TEST(BatchedMatvec, TripleProductElasticityBeam)
 
 TEST(BatchedMatvec, BeamTimingTripleProduct)
 {
+  if (!run_benchmarks) GTEST_SKIP() << "benchmark case; rerun with --run-benchmarks";
+
   int rank = 0, nproc = 1;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
@@ -382,6 +403,7 @@ TEST(BatchedMatvec, BeamTimingTripleProduct)
 
 int main(int argc, char* argv[])
 {
+  parseCommandLine(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   smith::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();

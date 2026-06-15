@@ -115,11 +115,11 @@ using DotManyFunction = std::function<std::vector<double>(const std::vector<DotP
 
 /// In-CG wall-time accumulators. Pass `nullptr` to skip profiling.
 struct CGProfile {
-  double H_mult_time = 0.0;  ///< wall time spent in H.Mult inside CG
-  double P_mult_time = 0.0;  ///< wall time spent in P->Mult inside CG
-  double dots_time = 0.0;    ///< wall time spent in dot_many invocations (incl. Allreduce)
-  size_t H_mult_count = 0;
-  size_t P_mult_count = 0;
+  double H_mult_time = 0.0;   ///< wall time spent in H.Mult inside CG
+  double P_mult_time = 0.0;   ///< wall time spent in P->Mult inside CG
+  double dots_time = 0.0;     ///< wall time spent in dot_many invocations (incl. Allreduce)
+  size_t H_mult_count = 0;    ///< number of H.Mult calls
+  size_t P_mult_count = 0;    ///< number of P->Mult calls
   size_t dot_call_count = 0;  ///< number of dot_many invocations
 };
 

@@ -8,10 +8,15 @@ namespace smith {
 
 /// BSR Matrix structure for a local CSR block
 struct BSRMatrix {
+  /// Number of block rows.
   int nb_rows = 0;
+  /// Scalar block size.
   int b = 0;
+  /// CSR row offsets in block rows.
   std::vector<int> I;
+  /// CSR column indices in block columns.
   std::vector<int> J;
+  /// Dense row-major block entries.
   std::vector<double> data;
 };
 

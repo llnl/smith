@@ -109,11 +109,6 @@ void symmetrize(mfem::DenseMatrix& matrix)
 
 }  // namespace
 
-DeflationIndefiniteCoarseException::DeflationIndefiniteCoarseException(double eigenvalue, const mfem::Vector& direction)
-    : std::runtime_error("Deflation coarse operator is indefinite"), eigenvalue_(eigenvalue), direction_(direction)
-{
-}
-
 int lanczosExtremeEigenpairs(int n, int k, const std::function<void(const double*, double*)>& apply, bool largest,
                              std::vector<double>& evals, std::vector<mfem::Vector>& evecs, int max_iters, double tol)
 {
@@ -623,19 +618,15 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
 
   if (W_local_.empty()) buildBasis();
 
-  // === TIMING BEGIN ===
   double t0 = MPI_Wtime();
   ++setop_calls_;
-  // === TIMING END ===
   if (bsr_op && bsr_op->Enabled()) {
     assembleWtAW(*bsr_op, W_dense_, modes_per_rank_, WtAW_, &assemble_timings_);
   } else {
     assembleWtAW(*A_, W_dense_, modes_per_rank_, WtAW_, &assemble_timings_);
   }
-  // === TIMING BEGIN ===
   double t1 = MPI_Wtime();
   setop_matvec_time_ += t1 - t0;
-  // === TIMING END ===
 
   if (envFlagEnabled("SMITH_DEFLATION_VERIFY")) {
     verifyWtAWAssembly();
@@ -715,10 +706,8 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
 
   factored_ = true;
   leftmost_valid_ = false;
-  // === TIMING BEGIN ===
   double t2 = MPI_Wtime();
   setop_factor_time_ += t2 - t1;
-  // === TIMING END ===
 
   switch (smoother_variant_) {
     case DeflationSmoother::BlockJacobi:
@@ -735,9 +724,7 @@ void DeflationPreconditioner::SetOperator(const mfem::Operator& op)
       smoother_->SetOperator(const_cast<mfem::HypreParMatrix&>(*A_));
       break;
   }
-  // === TIMING BEGIN ===
   setop_smoother_time_ += MPI_Wtime() - t2;
-  // === TIMING END ===
 }
 
 void DeflationPreconditioner::buildBlockJacobi()
@@ -1308,9 +1295,7 @@ void DeflationPreconditioner::verifyWtAWAssembly() const
 
 void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
 {
-  // === TIMING BEGIN ===
   double t0 = MPI_Wtime();
-  // === TIMING END ===
   const int n = fes_->GetTrueVSize();
   z.SetSize(n);
   const bool have_smoother = smoother_ ||
@@ -1375,10 +1360,8 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
     ++mult_calls_;
     return;
   }
-  // === TIMING BEGIN ===
   double t1 = MPI_Wtime();
   mult_smoother_time_ += t1 - t0;
-  // === TIMING END ===
 
   if (coarse_mode_ == CoarseMode::Multiplicative) {
     // Symmetric multiplicative V-cycle. Overwrite the additive `z = smoother(r)` from above:
@@ -1402,12 +1385,10 @@ void DeflationPreconditioner::Mult(const mfem::Vector& r, mfem::Vector& z) const
     addCoarseCorrection(r, z);
   }
 
-  // === TIMING BEGIN ===
   double t2 = MPI_Wtime();
   mult_coarse_time_ += t2 - t1;
   mult_total_time_ += t2 - t0;
   ++mult_calls_;
-  // === TIMING END ===
 }
 
 void DeflationPreconditioner::printTimingSummary(MPI_Comm comm) const

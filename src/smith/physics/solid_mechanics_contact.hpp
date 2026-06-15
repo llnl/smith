@@ -699,6 +699,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   using SolidMechanicsBase::du_;
   using SolidMechanicsBase::J_;
   using SolidMechanicsBase::J_e_;
+  /// Nonlinear solver inherited from the solid mechanics base.
   using SolidMechanicsBase::nonlin_solver_;
   using SolidMechanicsBase::reactions_adjoint_bcs_;
   using SolidMechanicsBase::residual_;

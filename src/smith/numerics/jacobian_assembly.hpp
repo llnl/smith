@@ -36,11 +36,15 @@
 
 namespace smith {
 
+/// Owns the current Jacobian assembly path and the eliminated solver operator.
 class JacobianAssembly {
  public:
+  /// Available Jacobian assembly implementations.
   enum class Mode
   {
+    /// Legacy hypre assembly and elimination path.
     Hypre,
+    /// Direct value routing into a BSR operator after one hypre bootstrap.
     DirectBSR
   };
 
@@ -64,7 +68,9 @@ class JacobianAssembly {
    *                           Functional's local CSR refreshed (Gradient::assemble does).
    * @param refresh_local_csr  refreshes the local CSR only (Gradient::assembleLocalCSR);
    *                           used by DirectBSR steady state.
-   * @param row_ptr/col_ind/values  the Functional local CSR (persistent references).
+   * @param row_ptr            Functional local CSR row offsets.
+   * @param col_ind            Functional local CSR column indices.
+   * @param values             Functional local CSR values.
    */
   mfem::Operator& assemble(const LegacyAssemble& legacy, const std::function<void()>& refresh_local_csr,
                            const std::vector<int>& row_ptr, const std::vector<int>& col_ind,
@@ -85,6 +91,7 @@ class JacobianAssembly {
   /// @overload
   const mfem::HypreParMatrix& hypreEliminatedEntries() const;
 
+  /// Selected assembly mode.
   Mode mode() const { return mode_; }
 
  private:

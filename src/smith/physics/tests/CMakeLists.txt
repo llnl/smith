@@ -15,11 +15,25 @@ smith_add_library(
       
 set(physics_test_depends smith_physics smith_differentiable_numerics smith_physics_test_utils gtest)
 
-smith_add_executable(NAME       hyperelastic_benchmarks
-                     SOURCES    hyperelastic_benchmarks.cpp
-                     DEPENDS_ON smith_physics
-                     OUTPUT_DIR ${PROJECT_BINARY_DIR}/tests
-                     FOLDER     smith/tests)
+set(hyperelastic_benchmark_sources
+    hyperelastic_benchmarks
+    shallow_arch_buckling
+    )
+
+foreach(hyperelastic_benchmark_exec ${hyperelastic_benchmark_sources})
+    smith_add_executable(NAME       ${hyperelastic_benchmark_exec}
+                         SOURCES    ${hyperelastic_benchmark_exec}.cpp
+                         DEPENDS_ON smith_physics gtest
+                         OUTPUT_DIR ${PROJECT_BINARY_DIR}/benchmarks
+                         FOLDER     smith/benchmarks)
+
+    set(hyperelastic_benchmark_name ${hyperelastic_benchmark_exec}_2_task_count)
+    blt_add_benchmark(NAME              ${hyperelastic_benchmark_name}
+                      COMMAND           ${hyperelastic_benchmark_exec} --print-level=0 --mesh-scale=0.3
+                      NUM_MPI_TASKS     2
+                      WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+    set_tests_properties(${hyperelastic_benchmark_name} PROPERTIES TIMEOUT 4800)
+endforeach()
 
 set(physics_serial_test_sources
     beam_bending.cpp
@@ -72,7 +86,6 @@ set(physics_parallel_test_sources
     lce_Brighenti_tensile.cpp
     lce_Bertoldi_lattice.cpp
     parameterized_thermal.cpp
-    shallow_arch_buckling.cpp
     solid.cpp
     solid_periodic.cpp
     solid_shape.cpp

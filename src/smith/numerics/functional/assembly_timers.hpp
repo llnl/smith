@@ -10,6 +10,7 @@ struct GradientAssembleTimers {
   double rap = 0.0;      ///< HypreParMatrix construction + RAP to true dofs
 };
 
+/// Process-local cumulative assembly timing counters.
 inline GradientAssembleTimers gradient_assemble_timers;
 
 }  // namespace smith

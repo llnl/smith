@@ -31,19 +31,22 @@
 
 namespace smith {
 
+/// Implementations available for multi-RHS matrix-vector products.
 enum class BatchedMatvecStrategy
 {
-  Loop,         // sequential per-column A.Mult — correctness baseline
-  PackedDense,  // single packed halo exchange + per-element local SpMV
+  /// Sequential per-column A.Mult; correctness baseline.
+  Loop,
+  /// Single packed halo exchange plus per-element local SpMV.
+  PackedDense,
 };
 
 /// Optional fine-grained wall-time accumulators for `assembleWtAW` profiling.
 /// Pass `nullptr` to skip.
 struct AssembleWtAWTimings {
-  double halo = 0.0;       // pack + Isend/Irecv + Waitall
-  double diag = 0.0;       // A_diag · W_local + W_local^T · (·)
-  double offd = 0.0;       // per-neighbor A_offd · W_s_halo + W_local^T · (·)
-  double allreduce = 0.0;  // MPI_Allreduce of the m × m result
+  double halo = 0.0;       ///< pack + Isend/Irecv + Waitall
+  double diag = 0.0;       ///< A_diag · W_local + W_local^T · (·)
+  double offd = 0.0;       ///< per-neighbor A_offd · W_s_halo + W_local^T · (·)
+  double allreduce = 0.0;  ///< MPI_Allreduce of the m × m result
 };
 
 /**
@@ -73,6 +76,7 @@ void batchedMatvec(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& X, mf
  *                         Must be uniform across ranks.
  * @param WtAW             output (m × m) dense matrix, replicated on all ranks.
  *                         m = modes_per_rank * nprocs. Owner of global col q is q / modes_per_rank.
+ * @param timings          optional fine-grained wall-time accumulators.
  */
 void assembleWtAW(const mfem::HypreParMatrix& A, const mfem::DenseMatrix& W_local, int modes_per_rank,
                   mfem::DenseMatrix& WtAW, AssembleWtAWTimings* timings = nullptr);
@@ -82,6 +86,12 @@ class BSROperator;
 /**
  * @brief Same as above, but the local diag/offd SpMM runs on the BSR representation
  * (one block index per b*b entries, contiguous block math). Requires bsr.Enabled().
+ *
+ * @param bsr              parallel operator with enabled BSR storage.
+ * @param W_local          (n_local × modes_per_rank) — this rank's owned W block.
+ * @param modes_per_rank   number of W columns owned by every rank.
+ * @param WtAW             output (m × m) dense matrix, replicated on all ranks.
+ * @param timings          optional fine-grained wall-time accumulators.
  */
 void assembleWtAW(const BSROperator& bsr, const mfem::DenseMatrix& W_local, int modes_per_rank, mfem::DenseMatrix& WtAW,
                   AssembleWtAWTimings* timings = nullptr);

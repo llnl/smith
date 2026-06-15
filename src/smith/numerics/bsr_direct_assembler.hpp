@@ -35,6 +35,13 @@
 
 namespace smith {
 
+/**
+ * @brief Routes Functional local CSR Jacobian values directly into a true-dof
+ * block sparse row operator.
+ *
+ * The constructor builds the fixed routing and elimination plans from one
+ * legacy hypre assembly. Later `update()` calls refresh only values.
+ */
 class BSRDirectAssembler {
  public:
   /**
@@ -43,7 +50,11 @@ class BSRDirectAssembler {
    * @param A          legacy-assembled, *eliminated* true-dof matrix at the current state.
    *                   Cloned internally (the caller may free or reassemble it); the clone
    *                   provides structure, first values, and the comm package.
-   * @param row_ptr / col_ind / values  Functional's local L-dof CSR at the same state.
+   * @param row_ptr    Functional's local L-dof CSR row offsets at the same state.
+   * @param col_ind    Functional's local L-dof CSR column indices at the same state.
+   * @param values     Functional's local L-dof CSR values at the same state.
+   * @param Ae_reference optional legacy eliminated-column matrix used to verify
+   *                     the direct eliminated-column action.
    */
   BSRDirectAssembler(mfem::ParFiniteElementSpace& fes, const mfem::Array<int>& ess_tdofs, mfem::HypreParMatrix* A,
                      const std::vector<int>& row_ptr, const std::vector<int>& col_ind,

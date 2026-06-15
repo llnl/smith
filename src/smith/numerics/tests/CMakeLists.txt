@@ -31,6 +31,18 @@ smith_add_tests( SOURCES       ${numerics_parallel_test_sources}
                  DEPENDS_ON    ${numerics_test_dependencies}
                  NUM_MPI_TASKS 4)
 
+blt_add_benchmark(NAME              test_batched_matvec_beam_timing
+                  COMMAND           test_batched_matvec --run-benchmarks --gtest_filter=BatchedMatvec.BeamTiming:BatchedMatvec.BeamTimingTripleProduct
+                  NUM_MPI_TASKS     4
+                  WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+set_tests_properties(test_batched_matvec_beam_timing PROPERTIES TIMEOUT 4800)
+
+blt_add_benchmark(NAME              test_deflation_cantilever_preconditioner_comparison
+                  COMMAND           test_deflation --run-benchmarks --gtest_filter=Deflation.CantileverBeam_PreconditionerComparison
+                  NUM_MPI_TASKS     4
+                  WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+set_tests_properties(test_deflation_cantilever_preconditioner_comparison PROPERTIES TIMEOUT 4800)
+
 if(PETSC_FOUND)
     set(petsc_solver_tests
         test_equationsolver_petsc.cpp

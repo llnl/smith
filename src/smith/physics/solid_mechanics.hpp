@@ -1513,6 +1513,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                                        drdu.localRowPtr(), drdu.localColInd(), drdu.localValues());
   }
 
+  /// Nonlinear solver used for quasistatic residual solves.
   std::unique_ptr<EquationSolver> nonlin_solver_;
 
   /**

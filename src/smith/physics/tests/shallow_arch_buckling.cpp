@@ -198,8 +198,7 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   if (deflation_coarse_mode_name == "schwarz")
     selected_coarse_mode = CoarseMode::AdditiveSchwarz;
   else if (deflation_coarse_mode_name != "global")
-    throw std::runtime_error("Unknown --deflation-coarse-mode '" + deflation_coarse_mode_name +
-                             "' (global|schwarz)");
+    throw std::runtime_error("Unknown --deflation-coarse-mode '" + deflation_coarse_mode_name + "' (global|schwarz)");
   smith::LinearSolverOptions linear_options{.linear_solver = LinearSolver::CG,
                                             .preconditioner = selected_pc,
                                             .deflation_order = DeflationOrder::Affine,

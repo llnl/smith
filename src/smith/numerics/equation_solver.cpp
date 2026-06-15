@@ -416,6 +416,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable mfem::Vector scratch;
   /// left most eigenvectors
   mutable std::vector<std::shared_ptr<mfem::Vector>> left_mosts;
+  mutable bool left_mosts_has_deflation_coarse_ = false;
   /// the action of the stiffness/hessian (H) on the left most eigenvectors
   mutable std::vector<std::shared_ptr<mfem::Vector>> H_left_mosts;
   /// accepted trust-region steps available for future subspace solves
@@ -437,15 +438,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable DeflationPreconditioner* deflation_precond_ = nullptr;
   mutable bool deflation_precond_checked_ = false;
 
-  /// Adaptive deflation-pieces ladder v2 (enabled by deflation_pieces == 0), A-B-A
-  /// bracketed: measure a window at s (A1), probe a window at 2s (B), revert and re-measure
-  /// at s (A2); accept the doubling only if B beats the bracket average — cancels linear
-  /// phase drift (v1's failure). The metric is the allreduced window wall per decade of
-  /// residual progress: per-outer metrics are blind to outer-count inflation (contact at
-  /// s=2 improves wall/outer AND iters/outer while doubling total wall). Windows with no
-  /// progress (snap-through excursions) are extended, and a probe that cannot measure
-  /// progress is abandoned. Decisions are identical on every rank (one allreduce/window).
-  /// State persists across load steps; an interrupted probe rolls back.
+  /// Adaptive deflation-pieces ratchet (enabled by deflation_pieces == 0).
+  /// A sustained run of CG iteration-cap hits is treated as a preconditioner-limited
+  /// solve and promotes the coarse basis to the size-rule target once.
   struct AdaptivePiecesState {
     bool enabled = false;
     bool locked = false;
@@ -458,7 +453,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     static constexpr size_t cap_hit_trigger = 8;
   };
   mutable AdaptivePiecesState adapt_pieces_;
-  mutable size_t window_cg_iters_ = 0;
   mutable bool force_precond_refresh_ = false;
   /// Cached coarse leftmost direction and eigenvalue, refreshed each precond rebuild.
   mutable mfem::Vector deflation_leftmost_w_;
@@ -475,10 +469,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   /// Tracks if grad was monolithicized and needs deletion
   mutable bool grad_monolithic = false;
 
-  // === TIMING BEGIN ===
   mutable double hess_vec_time_ = 0.0;
   mutable double precond_time_ = 0.0;
-  mutable double augment_time_ = 0.0;
   mutable double assemble_jacobian_time_ = 0.0;
   mutable double assemble_gradient_time_ = 0.0;
   mutable double bsr_convert_time_ = 0.0;
@@ -488,7 +480,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable double batch_hess_vec_time_ = 0.0;
   mutable size_t num_hess_vecs_ = 0;
   mutable size_t num_preconds_ = 0;
-  mutable size_t num_augments_ = 0;
   mutable size_t num_jacobian_assembles_ = 0;
   /// true while `grad` matches the current iterate X; cleared whenever X changes.
   mutable bool grad_is_current_ = false;
@@ -519,7 +510,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   mutable bool cg_sync_diag_ = (std::getenv("SMITH_CG_SYNC_DIAG") != nullptr);
   mutable double dot_barrier_time_ = 0.0;
   mutable double dot_allreduce_time_ = 0.0;
-  // === TIMING END ===
 
   std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 
@@ -731,23 +721,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                          double r0_norm_squared) const
   {
     auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
-    try {
-      steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda, &cg_profile_);
-    } catch (const DeflationIndefiniteCoarseException& e) {
-      results.interior_status = TrustRegionResults::Status::NegativeCurvature;
-      results.cg_iterations_count = std::max<size_t>(results.cg_iterations_count, 1);
-      results.cg_hit_max_iters = false;
-      results.cg_model_stagnated = false;
-      // Per user spec: z = leftmost direction as-is. The subspace solver picks optimal sign
-      // and magnitude. Do NOT append to left_mosts — z itself is fed to the subspace as one
-      // of its bases, alongside cauchy, previous_steps, and the existing left_mosts ring.
-      results.z = e.direction();
-      rCurrent = r0;
-      if (print_level >= 2) {
-        mfem::out << "Deflation coarse operator is indefinite, lambda_min = " << e.eigenvalue()
-                  << "; z := W*v_min, routed to subspace.\n";
-      }
-    }
+    steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda, &cg_profile_);
   }
 
   void fallbackToCauchyPoint(TrustRegionResults& results, const char* reason) const
@@ -786,6 +760,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     saveAcceptedStep(trResults.d);
     if (!subspace_cache.leftmosts.empty()) {
       left_mosts = subspace_cache.leftmosts;
+      left_mosts_has_deflation_coarse_ = false;
     }
     grad_is_current_ = false;
     X = accepted_x;
@@ -914,57 +889,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     }
   }
 
-  /// 2D model-objective minimization in span(d, w): minimize g^T s + 0.5 s^T A s s.t. ||s|| ≤ Δ.
-  /// Closed-form optimal α in `s = d + α w` when w^T A w > 0; otherwise step to TR boundary in
-  /// the descent direction along w. Replaces `d` only if the resulting model objective strictly
-  /// improves on the original `d`. Costs ~2 hess_vecs (Aw and Ad_new).
-  template <typename HessVecFunc>
-  void augmentDirectionWithDeflationLeftmost(mfem::Vector& d, const mfem::Vector& g, double tr_size,
-                                             const HessVecFunc& H) const
-  {
-    if (!deflation_precond_ || deflation_leftmost_w_.Size() != d.Size()) return;
-    const mfem::Vector& w = deflation_leftmost_w_;
-
-    mfem::Vector Ad(d.Size()), Aw(d.Size());
-    H(d, Ad);
-    H(w, Aw);
-    const double q_old = Dot(g, d) + 0.5 * Dot(d, Ad);
-
-    const double wAw = Dot(w, Aw);
-    const double dAw = Dot(d, Aw);
-    const double gw = Dot(g, w);
-
-    // Unconstrained optimum along α: solves d/dα [g^T(d+αw) + 0.5 (d+αw)^T A (d+αw)] = 0
-    double alpha = 0.0;
-    if (wAw > 1e-30) {
-      alpha = -(dAw + gw) / wAw;
-    } else {
-      // Negative or zero curvature along w → go to boundary in the descent direction.
-      alpha = (dAw + gw > 0.0) ? -1.0 : 1.0;
-    }
-
-    // Constrain ||d + α w||^2 ≤ tr_size^2: solve quadratic in α.
-    const double dd = Dot(d, d), dw = Dot(d, w), ww = Dot(w, w);
-    if (ww > 1e-30) {
-      const double radius_sq = tr_size * tr_size;
-      const double disc = dw * dw - ww * (dd - radius_sq);
-      if (disc < 0.0) return;  // current d already outside TR — leave alone
-      const double sq = std::sqrt(disc);
-      const double a_hi = (-dw + sq) / ww;
-      const double a_lo = (-dw - sq) / ww;
-      if (alpha > a_hi) alpha = a_hi;
-      if (alpha < a_lo) alpha = a_lo;
-    }
-
-    mfem::Vector d_new(d);
-    d_new.Add(alpha, w);
-
-    mfem::Vector Adnew(d.Size());
-    H(d_new, Adnew);
-    const double q_new = Dot(g, d_new) + 0.5 * Dot(d_new, Adnew);
-    if (q_new < q_old) d = d_new;
-  }
-
   /// @overload
   void Mult(const mfem::Vector&, mfem::Vector& X) const override
   {
@@ -1012,13 +936,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     settings.eta3 = nonlinear_options.tr_eta3;
     settings.eta4 = nonlinear_options.tr_eta4;
 
-    // === TIMING BEGIN ===
-    hess_vec_time_ = precond_time_ = augment_time_ = 0.0;
+    hess_vec_time_ = precond_time_ = 0.0;
     assemble_jacobian_time_ = precond_setop_time_ = 0.0;
     assemble_gradient_time_ = bsr_convert_time_ = 0.0;
     gradient_assemble_timers = {};
     subspace_prepare_time_ = subspace_solve_time_ = batch_hess_vec_time_ = 0.0;
-    num_hess_vecs_ = num_preconds_ = num_augments_ = 0;
+    num_hess_vecs_ = num_preconds_ = 0;
     num_jacobian_assembles_ = num_precond_setops_ = 0;
     num_subspace_prepares_ = num_subspace_solves_ = 0;
     num_batch_hess_vec_calls_ = num_batch_hess_vec_actions_ = 0;
@@ -1031,7 +954,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     line_search_retries_total_ = line_search_retries_max_ = 0;
     if (auto* defl = dynamic_cast<DeflationPreconditioner*>(&tr_precond)) defl->resetTimers();
     double solve_t0 = MPI_Wtime();
-    // === TIMING END ===
 
     int subspace_option = nonlinear_options.subspace_option;
     int num_leftmost = nonlinear_options.num_leftmost;
@@ -1048,10 +970,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     double max_norm_seen = norm;
     int consecutive_tr_shrinks = 0;
 
-    // Adaptive pieces: (re)arm per solve; ladder state (current_s/locked) persists across
-    // load steps. Enabled by deflation_pieces == 0.
     adapt_pieces_.enabled = (linear_options.deflation_pieces == 0);
-    // Ratchet state (current_s, cumulative cap hits, locked) persists across load steps.
 
     int it = 0;
     for (; true; it++) {
@@ -1151,17 +1070,30 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                              std::pow(nonlinear_options.cg_cap_gamma, consecutive_tr_shrinks);
           settings.max_cg_iterations = static_cast<size_t>(std::clamp(cap, cap_min, static_cast<double>(cap_max_full)));
         }
-        // Indefinite-coarse path: push the WtAW lowest mode into left_mosts as a candidate
-        // negative-curvature subspace basis vector. Mult itself applies smoother only (PD)
-        // so CG runs normally and contributes a Newton-quality direction.
+        if (deflation_precond_ && deflation_precond_->coarseIsSPD() && left_mosts_has_deflation_coarse_) {
+          if (!left_mosts.empty()) left_mosts.pop_back();
+          left_mosts_has_deflation_coarse_ = false;
+        }
+
+        // Indefinite-coarse path: keep the running reduced-subspace leftmost estimates and
+        // add one extra WtAW lowest mode as a candidate negative-curvature direction. Mult
+        // itself applies smoother only (PD), so CG still contributes a Newton-quality direction.
         if (deflation_precond_ && !deflation_precond_->coarseIsSPD() && deflation_leftmost_w_.Size() == r.Size()) {
-          const int k = std::max(1, nonlinear_options.num_leftmost);
-          while (left_mosts.size() >= static_cast<size_t>(k)) {
-            left_mosts.erase(left_mosts.begin());
+          const size_t max_running_leftmost = static_cast<size_t>(std::max(1, nonlinear_options.num_leftmost));
+          if (left_mosts_has_deflation_coarse_) {
+            if (left_mosts.empty()) {
+              left_mosts.emplace_back(std::make_shared<mfem::Vector>(deflation_leftmost_w_));
+            } else {
+              left_mosts.back() = std::make_shared<mfem::Vector>(deflation_leftmost_w_);
+            }
+          } else {
+            while (left_mosts.size() > max_running_leftmost) {
+              left_mosts.erase(left_mosts.begin());
+            }
+            left_mosts.emplace_back(std::make_shared<mfem::Vector>(deflation_leftmost_w_));
+            left_mosts_has_deflation_coarse_ = true;
           }
-          left_mosts.emplace_back(std::make_shared<mfem::Vector>(deflation_leftmost_w_));
           if (print_level >= 2) {
-            // Diagnostic: verify curvature and descent sign of the leftmost direction.
             const mfem::Vector& w = deflation_leftmost_w_;
             mfem::Vector Aw(w.Size());
             hess_vec_func(w, Aw);
@@ -1182,19 +1114,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
 
-      // Adaptive-cap diagnostic (SMITH_TR_CAP_DIAG=1): one line per outer with the state the
-      // cap schedule would consume. norm/tr_size are unmodified between the model solve and
-      // the line search, so capturing here reflects what CG saw.
-      static const bool cap_diag_enabled = [] {
-        const char* v = std::getenv("SMITH_TR_CAP_DIAG");
-        return v && v[0] != '\0' && v[0] != '0';
-      }();
-      const double diag_norm_pre = norm;
-      const double diag_tr_pre = tr_size;
-      const size_t diag_cg_iters = trResults.cg_iterations_count;
-      double diag_rho = std::numeric_limits<double>::quiet_NaN();
+      const double tr_size_pre_line_search = tr_size;
 
-      // === TIMING BEGIN === — per-outer-iter CG-count histogram + status tally
       {
         const size_t ci = trResults.cg_iterations_count;
         const size_t bin = (ci < 10) ? 0 : (ci < 50) ? 1 : (ci < 200) ? 2 : (ci < 1000) ? 3 : 4;
@@ -1218,7 +1139,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         }
         if (trResults.cg_hit_max_iters) ++cg_hit_max_iters_count_;
       }
-      // === TIMING END ===
 
       bool have_computed_Hvs = false;
       bool have_prepared_subspace = false;
@@ -1389,16 +1309,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         double realImprove = -realObjective;
 
         double rho = realImprove / modelImprove;
-        diag_rho = rho;
         if (modelObjective > 0) {
           if (print_level >= 2) {
             mfem::out << "Found a positive model objective increase.  Debug if you see this.\n";
           }
           rho = realImprove / -modelImprove;
         }
-
-        // std::cout << "rho , stuff = " << rho << " " << settings.eta3 << std::endl;
-        // std::cout << "stat = "<< trResults.interior_status << std::endl;
 
         if (!(rho >= settings.eta2) ||
             rho > settings.eta4) {  // not enough progress, decrease trust region. write it this way to handle NaNs.
@@ -1412,10 +1328,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           tr_size *= settings.t2;
         }
 
-        // eventually extend to handle this case to handle occasional roundoff issues
-        // modelRes = g + Jd
-        // modelResNorm = np.linalg.norm(modelRes)
-        // realResNorm = np.linalg.norm(gy)
         // Residual-norm safeguard against the trapezoid/Simpson blind spot. Skipped when the
         // exact-energy callback is in use, because ΔE is then sign-accurate by construction
         // and the safeguard would over-reject legitimate energy-descent steps that grow ‖r‖.
@@ -1435,27 +1347,18 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           break;
         }
       }
-      // === TIMING BEGIN ===
       {
-        const size_t ls = static_cast<size_t>(lineSearchIter);
+        const size_t ls = static_cast<size_t>(std::max(lineSearchIter - 1, 0));
         line_search_retries_total_ += ls;
         if (ls > line_search_retries_max_) line_search_retries_max_ = ls;
       }
-      // === TIMING END ===
 
-      if (tr_size < diag_tr_pre) {
+      if (tr_size < tr_size_pre_line_search) {
         ++consecutive_tr_shrinks;
       } else {
         consecutive_tr_shrinks = 0;
       }
 
-      // Adaptive pieces v4: deterministic one-way ratchet on SUSTAINED CG-cap saturation.
-      // Run-length of consecutive cap-saturated outers separates the classes with ~2x
-      // margins (measured at the suite defaults: arch max-run 262, block 35 vs twist 6,
-      // contact 3): snap-through spikes and cold starts are short transients, a
-      // preconditioner-limited solve saturates for dozens of outers in a row. On trigger,
-      // commit once to the pow2-floored size-rule target. All inputs are replicated
-      // integers — decisions are bitwise-deterministic across ranks and runs.
       if (adapt_pieces_.enabled && !adapt_pieces_.locked && deflation_precond_) {
         if (trResults.cg_hit_max_iters) {
           ++adapt_pieces_.cumulative_cap_hits;
@@ -1475,16 +1378,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           }
           adapt_pieces_.locked = true;
         }
-      }
-
-      if (cap_diag_enabled) {
-        // The line-search loop only exits via accept-break or retry exhaustion.
-        const bool diag_accepted = lineSearchIter <= nonlinear_options.max_line_search_iterations;
-        mfem::out << "[capdiag] it=" << it << " norm=" << diag_norm_pre << " norm_goal=" << norm_goal
-                  << " tr_pre=" << diag_tr_pre << " tr_post=" << tr_size << " cg=" << diag_cg_iters
-                  << " hit_max=" << trResults.cg_hit_max_iters << " stag=" << trResults.cg_model_stagnated
-                  << " status=" << static_cast<int>(trResults.interior_status) << " rho=" << diag_rho
-                  << " accepted=" << diag_accepted << " ls=" << lineSearchIter << "\n";
       }
     }
 
@@ -1514,7 +1407,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       };
       double t_hv = rmax(hess_vec_time_);
       double t_pc = rmax(precond_time_);
-      double t_ag = rmax(augment_time_);
       double t_aj = rmax(assemble_jacobian_time_);
       double t_ag_grad = rmax(assemble_gradient_time_);
       double t_bsr = rmax(bsr_convert_time_);
@@ -1547,7 +1439,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                   << num_batch_hess_vec_actions_ << " H-actions)\n"
                   << "  subspace prepare       : " << t_sp << " s  (" << num_subspace_prepares_ << " calls)\n"
                   << "  subspace solve         : " << t_ss << " s  (" << num_subspace_solves_ << " calls)\n"
-                  << "  augment-direction      : " << t_ag << " s  (" << num_augments_ << " calls)\n"
                   << "  --- in-CG breakdown ---\n"
                   << "  in-CG H.Mult           : " << t_cg_H << " s  (" << cg_profile_.H_mult_count << " calls)\n"
                   << "  in-CG P.Mult           : " << t_cg_P << " s  (" << cg_profile_.P_mult_count << " calls)\n"
@@ -1562,8 +1453,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                   << "  [50,200) : " << cg_iter_hist_[2] << "\n"
                   << "  [200,1k) : " << cg_iter_hist_[3] << "\n"
                   << "  [1k,+)   : " << cg_iter_hist_[4] << "\n"
-                  << "  mean = " << (cg_outer_count_ ? cg_iter_sum_ / cg_outer_count_ : 0)
-                  << "  max = " << cg_iter_max_ << "  total = " << cg_iter_sum_ << "\n"
+                  << "  mean = " << (cg_outer_count_ ? cg_iter_sum_ / cg_outer_count_ : 0) << "  max = " << cg_iter_max_
+                  << "  total = " << cg_iter_sum_ << "\n"
                   << "  --- CG exit status ---\n"
                   << "  Interior   : " << cg_status_hist_[0] << "\n"
                   << "  NegCurv    : " << cg_status_hist_[1] << "\n"

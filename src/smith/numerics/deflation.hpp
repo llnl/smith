@@ -41,18 +41,6 @@ int lanczosExtremeEigenpairs(int n, int k, const std::function<void(const double
                              std::vector<double>& evals, std::vector<mfem::Vector>& evecs, int max_iters = 0,
                              double tol = 1.0e-10);
 
-class DeflationIndefiniteCoarseException : public std::runtime_error {
- public:
-  DeflationIndefiniteCoarseException(double eigenvalue, const mfem::Vector& direction);
-
-  double eigenvalue() const { return eigenvalue_; }
-  const mfem::Vector& direction() const { return direction_; }
-
- private:
-  double eigenvalue_ = 0.0;
-  mfem::Vector direction_;
-};
-
 /// Polynomial order of the per-rank deflation basis.
 enum class DeflationOrder
 {
@@ -98,6 +86,14 @@ enum class DeflationSmoother
   BlockJacobi,
 };
 
+/**
+ * @brief Two-level deflation preconditioner using rank-local polynomial
+ * displacement modes as the coarse space.
+ *
+ * `SetOperator()` builds W, assembles W^T A W, factors or spectrally filters the
+ * coarse matrix, and configures the selected first-level smoother. `Mult()`
+ * applies the smoother plus a coarse correction.
+ */
 class DeflationPreconditioner : public mfem::Solver {
  public:
   /**
@@ -121,6 +117,7 @@ class DeflationPreconditioner : public mfem::Solver {
   /// Select the first-level smoother variant. Takes effect at the next SetOperator.
   void setSmootherVariant(DeflationSmoother variant) { smoother_variant_ = variant; }
 
+  /// True when a finite element space has been supplied.
   bool hasFES() const { return fes_ != nullptr; }
 
   /// factor W^T A W; also forwards to the inner smoother. A must be HypreParMatrix.
@@ -135,10 +132,15 @@ class DeflationPreconditioner : public mfem::Solver {
   /// Additive two-level Mult:  z = Jacobi(r) + W (W^T A W)^{-1} W^T r
   void Mult(const mfem::Vector& r, mfem::Vector& z) const override;
 
+  /// Number of coarse basis columns owned by this rank.
   int numLocalColumns() const { return static_cast<int>(W_local_.size()); }
+  /// Total number of coarse basis columns across all ranks.
   int numGlobalColumns() const { return m_; }
+  /// Global column offset of this rank's local coarse basis block.
   int myColumnOffset() const { return my_col_offset_; }
+  /// Rank-owned coarse basis vectors.
   const std::vector<mfem::Vector>& localColumns() const { return W_local_; }
+  /// Replicated coarse matrix W^T A W from the last SetOperator call.
   const mfem::DenseMatrix& coarseMatrix() const { return WtAW_; }
 
   // -------------------- Hooks for trust-region integration --------------------
@@ -158,7 +160,9 @@ class DeflationPreconditioner : public mfem::Solver {
   /// rank-revealing tolerance are dropped and do not make the preconditioner indefinite.
   bool coarseIsSPD() const { return coarse_is_spd_; }
 
+  /// Number of retained coarse eigenmodes after rank-revealing filtering.
   int coarseSpectralRank() const { return coarse_spectral_rank_; }
+  /// Eigenvalue cutoff used for rank-revealing spectral coarse solves.
   double coarseSpectralTolerance() const { return coarse_spectral_tol_; }
 
   /// Smallest eigenvalue of W^T A W. Computed lazily on first call after SetOperator.
@@ -174,14 +178,21 @@ class DeflationPreconditioner : public mfem::Solver {
   /// (ascending). `evals` receives the matching eigenvalues. Sized to local tdofs.
   void coarseSmallestDirections(int k, std::vector<mfem::Vector>& dirs, std::vector<double>& evals) const;
 
-  // === TIMING BEGIN === (remove block when no longer needed)
+  /// Cumulative time spent forming A*W during SetOperator.
   double setopMatvecTime() const { return setop_matvec_time_; }
+  /// Cumulative time spent factoring or filtering the coarse matrix.
   double setopFactorTime() const { return setop_factor_time_; }
+  /// Cumulative time spent configuring the first-level smoother.
   double setopSmootherTime() const { return setop_smoother_time_; }
+  /// Cumulative wall time spent in Mult.
   double multTotalTime() const { return mult_total_time_; }
+  /// Cumulative wall time spent applying the coarse correction in Mult.
   double multCoarseTime() const { return mult_coarse_time_; }
+  /// Cumulative wall time spent applying the first-level smoother in Mult.
   double multSmootherTime() const { return mult_smoother_time_; }
+  /// Number of Mult calls included in the timing counters.
   int multCalls() const { return mult_calls_; }
+  /// Clear all timing counters and coarse-factor diagnostic counters.
   void resetTimers() const
   {
     setop_matvec_time_ = setop_factor_time_ = setop_smoother_time_ = 0.0;
@@ -194,8 +205,8 @@ class DeflationPreconditioner : public mfem::Solver {
     wtaw_cholesky_failures_ = wtaw_pp_cholesky_failures_ = 0;
     wtaw_regularized_ = 0;
   }
+  /// Print reduced timing counters on rank zero.
   void printTimingSummary(MPI_Comm comm) const;
-  // === TIMING END ===
 
   /// zero out the rows of W on the given essential true dofs.
   /// Necessary when A came from FormLinearSystem (identity rows on essential dofs);
@@ -204,11 +215,13 @@ class DeflationPreconditioner : public mfem::Solver {
 
   /// Switch between coarse-correction modes. Can be called any time after SetOperator.
   void setCoarseMode(CoarseMode m) { coarse_mode_ = m; }
+  /// Current coarse-correction mode.
   CoarseMode coarseMode() const { return coarse_mode_; }
 
   /// Polynomial order of the deflation basis. Must be called before the first
   /// `SetOperator`; later calls force a basis rebuild.
   void setDeflationOrder(DeflationOrder order);
+  /// Current polynomial order of the deflation basis.
   DeflationOrder deflationOrder() const { return order_; }
 
   /// Sub-rank pieces: split this rank's elements into `s` geometric pieces (recursive
@@ -216,9 +229,10 @@ class DeflationPreconditioner : public mfem::Solver {
   /// piece. Enriches the coarse space at low processor counts (modes_per_rank = s * mpr).
   /// 1 (default) reproduces the classic per-rank basis bitwise. Forces a basis rebuild.
   void setNumPieces(int s);
+  /// Current number of geometric pieces per rank.
   int numPieces() const { return num_pieces_; }
 
-  /// Upper bound for adaptive piece selection (see performance_plan.md, E* study):
+  /// Upper bound for adaptive piece selection:
   /// min of the size rule dofs/(ranks·D*) with D* = 3000 dofs/piece, the coarse-size
   /// ceiling m = pieces·ranks·mpr ≤ 500, and ≥ 64 elements/piece on every rank.
   /// Collective on first call (global dof count + min local element count); cached.
@@ -346,7 +360,6 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable std::vector<double> point_diag_;
   mfem::Array<int> ess_tdofs_;
 
-  // === TIMING BEGIN ===
   mutable double setop_matvec_time_ = 0.0;
   mutable double setop_factor_time_ = 0.0;
   mutable double setop_smoother_time_ = 0.0;
@@ -365,7 +378,6 @@ class DeflationPreconditioner : public mfem::Solver {
   mutable int wtaw_pp_cholesky_failures_ = 0;
   mutable int wtaw_regularized_ = 0;
   mutable long long wtaw_null_filtered_ = 0;
-  // === TIMING END ===
 };
 
 }  // namespace smith
