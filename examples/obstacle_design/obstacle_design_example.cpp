@@ -85,8 +85,8 @@ class SmithObstacleDesignProblem : public ObstacleDesignProblem {
   std::shared_ptr<WeakFormT>
       objective_grad_displacement_;  // obstacle design objective gradient with respect to displacement
   std::shared_ptr<WeakFormT>
-      objective_grad_obstacle_;  // obstacle design objective gradient with respect to obstacle design field
-  std::vector<smith::FiniteElementState*> states_;         // optimization state variables
+      objective_grad_obstacle_;          // obstacle design objective gradient with respect to obstacle design field
+  std::vector<smith::FieldPtr> states_;  // optimization state variables
   std::unique_ptr<smith::FiniteElementState> shape_disp_;  // shape displacement
   std::shared_ptr<mfem::HypreParMatrix> HuuE_;  // Hessian (u,u) of obstacle design objective, u = "displacement"
   std::shared_ptr<mfem::HypreParMatrix>
