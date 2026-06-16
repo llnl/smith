@@ -106,14 +106,14 @@ std::unique_ptr<BasePhysics> createSolidSolver(std::shared_ptr<Mesh> mesh)
 
   auto solid = std::make_unique<ParametricSolid>(nonlinear_options, solid_mechanics::direct_linear_options,
                                                  solid_mechanics::default_quasistatic_options, physics_prefix, mesh,
-                                                 std::vector<std::string>{"E", "v"});
+                                                 std::vector<std::string>{"K", "G"});
 
   FiniteElementState bulk_modulus(mesh->mfemParMesh(), H1<p>{}, "bulk_modulus");
   bulk_modulus = 1.0;
-  FiniteElementState poisson_ratio(mesh->mfemParMesh(), H1<p>{}, "poisson_ratio");
-  poisson_ratio = 0.3;
+  FiniteElementState shear_modulus(mesh->mfemParMesh(), H1<p>{}, "shear_modulus");
+  shear_modulus = 0.5;
   solid->setParameter(0, bulk_modulus);
-  solid->setParameter(1, poisson_ratio);
+  solid->setParameter(1, shear_modulus);
 
   solid_mechanics::ParameterizedNeoHookeanSolid material{1.0, 0.0, 0.0};
   solid->setMaterial(DependsOn<0, 1>{}, material, mesh->entireBody());
