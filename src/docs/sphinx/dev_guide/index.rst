@@ -16,6 +16,7 @@ Developer Guide
    equation_solver
    functional
    gitflow_branching
+   lc_gitlab
    logging
    macmini
    memory_checking
