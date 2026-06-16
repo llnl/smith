@@ -14,9 +14,7 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
 
     if(ENZYME_FOUND)
         list(APPEND CONTACT_EXAMPLES_SOURCES
-        ironing_2D.cpp
-        ironing_2D_circle.cpp
-        twisted_ironing_2D.cpp
+            ironing_2D.cpp
         )
     endif()
 
@@ -28,9 +26,21 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
                              OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
                              DEPENDS_ON  smith)
 
-        smith_add_example_test(NAME           contact_${example_name}
-                               COMMAND        contact_${example_name}
-                               NUM_MPI_TASKS  4)
+        if(example_name STREQUAL "ironing_2D")
+            smith_add_example_test(NAME           contact_ironing_2D_square
+                                   COMMAND        contact_${example_name} --case square
+                                   NUM_MPI_TASKS  4)
+            smith_add_example_test(NAME           contact_ironing_2D_circle
+                                   COMMAND        contact_${example_name} --case circle
+                                   NUM_MPI_TASKS  4)
+            smith_add_example_test(NAME           contact_ironing_2D_twisted
+                                   COMMAND        contact_${example_name} --case twisted
+                                   NUM_MPI_TASKS  4)
+        else()
+            smith_add_example_test(NAME           contact_${example_name}
+                                   COMMAND        contact_${example_name}
+                                   NUM_MPI_TASKS  4)
+        endif()
 
         if(SMITH_ENABLE_HIP)
             blt_add_target_compile_flags(TO contact_${example_name} FLAGS "-fgpu-rdc")
