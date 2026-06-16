@@ -74,14 +74,14 @@ std::string caseName(IroningCase ironing_case)
 
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
 {
-  constexpr auto mesh_factor = 1;
+  constexpr auto mesh_factor = 1;  // 8;
 
-  auto mesh = shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(64 * mesh_factor, 16 * mesh_factor)
+  auto mesh = shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(8 * mesh_factor, 2 * mesh_factor)
                                               .updateBdrAttrib(1, 6)
                                               .updateBdrAttrib(3, 9)
                                               .updateBdrAttrib(2, 1)
                                               .scale({1.0, 0.25}),
-                                          shared::MeshBuilder::SquareMesh(16 * mesh_factor, 8 * mesh_factor)
+                                          shared::MeshBuilder::SquareMesh(2 * mesh_factor, 1 * mesh_factor)
                                               .scale({0.25, 0.125})
                                               .translate({0.0, 0.25})
                                               .updateBdrAttrib(3, 5)
@@ -202,8 +202,8 @@ CaseConfig makeCaseConfig(IroningCase ironing_case)
     case IroningCase::Twisted:
       config.mesh = buildSquareMesh(config.mesh_tag);
       config.displacement = twistedDisplacement();
-      config.substrate_contact_attrs = {8};
-      config.indenter_contact_attrs = {9};
+      config.substrate_contact_attrs = {9};
+      config.indenter_contact_attrs = {8};
       config.num_steps = 110;
       break;
   }
