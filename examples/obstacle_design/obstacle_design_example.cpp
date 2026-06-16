@@ -286,13 +286,12 @@ SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamOptProblem* parametr
                                                        std::shared_ptr<WeakFormT> objective_grad_obstacle)
     : ObstacleDesignProblem(parametrized_opt_problem), time_info_(0.0, 0.0, 0)
 {
-  states_.resize(states.size());
-  std::copy(states.begin(), states.end(), states_.begin());
   mesh_ = mesh;
   shape_disp_ = std::make_unique<smith::FiniteElementState>(mesh_->newShapeDisplacement());
   design_objective_ = design_objective;
   objective_grad_displacement_ = objective_grad_displacement;
   objective_grad_obstacle_ = objective_grad_obstacle;
+  std::copy(states.begin(), states.end(), std::back_inserter(states_));
 }
 
 double SmithObstacleDesignProblem::E(const mfem::Vector& u, const mfem::Vector& /*p*/, const mfem::Vector& theta,
