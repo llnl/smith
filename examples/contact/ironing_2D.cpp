@@ -230,11 +230,12 @@ int main(int argc, char* argv[])
   return 1;
 #endif
 
-  CaseConfig config = makeCaseConfig(parseCase(selected_case));
-  auto& mesh = config.mesh;
-
+  const auto ironing_case = parseCase(selected_case);
   axom::sidre::DataStore datastore;
-  smith::StateManager::initialize(datastore, config.name + "_data");
+  smith::StateManager::initialize(datastore, "contact_ironing_2D_" + caseName(ironing_case) + "_example_data");
+
+  CaseConfig config = makeCaseConfig(ironing_case);
+  auto& mesh = config.mesh;
 
   smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
                                             .preconditioner = smith::Preconditioner::HypreAMG,
