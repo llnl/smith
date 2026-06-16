@@ -99,7 +99,6 @@ MeshPtr buildCircleMesh(const std::string& mesh_tag)
       {shared::MeshBuilder::SquareMesh(32 * mesh_factor, 8 * mesh_factor)
            .updateBdrAttrib(1, 6)
            .updateBdrAttrib(3, 9)
-           .bdrAttribInfo()
            .scale({1.0, 0.25}),
        shared::MeshBuilder::SemiCircularShell(mesh_factor * 3 / 2, 10 * mesh_factor, 0.075, 0.125)
            .translate({0.125, 0.375})
@@ -237,9 +236,8 @@ int main(int argc, char* argv[])
   CaseConfig config = makeCaseConfig(ironing_case);
   auto& mesh = config.mesh;
 
-  smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::CG,
-                                            .preconditioner = smith::Preconditioner::HypreAMG,
-                                            .print_level = 0};
+  smith::LinearSolverOptions linear_options{
+      .linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreAMG, .print_level = 0};
 
   mfem::VisItDataCollection visit_dc(config.name + "_visit", &mesh->mfemParMesh());
   visit_dc.SetPrefixPath("visit_out");
@@ -279,15 +277,14 @@ int main(int argc, char* argv[])
   mesh->addDomainOfBoundaryElements("top_of_indenter", smith::by_attr<DIM>(5));
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
-  solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs,
-                                     contact_options);
+  solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
   }
 
-  const std::string visit_name = config.name + "_visit";
-  solid_solver.outputStateToDisk(visit_name);
+  const std::string paraview_name = config.name + "_paraview";
+  solid_solver.outputStateToDisk(paraview_name);
 
   solid_solver.completeSetup();
 
@@ -298,7 +295,7 @@ int main(int argc, char* argv[])
     visit_dc.SetTime((i + 1) * dt);
     visit_dc.Save();
 
-    solid_solver.outputStateToDisk(visit_name);
+    solid_solver.outputStateToDisk(paraview_name);
   }
 
   return 0;
