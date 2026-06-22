@@ -220,10 +220,11 @@ int main(int argc, char* argv[])
   auto design_objective = std::make_shared<ObjectiveT>("design_objective", mesh, space_ptrs);
 
   design_objective->addBodyIntegral(
-      smith::DependsOn<2>{}, mesh->entireBodyName(), [](double /*t*/, auto /*X*/, auto OBSTACLE) {
-        // auto f0 = 0.5 * smith::get<smith::VALUE>(DISP) * smith::get<smith::VALUE>(DISP);
-        auto f1 = 0.5 * smith::get<smith::VALUE>(OBSTACLE) * smith::get<smith::VALUE>(OBSTACLE);
-        return f1;
+      smith::DependsOn<1, 2>{}, mesh->entireBodyName(), [](double /*t*/, auto /*X*/, auto PRESSURE, auto OBSTACLE) {
+        auto fp = 0.5 * 1.e-3 * smith::get<smith::VALUE>(PRESSURE) * smith::get<smith::VALUE>(PRESSURE);
+        auto fo = 0.5 * smith::get<smith::VALUE>(OBSTACLE) * smith::get<smith::VALUE>(OBSTACLE);
+        // return fo;
+        return fp + fo;
       });
   states[2] = 1.0;  // obstacle = 1
 
@@ -237,9 +238,11 @@ int main(int argc, char* argv[])
                                                          });
   auto weak_form_objective_grad_pressure =
       std::make_shared<WeakFormT>("design_obj_pres_residual", mesh, pressure.space(), space_ptrs);
-  weak_form_objective_grad_displacement->addBodyIntegral(
-      smith::DependsOn<>{}, mesh->entireBodyName(),
-      [](double /*t*/, auto /*X*/) { return smith::tuple{smith::zero{}, smith::zero{}}; });
+  weak_form_objective_grad_displacement->addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
+                                                         [](double /*t*/, auto /*X*/, auto PRESSURE) {
+                                                           auto res = 1.e-3 * smith::get<smith::VALUE>(PRESSURE);
+                                                           return smith::tuple{res, smith::zero{}};
+                                                         });
   auto weak_form_objective_grad_design =
       std::make_shared<WeakFormT>("design_obj_design_residual", mesh, obstacle.space(), space_ptrs);
   weak_form_objective_grad_design->addBodyIntegral(smith::DependsOn<2>{}, mesh->entireBodyName(),
@@ -270,16 +273,21 @@ int main(int argc, char* argv[])
   designoptimizer.SetBarrierParameter(1.e-3);
   designoptimizer.SetMaxIter(nonlinear_solve_maxiter);
   designoptimizer.RegularizePrimalHessian(1.e-10);
+  designoptimizer.SetPrintLevel(4);
   // TODO: the specfic barrier parameter and primal Hessian regularization values
   //       should be given by an option
   designoptimizer.Mult(X0, Xf);
 
-  auto vis_states = {const_state_ptrs[0]};
+  auto vis_states = {const_state_ptrs[0], const_state_ptrs[1], const_state_ptrs[2]};
   auto writer = createParaviewWriter(mesh->mfemParMesh(), vis_states, "obstacledesign");
 
   if (visualize) {
     mfem::Vector uf(Xf, 0, dimU);
+    mfem::Vector pf(Xf, dimU, dimU);
+    mfem::Vector thf(Xf, 2 * dimU, dimU);
     states[0] = uf;
+    states[1] = pf;
+    states[2] = thf;
     writer.write(0, 0.0, vis_states);
   }
 }
