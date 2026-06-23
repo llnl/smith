@@ -207,7 +207,9 @@ TEST_P(ContactFiniteDiff3D, patch)
       }
     }
     std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
-
+    // Reset contact to the correct states (non-finite differenced) before advancing to the next step
+    f = 0.0;
+    oper->Mult(merged_sol, f);
     solid_solver.advanceTimestep(dt);
   }
 }
