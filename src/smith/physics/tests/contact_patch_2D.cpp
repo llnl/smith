@@ -4,33 +4,29 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include "smith/physics/solid_mechanics_contact.hpp"
-
-#include <fem/datacollection.hpp>
-#include <functional>
-#include <mesh/vtk.hpp>
-#include <mfem/fem/coefficient.hpp>
-#include <mfem/fem/fe_coll.hpp>
-#include <mfem/fem/pfespace.hpp>
-#include <mfem/fem/pgridfunc.hpp>
-#include <mfem/linalg/hypre.hpp>
-#include <set>
-#include <src/smith/physics/contact/contact_config.hpp>
+#include <cmath>
+#include <iostream>
+#include <memory>
 #include <string>
-#include "axom/slic/core/SimpleLogger.hpp"
-#include <gtest/gtest.h>
-#include <mpi.h>
-#include "mfem.hpp"
+#include <tuple>
 
+#include "axom/sidre.hpp"
+#include "axom/slic.hpp"
+#include "gtest/gtest.h"
+#include "mfem.hpp"
+#include "mpi.h"
 #include "shared/mesh/MeshBuilder.hpp"
-#include "smith/mesh_utils/mesh_utils.hpp"
-#include "smith/physics/boundary_conditions/components.hpp"
-#include "smith/physics/state/state_manager.hpp"
-#include "smith/physics/mesh.hpp"
-#include "smith/physics/materials/solid_material.hpp"
-#include "smith/smith_config.hpp"
+
 #include "smith/infrastructure/application_manager.hpp"
-#include <fenv.h>
+#include "smith/numerics/functional/domain.hpp"
+#include "smith/numerics/functional/tensor.hpp"
+#include "smith/numerics/solver_config.hpp"
+#include "smith/physics/boundary_conditions/components.hpp"
+#include "smith/physics/contact/contact_config.hpp"
+#include "smith/physics/materials/solid_material.hpp"
+#include "smith/physics/mesh.hpp"
+#include "smith/physics/solid_mechanics_contact.hpp"
+#include "smith/physics/state/state_manager.hpp"
 
 // static void enable_fpe() {
 //   // trap on invalid ops (NaN), divide-by-zero, and overflow
