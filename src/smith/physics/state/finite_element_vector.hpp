@@ -194,13 +194,15 @@ class FiniteElementVector : public mfem::HypreParVector {
   std::reference_wrapper<mfem::ParMesh> mesh_;
 
   /**
-   * @brief Handle to the FiniteElementCollection. Shared to ensure it outlives any Sidre grid functions.
+   * @brief Handle to the FiniteElementCollection. Shared to allow safe memory management when multiple vectors or grid
+   * functions use the same collection.
    * @note Must be const as FESpaces store a const reference to their FEColls
    */
   std::shared_ptr<mfem::FiniteElementCollection> coll_;
 
   /**
-   * @brief Handle to the mfem::ParFiniteElementSpace. Shared to ensure it outlives any Sidre grid functions.
+   * @brief Handle to the mfem::ParFiniteElementSpace. Shared to allow safe memory management when multiple vectors or
+   * grid functions use the same space.
    */
   std::shared_ptr<mfem::ParFiniteElementSpace> space_;
 
