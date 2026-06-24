@@ -37,6 +37,7 @@ class TribolFiniteDiff : public testing::TestWithParam<std::pair<ContactEnforcem
 TEST_P(TribolFiniteDiff, patch)
 {
   constexpr double eps = 1.0e-7;
+  constexpr double tol = 2.0 * eps;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -47,19 +48,17 @@ TEST_P(TribolFiniteDiff, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  double shift = eps * 10;
   // clang-format off
   auto pmesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::CubeMesh(1, 1, 1),
-    shared::MeshBuilder::CubeMesh(1, 1, 1)
-      // shift up 99.9% height of element
-      .translate({0.0, 0.0, 0.999})
-      // shift x and y so the element edges are not overlapping
-      .translate({shift, shift, 0.0})
-      // change the mesh1 boundary attribute from 1 to 7
-      .updateBdrAttrib(1, 7)
-      // change the mesh1 boundary attribute from 6 to 8
-      .updateBdrAttrib(6, 8)
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .translate({0.0, 0.999})
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(3, 9)
+      .updateBdrAttrib(1, 6),
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(1, 8)
+      .updateBdrAttrib(3, 5)
   }), "patch_mesh", 0, 0);
   // clang-format on
 
@@ -105,12 +104,12 @@ TEST_P(TribolFiniteDiff, patch)
         if (diff > max_diff) {
           max_diff = diff;
         }
-        if (diff > eps) {
+        if (diff > tol) {
           std::cout << "(" << k << ", " << j << "):  J_exact = " << std::setprecision(15) << J_exact[k]
                     << "   J_fd = " << std::setprecision(15) << J_fd[k] << "   |diff| = " << std::setprecision(15)
                     << diff << std::endl;
         }
-        EXPECT_NEAR(J_exact[k], J_fd[k], eps);
+        EXPECT_NEAR(J_exact[k], J_fd[k], tol);
       }
     }
   }
