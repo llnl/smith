@@ -342,6 +342,8 @@ class StateManager {
     named_duals_.clear();
     owned_states_.clear();
     owned_duals_.clear();
+    owned_spaces_.clear();
+    owned_colls_.clear();
     shape_displacements_.clear();
     shape_displacement_duals_.clear();
     datacolls_.clear();
@@ -538,6 +540,13 @@ class StateManager {
   /// @brief Dual grid functions allocated by StateManager and registered as non-owning data in Sidre.
   /// Used for lifetime management only. May not contain all duals (for example, restarted duals).
   static std::vector<std::unique_ptr<mfem::ParGridFunction>> owned_duals_;
+
+  /// @brief Spaces allocated by StateManager and registered as non-owning data in Sidre.
+  /// Shared ownership ensures the space outlives any user-held FiniteElementVector copies.
+  static std::vector<std::shared_ptr<mfem::ParFiniteElementSpace>> owned_spaces_;
+  /// @brief Collections allocated by StateManager and registered as non-owning data in Sidre.
+  /// Shared ownership ensures the collection outlives any user-held FiniteElementVector copies.
+  static std::vector<std::shared_ptr<mfem::FiniteElementCollection>> owned_colls_;
 };
 
 /// @brief Check that a mesh satisfies our required properties
