@@ -12,7 +12,7 @@ spack:
       when: '%cxx'
     - spec: '%fortran=gcc'
       when: '%fortran'
-    - spec: '%mvapich2@2.3.7.clang_19'
+    - spec: '%mpi=mvapich2@2.3.7.clang_19'
       when: '%mpi'
     gcc_13:
     - spec: '%c=gcc'
@@ -21,7 +21,7 @@ spack:
       when: '%cxx'
     - spec: '%fortran=gcc'
       when: '%fortran'
-    - spec: '%mvapich2@2.3.7.gcc_13'
+    - spec: '%mpi=mvapich2@2.3.7.gcc_13'
       when: '%mpi'
 
 
