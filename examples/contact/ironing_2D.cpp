@@ -188,9 +188,7 @@ CaseConfig makeCaseConfig(IroningCase ironing_case)
       config.mesh = buildSquareMesh(config.mesh_tag);
       config.displacement = slidingDisplacement(0.1);
       config.substrate_contact_attrs = {9};
-      config.indenter_contact_attrs = {8};
-      config.add_secondary_contact = true;
-      config.secondary_indenter_contact_attrs = {2};
+      config.indenter_contact_attrs = {8, 2};
       break;
     case IroningCase::Circle:
       config.mesh = buildCircleMesh(config.mesh_tag);
