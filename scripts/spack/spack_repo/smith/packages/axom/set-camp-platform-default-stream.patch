@@ -1,0 +1,21 @@
+diff --git a/src/axom/config.hpp.in b/src/axom/config.hpp.in
+index f810b1108..ae10c89d5 100644
+--- a/src/axom/config.hpp.in
++++ b/src/axom/config.hpp.in
+@@ -77,6 +77,17 @@
+ #cmakedefine AXOM_USE_SPARSEHASH
+ #cmakedefine AXOM_USE_UMPIRE
+ 
++/*
++ * CAMP is required to use the platform default stream (if MFEM is built
++ * with RAJA). Define this before any RAJA or CAMP headers are included.
++ */
++#if defined(AXOM_USE_MFEM)
++#ifndef CAMP_USE_PLATFORM_DEFAULT_STREAM
++#define CAMP_USE_PLATFORM_DEFAULT_STREAM 1
++#endif
++#endif
++
+ /*
+  * Compiler defines for library capabilities
+  */

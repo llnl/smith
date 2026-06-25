@@ -14,3 +14,7 @@ class Axom(BuiltinAxom):
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
     version("0.14.0.1", commit="f81109cea1507cd9bbbd2f549c3fb33be18a3936", submodules=True, preferred=True)
+
+    # TODO remove patch after the following PR merges in Axom
+    # https://github.com/llnl/axom/pull/1893/changes
+    patch("set-camp-platform-default-stream.patch")
