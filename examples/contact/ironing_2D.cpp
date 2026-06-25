@@ -75,7 +75,7 @@ std::string caseName(IroningCase ironing_case)
 
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
 {
-  constexpr auto mesh_factor = 1;  // 8;
+  constexpr auto mesh_factor = 8;
 
   auto mesh = shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(8 * mesh_factor, 2 * mesh_factor)
                                               .updateBdrAttrib(1, 6)
