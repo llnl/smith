@@ -25,6 +25,7 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/smith.hpp"
 #include "smith/smith_config.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace {
 
@@ -218,9 +219,12 @@ int main(int argc, char* argv[])
   smith::ApplicationManager applicationManager(argc, argv);
 
   std::string selected_case = "square";
+  std::string selected_normal = "element";
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
       ->check(axom::CLI::IsMember({"square", "circle", "twisted"}));
+  app.add_option("--energy-mortar-normal", selected_normal, "Energy mortar normal field: element or averaged")
+      ->check(axom::CLI::IsMember({"element", "averaged"}));
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
 
@@ -278,9 +282,15 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
+  if (selected_normal == "averaged") {
+    tribol::setEnergyMortarNormalMode(0, tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL);
+  }
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
+    if (selected_normal == "averaged") {
+      tribol::setEnergyMortarNormalMode(1, tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL);
+    }
   }
 
   const std::string paraview_name = config.name + "_paraview";

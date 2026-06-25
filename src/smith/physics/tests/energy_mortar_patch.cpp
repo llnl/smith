@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "axom/sidre.hpp"
 #include "axom/slic.hpp"
@@ -29,6 +30,8 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/solid_mechanics_contact.hpp"
 #include "smith/physics/state/state_manager.hpp"
+#include "tribol/mesh/MeshData.hpp"
+#include "tribol/physics/EnergyMortar.hpp"
 
 // static void enable_fpe() {
 //   // trap on invalid ops (NaN), divide-by-zero, and overflow
@@ -36,6 +39,103 @@
 //   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
 
 // }
+
+TEST(H1EnergyMortarTotalDerivativeCheck, GtildeFDvsAD)
+{
+  tribol::RealT x1[3] = {0.0, 1.0, 2.0};
+  tribol::RealT y1[3] = {0.0, 0.0, 0.1};
+  tribol::RealT x2[3] = {0.2, 0.9, 1.6};
+  tribol::RealT y2[3] = {0.55, 0.52, 0.62};
+
+  tribol::IndexT conn1[4] = {1, 0, 2, 1};
+  tribol::IndexT conn2[4] = {0, 1, 1, 2};
+
+  tribol::MeshData mesh1(0, 2, 3, conn1, tribol::LINEAR_EDGE, x1, y1, nullptr, tribol::MemorySpace::Host);
+  tribol::MeshData mesh2(1, 2, 3, conn2, tribol::LINEAR_EDGE, x2, y2, nullptr, tribol::MemorySpace::Host);
+  mesh1.setReferencePosition(x1, y1, nullptr);
+  mesh2.setReferencePosition(x2, y2, nullptr);
+
+  tribol::ContactParams params;
+  params.del = 0.1;
+  params.k = 1.0;
+  params.N = 3;
+  params.enzyme_quadrature = true;
+  params.normal_mode = tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL;
+  params.projection_smoothing = false;
+
+  tribol::EnergyMortarCalculator evaluator(params);
+  tribol::InterfacePair pair(0, 0);
+  auto base = evaluator.compute_h1_total_derivatives(pair, mesh1.getView(), mesh2.getView());
+  const int ndof = 2 * (base.num_mesh1_nodes + base.num_mesh2_nodes);
+
+  std::vector<tribol::RealT> x1_orig(x1, x1 + 3);
+  std::vector<tribol::RealT> y1_orig(y1, y1 + 3);
+  std::vector<tribol::RealT> x2_orig(x2, x2 + 3);
+  std::vector<tribol::RealT> y2_orig(y2, y2 + 3);
+
+  auto eval_from_dofs = [&](const std::vector<double>& du) {
+    auto x1_pert = x1_orig;
+    auto y1_pert = y1_orig;
+    auto x2_pert = x2_orig;
+    auto y2_pert = y2_orig;
+    std::size_t idx = 0;
+    for (int i = 0; i < base.num_mesh1_nodes; ++i) {
+      x1_pert[static_cast<std::size_t>(base.mesh1_nodes[static_cast<std::size_t>(i)])] += du[idx++];
+    }
+    for (int i = 0; i < base.num_mesh1_nodes; ++i) {
+      y1_pert[static_cast<std::size_t>(base.mesh1_nodes[static_cast<std::size_t>(i)])] += du[idx++];
+    }
+    for (int i = 0; i < base.num_mesh2_nodes; ++i) {
+      x2_pert[static_cast<std::size_t>(base.mesh2_nodes[static_cast<std::size_t>(i)])] += du[idx++];
+    }
+    for (int i = 0; i < base.num_mesh2_nodes; ++i) {
+      y2_pert[static_cast<std::size_t>(base.mesh2_nodes[static_cast<std::size_t>(i)])] += du[idx++];
+    }
+    mesh1.setPosition(x1_pert.data(), y1_pert.data(), nullptr);
+    mesh2.setPosition(x2_pert.data(), y2_pert.data(), nullptr);
+    return evaluator.compute_h1_total_derivatives(pair, mesh1.getView(), mesh2.getView(), false);
+  };
+
+  const double eps_grad = 1.0e-7;
+  for (int j = 0; j < ndof; ++j) {
+    const auto j_idx = static_cast<std::size_t>(j);
+    std::vector<double> du(static_cast<std::size_t>(ndof), 0.0);
+    du[j_idx] = eps_grad;
+    auto plus = eval_from_dofs(du);
+    du[j_idx] = -eps_grad;
+    auto minus = eval_from_dofs(du);
+
+    EXPECT_NEAR(base.dg1_dx[j_idx], (plus.g_tilde[0] - minus.g_tilde[0]) / (2.0 * eps_grad), 1.0e-6);
+    EXPECT_NEAR(base.dg2_dx[j_idx], (plus.g_tilde[1] - minus.g_tilde[1]) / (2.0 * eps_grad), 1.0e-6);
+    EXPECT_NEAR(base.dA1_dx[j_idx], (plus.area[0] - minus.area[0]) / (2.0 * eps_grad), 1.0e-6);
+    EXPECT_NEAR(base.dA2_dx[j_idx], (plus.area[1] - minus.area[1]) / (2.0 * eps_grad), 1.0e-6);
+  }
+
+  const double eps_hess = 1.0e-6;
+  for (int col = 0; col < ndof; ++col) {
+    const auto col_idx = static_cast<std::size_t>(col);
+    std::vector<double> du(static_cast<std::size_t>(ndof), 0.0);
+    du[col_idx] = eps_hess;
+    auto plus = eval_from_dofs(du);
+    du[col_idx] = -eps_hess;
+    auto minus = eval_from_dofs(du);
+    for (int row = 0; row < ndof; ++row) {
+      const auto row_idx = static_cast<std::size_t>(row);
+      const auto idx = static_cast<std::size_t>(row * ndof + col);
+      EXPECT_NEAR(base.d2g1_dx2[idx], (plus.dg1_dx[row_idx] - minus.dg1_dx[row_idx]) / (2.0 * eps_hess),
+                  1.0e-4);
+      EXPECT_NEAR(base.d2g2_dx2[idx], (plus.dg2_dx[row_idx] - minus.dg2_dx[row_idx]) / (2.0 * eps_hess),
+                  1.0e-4);
+      EXPECT_NEAR(base.d2A1_dx2[idx], (plus.dA1_dx[row_idx] - minus.dA1_dx[row_idx]) / (2.0 * eps_hess),
+                  1.0e-4);
+      EXPECT_NEAR(base.d2A2_dx2[idx], (plus.dA2_dx[row_idx] - minus.dA2_dx[row_idx]) / (2.0 * eps_hess),
+                  1.0e-4);
+    }
+  }
+
+  mesh1.setPosition(x1_orig.data(), y1_orig.data(), nullptr);
+  mesh2.setPosition(x2_orig.data(), y2_orig.data(), nullptr);
+}
 
 namespace smith {
 
