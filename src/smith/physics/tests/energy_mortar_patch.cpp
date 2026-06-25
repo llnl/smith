@@ -96,7 +96,6 @@ TEST_P(ContactTest, patch)
   return;
 #endif
 
-
   smith::NonlinearSolverOptions nonlinear_options{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
                                                   .relative_tol = 1.0e-8,
                                                   .absolute_tol = 1.0e-10,
