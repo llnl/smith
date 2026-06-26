@@ -11,6 +11,7 @@
 #include <string>
 
 #include "axom/CLI11.hpp"
+#include "axom/sidre/core/MFEMSidreDataCollection.hpp"
 #include "axom/slic.hpp"
 #include "mfem.hpp"
 #include "shared/mesh/MeshBuilder.hpp"
@@ -26,6 +27,7 @@
 #include "smith/smith.hpp"
 #include "smith/smith_config.hpp"
 #include "tribol/interface/tribol.hpp"
+#include "tribol/interface/mfem_tribol.hpp"
 
 namespace {
 
@@ -218,11 +220,17 @@ int main(int argc, char* argv[])
 
   std::string selected_case = "square";
   std::string selected_normal = "element";
+  bool projection_smoothing = true;
+  int num_steps_override = -1;
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
       ->check(axom::CLI::IsMember({"square", "circle", "twisted"}));
   app.add_option("--energy-mortar-normal", selected_normal, "Energy mortar normal field: element or averaged")
       ->check(axom::CLI::IsMember({"element", "averaged"}));
+  app.add_flag("--energy-mortar-projection-smoothing,!--no-energy-mortar-projection-smoothing", projection_smoothing,
+               "Use projection-bound smoothing in the energy mortar contact calculation");
+  app.add_option("--num-steps", num_steps_override, "Override the number of time steps")
+      ->check(axom::CLI::NonNegativeNumber);
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
 
@@ -238,6 +246,9 @@ int main(int argc, char* argv[])
                                   "contact_ironing_2D_" + caseName(ironing_case) + "_" + normal_name + "_example_data");
 
   CaseConfig config = makeCaseConfig(ironing_case);
+  if (num_steps_override >= 0) {
+    config.num_steps = num_steps_override;
+  }
   config.name = "contact_ironing_2D_" + caseName(ironing_case) + "_" + normal_name + "_example";
   auto& mesh = config.mesh;
 
@@ -283,12 +294,14 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
+  tribol::setEnergyMortarProjectionSmoothing(0, projection_smoothing);
   if (selected_normal == "averaged") {
     tribol::setEnergyMortarNormalMode(0, tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL);
   }
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
+    tribol::setEnergyMortarProjectionSmoothing(1, projection_smoothing);
     if (selected_normal == "averaged") {
       tribol::setEnergyMortarNormalMode(1, tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL);
     }
@@ -299,6 +312,36 @@ int main(int argc, char* argv[])
 
   solid_solver.completeSetup();
 
+  std::unique_ptr<axom::sidre::DataStore> submesh_normal_datastore;
+  std::unique_ptr<axom::sidre::MFEMSidreDataCollection> submesh_normal_dc;
+  auto save_submesh_normals = [&](int cycle, double time) {
+    if (selected_normal != "averaged") {
+      return;
+    }
+
+    const std::string coll_name = config.name + "_submesh_normals";
+    auto& nodal_normal = tribol::getMfemEnergyMortarNodalNormal(0);
+    if (!submesh_normal_dc) {
+      submesh_normal_datastore = std::make_unique<axom::sidre::DataStore>();
+      auto* global_group = submesh_normal_datastore->getRoot()->createGroup(coll_name + "_global");
+      auto* bp_index_group = global_group->createGroup("blueprint_index/" + coll_name);
+      auto* domain_group = submesh_normal_datastore->getRoot()->createGroup(coll_name);
+
+      submesh_normal_dc =
+          std::make_unique<axom::sidre::MFEMSidreDataCollection>(coll_name, bp_index_group, domain_group, true);
+      auto& contact_submesh = tribol::getMfemSubmesh(0);
+      submesh_normal_dc->SetComm(contact_submesh.GetComm());
+      submesh_normal_dc->SetPrefixPath(config.name + "_submesh_normals_data");
+      submesh_normal_dc->SetMesh(&contact_submesh);
+      submesh_normal_dc->SetOwnData(false);
+      submesh_normal_dc->RegisterField("energy_mortar_nodal_normal", &nodal_normal);
+    }
+    nodal_normal.HostRead();
+    submesh_normal_dc->SetCycle(cycle);
+    submesh_normal_dc->SetTime(time);
+    submesh_normal_dc->Save();
+  };
+
   constexpr double dt = 1.0;
   for (int i{0}; i < config.num_steps; ++i) {
     solid_solver.advanceTimestep(dt);
@@ -307,6 +350,7 @@ int main(int argc, char* argv[])
     visit_dc.Save();
 
     solid_solver.outputStateToDisk(paraview_name);
+    save_submesh_normals(i + 1, (i + 1) * dt);
   }
 
   return 0;
