@@ -232,10 +232,13 @@ int main(int argc, char* argv[])
 #endif
 
   const auto ironing_case = parseCase(selected_case);
+  const std::string normal_name = selected_normal + "_normal";
   axom::sidre::DataStore datastore;
-  smith::StateManager::initialize(datastore, "contact_ironing_2D_" + caseName(ironing_case) + "_example_data");
+  smith::StateManager::initialize(datastore,
+                                  "contact_ironing_2D_" + caseName(ironing_case) + "_" + normal_name + "_example_data");
 
   CaseConfig config = makeCaseConfig(ironing_case);
+  config.name = "contact_ironing_2D_" + caseName(ironing_case) + "_" + normal_name + "_example";
   auto& mesh = config.mesh;
 
   smith::LinearSolverOptions linear_options{
