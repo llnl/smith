@@ -15,6 +15,8 @@ class Mfem(BuiltinMfem):
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
+    depends_on("fortran", type="build", when="+strumpack")
+
     # AddressSanitizer (ASan) is only supported by GCC and (some) LLVM-derived
     # compilers. Denylist compilers not known to support ASan
     asan_compiler_denylist = {
