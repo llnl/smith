@@ -15,4 +15,5 @@ USER smith
 RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/smith.git smith_repo
 
 WORKDIR "/home/smith/smith_repo"
+RUN ./scripts/docker/install-cmake-binary.sh
 RUN ./scripts/docker/setup-smith.sh

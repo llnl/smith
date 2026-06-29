@@ -195,13 +195,12 @@ spack:
         prefix: /usr
 
     # Globally lock in versions of packages
-    # TODO set CMake as external once radiuss-docker updates CMake version 3.26+
-    # cmake:
-    #   version: [3.24.2]
-    #   buildable: false
-    #   externals:
-    #   - spec: cmake@3.24.2
-    #     prefix: /usr/local
+    cmake:
+      version: [4.3.4]
+      buildable: false
+      externals:
+      - spec: cmake@4.3.4
+        prefix: /usr/local
     doxygen:
       version: [1.9.8]
       buildable: false
