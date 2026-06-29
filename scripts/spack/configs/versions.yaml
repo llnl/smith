@@ -2,7 +2,7 @@
 packages:
   axom:
     require:
-    - spec: "@0.14.0.1"
+    - spec: "@0.14.0.2"
   adiak:
     require:
     - spec: "@0.4.1"
