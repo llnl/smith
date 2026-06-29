@@ -65,27 +65,33 @@ smith::var_solid_material_t FromInlet<smith::var_solid_material_t>::operator()(c
   } else if (model == "LinearIsotropic") {
     result = smith::solid_mechanics::LinearIsotropic{.density = base["density"], .K = base["K"], .G = base["mu"]};
   } else if (model == "J2SmallStrain") {
-    smith::var_hardening_t hardening = base["hardening"].get<smith::var_hardening_t>();
+    auto hardening = base["hardening"];
+    std::string law = hardening["law"];
 
-    if (std::holds_alternative<smith::solid_mechanics::LinearHardening>(hardening)) {
+    if (law == "LinearHardening") {
       result = smith::solid_mechanics::J2SmallStrain<smith::solid_mechanics::LinearHardening>{
           .E = base["E"],
           .nu = base["nu"],
-          .hardening = std::get<smith::solid_mechanics::LinearHardening>(hardening),
+          .hardening = smith::solid_mechanics::LinearHardening{
+              .sigma_y = hardening["sigma_y"], .Hi = hardening["Hi"], .eta = hardening["eta"]},
           .Hk = base["Hk"],
           .density = base["density"]};
-    } else if (std::holds_alternative<smith::solid_mechanics::PowerLawHardening>(hardening)) {
+    } else if (law == "PowerLawHardening") {
       result = smith::solid_mechanics::J2SmallStrain<smith::solid_mechanics::PowerLawHardening>{
           .E = base["E"],
           .nu = base["nu"],
-          .hardening = std::get<smith::solid_mechanics::PowerLawHardening>(hardening),
+          .hardening = smith::solid_mechanics::PowerLawHardening{
+              .sigma_y = hardening["sigma_y"], .n = hardening["n"], .eps0 = hardening["eps0"], .eta = hardening["eta"]},
           .Hk = base["Hk"],
           .density = base["density"]};
-    } else if (std::holds_alternative<smith::solid_mechanics::VoceHardening>(hardening)) {
+    } else if (law == "VoceHardening") {
       result = smith::solid_mechanics::J2SmallStrain<smith::solid_mechanics::VoceHardening>{
           .E = base["E"],
           .nu = base["nu"],
-          .hardening = std::get<smith::solid_mechanics::VoceHardening>(hardening),
+          .hardening = smith::solid_mechanics::VoceHardening{.sigma_y = hardening["sigma_y"],
+                                                             .sigma_sat = hardening["sigma_sat"],
+                                                             .strain_constant = hardening["strain_constant"],
+                                                             .eta = hardening["eta"]},
           .Hk = base["Hk"],
           .density = base["density"]};
     }
