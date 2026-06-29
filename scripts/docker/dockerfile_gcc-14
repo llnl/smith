@@ -8,6 +8,13 @@ RUN sudo apt-get update -y
 RUN sudo apt-get install gettext gfortran-$(gcc -dumpversion) libopenblas-dev \
                          lsb-release lua5.2 lua5.2-dev ssh -fy
 
+# Override version installed from https://github.com/llnl/radiuss-docker/blob/main/scripts/install-cmake-binary.sh
+# TODO remove this one CMake version has been updated in radiuss-docker repo
+RUN CMAKE="4.3.4"; \
+    sudo curl -s -L https://github.com/Kitware/CMake/releases/download/v$CMAKE/cmake-$CMAKE-linux-x86_64.sh > cmake.sh; \
+    sudo sh cmake.sh --prefix=/usr/local --skip-license; \
+    rm cmake.sh;
+
 RUN sudo useradd -m -s /bin/bash -G sudo smith
 WORKDIR "/home/smith"
 USER smith
@@ -15,5 +22,4 @@ USER smith
 RUN git clone --recursive --branch $branch --single-branch --depth 1 https://github.com/LLNL/smith.git smith_repo
 
 WORKDIR "/home/smith/smith_repo"
-RUN ./scripts/docker/install-cmake-binary.sh
 RUN ./scripts/docker/setup-smith.sh
