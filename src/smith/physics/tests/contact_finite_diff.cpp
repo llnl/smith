@@ -19,7 +19,7 @@
 #include "smith/smith_config.hpp"
 
 #ifndef SMITH_USE_ENZYME
-#error "This file requires Enzyme to be enabled
+#error "This file requires Enzyme to be enabled"
 #endif
 
 #include "smith/numerics/functional/domain.hpp"
@@ -35,6 +35,16 @@ class ContactFiniteDiff3D : public testing::TestWithParam<std::pair<ContactEnfor
 
 class ContactFiniteDiff2D : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
 
+/**
+ * @brief Checks Smith's SingleMortar contact integration by finite-differencing a small 3D patch problem.
+ *
+ * The two-cube patch geometry gives a compact tied-normal contact configuration with known contact boundary attributes,
+ * essential displacement boundary conditions, and a small number of unconstrained true dofs.  At each timestep, the
+ * test builds the coupled quasistatic residual vector from the current displacement and pressure state, asks Smith for
+ * the exact contact Jacobian, and perturbs each non-essential displacement/pressure dof by @c eps.  Each perturbed
+ * residual difference is divided by @c eps and compared column-by-column against the corresponding exact Jacobian
+ * action for both penalty and Lagrange-multiplier enforcement.
+ */
 TEST_P(ContactFiniteDiff3D, patch)
 {
   // NOTE: p must be equal to 1 for now
@@ -214,6 +224,18 @@ TEST_P(ContactFiniteDiff3D, patch)
   }
 }
 
+/**
+ * @brief Checks Smith's EnergyMortar contact integration by finite-differencing a small 2D patch problem.
+ *
+ * The patch geometry gives a minimal two-body contact configuration with known contact boundary attributes, essential
+ * displacement boundary conditions, and a small number of unconstrained true dofs.  At each timestep, the test builds
+ * the coupled quasistatic residual vector from the current displacement and contact state, asks Smith for the exact
+ * Jacobian, and then perturbs each non-essential displacement dof by @c eps.  Each perturbed residual difference is
+ * divided by
+ * @c eps and compared column-by-column against the corresponding exact Jacobian action.  The solve is limited to one
+ * nonlinear iteration per timestep so the check exercises the contact residual/Jacobian integration at several
+ * intermediate configurations rather than only at a converged final state.
+ */
 TEST_P(ContactFiniteDiff2D, patch)
 {
   // NOTE: p must be equal to 1 for now
@@ -231,7 +253,6 @@ TEST_P(ContactFiniteDiff2D, patch)
 
   // Construct the appropriate dimension mesh and give it to the data store
 
-  // double shift = 0.0;
   // clang-format off
   auto mesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(1, 1)
                                                                             .translate({0.0, 0.999})
@@ -302,11 +323,6 @@ TEST_P(ContactFiniteDiff2D, patch)
       bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(y0_face_dofs[i], d);
     }
   }
-  // for (int i{0}; i < z0_face_dofs.Size(); ++i) {
-  //   for (int d{0}; d < dim; ++d) {
-  //     bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(z0_face_dofs[i], d);
-  //   }
-  // }
   for (int i{0}; i < ymax_face_dofs.Size(); ++i) {
     for (int d{0}; d < dim; ++d) {
       bc_vdofs[dof_ct++] = solid_solver.displacement().space().DofToVDof(ymax_face_dofs[i], d);
@@ -362,13 +378,6 @@ TEST_P(ContactFiniteDiff2D, patch)
       J_fd /= eps;
       merged_sol[j] -= eps;
 
-      for (int m = 0; m < 16; ++m) {
-        std::cout << "J exact: " << J_exact[m] << std::endl;
-      }
-      for (int m = 0; m < 16; ++m) {
-        std::cout << "J FD: " << J_fd[m] << std::endl;
-      }
-
       // loop through forces (row = k)
       for (int k{0}; k < merged_sol.Size(); ++k) {
         if (J_exact[k] != 1.0 && (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15)) {
@@ -387,6 +396,9 @@ TEST_P(ContactFiniteDiff2D, patch)
     }
     std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
 
+    // Reset contact to the non-finite-differenced state before advancing to the next step.
+    f = 0.0;
+    oper->Mult(merged_sol, f);
     solid_solver.advanceTimestep(dt);
   }
 }

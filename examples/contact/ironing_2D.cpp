@@ -74,7 +74,7 @@ std::string caseName(IroningCase ironing_case)
 
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
 {
-  constexpr auto mesh_factor = 1;  // 8;
+  constexpr auto mesh_factor = 8;
 
   auto mesh = shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(8 * mesh_factor, 2 * mesh_factor)
                                               .updateBdrAttrib(1, 6)
@@ -218,9 +218,11 @@ int main(int argc, char* argv[])
   smith::ApplicationManager applicationManager(argc, argv);
 
   std::string selected_case = "square";
+  int num_steps = -1;
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
       ->check(axom::CLI::IsMember({"square", "circle", "twisted"}));
+  app.add_option("--num-steps", num_steps, "Override the number of timesteps to run");
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
 
@@ -234,6 +236,9 @@ int main(int argc, char* argv[])
   smith::StateManager::initialize(datastore, "contact_ironing_2D_" + caseName(ironing_case) + "_example_data");
 
   CaseConfig config = makeCaseConfig(ironing_case);
+  if (num_steps > 0) {
+    config.num_steps = num_steps;
+  }
   auto& mesh = config.mesh;
 
   smith::LinearSolverOptions linear_options{
@@ -247,7 +252,6 @@ int main(int argc, char* argv[])
                                         .enforcement = smith::ContactEnforcement::Penalty,
                                         .type = smith::ContactType::Frictionless,
                                         .penalty = 30000.0,
-                                        .penalty2 = 0.0,
                                         .jacobian = smith::ContactJacobian::Exact};
 
   smith::SolidMechanicsContact<P, DIM, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
