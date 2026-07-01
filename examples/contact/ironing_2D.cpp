@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <string>
 
 #include "axom/CLI11.hpp"
@@ -73,6 +74,33 @@ std::string caseName(IroningCase ironing_case)
 
   SLIC_ERROR_ROOT("Unsupported ironing case.");
   return "square";
+}
+
+std::string formatNameValue(double value)
+{
+  std::ostringstream os;
+  os << value;
+  std::string out = os.str();
+  for (auto& c : out) {
+    if (c == '.') {
+      c = 'p';
+    } else if (c == '-') {
+      c = 'm';
+    } else if (c == '+') {
+      c = 'p';
+    }
+  }
+  return out;
+}
+
+std::string makeRunName(const std::string& case_name, const std::string& selected_normal,
+                        const std::string& penalty_mode, bool projection_smoothing, double active_set_smoothing_gap,
+                        const std::string& nodal_energy_basis, bool nodal_energy_angle_smoothing)
+{
+  return "contact_ironing_2D_" + case_name + "_normal_" + selected_normal + "_penalty_" + penalty_mode +
+         "_proj_smooth_" + (projection_smoothing ? "on" : "off") +
+         "_active_gap_" + formatNameValue(active_set_smoothing_gap) + "_nodal_basis_" + nodal_energy_basis +
+         "_angle_smooth_" + (nodal_energy_angle_smoothing ? "on" : "off") + "_example";
 }
 
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
@@ -220,17 +248,35 @@ int main(int argc, char* argv[])
 
   std::string selected_case = "square";
   std::string selected_normal = "element";
+  std::string penalty_mode = "nodal";
+  std::string nodal_energy_basis = "cubic-spline";
   bool projection_smoothing = true;
+  bool nodal_energy_angle_smoothing = true;
+  double active_set_smoothing_gap = 0.001;
   int num_steps_override = -1;
+  int nonlinear_print_level = -1;
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
       ->check(axom::CLI::IsMember({"square", "circle", "twisted"}));
   app.add_option("--energy-mortar-normal", selected_normal, "Energy mortar normal field: element or averaged")
       ->check(axom::CLI::IsMember({"element", "averaged"}));
+  app.add_option("--energy-mortar-penalty-mode", penalty_mode,
+                 "Energy mortar penalty enforcement mode: nodal, quadrature-point, or nodal-energy")
+      ->check(axom::CLI::IsMember({"nodal", "quadrature-point", "nodal-energy"}));
+  app.add_option("--energy-mortar-nodal-energy-basis", nodal_energy_basis,
+                 "Nodal energy basis: fe or cubic-spline")
+      ->check(axom::CLI::IsMember({"fe", "cubic-spline"}));
   app.add_flag("--energy-mortar-projection-smoothing,!--no-energy-mortar-projection-smoothing", projection_smoothing,
                "Use projection-bound smoothing in the energy mortar contact calculation");
+  app.add_flag("--energy-mortar-nodal-energy-angle-smoothing,!--no-energy-mortar-nodal-energy-angle-smoothing",
+               nodal_energy_angle_smoothing, "Use 80-to-90 degree angle smoothing in nodal energy mode");
+  app.add_option("--energy-mortar-active-set-smoothing-gap", active_set_smoothing_gap,
+                 "Energy mortar active-set smoothing transition gap; disabled when <= 0")
+      ->check(axom::CLI::NonNegativeNumber);
   app.add_option("--num-steps", num_steps_override, "Override the number of time steps")
       ->check(axom::CLI::NonNegativeNumber);
+  app.add_option("--nonlinear-print-level", nonlinear_print_level, "Override the nonlinear solver print level")
+      ->check(axom::CLI::Range(0, 2));
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
 
@@ -240,16 +286,21 @@ int main(int argc, char* argv[])
 #endif
 
   const auto ironing_case = parseCase(selected_case);
-  const std::string normal_name = selected_normal + "_normal";
+  const std::string case_name = caseName(ironing_case);
+  const std::string run_name =
+      makeRunName(case_name, selected_normal, penalty_mode, projection_smoothing, active_set_smoothing_gap,
+                  nodal_energy_basis, nodal_energy_angle_smoothing);
   axom::sidre::DataStore datastore;
-  smith::StateManager::initialize(datastore,
-                                  "contact_ironing_2D_" + caseName(ironing_case) + "_" + normal_name + "_example_data");
+  smith::StateManager::initialize(datastore, run_name + "_data");
 
   CaseConfig config = makeCaseConfig(ironing_case);
   if (num_steps_override >= 0) {
     config.num_steps = num_steps_override;
   }
-  config.name = "contact_ironing_2D_" + caseName(ironing_case) + "_" + normal_name + "_example";
+  if (nonlinear_print_level >= 0) {
+    config.nonlinear_options.print_level = nonlinear_print_level;
+  }
+  config.name = run_name;
   auto& mesh = config.mesh;
 
   smith::LinearSolverOptions linear_options{
@@ -295,6 +346,16 @@ int main(int argc, char* argv[])
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
   tribol::setEnergyMortarProjectionSmoothing(0, projection_smoothing);
+  tribol::setEnergyMortarH1ActiveSetSmoothing(0, active_set_smoothing_gap);
+  tribol::setEnergyMortarPenaltyMode(0, penalty_mode == "nodal-energy"
+                                            ? tribol::EnergyMortarPenaltyMode::NODAL_ENERGY
+                                            : penalty_mode == "quadrature-point"
+                                                  ? tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP
+                                                  : tribol::EnergyMortarPenaltyMode::NODAL_GAP);
+  tribol::setEnergyMortarNodalEnergyBasis(0, nodal_energy_basis == "fe"
+                                                 ? tribol::EnergyMortarNodalEnergyBasis::FE
+                                                 : tribol::EnergyMortarNodalEnergyBasis::CUBIC_SPLINE);
+  tribol::setEnergyMortarNodalEnergyAngleSmoothing(0, nodal_energy_angle_smoothing);
   if (selected_normal == "averaged") {
     tribol::setEnergyMortarNormalMode(0, tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL);
   }
@@ -302,6 +363,16 @@ int main(int argc, char* argv[])
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
     tribol::setEnergyMortarProjectionSmoothing(1, projection_smoothing);
+    tribol::setEnergyMortarH1ActiveSetSmoothing(1, active_set_smoothing_gap);
+    tribol::setEnergyMortarPenaltyMode(1, penalty_mode == "nodal-energy"
+                                              ? tribol::EnergyMortarPenaltyMode::NODAL_ENERGY
+                                              : penalty_mode == "quadrature-point"
+                                                    ? tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP
+                                                    : tribol::EnergyMortarPenaltyMode::NODAL_GAP);
+    tribol::setEnergyMortarNodalEnergyBasis(1, nodal_energy_basis == "fe"
+                                                   ? tribol::EnergyMortarNodalEnergyBasis::FE
+                                                   : tribol::EnergyMortarNodalEnergyBasis::CUBIC_SPLINE);
+    tribol::setEnergyMortarNodalEnergyAngleSmoothing(1, nodal_energy_angle_smoothing);
     if (selected_normal == "averaged") {
       tribol::setEnergyMortarNormalMode(1, tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL);
     }
