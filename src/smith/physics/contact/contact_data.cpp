@@ -29,6 +29,7 @@ ContactData::ContactData(const mfem::ParMesh& mesh)
     : mesh_{mesh},
       reference_nodes_{static_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
       current_coords_{*reference_nodes_},
+      shaped_reference_coords_{*reference_nodes_},
       have_lagrange_multipliers_{false},
       num_pressure_dofs_{0},
       offsets_up_to_date_{false}
@@ -45,7 +46,8 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
   SLIC_ERROR_ROOT_IF(cs != nullptr,
                      std::format("Contact interaction id {} is already registered with Tribol.", interaction_id));
 
-  interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_, contact_opts);
+  interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_,
+                             shaped_reference_coords_, contact_opts);
   if (contact_opts.enforcement == ContactEnforcement::LagrangeMultiplier) {
     have_lagrange_multipliers_ = true;
     num_pressure_dofs_ += interactions_.back().numPressureDofs();
@@ -352,12 +354,11 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 
 void ContactData::setDisplacements(const mfem::Vector& shape_u, const mfem::Vector& u)
 {
-  mfem::ParGridFunction prolonged_shape_disp{current_coords_};
   reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(u, current_coords_);
-  reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, prolonged_shape_disp);
+  reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, shaped_reference_coords_);
 
-  current_coords_ += *reference_nodes_;
-  current_coords_ += prolonged_shape_disp;
+  shaped_reference_coords_ += *reference_nodes_;
+  current_coords_ += shaped_reference_coords_;
 }
 
 void ContactData::updateDofOffsets() const

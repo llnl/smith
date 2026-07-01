@@ -33,7 +33,9 @@ static void mark_dofs(const mfem::Array<int>& dofs, mfem::Array<int>& mark_array
 
 ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& mesh,
                                        const std::set<int>& bdry_attr_surf1, const std::set<int>& bdry_attr_surf2,
-                                       const mfem::ParGridFunction& current_coords, ContactOptions contact_opts)
+                                       const mfem::ParGridFunction& current_coords,
+                                       const mfem::ParGridFunction& shaped_reference_coords,
+                                       ContactOptions contact_opts)
     : interaction_id_{interaction_id}, contact_opts_{contact_opts}, current_coords_{current_coords}
 {
   int mesh1_id = 2 * interaction_id;      // unique id for the first Tribol mesh
@@ -80,12 +82,20 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
   }
 #endif
 
-  // set up Tribol to compute exact Jacobian if requested
-  if (getContactOptions().jacobian == ContactJacobian::Exact) {
+  const bool use_exact_jacobian = getContactOptions().jacobian == ContactJacobian::Exact;
 #ifdef SMITH_USE_ENZYME
-    tribol::enableEnzyme(interaction_id, true);
+  const bool use_energy_mortar = getContactOptions().method == ContactMethod::EnergyMortar;
+#else
+  const bool use_energy_mortar = false;
 #endif
-    tribol::registerMfemReferenceCoords(interaction_id, static_cast<const mfem::ParGridFunction&>(*mesh.GetNodes()));
+
+  if (use_exact_jacobian || use_energy_mortar) {
+#ifdef SMITH_USE_ENZYME
+    if (use_exact_jacobian) {
+      tribol::enableEnzyme(interaction_id, true);
+    }
+#endif
+    tribol::registerMfemReferenceCoords(interaction_id, shaped_reference_coords);
   }
 }
 

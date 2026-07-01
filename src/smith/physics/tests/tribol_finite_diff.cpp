@@ -29,10 +29,60 @@
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
+#include "tribol/mesh/CouplingScheme.hpp"
 
 namespace smith {
 
 class TribolFiniteDiff : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
+
+TEST(TribolShapeReferenceCoords, ShapeDisplacementIncluded)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "tribol_shape_reference_coords_data");
+
+  // clang-format off
+  auto pmesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .translate({0.0, 0.999})
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(3, 9)
+      .updateBdrAttrib(1, 6),
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(1, 8)
+      .updateBdrAttrib(3, 5)
+  }), "patch_mesh", 0, 0);
+  // clang-format on
+
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
+                                 .enforcement = ContactEnforcement::Penalty,
+                                 .type = ContactType::Frictionless,
+                                 .penalty = 0.1,
+                                 .jacobian = ContactJacobian::Approximate};
+  ContactData contact_data(pmesh->mfemParMesh());
+  constexpr int interaction_id = 0;
+  contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
+
+  mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.numPressureDofs());
+  u = 0.0;
+  mfem::Vector u_shape(pmesh->mfemParMesh().GetNodes()->Size());
+  u_shape = 0.125;
+  mfem::Vector f(u.Size());
+  f = 0.0;
+  contact_data.residualFunction(u_shape, u, f);
+
+  auto& cs = tribol::CouplingSchemeManager::getInstance().at(interaction_id);
+  auto check_mesh = [](auto& mesh) {
+    const auto view = mesh.getView();
+    ASSERT_TRUE(view.hasReferencePosition());
+    for (tribol::IndexT node = 0; node < view.numberOfNodes(); ++node) {
+      EXPECT_NEAR(view.getPosition()[0][node], view.getReferencePosition()[0][node], 1.0e-14);
+      EXPECT_NEAR(view.getPosition()[1][node], view.getReferencePosition()[1][node], 1.0e-14);
+    }
+  };
+  check_mesh(cs.getMesh1());
+  check_mesh(cs.getMesh2());
+}
 
 TEST_P(TribolFiniteDiff, patch)
 {
