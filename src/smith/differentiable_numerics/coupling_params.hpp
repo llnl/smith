@@ -191,33 +191,19 @@ auto collectCouplingFields(const CouplingFields<PFs...>& coupled, const ParamFie
 // Time-rule interpolation
 // -------------------------------------------------------------------------
 
-/// @brief Implementation of time rule prefix application.
-template <typename Rule, typename TimeInfoT, typename ArgsTuple, typename Callback, std::size_t... StateIs,
-          std::size_t... TailIs>
-decltype(auto) applyTimeRuleToPrefixImpl(const Rule& rule, const TimeInfoT& t_info, const ArgsTuple& raw_args,
-                                         Callback&& callback, std::index_sequence<StateIs...>,
-                                         std::index_sequence<TailIs...>)
+/// @brief Interpolate the leading time-rule state arguments.
+template <typename Rule, typename TimeInfoT, typename ArgsTuple, std::size_t... StateIs>
+auto interpolateTimeRulePrefix(const Rule& rule, const TimeInfoT& t_info, const ArgsTuple& raw_args,
+                               std::index_sequence<StateIs...>)
 {
-  auto interpolated = rule.interpolate(t_info, std::get<StateIs>(raw_args)...);
-  return std::apply(
-      [&](auto&&... values) -> decltype(auto) {
-        return std::forward<Callback>(callback)(std::forward<decltype(values)>(values)...,
-                                                std::get<Rule::num_states + TailIs>(raw_args)...);
-      },
-      interpolated);
+  return rule.interpolate(t_info, std::get<StateIs>(raw_args)...);
 }
 
-/// @brief Apply time rule interpolation to the leading prefix of raw arguments.
-template <typename Rule, typename TimeInfoT, typename Callback, typename... RawArgs>
-decltype(auto) applyTimeRuleToPrefix(const Rule& rule, const TimeInfoT& t_info, Callback&& callback,
-                                     const RawArgs&... raw_args)
+/// @brief Select a tuple of raw arguments starting at Offset.
+template <std::size_t Offset, typename ArgsTuple, std::size_t... Is>
+auto selectArgsFrom(const ArgsTuple& raw_args, std::index_sequence<Is...>)
 {
-  static_assert(sizeof...(RawArgs) >= Rule::num_states, "Not enough raw arguments for time-rule interpolation");
-  auto raw_tuple = std::forward_as_tuple(raw_args...);
-  constexpr std::size_t tail_count = sizeof...(RawArgs) - Rule::num_states;
-  return applyTimeRuleToPrefixImpl(rule, t_info, raw_tuple, std::forward<Callback>(callback),
-                                   std::make_index_sequence<Rule::num_states>{},
-                                   std::make_index_sequence<tail_count>{});
+  return std::forward_as_tuple(std::get<Offset + Is>(raw_args)...);
 }
 
 /// @brief Evaluate a single coupling pack's time rule.
@@ -262,31 +248,23 @@ decltype(auto) applyCouplingTimeRules(const PacksTuple& packs, const TimeInfoT& 
 /**
  * @brief Interpolate self time-rule states then coupling segments, then invoke callback.
  *
- * Combines `applyTimeRuleToPrefix` with `applyCouplingTimeRules` into a single helper so
- * per-method weak-form bodies stop repeating the same 3-level nested-lambda boilerplate.
- *
  * Callback signature: `(self_states..., interpolated_coupling...)`.
+ *
+ * Raw arguments start with the self time-rule states. Remaining arguments are split by
+ * coupling pack, and each pack's time rule interpolates its own segment.
  */
 template <typename Rule, typename Coupling, typename TimeInfoT, typename Callback, typename... RawArgs>
 decltype(auto) applyTimeRuleAndCoupling(const Rule& rule, const Coupling& coupling, const TimeInfoT& t_info,
                                         Callback&& callback, const RawArgs&... raw_args)
 {
+  static_assert(sizeof...(RawArgs) >= Rule::num_states, "Not enough raw arguments for time-rule interpolation");
   constexpr std::size_t tail_count = sizeof...(RawArgs) - Rule::num_states;
-  return applyTimeRuleToPrefix(
-      rule, t_info,
-      [&](auto... self_states_and_tail) {
-        constexpr std::size_t n_self = sizeof...(self_states_and_tail) - tail_count;
-        auto all = std::forward_as_tuple(self_states_and_tail...);
-        return [&]<std::size_t... Si, std::size_t... Ti>(std::index_sequence<Si...>, std::index_sequence<Ti...>) {
-          return applyCouplingTimeRules(
-              coupling, t_info,
-              [&](auto... interpolated_coupling) {
-                return std::forward<Callback>(callback)(std::get<Si>(all)..., interpolated_coupling...);
-              },
-              std::get<n_self + Ti>(all)...);
-        }(std::make_index_sequence<n_self>{}, std::make_index_sequence<tail_count>{});
-      },
-      raw_args...);
+  auto raw_tuple = std::forward_as_tuple(raw_args...);
+  auto self_states = interpolateTimeRulePrefix(rule, t_info, raw_tuple, std::make_index_sequence<Rule::num_states>{});
+  auto coupling_raw_args = selectArgsFrom<Rule::num_states>(raw_tuple, std::make_index_sequence<tail_count>{});
+  auto coupling_states = evaluateCouplingPacks<0, 0>(coupling, t_info, coupling_raw_args);
+  auto callback_args = std::tuple_cat(self_states, coupling_states);
+  return std::apply(std::forward<Callback>(callback), callback_args);
 }
 
 // -------------------------------------------------------------------------
