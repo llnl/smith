@@ -430,6 +430,13 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     augmented_solution.SetVector(displacement_, 0);
     augmented_solution.SetVector(contact_.mergedPressures(), displacement_.Size());
 
+    // {
+    //   mfem::Vector u_blk(augmented_solution, 0, displacement_.Size());
+    //   mfem::Vector p_blk(augmented_solution, displacement_.Size(), contact_.numPressureDofs());
+    //   contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), u_blk, p_blk);
+    //   contact_.printDiagnostics(cycle_, time_, BasePhysics::shapeDisplacement(), u_blk, "forward-initial");
+    // }
+
     // solve the non-linear system resid = 0 and pressure * gap = 0
     nonlin_solver_->solve(augmented_solution);
     displacement_.Set(1.0, mfem::Vector(augmented_solution, 0, displacement_.Size()));

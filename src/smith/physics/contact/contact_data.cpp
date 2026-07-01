@@ -6,9 +6,13 @@
 
 #include "smith/physics/contact/contact_data.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <format>
+#include <limits>
 #include <memory>
+#include <string_view>
 
 #include "axom/slic.hpp"
 #include "mpi.h"
@@ -24,6 +28,69 @@
 namespace smith {
 
 #ifdef SMITH_USE_TRIBOL
+
+namespace {
+
+std::string_view contactMethodName(ContactMethod method)
+{
+  switch (method) {
+    case ContactMethod::SingleMortar:
+      return "single-mortar";
+#ifdef SMITH_USE_ENZYME
+    case ContactMethod::EnergyMortar:
+      return "energy-mortar";
+#endif
+    default:
+      return "unknown";
+  }
+}
+
+std::string_view contactEnforcementName(ContactEnforcement enforcement)
+{
+  switch (enforcement) {
+    case ContactEnforcement::Penalty:
+      return "penalty";
+    case ContactEnforcement::LagrangeMultiplier:
+      return "lagrange-multiplier";
+    case ContactEnforcement::NotRequired:
+      return "not-required";
+    default:
+      return "unknown";
+  }
+}
+
+double globalMaxAbs(const mfem::Vector& v, MPI_Comm comm)
+{
+  double local_max = 0.0;
+  for (int i = 0; i < v.Size(); ++i) {
+    local_max = std::max(local_max, std::abs(v[i]));
+  }
+  double global_max = 0.0;
+  MPI_Allreduce(&local_max, &global_max, 1, MPI_DOUBLE, MPI_MAX, comm);
+  return global_max;
+}
+
+double globalMaxAbsDiff(const mfem::Vector& a, const mfem::Vector& b, MPI_Comm comm)
+{
+  double local_max = 0.0;
+  const int size = std::min(a.Size(), b.Size());
+  for (int i = 0; i < size; ++i) {
+    local_max = std::max(local_max, std::abs(a[i] - b[i]));
+  }
+  double global_max = 0.0;
+  MPI_Allreduce(&local_max, &global_max, 1, MPI_DOUBLE, MPI_MAX, comm);
+  return global_max;
+}
+
+unsigned long long hashPair(tribol::IndexT elem1, tribol::IndexT elem2)
+{
+  auto hash = 1469598103934665603ULL;
+  hash ^= static_cast<unsigned long long>(elem1) + 0x9e3779b97f4a7c15ULL + (hash << 6) + (hash >> 2);
+  hash ^= static_cast<unsigned long long>(elem2) + 0x9e3779b97f4a7c15ULL + (hash << 6) + (hash >> 2);
+  return hash;
+}
+
+}  // namespace
 
 ContactData::ContactData(const mfem::ParMesh& mesh)
     : mesh_{mesh},
@@ -455,6 +522,105 @@ std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperat
   return transfer_operator;
 }
 
+void ContactData::printDiagnostics(int cycle, double time, const mfem::Vector& shape_displacement,
+                                   const mfem::Vector& displacement, std::string_view label) const
+{
+  const MPI_Comm comm = mesh_.GetComm();
+  const double max_shape = globalMaxAbs(shape_displacement, comm);
+  const double max_displacement = globalMaxAbs(displacement, comm);
+  const bool have_previous_shape =
+      diagnostics_have_previous_shape_displacement_ &&
+      diagnostics_previous_shape_displacement_.Size() == shape_displacement.Size();
+  const std::string shape_step_summary =
+      have_previous_shape
+          ? std::format("max|delta_shape|={}",
+                        globalMaxAbsDiff(shape_displacement, diagnostics_previous_shape_displacement_, comm))
+          : "max|delta_shape|=unavailable";
+
+  SLIC_INFO_ROOT(std::format("Tribol contact diagnostics [{}]: cycle={} time={} max|shape|={} max|u|={} "
+                             "{} num_interactions={}",
+                             label, cycle, time, max_shape, max_displacement, shape_step_summary,
+                             interactions_.size()));
+
+  for (const auto& interaction : interactions_) {
+    const int interaction_id = interaction.getInteractionId();
+    const auto* cs = tribol::CouplingSchemeManager::getInstance().findData(interaction_id);
+    if (!cs) {
+      SLIC_INFO_ROOT(std::format("  interaction {}: no Tribol coupling scheme found", interaction_id));
+      continue;
+    }
+
+    const auto* stored_pairs = cs->hasContactFormulation() ? cs->getContactFormulation()->getStoredInterfacePairs() : nullptr;
+    const auto& pairs = stored_pairs ? *stored_pairs : cs->getInterfacePairs();
+    long long local_pairs = static_cast<long long>(pairs.size());
+    long long local_candidate_pairs = 0;
+    unsigned long long local_pair_hash = 0ULL;
+    for (const auto& pair : pairs) {
+      if (pair.m_is_contact_candidate) {
+        ++local_candidate_pairs;
+      }
+      local_pair_hash ^= hashPair(pair.m_element_id1, pair.m_element_id2);
+    }
+
+    long long global_pairs = 0;
+    long long global_candidate_pairs = 0;
+    long long local_active_pairs =
+        stored_pairs ? static_cast<long long>(stored_pairs->size()) : static_cast<long long>(cs->getNumActivePairs());
+    long long global_active_pairs = 0;
+    unsigned long long global_pair_hash = 0ULL;
+    MPI_Allreduce(&local_pairs, &global_pairs, 1, MPI_LONG_LONG, MPI_SUM, comm);
+    MPI_Allreduce(&local_candidate_pairs, &global_candidate_pairs, 1, MPI_LONG_LONG, MPI_SUM, comm);
+    MPI_Allreduce(&local_active_pairs, &global_active_pairs, 1, MPI_LONG_LONG, MPI_SUM, comm);
+    MPI_Allreduce(&local_pair_hash, &global_pair_hash, 1, MPI_UNSIGNED_LONG_LONG, MPI_BXOR, comm);
+
+    const auto gaps = interaction.gaps();
+    long long local_gap_dofs = static_cast<long long>(gaps.Size());
+    long long local_active_gap_dofs = 0;
+    double local_min_gap = std::numeric_limits<double>::infinity();
+    double local_max_gap = -std::numeric_limits<double>::infinity();
+    for (int i = 0; i < gaps.Size(); ++i) {
+      const double gap = gaps[i];
+      local_min_gap = std::min(local_min_gap, gap);
+      local_max_gap = std::max(local_max_gap, gap);
+      if (gap < 0.0) {
+        ++local_active_gap_dofs;
+      }
+    }
+
+    long long global_gap_dofs = 0;
+    long long global_active_gap_dofs = 0;
+    double global_min_gap = std::numeric_limits<double>::infinity();
+    double global_max_gap = -std::numeric_limits<double>::infinity();
+    MPI_Allreduce(&local_gap_dofs, &global_gap_dofs, 1, MPI_LONG_LONG, MPI_SUM, comm);
+    MPI_Allreduce(&local_active_gap_dofs, &global_active_gap_dofs, 1, MPI_LONG_LONG, MPI_SUM, comm);
+    MPI_Allreduce(&local_min_gap, &global_min_gap, 1, MPI_DOUBLE, MPI_MIN, comm);
+    MPI_Allreduce(&local_max_gap, &global_max_gap, 1, MPI_DOUBLE, MPI_MAX, comm);
+
+    std::string gap_summary = "gap_dofs=0 gap_range=none active_gap_dofs=0";
+    if (global_gap_dofs > 0) {
+      gap_summary = std::format("gap_dofs={} gap_range=[{}, {}] active_gap_dofs={}", global_gap_dofs, global_min_gap,
+                                global_max_gap, global_active_gap_dofs);
+    }
+
+    std::string energy_summary;
+    if (cs->hasContactFormulation()) {
+      energy_summary = std::format(" contact_energy={}", cs->getContactFormulation()->getEnergy());
+    }
+
+    const double force_norm = interaction.forces().Norml2();
+    const auto& options = interaction.getContactOptions();
+    SLIC_INFO_ROOT(std::format("  interaction {}: method={} enforcement={} pairs={} candidate_pairs={} "
+                               "active_pairs={} pair_hash=0x{:016x} {} force_norm={}{}",
+                               interaction_id, contactMethodName(options.method),
+                               contactEnforcementName(options.enforcement), global_pairs, global_candidate_pairs,
+                               global_active_pairs, global_pair_hash, gap_summary, force_norm, energy_summary));
+  }
+
+  diagnostics_previous_shape_displacement_.SetSize(shape_displacement.Size());
+  diagnostics_previous_shape_displacement_ = shape_displacement;
+  diagnostics_have_previous_shape_displacement_ = true;
+}
+
 #else
 
 ContactData::ContactData([[maybe_unused]] const mfem::ParMesh& mesh)
@@ -530,6 +696,13 @@ void ContactData::setPressures([[maybe_unused]] const mfem::Vector& true_pressur
 
 void ContactData::setDisplacements([[maybe_unused]] const mfem::Vector& u_shape,
                                    [[maybe_unused]] const mfem::Vector& true_displacement)
+{
+}
+
+void ContactData::printDiagnostics([[maybe_unused]] int cycle, [[maybe_unused]] double time,
+                                   [[maybe_unused]] const mfem::Vector& shape_displacement,
+                                   [[maybe_unused]] const mfem::Vector& displacement,
+                                   [[maybe_unused]] std::string_view label) const
 {
 }
 

@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <string_view>
 #include <vector>
 
 #include "mfem.hpp"
@@ -195,6 +196,18 @@ class ContactData {
   std::unique_ptr<mfem::HypreParMatrix> contactSubspaceTransferOperator();
 
   /**
+   * @brief Print contact diagnostics for the currently updated Tribol state
+   *
+   * @param cycle Current simulation cycle
+   * @param time Current simulation time
+   * @param shape_displacement Shape displacement true dof vector
+   * @param displacement Displacement true dof vector
+   * @param label Short context label for the diagnostic output
+   */
+  void printDiagnostics(int cycle, double time, const mfem::Vector& shape_displacement,
+                        const mfem::Vector& displacement, std::string_view label) const;
+
+  /**
    * @brief Have there been contact interactions added?
    *
    * @return true if contact interactions have been added
@@ -285,6 +298,16 @@ class ContactData {
    * @brief Reference coordinates of the shape-displaced mesh
    */
   mfem::ParGridFunction shaped_reference_coords_;
+
+  /**
+   * @brief Shape displacement from the previous diagnostic print
+   */
+  mutable mfem::Vector diagnostics_previous_shape_displacement_;
+
+  /**
+   * @brief Whether the previous diagnostic shape displacement has been initialized
+   */
+  mutable bool diagnostics_have_previous_shape_displacement_{false};
 
   /**
    * @brief The contact boundary condition information
