@@ -17,6 +17,7 @@ set(physics_test_depends smith_physics smith_differentiable_numerics smith_physi
 
 set(physics_serial_test_sources
     beam_bending.cpp
+    test_adjoint_workflow.cpp
     fit_test.cpp
     test_mesh_wrapper.cpp
     thermal_finite_diff.cpp
@@ -82,6 +83,10 @@ set(physics_parallel_tribol_test_sources
     contact_patch_tied.cpp
     contact_beam.cpp
     )
+if (ENZYME_FOUND)
+    list(APPEND physics_parallel_tribol_test_sources
+                energy_mortar_patch.cpp)
+endif()
 blt_list_append(TO       physics_parallel_test_sources
                 ELEMENTS ${physics_parallel_tribol_test_sources}
                 IF       TRIBOL_FOUND)
