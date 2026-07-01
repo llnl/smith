@@ -62,6 +62,7 @@ TEST(H1EnergyMortarTotalDerivativeCheck, GtildeFDvsAD)
   params.enzyme_quadrature = true;
   params.normal_mode = tribol::EnergyMortarNormalMode::H1_NODAL_NORMAL;
   params.projection_smoothing = false;
+  params.residual_gap = 0.03;
 
   tribol::EnergyMortarCalculator evaluator(params);
   tribol::InterfacePair pair(0, 0);
@@ -135,6 +136,75 @@ TEST(H1EnergyMortarTotalDerivativeCheck, GtildeFDvsAD)
 
   mesh1.setPosition(x1_orig.data(), y1_orig.data(), nullptr);
   mesh2.setPosition(x2_orig.data(), y2_orig.data(), nullptr);
+}
+
+TEST(EnergyMortarResidualGapCheck, AssembledGapIsShiftedByArea)
+{
+  tribol::RealT x1[2] = {0.0, 1.0};
+  tribol::RealT y1[2] = {0.0, 0.0};
+  tribol::IndexT conn1[2] = {1, 0};
+  tribol::MeshData mesh1(0, 1, 2, conn1, tribol::LINEAR_EDGE, x1, y1, nullptr, tribol::MemorySpace::Host);
+
+  tribol::RealT x2[2] = {0.2, 0.8};
+  tribol::RealT y2[2] = {0.1, 0.1};
+  tribol::IndexT conn2[2] = {0, 1};
+  tribol::MeshData mesh2(1, 1, 2, conn2, tribol::LINEAR_EDGE, x2, y2, nullptr, tribol::MemorySpace::Host);
+
+  tribol::ContactParams params;
+  params.del = 0.1;
+  params.k = 3.0;
+  params.N = 3;
+  params.enzyme_quadrature = true;
+  params.penalty_mode = tribol::EnergyMortarPenaltyMode::NODAL_GAP;
+
+  double g0[2] = {0.0, 0.0};
+  double area0[2] = {0.0, 0.0};
+  tribol::EnergyMortarCalculator evaluator_without_residual(params);
+  evaluator_without_residual.compute_gtilde_and_area(tribol::InterfacePair(0, 0), mesh1.getView(), mesh2.getView(), g0,
+                                                     area0);
+
+  params.residual_gap = 0.15;
+  double g_residual[2] = {0.0, 0.0};
+  double area_residual[2] = {0.0, 0.0};
+  tribol::EnergyMortarCalculator evaluator_with_residual(params);
+  evaluator_with_residual.compute_gtilde_and_area(tribol::InterfacePair(0, 0), mesh1.getView(), mesh2.getView(),
+                                                  g_residual, area_residual);
+
+  for (int i = 0; i < 2; ++i) {
+    EXPECT_NEAR(area_residual[i], area0[i], 1.0e-14);
+    EXPECT_NEAR(g_residual[i], g0[i] - params.residual_gap * area0[i], 1.0e-14);
+  }
+}
+
+TEST(EnergyMortarResidualGapCheck, QuadraturePointOpenGapBecomesActive)
+{
+  tribol::RealT x1[2] = {0.0, 1.0};
+  tribol::RealT y1[2] = {0.0, 0.0};
+  tribol::IndexT conn1[2] = {1, 0};
+  tribol::MeshData mesh1(0, 1, 2, conn1, tribol::LINEAR_EDGE, x1, y1, nullptr, tribol::MemorySpace::Host);
+
+  tribol::RealT x2[2] = {0.2, 0.8};
+  tribol::RealT y2[2] = {0.1, 0.1};
+  tribol::IndexT conn2[2] = {0, 1};
+  tribol::MeshData mesh2(1, 1, 2, conn2, tribol::LINEAR_EDGE, x2, y2, nullptr, tribol::MemorySpace::Host);
+
+  tribol::ContactParams params;
+  params.del = 0.1;
+  params.k = 3.0;
+  params.N = 3;
+  params.enzyme_quadrature = true;
+  params.penalty_mode = tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP;
+
+  tribol::EnergyMortarCalculator evaluator_without_residual(params);
+  const auto inactive = evaluator_without_residual.compute_quadrature_point_penalty_data(
+      tribol::InterfacePair(0, 0), mesh1.getView(), mesh2.getView());
+  EXPECT_EQ(inactive.energy, 0.0);
+
+  params.residual_gap = 0.15;
+  tribol::EnergyMortarCalculator evaluator_with_residual(params);
+  const auto active = evaluator_with_residual.compute_quadrature_point_penalty_data(tribol::InterfacePair(0, 0),
+                                                                                   mesh1.getView(), mesh2.getView());
+  EXPECT_GT(active.energy, 0.0);
 }
 
 namespace smith {
