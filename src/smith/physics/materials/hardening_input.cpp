@@ -63,8 +63,7 @@ smith::var_hardening_t FromInlet<smith::var_hardening_t>::operator()(const axom:
   smith::var_hardening_t result;
   std::string law = base["law"];
   if (law == "LinearHardening") {
-    result = smith::solid_mechanics::LinearHardening{
-        .sigma_y = base["sigma_y"], .Hi = base["Hi"], .eta = base["eta"]};
+    result = smith::solid_mechanics::LinearHardening{.sigma_y = base["sigma_y"], .Hi = base["Hi"], .eta = base["eta"]};
   } else if (law == "PowerLawHardening") {
     result = smith::solid_mechanics::PowerLawHardening{
         .sigma_y = base["sigma_y"], .n = base["n"], .eps0 = base["eps0"], .eta = base["eta"]};
