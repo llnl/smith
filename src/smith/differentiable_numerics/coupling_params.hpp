@@ -113,26 +113,6 @@ auto registerParameterFields(const std::shared_ptr<FieldStore>& field_store, Fie
 
 namespace detail {
 
-template <typename T>
-struct is_parameter_pack_impl : std::false_type {};
-
-template <typename... S>
-struct is_parameter_pack_impl<ParamFields<S...>> : std::true_type {};
-
-/// @brief True if T is a ParamFields type.
-template <typename T>
-inline constexpr bool is_parameter_pack_v = is_parameter_pack_impl<std::decay_t<T>>::value;
-
-template <typename T>
-struct is_coupling_fields_impl : std::false_type {};
-
-template <typename... PFs>
-struct is_coupling_fields_impl<CouplingFields<PFs...>> : std::true_type {};
-
-/// @brief True if T is a CouplingFields type.
-template <typename T>
-inline constexpr bool is_coupling_fields_v = is_coupling_fields_impl<std::decay_t<T>>::value;
-
 /// True for a `std::tuple<Packs...>` returned by `collectCouplingFields`.
 template <typename T>
 struct is_coupling_packs_impl : std::false_type {};
@@ -191,21 +171,6 @@ auto collectCouplingFields(const CouplingFields<PFs...>& coupled, const ParamFie
 // Time-rule interpolation
 // -------------------------------------------------------------------------
 
-/// @brief Interpolate the leading time-rule state arguments.
-template <typename Rule, typename TimeInfoT, typename ArgsTuple, std::size_t... StateIs>
-auto interpolateTimeRulePrefix(const Rule& rule, const TimeInfoT& t_info, const ArgsTuple& raw_args,
-                               std::index_sequence<StateIs...>)
-{
-  return rule.interpolate(t_info, std::get<StateIs>(raw_args)...);
-}
-
-/// @brief Select a tuple of raw arguments starting at Offset.
-template <std::size_t Offset, typename ArgsTuple, std::size_t... Is>
-auto selectArgsFrom(const ArgsTuple& raw_args, std::index_sequence<Is...>)
-{
-  return std::forward_as_tuple(std::get<Offset + Is>(raw_args)...);
-}
-
 /// @brief Evaluate a single coupling pack's time rule.
 template <std::size_t Offset, typename Pack, typename TimeInfoT, typename RawTuple, std::size_t... Is>
 auto evaluateCouplingPack(const Pack& /*pack*/, const TimeInfoT& t_info, const RawTuple& raw_args,
@@ -235,16 +200,6 @@ auto evaluateCouplingPacks(const PacksTuple& packs, const TimeInfoT& t_info, con
   }
 }
 
-/// @brief Interpolate coupling packs and invoke the callback.
-template <typename PacksTuple, typename TimeInfoT, typename Callback, typename... RawArgs>
-decltype(auto) applyCouplingTimeRules(const PacksTuple& packs, const TimeInfoT& t_info, Callback&& callback,
-                                      const RawArgs&... raw_args)
-{
-  auto raw_tuple = std::forward_as_tuple(raw_args...);
-  auto interpolated_tail = evaluateCouplingPacks<0, 0>(packs, t_info, raw_tuple);
-  return std::apply(std::forward<Callback>(callback), interpolated_tail);
-}
-
 /**
  * @brief Interpolate self time-rule states then coupling segments, then invoke callback.
  *
@@ -258,11 +213,11 @@ decltype(auto) applyTimeRuleAndCoupling(const Rule& rule, const Coupling& coupli
                                         Callback&& callback, const RawArgs&... raw_args)
 {
   static_assert(sizeof...(RawArgs) >= Rule::num_states, "Not enough raw arguments for time-rule interpolation");
-  constexpr std::size_t tail_count = sizeof...(RawArgs) - Rule::num_states;
   auto raw_tuple = std::forward_as_tuple(raw_args...);
-  auto self_states = interpolateTimeRulePrefix(rule, t_info, raw_tuple, std::make_index_sequence<Rule::num_states>{});
-  auto coupling_raw_args = selectArgsFrom<Rule::num_states>(raw_tuple, std::make_index_sequence<tail_count>{});
-  auto coupling_states = evaluateCouplingPacks<0, 0>(coupling, t_info, coupling_raw_args);
+  auto self_states = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    return rule.interpolate(t_info, std::get<Is>(raw_tuple)...);
+  }(std::make_index_sequence<Rule::num_states>{});
+  auto coupling_states = evaluateCouplingPacks<0, Rule::num_states>(coupling, t_info, raw_tuple);
   auto callback_args = std::tuple_cat(self_states, coupling_states);
   return std::apply(std::forward<Callback>(callback), callback_args);
 }
