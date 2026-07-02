@@ -158,7 +158,8 @@ struct finite_element<mfem::Geometry::CUBE, H1<p, c> > {
           const auto& d10 = get<0>(get<1>(input(Q)));
           const auto& d11 = get<1>(get<1>(input(Q)));
 
-          output[Q] = {d00 * phi_j + dot(d01, dphi_j_dxi), d10 * phi_j + dot(d11, dphi_j_dxi)};
+          output[Q] = std::remove_reference_t<decltype(output[Q])>{d00 * phi_j + dot(d01, dphi_j_dxi),
+                                                                   d10 * phi_j + dot(d11, dphi_j_dxi)};
         }
       }
     }
