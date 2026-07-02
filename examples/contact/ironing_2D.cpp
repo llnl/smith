@@ -94,11 +94,13 @@ std::string formatNameValue(double value)
 }
 
 std::string makeRunName(const std::string& case_name, const std::string& selected_normal,
-                        const std::string& penalty_mode, bool projection_smoothing, double active_set_smoothing_gap,
+                        const std::string& penalty_mode, bool enzyme_quadrature, bool projection_smoothing,
+                        bool fixed_integration_jacobian, double active_set_smoothing_gap,
                         const std::string& nodal_energy_basis, bool nodal_energy_angle_smoothing)
 {
   return "contact_ironing_2D_" + case_name + "_normal_" + selected_normal + "_penalty_" + penalty_mode +
-         "_proj_smooth_" + (projection_smoothing ? "on" : "off") +
+         "_enzyme_quad_" + (enzyme_quadrature ? "on" : "off") + "_proj_smooth_" +
+         (projection_smoothing ? "on" : "off") + "_fixed_j_" + (fixed_integration_jacobian ? "on" : "off") +
          "_active_gap_" + formatNameValue(active_set_smoothing_gap) + "_nodal_basis_" + nodal_energy_basis +
          "_angle_smooth_" + (nodal_energy_angle_smoothing ? "on" : "off") + "_example";
 }
@@ -250,7 +252,9 @@ int main(int argc, char* argv[])
   std::string selected_normal = "element";
   std::string penalty_mode = "nodal";
   std::string nodal_energy_basis = "cubic-spline";
+  bool enzyme_quadrature = true;
   bool projection_smoothing = true;
+  bool fixed_integration_jacobian = false;
   bool nodal_energy_angle_smoothing = true;
   double active_set_smoothing_gap = 0.001;
   int num_steps_override = -1;
@@ -266,8 +270,13 @@ int main(int argc, char* argv[])
   app.add_option("--energy-mortar-nodal-energy-basis", nodal_energy_basis,
                  "Nodal energy basis: fe or cubic-spline")
       ->check(axom::CLI::IsMember({"fe", "cubic-spline"}));
+  app.add_flag("--energy-mortar-enzyme-quadrature,!--no-energy-mortar-enzyme-quadrature", enzyme_quadrature,
+               "Differentiate through geometry-dependent quadrature construction in EnergyMortar");
   app.add_flag("--energy-mortar-projection-smoothing,!--no-energy-mortar-projection-smoothing", projection_smoothing,
                "Use projection-bound smoothing in the energy mortar contact calculation");
+  app.add_flag("--energy-mortar-fixed-integration-jacobian,!--no-energy-mortar-fixed-integration-jacobian",
+               fixed_integration_jacobian,
+               "Hold the physical integration measure fixed during EnergyMortar differentiation");
   app.add_flag("--energy-mortar-nodal-energy-angle-smoothing,!--no-energy-mortar-nodal-energy-angle-smoothing",
                nodal_energy_angle_smoothing, "Use 80-to-90 degree angle smoothing in nodal energy mode");
   app.add_option("--energy-mortar-active-set-smoothing-gap", active_set_smoothing_gap,
@@ -288,8 +297,9 @@ int main(int argc, char* argv[])
   const auto ironing_case = parseCase(selected_case);
   const std::string case_name = caseName(ironing_case);
   const std::string run_name =
-      makeRunName(case_name, selected_normal, penalty_mode, projection_smoothing, active_set_smoothing_gap,
-                  nodal_energy_basis, nodal_energy_angle_smoothing);
+      makeRunName(case_name, selected_normal, penalty_mode, enzyme_quadrature, projection_smoothing,
+                  fixed_integration_jacobian, active_set_smoothing_gap, nodal_energy_basis,
+                  nodal_energy_angle_smoothing);
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, run_name + "_data");
 
@@ -345,6 +355,8 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
+  tribol::setEnergyMortarEnzymeQuadrature(0, enzyme_quadrature);
+  tribol::setEnergyMortarFixedIntegrationJacobian(0, fixed_integration_jacobian);
   tribol::setEnergyMortarProjectionSmoothing(0, projection_smoothing);
   tribol::setEnergyMortarH1ActiveSetSmoothing(0, active_set_smoothing_gap);
   tribol::setEnergyMortarPenaltyMode(0, penalty_mode == "nodal-energy"
@@ -362,6 +374,8 @@ int main(int argc, char* argv[])
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
+    tribol::setEnergyMortarEnzymeQuadrature(1, enzyme_quadrature);
+    tribol::setEnergyMortarFixedIntegrationJacobian(1, fixed_integration_jacobian);
     tribol::setEnergyMortarProjectionSmoothing(1, projection_smoothing);
     tribol::setEnergyMortarH1ActiveSetSmoothing(1, active_set_smoothing_gap);
     tribol::setEnergyMortarPenaltyMode(1, penalty_mode == "nodal-energy"
