@@ -108,20 +108,15 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   template <typename BodyIntegralType, int... all_params>
   void addBodyIntegralImpl(std::string body_name, BodyIntegralType integrand, std::integer_sequence<int, all_params...>)
   {
-    const double* dt = &dt_;
-    const size_t* cycle = &cycle_;
-    const TimeInfo::EvaluationMode* mode = &mode_;
     weak_form_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<all_params...>{},
-        [dt, cycle, mode, integrand](double time, auto X, auto... inputs) {
-          return integrand(TimeInfo(time, *dt, *cycle, *mode), X, inputs...);
-        },
+        [this, integrand](double /*time*/, auto X, auto... inputs) { return integrand(timeInfo(), X, inputs...); },
         mesh_->domain(body_name));
 
     v_dot_weak_form_residual_->AddDomainIntegral(
         Dimension<spatial_dim>{}, DependsOn<0, 1 + all_params...>{},
-        [dt, cycle, mode, integrand](double time, auto X, auto V, auto... inputs) {
-          auto orig_tuple = integrand(TimeInfo(time, *dt, *cycle, *mode), X, inputs...);
+        [this, integrand](double /*time*/, auto X, auto V, auto... inputs) {
+          auto orig_tuple = integrand(timeInfo(), X, inputs...);
           return smith::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  smith::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
@@ -202,20 +197,15 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void addBoundaryIntegralImpl(std::string boundary_name, BoundaryIntegrandType integrand,
                                std::integer_sequence<int, all_params...>)
   {
-    const double* dt = &dt_;
-    const size_t* cycle = &cycle_;
-    const TimeInfo::EvaluationMode* mode = &mode_;
     weak_form_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<all_params...>{},
-        [dt, cycle, mode, integrand](double time, auto X, auto... params) {
-          return integrand(TimeInfo(time, *dt, *cycle, *mode), X, params...);
-        },
+        [this, integrand](double /*time*/, auto X, auto... params) { return integrand(timeInfo(), X, params...); },
         mesh_->domain(boundary_name));
 
     v_dot_weak_form_residual_->AddBoundaryIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + all_params...>{},
-        [dt, cycle, mode, integrand](double time, auto X, auto V, auto... params) {
-          auto orig_surface_flux = integrand(TimeInfo(time, *dt, *cycle, *mode), X, params...);
+        [this, integrand](double /*time*/, auto X, auto V, auto... params) {
+          auto orig_surface_flux = integrand(timeInfo(), X, params...);
           return smith::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
@@ -255,21 +245,16 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void addInteriorBoundaryIntegralImpl(std::string interior_name, InteriorIntegrandType integrand,
                                        std::integer_sequence<int, all_params...>)
   {
-    const double* dt = &dt_;
-    const size_t* cycle = &cycle_;
-    const TimeInfo::EvaluationMode* mode = &mode_;
     weak_form_->AddInteriorFaceIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<all_params...>{},
-        [dt, cycle, mode, integrand](double time, auto X, auto... params) {
-          return integrand(TimeInfo(time, *dt, *cycle, *mode), X, params...);
-        },
+        [this, integrand](double /*time*/, auto X, auto... params) { return integrand(timeInfo(), X, params...); },
         mesh_->domain(interior_name));
 
     v_dot_weak_form_residual_->AddInteriorFaceIntegral(
         Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + all_params...>{},
-        [dt, cycle, mode, integrand](double time, auto X, auto V, auto... params) {
+        [this, integrand](double /*time*/, auto X, auto V, auto... params) {
           auto [V1, V2] = V;
-          auto orig_surface_flux = integrand(TimeInfo(time, *dt, *cycle, *mode), X, params...);
+          auto orig_surface_flux = integrand(timeInfo(), X, params...);
           auto [flux_pos, flux_neg] = orig_surface_flux;
           return smith::inner(V1, flux_pos) + smith::inner(V2, flux_neg);
         },
@@ -332,27 +317,23 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  mfem::Vector residual(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  mfem::Vector residual(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                         [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "residual");
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
-    mode_ = time_info.mode();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
     auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
     return ret;
   }
 
   /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(
-      TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+      const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
       const std::vector<double>& jacobian_weights,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "jacobian");
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
-    mode_ = time_info.mode();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     std::unique_ptr<mfem::HypreParMatrix> J;
 
@@ -383,7 +364,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  void jvp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  void jvp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
            [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
@@ -393,9 +374,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
-    mode_ = time_info.mode();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time_info.time(),
                                   shape_disp, fields);
@@ -411,7 +390,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  void vjp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  void vjp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_field,
            DualFieldPtr vjp_shape_disp_sensitivity, const std::vector<DualFieldPtr>& vjp_sensitivities,
            [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
@@ -420,9 +399,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
-    mode_ = time_info.mode();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
                                            time_info.time(), shape_disp, v_field, fields);
@@ -440,18 +417,6 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         *vjp_sensitivities[input_col] += *vec_jac_mfem_vector;
       }
     }
-  }
-
-  /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional in case more direct access is needed.
-  /// @return Reference to ShapeAwareFunctional instance.
-  ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>& getShapeAwareResidual() { return *weak_form_; }
-
-  /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional vector-residual in case more direct
-  /// access is needed.
-  /// @return Reference to ShapeAwareFunctional instance.
-  ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>& getShapeAwareVectorTimesResidual()
-  {
-    return *v_dot_weak_form_residual_;
   }
 
  protected:
@@ -595,14 +560,34 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         }...};
   }
 
-  /// @brief timestep, this needs to be held here and modified for rate dependent applications
-  mutable double dt_ = std::numeric_limits<double>::max();
+  /// @brief Return active TimeInfo for WeakForm interface evaluations.
+  const TimeInfo& timeInfo() const
+  {
+    SLIC_ERROR_IF(current_time_info_ == nullptr,
+                  "FunctionalWeakForm integrands require evaluation through the WeakForm interface.");
+    return *current_time_info_;
+  }
 
-  /// @brief cycle or step or iteration.  This counter is useful for certain time integrators.
-  mutable size_t cycle_ = 0;
+  /// @brief Scoped setter for active TimeInfo during WeakForm interface evaluations.
+  class SetCurrentTimeInfoRAII {
+   public:
+    SetCurrentTimeInfoRAII(const TimeInfo*& current_time_info, const TimeInfo& time_info)
+        : current_time_info_(current_time_info)
+    {
+      current_time_info_ = &time_info;
+    }
 
-  /// @brief residual evaluation mode.
-  mutable TimeInfo::EvaluationMode mode_ = TimeInfo::EvaluationMode::Regular;
+    ~SetCurrentTimeInfoRAII() { current_time_info_ = nullptr; }
+
+    SetCurrentTimeInfoRAII(const SetCurrentTimeInfoRAII&) = delete;
+    SetCurrentTimeInfoRAII& operator=(const SetCurrentTimeInfoRAII&) = delete;
+
+   private:
+    const TimeInfo*& current_time_info_;
+  };
+
+  /// @brief Active time information forwarded to integrands.
+  mutable const TimeInfo* current_time_info_ = nullptr;
 
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;

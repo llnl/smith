@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <memory>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -247,6 +248,41 @@ TEST_F(WeakFormFixture, JvpConsistency)
     weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, field_tangents, {}, &jvp);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
+}
+
+TEST_F(WeakFormFixture, ForwardsOriginalTimeInfoToIntegrands)
+{
+  using TrialSpace = VectorSpace;
+  using WeakFormT =
+      smith::FunctionalWeakForm<dim, TrialSpace, smith::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
+
+  std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[STATE::DISP].space(), &states[STATE::VELO].space(),
+                                                         &params[PAR::DENSITY].space()};
+  auto f_weak_form = std::make_shared<WeakFormT>("time_info_forwarding", mesh, states[STATE::DISP].space(), inputs);
+
+  double observed_time = std::numeric_limits<double>::quiet_NaN();
+  double observed_dt = std::numeric_limits<double>::quiet_NaN();
+  size_t observed_cycle = 0;
+  bool observed_cycle_zero = false;
+
+  f_weak_form->addBodySource(mesh->entireBodyName(),
+                             [&observed_time, &observed_dt, &observed_cycle, &observed_cycle_zero](
+                                 const smith::TimeInfo& t_info, auto x, auto... /*args*/) {
+                               observed_time = t_info.time();
+                               observed_dt = t_info.dt();
+                               observed_cycle = t_info.cycle();
+                               observed_cycle_zero = t_info.isCycleZeroEvaluation();
+                               return 0.0 * x;
+                             });
+
+  smith::TimeInfo step_time(2.0, 0.25, 7, smith::TimeInfo::EvaluationMode::CycleZero);
+  auto input_fields = getConstFieldPointers(states, params);
+  f_weak_form->residual(step_time, shape_disp.get(), input_fields);
+
+  EXPECT_DOUBLE_EQ(observed_time, step_time.time());
+  EXPECT_DOUBLE_EQ(observed_dt, step_time.dt());
+  EXPECT_EQ(observed_cycle, step_time.cycle());
+  EXPECT_TRUE(observed_cycle_zero);
 }
 
 int main(int argc, char* argv[])
