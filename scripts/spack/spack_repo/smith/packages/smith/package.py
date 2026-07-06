@@ -220,7 +220,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on(f"hypre {ext_cuda_dep}", when=f"{ext_cuda_dep}")
 
         # optional
-        depends_on(f"caliper {ext_cuda_dep}", when=f"^caliper {ext_cuda_dep}")
+        depends_on(f"caliper {ext_cuda_dep}", when=f"+caliper {ext_cuda_dep}")
         depends_on(f"petsc {ext_cuda_dep}", when=f"+petsc {ext_cuda_dep}")
         depends_on(f"raja {ext_cuda_dep}", when=f"+raja {ext_cuda_dep}")
         depends_on(f"slepc {ext_cuda_dep}", when=f"+slepc {ext_cuda_dep}")
@@ -240,7 +240,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on(f"hypre {ext_rocm_dep}", when=f"{ext_rocm_dep}")
 
         # optional
-        depends_on(f"caliper {ext_rocm_dep}", when=f"^caliper {ext_rocm_dep}")
+        depends_on(f"caliper {ext_rocm_dep}", when=f"+caliper {ext_rocm_dep}")
         depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
         depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
         depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")

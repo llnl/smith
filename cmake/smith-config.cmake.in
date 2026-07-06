@@ -138,7 +138,7 @@ if(NOT SMITH_FOUND)
   endif()
 
   # Axom
-  # also covers fmt/cli11, conduit, and hdf5
+  # also covers cli11, conduit, and hdf5
   if(SMITH_USE_AXOM)
     find_dependency(Axom REQUIRED NO_DEFAULT_PATH PATHS "${AXOM_DIR}/lib/cmake")
   endif()

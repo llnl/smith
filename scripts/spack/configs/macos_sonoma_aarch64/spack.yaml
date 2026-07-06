@@ -45,8 +45,6 @@ spack:
             cxx: /opt/homebrew/opt/llvm@19/bin/clang++
           flags:
             fflags: -fPIC
-          extra_rpaths:
-          - /opt/homebrew/lib/gcc/15
 
     # Providers
     mpi:

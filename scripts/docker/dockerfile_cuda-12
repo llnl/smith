@@ -10,10 +10,10 @@ RUN sudo apt-get install gettext gfortran-13 libopenblas-dev \
 
 # Override version installed from https://github.com/llnl/radiuss-docker/blob/main/scripts/install-cmake-binary.sh
 # TODO remove this one CMake version has been updated in radiuss-docker repo
-RUN CMAKE="4.3.4"; \
-    sudo curl -s -L https://github.com/Kitware/CMake/releases/download/v$CMAKE/cmake-$CMAKE-linux-x86_64.sh > cmake.sh; \
-    sudo sh cmake.sh --prefix=/usr/local --skip-license; \
-    rm cmake.sh;
+RUN CMAKE_VERSION="4.3.4"; \
+    sudo curl -s -L https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-linux-x86_64.sh > install_cmake.sh; \
+    sudo sh install_cmake.sh --prefix=/usr/local --skip-license; \
+    rm install_cmake.sh;
 
 RUN sudo useradd -m -s /bin/bash -G sudo smith
 WORKDIR "/home/smith"
