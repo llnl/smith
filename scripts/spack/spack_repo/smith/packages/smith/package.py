@@ -251,47 +251,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("rocprim", when="+rocm")
     depends_on("hipblas", when="+rocm")
 
-    #
-    # Conflicts
-    #
-
-    # Enzyme required an LLVM-based compiler
-    for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
-        conflicts("+enzyme", when=f"%[virtuals=c,cxx] {compiler_}")
-
-    conflicts("+openmp", when="+rocm")
-    conflicts("+cuda", when="+rocm")
-    conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
-
-    conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
-
-    conflicts("~petsc", when="+slepc", msg="PETSc must be built when building with SLEPc!")
-
-    conflicts("sundials+shared", when="+sundials",
-              msg="Sundials causes runtime errors if shared!")
-
-    # ASan is only supported by GCC and (some) LLVM-derived
-    # compilers.
-    asan_compiler_denylist = {"aocc", "arm", "cce", "fj", "intel", "nag",
-                              "nvhpc", "oneapi", "pgi", "xl", "xl_r"}
-    asan_compiler_allowlist = {"gcc", "clang", "apple-clang"}
-
-    # ASan compiler denylist and allowlist should be disjoint.
-    assert len(asan_compiler_denylist & asan_compiler_allowlist) == 0
-
-    for compiler_ in asan_compiler_denylist:
-        conflicts(
-            "%{0}".format(compiler_),
-            when="+asan",
-            msg="{0} compilers do not support Address Sanitizer".format(compiler_)
-        )
-
-    conflicts("cuda_arch=none", when="+cuda",
-              msg="CUDA architecture is required")
-
-    conflicts("amdgpu_target=none", when="+rocm",
-              msg="AMD GPU target is required when building with ROCm")
-
 
     # -----------------------------------------------------------------------
     # Conflicts
@@ -313,12 +272,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     conflicts("amdgpu_target=none", when="+rocm", msg="AMD GPU target is required when building with ROCm")
 
     conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
-
-    # NOTE: Sundials must be built static to prevent the following runtime error:
-    # "error while loading shared libraries: libsundials_nvecserial.so.6:
-    # cannot open shared object file: No such file or directory"
-    conflicts("sundials+shared", when="+sundials",
-              msg="Sundials causes runtime errors if shared!")
 
     # ASan is only supported by GCC and (some) LLVM-derived
     # compilers.
