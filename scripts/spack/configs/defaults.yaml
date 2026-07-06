@@ -41,7 +41,7 @@ packages:
     - spec: "~shared~examples~werror"
 
   # Forward debug and shared variants to relevant tpls
-  # NOTE: You can use build_type==Debug and ++shared to propagate variants instead, but it will affect external packages
+  # NOTE: You can use build_type==Debug and ++shared to propagate variants from the smith spec instead, but it will affect external packages
   # as well and therefore leads to lower chances of concretization
   smith:
     require:
