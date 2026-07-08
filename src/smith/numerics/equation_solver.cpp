@@ -189,6 +189,20 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
   }
 
+  ConvergenceStatus prepareNonlinearIteration(const mfem::Vector& x, mfem::Vector& rOut) const
+  {
+    auto status = evaluateConvergence(x, rOut);
+    if (nonlinear_options.iteration_setup_callback) {
+      nonlinear_options.iteration_setup_callback();
+      status = evaluateConvergence(x, rOut);
+    }
+    if (nonlinear_options.residual_norm_callback) {
+      nonlinear_options.residual_norm_callback(status.global_norm);
+      status = evaluateConvergence(x, rOut);
+    }
+    return status;
+  }
+
   /// set the preconditioner for the linear solver
   void setPreconditioner() const
   {
@@ -214,10 +228,23 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
 
     using real_t = mfem::real_t;
 
-    ConvergenceStatus status = evaluateConvergence(x, r);
+    NonlinearSolveStats solve_stats;
+    solve_stats.nonlin_solver = nonlinear_options.nonlin_solver;
+
+    ConvergenceStatus status = prepareNonlinearIteration(x, r);
     real_t norm = status.global_norm;
+    real_t norm_goal = status.global_goal;
     initial_norm = norm;
-    if (norm == 0.0) return;
+    solve_stats.initial_residual_norm = norm;
+    if (norm == 0.0) {
+      solve_stats.converged = true;
+      solve_stats.final_residual_norm = norm;
+      solve_stats.final_residual_goal = norm_goal;
+      if (nonlinear_options.solve_stats_callback) {
+        nonlinear_options.solve_stats_callback(solve_stats);
+      }
+      return;
+    }
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -227,6 +254,11 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
 
     int it = 0;
     for (; true; it++) {
+      if (it > 0) {
+        status = prepareNonlinearIteration(x, r);
+        norm = status.global_norm;
+        norm_goal = status.global_goal;
+      }
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
       if (print_level >= 2) {
         mfem::out << "Newton iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
@@ -255,6 +287,7 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
       assembleJacobian(x);
       setPreconditioner();
       solveLinearSystem(r, c);
+      ++solve_stats.linear_solves;
 
       // there must be a better way to do this?
       x0.SetSize(x.Size());
@@ -313,6 +346,7 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
       }
 
       if (ls_iter_sum) {
+        solve_stats.line_search_cutbacks += ls_iter_sum;
         if (print_level >= 2) {
           mfem::out << "Number of line search steps taken = " << ls_iter_sum << std::endl;
         }
@@ -322,16 +356,26 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
                     << std::endl;
         }
       }
+      ++solve_stats.accepted_steps;
+      solve_stats.final_step_scale = stepScale;
+      solve_stats.min_step_scale = std::min(solve_stats.min_step_scale, static_cast<double>(stepScale));
     }
 
     final_iter = it;
     final_norm = norm;
+    solve_stats.converged = converged;
+    solve_stats.iterations = final_iter;
+    solve_stats.final_residual_norm = norm;
+    solve_stats.final_residual_goal = norm_goal;
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm << '\n';
     }
     if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
       mfem::out << "Newton: No convergence!\n";
+    }
+    if (nonlinear_options.solve_stats_callback) {
+      nonlinear_options.solve_stats_callback(solve_stats);
     }
   }
 };
@@ -776,6 +820,20 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     return status;
   }
 
+  ConvergenceStatus prepareNonlinearIteration(const mfem::Vector& x_, mfem::Vector& r_) const
+  {
+    auto status = evaluateConvergence(x_, r_);
+    if (nonlinear_options.iteration_setup_callback) {
+      nonlinear_options.iteration_setup_callback();
+      status = evaluateConvergence(x_, r_);
+    }
+    if (nonlinear_options.residual_norm_callback) {
+      nonlinear_options.residual_norm_callback(status.global_norm);
+      status = evaluateConvergence(x_, r_);
+    }
+    return status;
+  }
+
   /// apply the action of the assembled Jacobian matrix to a vector
   void hessVec(const mfem::Vector& x_, mfem::Vector& v_) const
   {
@@ -809,11 +867,24 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     num_subspace_solves = 0;
     num_jacobian_assembles = 0;
 
-    ConvergenceStatus status = evaluateConvergence(X, r);
+    NonlinearSolveStats solve_stats;
+    solve_stats.nonlin_solver = nonlinear_options.nonlin_solver;
+
+    ConvergenceStatus status = prepareNonlinearIteration(X, r);
     real_t norm = status.global_norm;
     real_t norm_goal = status.global_goal;
     initial_norm = norm;
-    if (norm == 0.0) return;
+    solve_stats.initial_residual_norm = norm;
+    if (norm == 0.0) {
+      solve_stats.converged = true;
+      solve_stats.final_residual_norm = norm;
+      solve_stats.final_residual_goal = norm_goal;
+      solve_stats.residual_evaluations = static_cast<int>(num_residuals);
+      if (nonlinear_options.solve_stats_callback) {
+        nonlinear_options.solve_stats_callback(solve_stats);
+      }
+      return;
+    }
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -841,10 +912,18 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
     scratch = 1.0;
     double tr_size = nonlinear_options.trust_region_scaling * std::sqrt(Dot(scratch, scratch));
+    solve_stats.initial_trust_region_size = tr_size;
+    solve_stats.min_trust_region_size = tr_size;
+    solve_stats.final_trust_region_size = tr_size;
     size_t cumulative_cg_iters_from_last_precond_update = 0;
 
     int it = 0;
     for (; true; it++) {
+      if (it > 0) {
+        status = prepareNonlinearIteration(X, r);
+        norm = status.global_norm;
+        norm_goal = status.global_goal;
+      }
       MFEM_ASSERT(mfem::IsFinite(norm), "norm = " << norm);
       if (print_level >= 2) {
         mfem::out << "TrustRegion iteration " << std::setw(3) << it << " : ||r|| = " << std::setw(13) << norm;
@@ -914,6 +993,10 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
         solveTrustRegionModelProblem(r, scratch, hess_vec_func, precond_func, settings, tr_size, trResults);
       }
+      const int model_cg_iterations = static_cast<int>(trResults.cg_iterations_count);
+      solve_stats.trust_region_cg_iterations += model_cg_iterations;
+      solve_stats.max_trust_region_cg_iterations =
+          std::max(solve_stats.max_trust_region_cg_iterations, model_cg_iterations);
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
 
       bool have_computed_Hvs = false;
@@ -921,6 +1004,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       int lineSearchIter = 0;
       while (lineSearchIter <= nonlinear_options.max_line_search_iterations) {
         ++lineSearchIter;
+        ++solve_stats.trust_region_trial_steps;
 
         doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
 
@@ -971,6 +1055,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
             r = r_pred;
             status = predicted_status;
             norm = status.global_norm;
+            ++solve_stats.accepted_steps;
+            solve_stats.final_trust_region_size = tr_size;
             if (print_level >= 2) {
               printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, true);
               trResults.cg_iterations_count = 0;
@@ -1007,6 +1093,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                                                                            // region
           tr_size *= settings.t2;
         }
+        solve_stats.min_trust_region_size = std::min(solve_stats.min_trust_region_size, tr_size);
 
         // eventually extend to handle this case to handle occasional roundoff issues
         // modelRes = g + Jd
@@ -1026,13 +1113,27 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           r = r_pred;
           status = convergence_manager_ ? convergence_manager_->evaluate(1.0, r_pred) : status;
           norm = normPred;
+          ++solve_stats.accepted_steps;
+          solve_stats.final_trust_region_size = tr_size;
           break;
         }
+        ++solve_stats.rejected_steps;
+        ++solve_stats.line_search_cutbacks;
       }
     }
 
     final_iter = it;
     final_norm = norm;
+    solve_stats.converged = converged;
+    solve_stats.iterations = final_iter;
+    solve_stats.final_residual_norm = norm;
+    solve_stats.final_residual_goal = norm_goal;
+    solve_stats.final_trust_region_size = tr_size;
+    solve_stats.residual_evaluations = static_cast<int>(num_residuals);
+    solve_stats.jacobian_assemblies = static_cast<int>(num_jacobian_assembles);
+    solve_stats.hessian_vector_products = static_cast<int>(num_hess_vecs);
+    solve_stats.preconditioner_applications = static_cast<int>(num_preconds);
+    solve_stats.subspace_solves = static_cast<int>(num_subspace_solves);
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << final_iter << " : ||r|| = " << std::setw(13) << norm
@@ -1040,6 +1141,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     }
     if (!converged && print_level >= 1) {  // (print_options.summary || print_options.warnings)) {
       mfem::out << "TrustRegion: No convergence!\n";
+    }
+    if (nonlinear_options.solve_stats_callback) {
+      nonlinear_options.solve_stats_callback(solve_stats);
     }
 
     if (false && print_level >= 2) {

@@ -4,12 +4,15 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <functional>
+#include <iomanip>
 #include <memory>
 #include <set>
-#include <sstream>
 #include <string>
+#include <vector>
 
 #include "axom/CLI11.hpp"
 #include "axom/sidre/core/MFEMSidreDataCollection.hpp"
@@ -76,33 +79,95 @@ std::string caseName(IroningCase ironing_case)
   return "square";
 }
 
-std::string formatNameValue(double value)
+std::string penaltyModeTag(const std::string& penalty_mode)
 {
-  std::ostringstream os;
-  os << value;
-  std::string out = os.str();
-  for (auto& c : out) {
-    if (c == '.') {
-      c = 'p';
-    } else if (c == '-') {
-      c = 'm';
-    } else if (c == '+') {
-      c = 'p';
-    }
+  if (penalty_mode == "quadrature-point") {
+    return "qp";
   }
-  return out;
+  if (penalty_mode == "nodal-energy") {
+    return "ne";
+  }
+  return "ng";
+}
+
+std::string normalTag(const std::string& selected_normal)
+{
+  if (selected_normal == "averaged") {
+    return "h1";
+  }
+  return "el";
+}
+
+std::string nonlinearSolverTag(const std::string& nonlinear_solver)
+{
+  if (nonlinear_solver == "newton-line-search") {
+    return "nls";
+  }
+  return "tr";
+}
+
+std::string projectionSmoothingCurveTag(const std::string& projection_smoothing_curve)
+{
+  if (projection_smoothing_curve == "quadratic") {
+    return "q2";
+  }
+  return "q5";
+}
+
+smith::NonlinearSolver parseNonlinearSolver(const std::string& value)
+{
+  if (value == "trust-region") {
+    return smith::NonlinearSolver::TrustRegion;
+  }
+  if (value == "newton-line-search") {
+    return smith::NonlinearSolver::NewtonLineSearch;
+  }
+
+  SLIC_ERROR_ROOT("Unknown nonlinear solver '" << value << "'. Expected one of: trust-region, newton-line-search.");
+  return smith::NonlinearSolver::TrustRegion;
+}
+
+tribol::EnergyMortarProjectionSmoothingCurve parseProjectionSmoothingCurve(const std::string& value)
+{
+  if (value == "quadratic") {
+    return tribol::EnergyMortarProjectionSmoothingCurve::QUADRATIC;
+  }
+  if (value == "quintic") {
+    return tribol::EnergyMortarProjectionSmoothingCurve::QUINTIC;
+  }
+
+  SLIC_ERROR_ROOT("Unknown projection smoothing curve '" << value << "'. Expected one of: quadratic, quintic.");
+  return tribol::EnergyMortarProjectionSmoothingCurve::QUINTIC;
+}
+
+double smoothstep(double t)
+{
+  if (t <= 0.0) {
+    return 0.0;
+  }
+  if (t >= 1.0) {
+    return 1.0;
+  }
+  return t * t * (3.0 - 2.0 * t);
+}
+
+double fullPathWeightFromResidual(double residual_norm, double min_residual, double max_residual)
+{
+  const double t = (residual_norm - min_residual) / (max_residual - min_residual);
+  return 1.0 - smoothstep(t);
 }
 
 std::string makeRunName(const std::string& case_name, const std::string& selected_normal,
                         const std::string& penalty_mode, bool enzyme_quadrature, bool projection_smoothing,
-                        bool fixed_integration_jacobian, double active_set_smoothing_gap,
-                        const std::string& nodal_energy_basis, bool nodal_energy_angle_smoothing)
+                        const std::string& projection_smoothing_curve, bool fixed_integration_jacobian,
+                        bool qp_frozen_integration, bool qp_derivative_blend_adaptive_gap,
+                        const std::string& nonlinear_solver)
 {
-  return "contact_ironing_2D_" + case_name + "_normal_" + selected_normal + "_penalty_" + penalty_mode +
-         "_enzyme_quad_" + (enzyme_quadrature ? "on" : "off") + "_proj_smooth_" +
-         (projection_smoothing ? "on" : "off") + "_fixed_j_" + (fixed_integration_jacobian ? "on" : "off") +
-         "_active_gap_" + formatNameValue(active_set_smoothing_gap) + "_nodal_basis_" + nodal_energy_basis +
-         "_angle_smooth_" + (nodal_energy_angle_smoothing ? "on" : "off") + "_example";
+  return "ci2d_" + case_name + "_p" + penaltyModeTag(penalty_mode) + "_n" + normalTag(selected_normal) + "_s" +
+         nonlinearSolverTag(nonlinear_solver) + "_eq" + (enzyme_quadrature ? "1" : "0") + "_ps" +
+         (projection_smoothing ? "1" : "0") + projectionSmoothingCurveTag(projection_smoothing_curve) + "_fj" +
+         (fixed_integration_jacobian ? "1" : "0") + "_fq" +
+         (qp_frozen_integration ? "1" : "0") + "_ag" + (qp_derivative_blend_adaptive_gap ? "1" : "0");
 }
 
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
@@ -158,6 +223,115 @@ struct CaseConfig {
   bool add_secondary_contact = false;
   std::set<int> secondary_indenter_contact_attrs;
 };
+
+struct CycleRunStats {
+  int cycle = 0;
+  double time = 0.0;
+  smith::NonlinearSolveStats nonlinear;
+  tribol::EnergyMortarQpDiagnostics contact0;
+  tribol::EnergyMortarQpDiagnostics contact1;
+  bool has_secondary_contact = false;
+};
+
+std::string jsonString(const std::string& value)
+{
+  std::string out = "\"";
+  for (const char c : value) {
+    switch (c) {
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
+      default:
+        out += c;
+        break;
+    }
+  }
+  out += "\"";
+  return out;
+}
+
+void writeNonlinearSolveStatsJson(std::ostream& os, const smith::NonlinearSolveStats& stats, const std::string& indent)
+{
+  os << indent << "{\n";
+  os << indent << "  \"solver\": " << jsonString(smith::nonlinearName(stats.nonlin_solver)) << ",\n";
+  os << indent << "  \"converged\": " << (stats.converged ? "true" : "false") << ",\n";
+  os << indent << "  \"iterations\": " << stats.iterations << ",\n";
+  os << indent << "  \"initial_residual_norm\": " << stats.initial_residual_norm << ",\n";
+  os << indent << "  \"final_residual_norm\": " << stats.final_residual_norm << ",\n";
+  os << indent << "  \"final_residual_goal\": " << stats.final_residual_goal << ",\n";
+  os << indent << "  \"linear_solves\": " << stats.linear_solves << ",\n";
+  os << indent << "  \"line_search_cutbacks\": " << stats.line_search_cutbacks << ",\n";
+  os << indent << "  \"accepted_steps\": " << stats.accepted_steps << ",\n";
+  os << indent << "  \"rejected_steps\": " << stats.rejected_steps << ",\n";
+  os << indent << "  \"min_step_scale\": " << stats.min_step_scale << ",\n";
+  os << indent << "  \"final_step_scale\": " << stats.final_step_scale << ",\n";
+  os << indent << "  \"trust_region_cg_iterations\": " << stats.trust_region_cg_iterations << ",\n";
+  os << indent << "  \"max_trust_region_cg_iterations\": " << stats.max_trust_region_cg_iterations << ",\n";
+  os << indent << "  \"trust_region_trial_steps\": " << stats.trust_region_trial_steps << ",\n";
+  os << indent << "  \"initial_trust_region_size\": " << stats.initial_trust_region_size << ",\n";
+  os << indent << "  \"min_trust_region_size\": " << stats.min_trust_region_size << ",\n";
+  os << indent << "  \"final_trust_region_size\": " << stats.final_trust_region_size << ",\n";
+  os << indent << "  \"residual_evaluations\": " << stats.residual_evaluations << ",\n";
+  os << indent << "  \"jacobian_assemblies\": " << stats.jacobian_assemblies << ",\n";
+  os << indent << "  \"hessian_vector_products\": " << stats.hessian_vector_products << ",\n";
+  os << indent << "  \"preconditioner_applications\": " << stats.preconditioner_applications << ",\n";
+  os << indent << "  \"subspace_solves\": " << stats.subspace_solves << "\n";
+  os << indent << "}";
+}
+
+void writeQpDiagnosticsJson(std::ostream& os, const tribol::EnergyMortarQpDiagnostics& diagnostics,
+                            const std::string& indent)
+{
+  os << indent << "{\n";
+  os << indent << "  \"energy\": " << diagnostics.energy << ",\n";
+  os << indent << "  \"residual_gap_average\": " << diagnostics.residual_gap_average << ",\n";
+  os << indent << "  \"residual_gap_min\": " << diagnostics.residual_gap_min << ",\n";
+  os << indent << "  \"residual_gap_max\": " << diagnostics.residual_gap_max << ",\n";
+  os << indent << "  \"blend_weight_average\": " << diagnostics.blend_weight_average << ",\n";
+  os << indent << "  \"blend_weight_min\": " << diagnostics.blend_weight_min << ",\n";
+  os << indent << "  \"blend_weight_max\": " << diagnostics.blend_weight_max << ",\n";
+  os << indent << "  \"full_simplified_energy_difference_average\": "
+     << diagnostics.full_simplified_energy_difference_average << ",\n";
+  os << indent << "  \"full_simplified_energy_difference_max\": "
+     << diagnostics.full_simplified_energy_difference_max << ",\n";
+  os << indent << "  \"active_pair_count\": " << diagnostics.active_pair_count << ",\n";
+  os << indent << "  \"contributing_pair_count\": " << diagnostics.contributing_pair_count << ",\n";
+  os << indent << "  \"full_weight_pair_count\": " << diagnostics.full_weight_pair_count << ",\n";
+  os << indent << "  \"blended_pair_count\": " << diagnostics.blended_pair_count << ",\n";
+  os << indent << "  \"simplified_pair_count\": " << diagnostics.simplified_pair_count << ",\n";
+  os << indent << "  \"missing_frozen_integration_pair_count\": "
+     << diagnostics.missing_frozen_integration_pair_count << "\n";
+  os << indent << "}";
+}
+
+void writeCycleRunStatsJson(std::ostream& os, const CycleRunStats& cycle_stats, const std::string& indent)
+{
+  os << indent << "{\n";
+  os << indent << "  \"cycle\": " << cycle_stats.cycle << ",\n";
+  os << indent << "  \"time\": " << cycle_stats.time << ",\n";
+  os << indent << "  \"nonlinear\": ";
+  writeNonlinearSolveStatsJson(os, cycle_stats.nonlinear, indent + "  ");
+  os << ",\n" << indent << "  \"contact\": [\n";
+  writeQpDiagnosticsJson(os, cycle_stats.contact0, indent + "    ");
+  if (cycle_stats.has_secondary_contact) {
+    os << ",\n";
+    writeQpDiagnosticsJson(os, cycle_stats.contact1, indent + "    ");
+  }
+  os << "\n" << indent << "  ]\n";
+  os << indent << "}";
+}
 
 DisplacementFunction slidingDisplacement(double depth)
 {
@@ -254,11 +428,25 @@ int main(int argc, char* argv[])
   std::string nodal_energy_basis = "cubic-spline";
   bool enzyme_quadrature = true;
   bool projection_smoothing = true;
+  std::string projection_smoothing_curve = "quintic";
   bool fixed_integration_jacobian = false;
+  bool qp_frozen_integration = false;
   bool nodal_energy_angle_smoothing = true;
   double active_set_smoothing_gap = 0.001;
+  double qp_derivative_blend_min_gap = 0.0;
+  double qp_derivative_blend_max_gap = 0.0;
+  bool qp_derivative_blend_enzyme_gap_weight = true;
+  bool qp_derivative_blend_adaptive_gap = false;
+  double qp_derivative_blend_adaptive_min_gap_scale = 1.5;
+  double qp_derivative_blend_adaptive_max_gap_scale = 20.0;
+  double qp_derivative_blend_force_residual_min = 0.0;
+  double qp_derivative_blend_force_residual_max = 0.0;
+  bool print_qp_diagnostics = false;
+  std::string nonlinear_solver = "trust-region";
+  std::string run_summary_json;
   int num_steps_override = -1;
   int nonlinear_print_level = -1;
+  int nonlinear_max_line_search_iterations = -1;
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
       ->check(axom::CLI::IsMember({"square", "circle", "twisted"}));
@@ -274,20 +462,85 @@ int main(int argc, char* argv[])
                "Differentiate through geometry-dependent quadrature construction in EnergyMortar");
   app.add_flag("--energy-mortar-projection-smoothing,!--no-energy-mortar-projection-smoothing", projection_smoothing,
                "Use projection-bound smoothing in the energy mortar contact calculation");
+  app.add_option("--energy-mortar-projection-smoothing-curve", projection_smoothing_curve,
+                 "Energy mortar projection-bound smoothing curve: quadratic or quintic")
+      ->check(axom::CLI::IsMember({"quadratic", "quintic"}));
   app.add_flag("--energy-mortar-fixed-integration-jacobian,!--no-energy-mortar-fixed-integration-jacobian",
                fixed_integration_jacobian,
                "Hold the physical integration measure fixed during EnergyMortar differentiation");
+  app.add_flag("--energy-mortar-qp-frozen-integration,!--no-energy-mortar-qp-frozen-integration",
+               qp_frozen_integration,
+               "Use previous-timestep cached quadrature points, weights, and J for the simplified QP blend path");
   app.add_flag("--energy-mortar-nodal-energy-angle-smoothing,!--no-energy-mortar-nodal-energy-angle-smoothing",
                nodal_energy_angle_smoothing, "Use 80-to-90 degree angle smoothing in nodal energy mode");
   app.add_option("--energy-mortar-active-set-smoothing-gap", active_set_smoothing_gap,
                  "Energy mortar active-set smoothing transition gap; disabled when <= 0")
       ->check(axom::CLI::NonNegativeNumber);
+  app.add_option("--energy-mortar-qp-derivative-blend-min-gap", qp_derivative_blend_min_gap,
+                 "Residual gap below which the full energy mortar QP derivative is used")
+      ->check(axom::CLI::NonNegativeNumber);
+  app.add_option("--energy-mortar-qp-derivative-blend-max-gap", qp_derivative_blend_max_gap,
+                 "Residual gap above which the simplified energy mortar QP derivative is used")
+      ->check(axom::CLI::NonNegativeNumber);
+  app.add_flag(
+      "--energy-mortar-qp-derivative-blend-enzyme-gap-weight,"
+      "!--no-energy-mortar-qp-derivative-blend-enzyme-gap-weight",
+      qp_derivative_blend_enzyme_gap_weight,
+      "Differentiate the gap-based energy mortar QP derivative blend weight with Enzyme");
+  app.add_flag("--energy-mortar-qp-derivative-blend-adaptive-gap", qp_derivative_blend_adaptive_gap,
+               "Update the energy mortar QP derivative gap blend range from the previous timestep average gap");
+  app.add_option("--energy-mortar-qp-derivative-blend-adaptive-min-gap-scale",
+                 qp_derivative_blend_adaptive_min_gap_scale,
+                 "Adaptive QP derivative blend min gap scale applied to the previous timestep average gap")
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--energy-mortar-qp-derivative-blend-adaptive-max-gap-scale",
+                 qp_derivative_blend_adaptive_max_gap_scale,
+                 "Adaptive QP derivative blend max gap scale applied to the adaptive min gap")
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--energy-mortar-qp-derivative-blend-force-residual-min", qp_derivative_blend_force_residual_min,
+                 "Force residual norm below which the full energy mortar QP derivative is used")
+      ->check(axom::CLI::NonNegativeNumber);
+  app.add_option("--energy-mortar-qp-derivative-blend-force-residual-max", qp_derivative_blend_force_residual_max,
+                 "Force residual norm above which the simplified energy mortar QP derivative is used")
+      ->check(axom::CLI::NonNegativeNumber);
+  app.add_flag("--energy-mortar-qp-diagnostics", print_qp_diagnostics,
+               "Print EnergyMortar QP diagnostics during nonlinear iterations");
+  app.add_option("--nonlinear-solver", nonlinear_solver, "Nonlinear solver: trust-region or newton-line-search")
+      ->check(axom::CLI::IsMember({"trust-region", "newton-line-search"}));
+  app.add_option("--run-summary-json", run_summary_json, "Write a structured run summary JSON file");
   app.add_option("--num-steps", num_steps_override, "Override the number of time steps")
       ->check(axom::CLI::NonNegativeNumber);
   app.add_option("--nonlinear-print-level", nonlinear_print_level, "Override the nonlinear solver print level")
       ->check(axom::CLI::Range(0, 2));
+  app.add_option("--nonlinear-max-line-search-iterations", nonlinear_max_line_search_iterations,
+                 "Override the maximum Newton line-search cutbacks")
+      ->check(axom::CLI::NonNegativeNumber);
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
+
+  SLIC_ERROR_ROOT_IF((qp_derivative_blend_min_gap > 0.0 || qp_derivative_blend_max_gap > 0.0) &&
+                         qp_derivative_blend_max_gap <= qp_derivative_blend_min_gap,
+                     "The energy mortar QP derivative blend max gap must be greater than the min gap.");
+  SLIC_ERROR_ROOT_IF(qp_derivative_blend_adaptive_gap &&
+                         (qp_derivative_blend_min_gap <= 0.0 ||
+                          qp_derivative_blend_max_gap <= qp_derivative_blend_min_gap),
+                     "Adaptive energy mortar QP derivative gap blending requires initial min/max gaps with max > min.");
+  SLIC_ERROR_ROOT_IF((qp_derivative_blend_force_residual_min > 0.0 ||
+                      qp_derivative_blend_force_residual_max > 0.0) &&
+                         qp_derivative_blend_force_residual_max <= qp_derivative_blend_force_residual_min,
+                     "The energy mortar QP derivative blend force residual max must be greater than the min.");
+  SLIC_ERROR_ROOT_IF(qp_derivative_blend_adaptive_gap && qp_derivative_blend_adaptive_max_gap_scale <= 1.0,
+                     "The adaptive energy mortar QP derivative blend max gap scale must be greater than 1.");
+  SLIC_WARNING_ROOT_IF((qp_derivative_blend_min_gap > 0.0 || qp_derivative_blend_max_gap > 0.0 ||
+                        qp_derivative_blend_adaptive_gap) &&
+                           (qp_derivative_blend_force_residual_min > 0.0 ||
+                            qp_derivative_blend_force_residual_max > 0.0),
+                       "Force-residual derivative blending overrides gap-residual derivative blending.");
+  SLIC_WARNING_ROOT_IF(qp_derivative_blend_adaptive_gap && penalty_mode != "quadrature-point",
+                       "Energy mortar QP adaptive derivative gap blending is only used with quadrature-point penalty "
+                       "mode.");
+  SLIC_WARNING_ROOT_IF(qp_frozen_integration && penalty_mode != "quadrature-point",
+                       "Energy mortar QP frozen integration is only used with quadrature-point penalty mode.");
 
 #ifndef MFEM_USE_STRUMPACK
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -298,8 +551,8 @@ int main(int argc, char* argv[])
   const std::string case_name = caseName(ironing_case);
   const std::string run_name =
       makeRunName(case_name, selected_normal, penalty_mode, enzyme_quadrature, projection_smoothing,
-                  fixed_integration_jacobian, active_set_smoothing_gap, nodal_energy_basis,
-                  nodal_energy_angle_smoothing);
+                  projection_smoothing_curve, fixed_integration_jacobian, qp_frozen_integration,
+                  qp_derivative_blend_adaptive_gap, nonlinear_solver);
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, run_name + "_data");
 
@@ -310,15 +563,67 @@ int main(int argc, char* argv[])
   if (nonlinear_print_level >= 0) {
     config.nonlinear_options.print_level = nonlinear_print_level;
   }
+  config.nonlinear_options.nonlin_solver = parseNonlinearSolver(nonlinear_solver);
+  if (nonlinear_max_line_search_iterations >= 0) {
+    config.nonlinear_options.max_line_search_iterations = nonlinear_max_line_search_iterations;
+  }
+  const bool force_residual_blend =
+      qp_derivative_blend_force_residual_max > qp_derivative_blend_force_residual_min;
+  if (force_residual_blend || print_qp_diagnostics) {
+    const bool add_secondary_contact = config.add_secondary_contact;
+    config.nonlinear_options.residual_norm_callback =
+        [qp_derivative_blend_force_residual_min, qp_derivative_blend_force_residual_max, force_residual_blend,
+         print_qp_diagnostics, add_secondary_contact, callback_count = 0](double residual_norm) mutable {
+          if (force_residual_blend) {
+            const double weight = fullPathWeightFromResidual(residual_norm, qp_derivative_blend_force_residual_min,
+                                                             qp_derivative_blend_force_residual_max);
+            tribol::setEnergyMortarQpDerivativeBlendWeight(0, weight);
+            if (add_secondary_contact) {
+              tribol::setEnergyMortarQpDerivativeBlendWeight(1, weight);
+            }
+          }
+          if (print_qp_diagnostics) {
+            auto print_diagnostics = [residual_norm, callback_count](int interaction) {
+              const auto diagnostics = tribol::getMfemEnergyMortarQpDiagnostics(interaction);
+              SLIC_INFO_ROOT("Energy mortar QP diagnostics callback "
+                             << callback_count << ", interaction " << interaction << ": residual_norm="
+                             << residual_norm << ", energy=" << diagnostics.energy
+                             << ", active_pairs=" << diagnostics.active_pair_count
+                             << ", contributing_pairs=" << diagnostics.contributing_pair_count
+                             << ", gap[min/avg/max]=" << diagnostics.residual_gap_min << "/"
+                             << diagnostics.residual_gap_average << "/" << diagnostics.residual_gap_max
+                             << ", full_weight[min/avg/max]=" << diagnostics.blend_weight_min << "/"
+                             << diagnostics.blend_weight_average << "/" << diagnostics.blend_weight_max
+                             << ", weight_counts(full/blend/simplified)="
+                             << diagnostics.full_weight_pair_count << "/" << diagnostics.blended_pair_count << "/"
+                             << diagnostics.simplified_pair_count << ", |Efull-Esimpl|[avg/max]="
+                             << diagnostics.full_simplified_energy_difference_average << "/"
+                             << diagnostics.full_simplified_energy_difference_max
+                             << ", missing_frozen_pairs="
+                             << diagnostics.missing_frozen_integration_pair_count);
+            };
+            print_diagnostics(0);
+            if (add_secondary_contact) {
+              print_diagnostics(1);
+            }
+          }
+          ++callback_count;
+        };
+  }
+  std::vector<smith::NonlinearSolveStats> nonlinear_solve_stats;
+  config.nonlinear_options.solve_stats_callback =
+      [&nonlinear_solve_stats](const smith::NonlinearSolveStats& stats) { nonlinear_solve_stats.push_back(stats); };
   config.name = run_name;
   auto& mesh = config.mesh;
 
-  smith::LinearSolverOptions linear_options{
-      .linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreAMG, .print_level = 0};
-
-  mfem::VisItDataCollection visit_dc(config.name + "_visit", &mesh->mfemParMesh());
-  visit_dc.SetPrefixPath("visit_out");
-  visit_dc.Save();
+  smith::LinearSolverOptions linear_options =
+      nonlinear_solver == "newton-line-search"
+          ? smith::LinearSolverOptions{.linear_solver = smith::LinearSolver::Strumpack,
+                                       .preconditioner = smith::Preconditioner::None,
+                                       .print_level = 0}
+          : smith::LinearSolverOptions{.linear_solver = smith::LinearSolver::CG,
+                                       .preconditioner = smith::Preconditioner::HypreAMG,
+                                       .print_level = 0};
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
@@ -330,6 +635,17 @@ int main(int argc, char* argv[])
   smith::SolidMechanicsContact<P, DIM, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       config.nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, config.name, mesh,
       {"bulk_mod", "shear_mod"}, 0, 0.0, false, false);
+
+  mfem::VisItDataCollection visit_dc(config.name + "_visit", &mesh->mfemParMesh());
+  visit_dc.SetPrefixPath("visit_out");
+  visit_dc.RegisterField("displacement", &solid_solver.displacement().gridFunction());
+  auto save_visit_output = [&](int cycle, double time) {
+    solid_solver.displacement().gridFunction();
+    visit_dc.SetCycle(cycle);
+    visit_dc.SetTime(time);
+    visit_dc.Save();
+  };
+  save_visit_output(0, 0.0);
 
   smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
 
@@ -357,8 +673,12 @@ int main(int argc, char* argv[])
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
   tribol::setEnergyMortarEnzymeQuadrature(0, enzyme_quadrature);
   tribol::setEnergyMortarFixedIntegrationJacobian(0, fixed_integration_jacobian);
+  tribol::setEnergyMortarQpFrozenIntegration(0, qp_frozen_integration);
   tribol::setEnergyMortarProjectionSmoothing(0, projection_smoothing);
+  tribol::setEnergyMortarProjectionSmoothingCurve(0, parseProjectionSmoothingCurve(projection_smoothing_curve));
   tribol::setEnergyMortarH1ActiveSetSmoothing(0, active_set_smoothing_gap);
+  tribol::setEnergyMortarQpDerivativeBlendGapRange(0, qp_derivative_blend_min_gap, qp_derivative_blend_max_gap);
+  tribol::setEnergyMortarQpDerivativeBlendEnzymeGapWeight(0, qp_derivative_blend_enzyme_gap_weight);
   tribol::setEnergyMortarPenaltyMode(0, penalty_mode == "nodal-energy"
                                             ? tribol::EnergyMortarPenaltyMode::NODAL_ENERGY
                                             : penalty_mode == "quadrature-point"
@@ -376,8 +696,12 @@ int main(int argc, char* argv[])
                                        contact_options);
     tribol::setEnergyMortarEnzymeQuadrature(1, enzyme_quadrature);
     tribol::setEnergyMortarFixedIntegrationJacobian(1, fixed_integration_jacobian);
+    tribol::setEnergyMortarQpFrozenIntegration(1, qp_frozen_integration);
     tribol::setEnergyMortarProjectionSmoothing(1, projection_smoothing);
+    tribol::setEnergyMortarProjectionSmoothingCurve(1, parseProjectionSmoothingCurve(projection_smoothing_curve));
     tribol::setEnergyMortarH1ActiveSetSmoothing(1, active_set_smoothing_gap);
+    tribol::setEnergyMortarQpDerivativeBlendGapRange(1, qp_derivative_blend_min_gap, qp_derivative_blend_max_gap);
+    tribol::setEnergyMortarQpDerivativeBlendEnzymeGapWeight(1, qp_derivative_blend_enzyme_gap_weight);
     tribol::setEnergyMortarPenaltyMode(1, penalty_mode == "nodal-energy"
                                               ? tribol::EnergyMortarPenaltyMode::NODAL_ENERGY
                                               : penalty_mode == "quadrature-point"
@@ -427,15 +751,154 @@ int main(int argc, char* argv[])
     submesh_normal_dc->Save();
   };
 
+  auto print_qp_residual_gap_average = [&](int cycle, double time) {
+    SLIC_INFO_ROOT("Energy mortar QP residual gap average at cycle "
+                   << cycle << ", time " << time << ", interaction 0: "
+                   << tribol::getMfemEnergyMortarQpResidualGapAverage(0));
+    if (config.add_secondary_contact) {
+      SLIC_INFO_ROOT("Energy mortar QP residual gap average at cycle "
+                     << cycle << ", time " << time << ", interaction 1: "
+                     << tribol::getMfemEnergyMortarQpResidualGapAverage(1));
+    }
+  };
+
+  auto update_adaptive_qp_derivative_blend_gap_range = [&](int cycle, double time) {
+    if (!qp_derivative_blend_adaptive_gap) {
+      return;
+    }
+    auto update_interaction = [&](int interaction) {
+      const double average_gap = tribol::getMfemEnergyMortarQpResidualGapAverage(interaction);
+      const double min_gap = qp_derivative_blend_adaptive_min_gap_scale * std::abs(average_gap);
+      const double max_gap = qp_derivative_blend_adaptive_max_gap_scale * min_gap;
+      tribol::setEnergyMortarQpDerivativeBlendGapRange(interaction, min_gap, max_gap);
+      SLIC_INFO_ROOT("Energy mortar adaptive QP derivative gap blend range at cycle "
+                     << cycle << ", time " << time << ", interaction " << interaction
+                     << ": average_gap=" << average_gap << ", min_gap=" << min_gap << ", max_gap=" << max_gap);
+    };
+    update_interaction(0);
+    if (config.add_secondary_contact) {
+      update_interaction(1);
+    }
+  };
+
+  auto update_qp_frozen_integration_data = [&]() {
+    if (!qp_frozen_integration) {
+      return;
+    }
+    tribol::updateEnergyMortarQpFrozenIntegrationData(0);
+    if (config.add_secondary_contact) {
+      tribol::updateEnergyMortarQpFrozenIntegrationData(1);
+    }
+  };
+
+  update_qp_frozen_integration_data();
+
+  std::vector<CycleRunStats> cycle_run_stats;
   constexpr double dt = 1.0;
   for (int i{0}; i < config.num_steps; ++i) {
+    const auto stats_size_before_solve = nonlinear_solve_stats.size();
     solid_solver.advanceTimestep(dt);
-    visit_dc.SetCycle(i);
-    visit_dc.SetTime((i + 1) * dt);
-    visit_dc.Save();
+    const int cycle = i + 1;
+    const double time = cycle * dt;
+    print_qp_residual_gap_average(cycle, time);
+    CycleRunStats cycle_stats;
+    cycle_stats.cycle = cycle;
+    cycle_stats.time = time;
+    if (nonlinear_solve_stats.size() > stats_size_before_solve) {
+      cycle_stats.nonlinear = nonlinear_solve_stats.back();
+    }
+    cycle_stats.contact0 = tribol::getMfemEnergyMortarQpDiagnostics(0);
+    cycle_stats.has_secondary_contact = config.add_secondary_contact;
+    if (config.add_secondary_contact) {
+      cycle_stats.contact1 = tribol::getMfemEnergyMortarQpDiagnostics(1);
+    }
+    cycle_run_stats.push_back(cycle_stats);
+    update_adaptive_qp_derivative_blend_gap_range(cycle, time);
+    update_qp_frozen_integration_data();
+    save_visit_output(i, time);
 
     solid_solver.outputStateToDisk(paraview_name);
-    save_submesh_normals(i + 1, (i + 1) * dt);
+    save_submesh_normals(cycle, time);
+  }
+
+  if (!run_summary_json.empty()) {
+    std::ofstream out(run_summary_json);
+    SLIC_ERROR_ROOT_IF(!out, "Could not open run summary JSON file '" << run_summary_json << "'.");
+    out << std::setprecision(16);
+
+    int total_iterations = 0;
+    int max_iterations = 0;
+    int failed_cycles = 0;
+    int total_line_search_cutbacks = 0;
+    int total_rejected_steps = 0;
+    int total_trust_region_cg_iterations = 0;
+    int total_residual_evaluations = 0;
+    int total_jacobian_assemblies = 0;
+    int total_hessian_vector_products = 0;
+    for (const auto& cycle_stats : cycle_run_stats) {
+      const auto& nonlinear = cycle_stats.nonlinear;
+      total_iterations += nonlinear.iterations;
+      max_iterations = std::max(max_iterations, nonlinear.iterations);
+      failed_cycles += nonlinear.converged ? 0 : 1;
+      total_line_search_cutbacks += nonlinear.line_search_cutbacks;
+      total_rejected_steps += nonlinear.rejected_steps;
+      total_trust_region_cg_iterations += nonlinear.trust_region_cg_iterations;
+      total_residual_evaluations += nonlinear.residual_evaluations;
+      total_jacobian_assemblies += nonlinear.jacobian_assemblies;
+      total_hessian_vector_products += nonlinear.hessian_vector_products;
+    }
+    const double average_iterations =
+        cycle_run_stats.empty() ? 0.0 : static_cast<double>(total_iterations) / static_cast<double>(cycle_run_stats.size());
+
+    out << "{\n";
+    out << "  \"problem\": \"ironing_2D\",\n";
+    out << "  \"run_name\": " << jsonString(config.name) << ",\n";
+    out << "  \"options\": {\n";
+    out << "    \"case\": " << jsonString(case_name) << ",\n";
+    out << "    \"normal\": " << jsonString(selected_normal) << ",\n";
+    out << "    \"penalty_mode\": " << jsonString(penalty_mode) << ",\n";
+    out << "    \"nodal_energy_basis\": " << jsonString(nodal_energy_basis) << ",\n";
+    out << "    \"nonlinear_solver\": " << jsonString(nonlinear_solver) << ",\n";
+    out << "    \"linear_solver\": " << jsonString(smith::linearName(linear_options.linear_solver)) << ",\n";
+    out << "    \"preconditioner\": " << jsonString(smith::preconditionerName(linear_options.preconditioner))
+        << ",\n";
+    out << "    \"enzyme_quadrature\": " << (enzyme_quadrature ? "true" : "false") << ",\n";
+    out << "    \"projection_smoothing\": " << (projection_smoothing ? "true" : "false") << ",\n";
+    out << "    \"projection_smoothing_curve\": " << jsonString(projection_smoothing_curve) << ",\n";
+    out << "    \"fixed_integration_jacobian\": " << (fixed_integration_jacobian ? "true" : "false") << ",\n";
+    out << "    \"qp_frozen_integration\": " << (qp_frozen_integration ? "true" : "false") << ",\n";
+    out << "    \"nodal_energy_angle_smoothing\": " << (nodal_energy_angle_smoothing ? "true" : "false") << ",\n";
+    out << "    \"active_set_smoothing_gap\": " << active_set_smoothing_gap << ",\n";
+    out << "    \"qp_derivative_blend_min_gap\": " << qp_derivative_blend_min_gap << ",\n";
+    out << "    \"qp_derivative_blend_max_gap\": " << qp_derivative_blend_max_gap << ",\n";
+    out << "    \"qp_derivative_blend_enzyme_gap_weight\": "
+        << (qp_derivative_blend_enzyme_gap_weight ? "true" : "false") << ",\n";
+    out << "    \"qp_derivative_blend_adaptive_gap\": "
+        << (qp_derivative_blend_adaptive_gap ? "true" : "false") << ",\n";
+    out << "    \"qp_derivative_blend_force_residual_min\": " << qp_derivative_blend_force_residual_min << ",\n";
+    out << "    \"qp_derivative_blend_force_residual_max\": " << qp_derivative_blend_force_residual_max << "\n";
+    out << "  },\n";
+    out << "  \"summary\": {\n";
+    out << "    \"cycles\": " << cycle_run_stats.size() << ",\n";
+    out << "    \"converged\": " << (failed_cycles == 0 ? "true" : "false") << ",\n";
+    out << "    \"failed_cycles\": " << failed_cycles << ",\n";
+    out << "    \"total_nonlinear_iterations\": " << total_iterations << ",\n";
+    out << "    \"average_nonlinear_iterations\": " << average_iterations << ",\n";
+    out << "    \"max_nonlinear_iterations\": " << max_iterations << ",\n";
+    out << "    \"total_line_search_cutbacks\": " << total_line_search_cutbacks << ",\n";
+    out << "    \"total_rejected_steps\": " << total_rejected_steps << ",\n";
+    out << "    \"total_trust_region_cg_iterations\": " << total_trust_region_cg_iterations << ",\n";
+    out << "    \"total_residual_evaluations\": " << total_residual_evaluations << ",\n";
+    out << "    \"total_jacobian_assemblies\": " << total_jacobian_assemblies << ",\n";
+    out << "    \"total_hessian_vector_products\": " << total_hessian_vector_products << "\n";
+    out << "  },\n";
+    out << "  \"cycles\": [\n";
+    for (std::size_t i = 0; i < cycle_run_stats.size(); ++i) {
+      writeCycleRunStatsJson(out, cycle_run_stats[i], "    ");
+      out << (i + 1 == cycle_run_stats.size() ? "\n" : ",\n");
+    }
+    out << "  ]\n";
+    out << "}\n";
   }
 
   return 0;

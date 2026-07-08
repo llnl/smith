@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <functional>
 #include <variant>
 #include <vector>
 
@@ -460,6 +461,78 @@ enum SubSpaceOptions
   ALWAYS
 };
 
+/// Summary statistics from one nonlinear solve.
+struct NonlinearSolveStats {
+  /// Nonlinear solver selection
+  NonlinearSolver nonlin_solver = NonlinearSolver::NewtonLineSearch;
+
+  /// True if the nonlinear solve converged
+  bool converged = false;
+
+  /// Number of accepted nonlinear iterations
+  int iterations = 0;
+
+  /// Initial nonlinear residual norm
+  double initial_residual_norm = 0.0;
+
+  /// Final nonlinear residual norm
+  double final_residual_norm = 0.0;
+
+  /// Final nonlinear residual convergence goal
+  double final_residual_goal = 0.0;
+
+  /// Number of Newton linear solves
+  int linear_solves = 0;
+
+  /// Total line-search cutbacks or trust-region trial retries
+  int line_search_cutbacks = 0;
+
+  /// Number of accepted nonlinear trial steps
+  int accepted_steps = 0;
+
+  /// Number of rejected nonlinear trial steps
+  int rejected_steps = 0;
+
+  /// Smallest accepted Newton line-search step scale
+  double min_step_scale = 1.0;
+
+  /// Final accepted Newton line-search step scale
+  double final_step_scale = 1.0;
+
+  /// Total trust-region inner CG iterations
+  int trust_region_cg_iterations = 0;
+
+  /// Maximum trust-region inner CG iterations for one outer iteration
+  int max_trust_region_cg_iterations = 0;
+
+  /// Number of trust-region trial steps evaluated
+  int trust_region_trial_steps = 0;
+
+  /// Initial trust-region size
+  double initial_trust_region_size = 0.0;
+
+  /// Smallest trust-region size reached
+  double min_trust_region_size = 0.0;
+
+  /// Final trust-region size
+  double final_trust_region_size = 0.0;
+
+  /// Number of nonlinear residual evaluations
+  int residual_evaluations = 0;
+
+  /// Number of Jacobian assemblies
+  int jacobian_assemblies = 0;
+
+  /// Number of Hessian-vector products
+  int hessian_vector_products = 0;
+
+  /// Number of preconditioner applications
+  int preconditioner_applications = 0;
+
+  /// Number of trust-region subspace solves
+  int subspace_solves = 0;
+};
+
 // _nonlinear_options_start
 /// Nonlinear solution scheme parameters
 struct NonlinearSolverOptions {
@@ -492,6 +565,15 @@ struct NonlinearSolverOptions {
 
   /// Number of extra leftmost eigenvector to be stored between solves
   int num_leftmost = 1;
+
+  /// Callback invoked at the start of an accepted nonlinear iteration after a residual evaluation updates dependent state
+  std::function<void()> iteration_setup_callback = nullptr;
+
+  /// Callback invoked with the accepted-iterate residual norm before Jacobian assembly
+  std::function<void(double)> residual_norm_callback = nullptr;
+
+  /// Callback invoked after each nonlinear solve with summary statistics
+  std::function<void(const NonlinearSolveStats&)> solve_stats_callback = nullptr;
 };
 // _nonlinear_options_end
 
