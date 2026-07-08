@@ -122,7 +122,8 @@ public:
 
       // Accumulate remaining contributions γ_m φ^{k-m}.
       for (int j = 1; j < available_order; ++j) {
-        result.Add(gammas[j], *history[static_cast<std::size_t>(j)].get());
+        auto const idx = static_cast<std::size_t>(j);
+        result.Add(gammas[idx], *history[idx].get());
       }
 
     }

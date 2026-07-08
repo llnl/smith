@@ -190,7 +190,7 @@ struct FixedStepBDFOperator {
       )
     );
 
-    return betas[j];
+    return betas[static_cast<std::size_t>(j)];
 
   }
 
