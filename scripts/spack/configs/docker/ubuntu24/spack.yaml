@@ -194,12 +194,12 @@ spack:
       - spec: zlib@1.3
         prefix: /usr
 
-    # Globally lock in version of CMake
+    # Globally lock in versions of packages
     cmake:
-      version: [3.24.2]
+      version: [4.3.4]
       buildable: false
       externals:
-      - spec: cmake@3.24.2
+      - spec: cmake@4.3.4
         prefix: /usr/local
     doxygen:
       version: [1.9.8]
