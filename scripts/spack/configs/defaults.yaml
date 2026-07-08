@@ -39,3 +39,72 @@ packages:
   umpire:
     require:
     - spec: "~shared~examples~werror"
+
+  # Forward debug and shared variants to relevant tpls
+  # NOTE: You can use build_type==Debug and ++shared to propagate variants from the smith spec instead, but it will affect external packages
+  # as well and therefore leads to lower chances of concretization
+  smith:
+    require:
+    #######
+    # Debug
+    #######
+    # Required dependencies
+    - spec: "^axom build_type=Debug ^conduit build_type=Debug ^hdf5 build_type=Debug ^hypre+debug ^metis build_type=Debug ^mfem+debug ^parmetis build_type=Debug ^superlu-dist build_type=Debug"
+      when: "build_type=Debug"
+    # Optional dependencies
+    - spec: "^tribol build_type=Debug"
+      when: "+tribol build_type=Debug"
+    - spec: "^petsc+debug"
+      when: "+petsc build_type=Debug"
+    - spec: "^strumpack build_type=Debug"
+      when: "+strumpack build_type=Debug"
+    - spec: "^raja build_type=Debug"
+      when: "+raja build_type=Debug"
+    - spec: "^umpire build_type=Debug"
+      when: "+umpire build_type=Debug"
+    - spec: "^sundials build_type=Debug"
+      when: "+sundials build_type=Debug"
+    - spec: "^caliper build_type=Debug"
+      when: "+caliper build_type=Debug"
+    - spec: "^adiak build_type=Debug"
+      when: "+adiak build_type=Debug"
+    ########
+    # Shared
+    ########
+    # Required dependencies
+    - spec: "^axom+shared ^hypre+shared ^metis+shared ^mfem+shared~static ^netcdf-c+shared ^parmetis+shared ^superlu-dist+shared"
+      when: "+shared"
+    # Optional dependencies
+    - spec: "^petsc+shared"
+      when: "+shared+petsc"
+    - spec: "^strumpack+shared"
+      when: "+shared+strumpack"
+    - spec: "^raja+shared"
+      when: "+shared+raja"
+    - spec: "^umpire+shared"
+      when: "+shared+umpire"
+    - spec: "^caliper+shared"
+      when: "+shared+caliper"
+    - spec: "^adiak+shared"
+      when: "+shared+adiak"
+    - spec: "^sundials+shared"
+      when: "+shared+sundials"
+    ########
+    # Static
+    ########
+    # Required dependencies
+    - spec: "^axom~shared ^hypre~shared ^metis~shared ^mfem~shared+static ^netcdf-c~shared ^parmetis~shared ^superlu-dist~shared"
+      when: "~shared"
+    # Optional dependencies
+    - spec: "^petsc~shared"
+      when: "~shared+petsc"
+    - spec: "^raja~shared"
+      when: "~shared+raja"
+    - spec: "^umpire~shared"
+      when: "~shared+umpire"
+    - spec: "^caliper~shared"
+      when: "~shared+caliper"
+    - spec: "^adiak~shared"
+      when: "~shared+adiak"
+    - spec: "^sundials~shared"
+      when: "~shared+sundials"

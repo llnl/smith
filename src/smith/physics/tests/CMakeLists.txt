@@ -83,6 +83,10 @@ set(physics_parallel_tribol_test_sources
     contact_patch_tied.cpp
     contact_beam.cpp
     )
+if (ENZYME_FOUND)
+    list(APPEND physics_parallel_tribol_test_sources
+                energy_mortar_patch.cpp)
+endif()
 blt_list_append(TO       physics_parallel_test_sources
                 ELEMENTS ${physics_parallel_tribol_test_sources}
                 IF       TRIBOL_FOUND)
