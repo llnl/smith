@@ -171,11 +171,9 @@ int main(int argc, char* argv[])
 
   std::vector<smith::FiniteElementState> states;
   states = {displacement, pressure, obstacle};
+  obstacle = 1.0;
   std::vector<smith::FiniteElementState*> state_ptrs = {&displacement, &pressure, &obstacle};
 
-  double time = 0.0;
-  double dt = 1.0;
-  smith::TimeInfo time_info(time, dt, 0);
   auto const_state_ptrs = getConstFieldPointers(states);
   ObjectiveT::SpacesT space_ptrs{&displacement.space(), &pressure.space(), &obstacle.space()};
 
@@ -192,7 +190,6 @@ int main(int argc, char* argv[])
                    smith::inner(smith::get<smith::DERIVATIVE>(PRESSURE), smith::get<smith::DERIVATIVE>(PRESSURE));
         return fo1 + fo2 + fp1 + fp2;
       });
-  states[2] = 1.0;  // obstacle = 1
 
   // weak form for gradient (w.r.t. displacement) and subsequent Hessian callbacks of design objective
   auto weak_form_objective_grad_displacement =
@@ -221,7 +218,8 @@ int main(int argc, char* argv[])
                                                      return smith::tuple{reso1, reso2};
                                                    });
 
-  auto [Vh, _] = smith::generateParFiniteElementSpace<StateSpace>(&mesh->mfemParMesh());
+  auto [Vh, unused] = smith::generateParFiniteElementSpace<StateSpace>(&mesh->mfemParMesh());
+  (void)unused;
   int dimU = Vh->GetTrueVSize();
   ParamObstacleProblem problem(Vh.get(), &forcing, &flat_obstacle);
   SmithObstacleDesignProblem smithdesignproblem(&problem, state_ptrs, mesh, design_objective,
