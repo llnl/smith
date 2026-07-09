@@ -162,10 +162,11 @@ int main(int argc, char* argv[])
       parallel_refinement);
 
   smith::FiniteElementState displacement = smith::StateManager::newState(StateSpace{}, "displacement", mesh->tag());
+  smith::FiniteElementState pressure = smith::StateManager::newState(PressureSpace{}, "pressure", mesh->tag());
   smith::FiniteElementState obstacle = smith::StateManager::newState(ObstacleSpace{}, "obstacle", mesh->tag());
-  smith::FiniteElementState pressure = smith::StateManager::newState(StateSpace{}, "pressure", mesh->tag());
-  smith::FiniteElementState grad = smith::StateManager::newState(VectorSpace{}, "gradient", mesh->tag());
-  std::unique_ptr<smith::FiniteElementState> shape_disp =
+  [[maybe_unused]] smith::FiniteElementState grad =
+      smith::StateManager::newState(VectorSpace{}, "gradient", mesh->tag());
+  [[maybe_unused]] std::unique_ptr<smith::FiniteElementState> shape_disp =
       std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 
   std::vector<smith::FiniteElementState> states;
@@ -177,29 +178,6 @@ int main(int argc, char* argv[])
   smith::TimeInfo time_info(time, dt, 0);
   auto const_state_ptrs = getConstFieldPointers(states);
   ObjectiveT::SpacesT space_ptrs{&displacement.space(), &pressure.space(), &obstacle.space()};
-
-  /* TODO:
-   * 1) utilize a weak form to define the objective of the "lower level" obstacle problem
-   *    e.g., linear elasticity: 1/2 u^T K u - f^T u
-   * */
-  // weak_form to define the "lower level" obstacle problem
-  // std::string physics_name = "elasticity";
-  // auto elasticity_weak_form = std::make_shared<WeakFormT2>(physics_name, mesh, grad.space(), space_ptrs);
-  // elasticity_weak_form->addBodyIntegral(smith::DependsOn<0>{},
-  //     	   mesh->entireBodyName(), [](auto /*t*/, auto /*X*/, auto U) {
-  //   auto gradu = smith::get<smith::DERIVATIVE>(U);
-  //   return smith::tuple{gradu, smith::zero{}}; // complete me!
-  //});
-  // std::vector<double> jacobian_weights = {1.0, 0.0};
-  // auto res_vector = elasticity_weak_form->residual(time_info, shape_disp.get(), const_state_ptrs);
-  // auto H = elasticity_weak_form->jacobian(time_info, shape_disp.get(), const_state_ptrs, jacobian_weights);
-
-  // NOTE: not going to use this idea for now. It seems more questionable to me that this adds much value
-  // also does the solid weak form reduce to what we want in the case of a H1 field. Is it assumed
-
-  // define objective in terms of displacement/deformation field and the obstacle
-  // challenge: how to incorporate the pressure as a design parameter into a functional objective
-  // given that the pressure is a dual field?
 
   auto design_objective = std::make_shared<ObjectiveT>("design_objective", mesh, space_ptrs);
 
@@ -245,9 +223,6 @@ int main(int argc, char* argv[])
 
   auto [Vh, _] = smith::generateParFiniteElementSpace<StateSpace>(&mesh->mfemParMesh());
   int dimU = Vh->GetTrueVSize();
-  // TODO:
-  // 1) Add a SmithParamObstacleProblem that will take smith types such as a H1 space, FiniteElementState
-  //    equivalents of forcing and flat_obstacle
   ParamObstacleProblem problem(Vh.get(), &forcing, &flat_obstacle);
   SmithObstacleDesignProblem smithdesignproblem(&problem, state_ptrs, mesh, design_objective,
                                                 weak_form_objective_grad_displacement,
@@ -305,7 +280,7 @@ SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamObstacleProblem* par
   objective_grad_pressure_ = objective_grad_pressure;
   objective_grad_obstacle_ = objective_grad_obstacle;
   std::copy(states.begin(), states.end(), std::back_inserter(states_));
-  // get mass matrices
+  // lumped mass matrices
   mfem::Vector Mlump;
   mfem::Vector Mduallump;
   parametrized_obst_problem->GetConstraintMassLump(Mlump);
@@ -314,14 +289,14 @@ SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamObstacleProblem* par
   Mduallump /= Mlump;
   mfem::BlockVector MUlump_blk(primal_blockoffsets);
   mfem::BlockVector MClump_blk(constraint_blockoffsets);
-  // || nabla_U L ||_MU^-1
+  // U = (u, p, theta, s, z)
   MUlump_blk.GetBlock(0).Set(1.0, Mlump);      // u
   MUlump_blk.GetBlock(1).Set(1.0, Mlump);      // p
   MUlump_blk.GetBlock(2).Set(1.0, Mlump);      // theta
   MUlump_blk.GetBlock(3).Set(1.0, Mduallump);  // s
   MUlump_blk.GetBlock(4).Set(1.0, Mlump);      // z
 
-  // || C ||_MC
+  // C = \nabla_u L, g - s, p - z, \Phi_{FB}
   MClump_blk.GetBlock(0).Set(1.0, Mduallump);  // \nabla_u L
   MClump_blk.GetBlock(1).Set(1.0, Mduallump);  // g - s
   MClump_blk.GetBlock(2).Set(1.0, Mlump);      // p - z
@@ -331,6 +306,7 @@ SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamObstacleProblem* par
   Mclump.Set(1.0, MClump_blk);
 }
 
+// design objective (E)
 double SmithObstacleDesignProblem::E(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                      const mfem::Vector& obstacle, int& eval_err)
 {
@@ -341,6 +317,7 @@ double SmithObstacleDesignProblem::E(const mfem::Vector& displacement, const mfe
   return design_objective_->evaluate(time_info_, shape_disp_.get(), smith::getConstFieldPointers(states_));
 }
 
+// gradient of design objective with respect to displacement (u)
 void SmithObstacleDesignProblem::DuE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                      const mfem::Vector& obstacle, mfem::Vector& displacementGradE)
 {
@@ -352,6 +329,7 @@ void SmithObstacleDesignProblem::DuE(const mfem::Vector& displacement, const mfe
   displacementGradE.Set(1.0, res_vector);
 }
 
+// gradient of design objective with respect to pressure (p)
 void SmithObstacleDesignProblem::DpE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                      const mfem::Vector& obstacle, mfem::Vector& pressureGradE)
 {
@@ -363,6 +341,7 @@ void SmithObstacleDesignProblem::DpE(const mfem::Vector& displacement, const mfe
   pressureGradE.Set(1.0, res_vector);
 }
 
+// gradient of design objective with respect to obstacle design (th)
 void SmithObstacleDesignProblem::DthE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                       const mfem::Vector& obstacle, mfem::Vector& obstacleGradE)
 {
@@ -374,6 +353,7 @@ void SmithObstacleDesignProblem::DthE(const mfem::Vector& displacement, const mf
   obstacleGradE.Set(1.0, res_vector);
 }
 
+// return non-owning Hessian of the design objective (u, u)
 mfem::Operator* SmithObstacleDesignProblem::DuuE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                                  const mfem::Vector& obstacle)
 {
@@ -388,6 +368,7 @@ mfem::Operator* SmithObstacleDesignProblem::DuuE(const mfem::Vector& displacemen
   return HuuE_.get();
 }
 
+// return non-owning Hessian of the design objective (u, p)
 mfem::Operator* SmithObstacleDesignProblem::DupE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                                  const mfem::Vector& obstacle)
 {
@@ -402,6 +383,7 @@ mfem::Operator* SmithObstacleDesignProblem::DupE(const mfem::Vector& displacemen
   return HupE_.get();
 }
 
+// return non-owning Hessian of the design objective (u, th)
 mfem::Operator* SmithObstacleDesignProblem::DuthE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                                   const mfem::Vector& obstacle)
 {
@@ -416,6 +398,7 @@ mfem::Operator* SmithObstacleDesignProblem::DuthE(const mfem::Vector& displaceme
   return HuthE_.get();
 }
 
+// return non-owning Hessian of the design objective (p, p)
 mfem::Operator* SmithObstacleDesignProblem::DppE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                                  const mfem::Vector& obstacle)
 {
@@ -430,6 +413,7 @@ mfem::Operator* SmithObstacleDesignProblem::DppE(const mfem::Vector& displacemen
   return HppE_.get();
 }
 
+// return non-owning Hessian of the design objective (p, th)
 mfem::Operator* SmithObstacleDesignProblem::DpthE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                                   const mfem::Vector& obstacle)
 {
@@ -444,6 +428,7 @@ mfem::Operator* SmithObstacleDesignProblem::DpthE(const mfem::Vector& displaceme
   return HpthE_.get();
 }
 
+// return non-owning Hessian of the design objective (th, th)
 mfem::Operator* SmithObstacleDesignProblem::DththE(const mfem::Vector& displacement, const mfem::Vector& pressure,
                                                    const mfem::Vector& obstacle)
 {
