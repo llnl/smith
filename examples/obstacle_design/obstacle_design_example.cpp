@@ -14,6 +14,7 @@
  * The design problem contains regularized obstacle problem constraints.
  */
 
+#include <cmath>
 #include <format>
 
 #include "smith/smith.hpp"
@@ -32,14 +33,17 @@ auto element_shape = mfem::Element::QUADRILATERAL;
 static constexpr int dim = 2;
 static constexpr int order = 1;
 
-using StateSpace = smith::H1<order>;
-using ObstacleSpace = smith::H1<order>;
+using FESpace = smith::H1<order>;
 using VectorSpace = smith::H1<order, dim>;
-using TrialSpace = ObstacleSpace;
-using ObjectiveT = smith::FunctionalObjective<dim, smith::Parameters<StateSpace, ObstacleSpace, StateSpace>>;
-using WeakFormT = smith::FunctionalWeakForm<dim, TrialSpace, smith::Parameters<StateSpace, ObstacleSpace, StateSpace>>;
+using StateSpace = FESpace;
+using PressureSpace = FESpace;
+using ObstacleSpace = FESpace;
+using TrialSpace = FESpace;
+using ObjectiveT = smith::FunctionalObjective<dim, smith::Parameters<StateSpace, PressureSpace, ObstacleSpace>>;
+using WeakFormT =
+    smith::FunctionalWeakForm<dim, TrialSpace, smith::Parameters<StateSpace, PressureSpace, ObstacleSpace>>;
 using WeakFormT2 =
-    smith::FunctionalWeakForm<dim, VectorSpace, smith::Parameters<StateSpace, ObstacleSpace, StateSpace>>;
+    smith::FunctionalWeakForm<dim, VectorSpace, smith::Parameters<StateSpace, PressureSpace, ObstacleSpace>>;
 
 class SmithObstacleDesignProblem : public ObstacleDesignProblem {
  protected:
