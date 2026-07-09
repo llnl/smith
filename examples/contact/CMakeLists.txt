@@ -14,6 +14,7 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
 
     if(ENZYME_FOUND)
         list(APPEND CONTACT_EXAMPLES_SOURCES
+            energy_mortar_patch_2D.cpp
             ironing_2D.cpp
         )
     endif()
@@ -35,6 +36,10 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
                                    NUM_MPI_TASKS  4)
             smith_add_example_test(NAME           contact_ironing_2D_twisted
                                    COMMAND        contact_${example_name} --case twisted
+                                   NUM_MPI_TASKS  4)
+        elseif(example_name STREQUAL "energy_mortar_patch_2D")
+            smith_add_example_test(NAME           contact_${example_name}
+                                   COMMAND        contact_${example_name} --num-elements 10
                                    NUM_MPI_TASKS  4)
         else()
             smith_add_example_test(NAME           contact_${example_name}

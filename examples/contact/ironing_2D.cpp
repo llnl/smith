@@ -184,7 +184,7 @@ MeshPtr buildSquareMesh(const std::string& mesh_tag)
                                               .translate({0.0, 0.25})
                                               .updateBdrAttrib(3, 5)
                                               .updateBdrAttrib(1, 8)
-                                              .updateBdrAttrib(4, 2)
+                                              .updateBdrAttrib(4, 10)
                                               .updateAttrib(1, 2)});
   return std::make_shared<smith::Mesh>(mesh, mesh_tag, 0, 0);
 }
@@ -394,7 +394,7 @@ CaseConfig makeCaseConfig(IroningCase ironing_case)
       config.mesh = buildSquareMesh(config.mesh_tag);
       config.displacement = slidingDisplacement(0.1);
       config.substrate_contact_attrs = {9};
-      config.indenter_contact_attrs = {8, 2};
+      config.indenter_contact_attrs = {8, 2, 10};
       break;
     case IroningCase::Circle:
       config.mesh = buildCircleMesh(config.mesh_tag);
@@ -431,6 +431,9 @@ int main(int argc, char* argv[])
   std::string projection_smoothing_curve = "quintic";
   bool fixed_integration_jacobian = false;
   bool qp_frozen_integration = false;
+  bool eta_gap_scaling = true;
+  bool eta_angle_smoothing = false;
+  double eta_angle_smoothing_start_angle = 80.0;
   bool nodal_energy_angle_smoothing = true;
   double active_set_smoothing_gap = 0.001;
   double qp_derivative_blend_min_gap = 0.0;
@@ -471,6 +474,13 @@ int main(int argc, char* argv[])
   app.add_flag("--energy-mortar-qp-frozen-integration,!--no-energy-mortar-qp-frozen-integration",
                qp_frozen_integration,
                "Use previous-timestep cached quadrature points, weights, and J for the simplified QP blend path");
+  app.add_flag("--energy-mortar-eta-gap-scaling,!--no-energy-mortar-eta-gap-scaling", eta_gap_scaling,
+               "Scale the energy mortar normal gap by eta, the surface-normal dot product");
+  app.add_flag("--energy-mortar-eta-angle-smoothing,!--no-energy-mortar-eta-angle-smoothing", eta_angle_smoothing,
+               "Smooth energy mortar eta to zero near 90 degrees when eta gap scaling is disabled");
+  app.add_option("--energy-mortar-eta-angle-smoothing-start-angle", eta_angle_smoothing_start_angle,
+                 "Energy mortar eta angle-smoothing start angle in degrees; smoothing ends at 90 degrees")
+      ->check(axom::CLI::NonNegativeNumber);
   app.add_flag("--energy-mortar-nodal-energy-angle-smoothing,!--no-energy-mortar-nodal-energy-angle-smoothing",
                nodal_energy_angle_smoothing, "Use 80-to-90 degree angle smoothing in nodal energy mode");
   app.add_option("--energy-mortar-active-set-smoothing-gap", active_set_smoothing_gap,
@@ -531,6 +541,8 @@ int main(int argc, char* argv[])
                      "The energy mortar QP derivative blend force residual max must be greater than the min.");
   SLIC_ERROR_ROOT_IF(qp_derivative_blend_adaptive_gap && qp_derivative_blend_adaptive_max_gap_scale <= 1.0,
                      "The adaptive energy mortar QP derivative blend max gap scale must be greater than 1.");
+  SLIC_ERROR_ROOT_IF(eta_angle_smoothing_start_angle >= 90.0,
+                     "The energy mortar eta angle-smoothing start angle must be in [0, 90) degrees.");
   SLIC_WARNING_ROOT_IF((qp_derivative_blend_min_gap > 0.0 || qp_derivative_blend_max_gap > 0.0 ||
                         qp_derivative_blend_adaptive_gap) &&
                            (qp_derivative_blend_force_residual_min > 0.0 ||
@@ -669,6 +681,7 @@ int main(int argc, char* argv[])
 
   mesh->addDomainOfBoundaryElements("top_of_indenter", smith::by_attr<DIM>(5));
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
+  const double eta_angle_smoothing_start = eta_angle_smoothing_start_angle * M_PI / 180.0;
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
   tribol::setEnergyMortarEnzymeQuadrature(0, enzyme_quadrature);
@@ -679,6 +692,9 @@ int main(int argc, char* argv[])
   tribol::setEnergyMortarH1ActiveSetSmoothing(0, active_set_smoothing_gap);
   tribol::setEnergyMortarQpDerivativeBlendGapRange(0, qp_derivative_blend_min_gap, qp_derivative_blend_max_gap);
   tribol::setEnergyMortarQpDerivativeBlendEnzymeGapWeight(0, qp_derivative_blend_enzyme_gap_weight);
+  tribol::setEnergyMortarEtaGapScaling(0, eta_gap_scaling);
+  tribol::setEnergyMortarEtaAngleSmoothing(0, eta_angle_smoothing);
+  tribol::setEnergyMortarEtaAngleSmoothingStart(0, eta_angle_smoothing_start);
   tribol::setEnergyMortarPenaltyMode(0, penalty_mode == "nodal-energy"
                                             ? tribol::EnergyMortarPenaltyMode::NODAL_ENERGY
                                             : penalty_mode == "quadrature-point"
@@ -702,6 +718,9 @@ int main(int argc, char* argv[])
     tribol::setEnergyMortarH1ActiveSetSmoothing(1, active_set_smoothing_gap);
     tribol::setEnergyMortarQpDerivativeBlendGapRange(1, qp_derivative_blend_min_gap, qp_derivative_blend_max_gap);
     tribol::setEnergyMortarQpDerivativeBlendEnzymeGapWeight(1, qp_derivative_blend_enzyme_gap_weight);
+    tribol::setEnergyMortarEtaGapScaling(1, eta_gap_scaling);
+    tribol::setEnergyMortarEtaAngleSmoothing(1, eta_angle_smoothing);
+    tribol::setEnergyMortarEtaAngleSmoothingStart(1, eta_angle_smoothing_start);
     tribol::setEnergyMortarPenaltyMode(1, penalty_mode == "nodal-energy"
                                               ? tribol::EnergyMortarPenaltyMode::NODAL_ENERGY
                                               : penalty_mode == "quadrature-point"
@@ -867,6 +886,9 @@ int main(int argc, char* argv[])
     out << "    \"projection_smoothing_curve\": " << jsonString(projection_smoothing_curve) << ",\n";
     out << "    \"fixed_integration_jacobian\": " << (fixed_integration_jacobian ? "true" : "false") << ",\n";
     out << "    \"qp_frozen_integration\": " << (qp_frozen_integration ? "true" : "false") << ",\n";
+    out << "    \"eta_gap_scaling\": " << (eta_gap_scaling ? "true" : "false") << ",\n";
+    out << "    \"eta_angle_smoothing\": " << (eta_angle_smoothing ? "true" : "false") << ",\n";
+    out << "    \"eta_angle_smoothing_start_angle\": " << eta_angle_smoothing_start_angle << ",\n";
     out << "    \"nodal_energy_angle_smoothing\": " << (nodal_energy_angle_smoothing ? "true" : "false") << ",\n";
     out << "    \"active_set_smoothing_gap\": " << active_set_smoothing_gap << ",\n";
     out << "    \"qp_derivative_blend_min_gap\": " << qp_derivative_blend_min_gap << ",\n";
