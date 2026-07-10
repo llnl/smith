@@ -641,7 +641,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 
   void acceptStep(TrustRegionResults& trResults, const TrustRegionSubspaceCache& subspace_cache,
                   const mfem::Vector& accepted_x, const mfem::Vector& accepted_r,
-                  const ConvergenceStatus& predicted_status, mfem::Vector& X, mfem::Vector& r,
+                  const ConvergenceStatus& predicted_status, mfem::Vector& X, mfem::Vector& residual,
                   ConvergenceStatus& status, mfem::real_t& norm) const
   {
     saveAcceptedStep(trResults.d);
@@ -649,7 +649,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       left_mosts = subspace_cache.leftmosts;
     }
     X = accepted_x;
-    r = accepted_r;
+    residual = accepted_r;
     status = predicted_status;
     norm = status.global_norm;
   }
@@ -757,6 +757,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     settings.min_cg_iterations = static_cast<size_t>(nonlinear_options.min_iterations);
     settings.max_cg_iterations = static_cast<size_t>(linear_options.max_iterations);
     settings.cg_tol = 0.5 * norm_goal;
+    settings.t1 = nonlinear_options.tr_decrease_factor;
+    settings.t2 = nonlinear_options.tr_increase_factor;
+    settings.eta1 = nonlinear_options.tr_eta1;
+    settings.eta2 = nonlinear_options.tr_eta2;
+    settings.eta3 = nonlinear_options.tr_eta3;
+    settings.eta4 = nonlinear_options.tr_eta4;
 
     int subspace_option = nonlinear_options.subspace_option;
     int num_leftmost = nonlinear_options.num_leftmost;
@@ -836,7 +842,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         trResults.cg_iterations_count = 1;
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
-        settings.cg_tol = std::max(0.5 * norm_goal, 5e-5 * norm);
+        settings.cg_tol = std::max(0.5 * norm_goal, nonlinear_options.cg_forcing_rel * norm);
         solveModelProblem(r, scratch, *grad, &this->tr_precond, settings, tr_size, trResults, norm * norm);
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;
@@ -978,11 +984,9 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           tr_size *= settings.t2;
         }
 
-        // eventually extend to handle this case to handle occasional roundoff issues
-        // modelRes = g + Jd
-        // modelResNorm = np.linalg.norm(modelRes)
-        // realResNorm = np.linalg.norm(gy)
-        const bool willAccept = rho >= settings.eta1 && rho <= settings.eta4;
+        const bool residual_safe = normPred <= nonlinear_options.residual_growth_cap * norm;
+        const bool willAccept = rho >= settings.eta1 && rho <= settings.eta4 && residual_safe;
+        if (!residual_safe) tr_size *= settings.t1;
 
         if (print_level >= 2) {
           printTrustRegionInfo(realObjective, modelObjective, trResults.cg_iterations_count, tr_size, willAccept);
