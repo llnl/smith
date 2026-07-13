@@ -19,7 +19,7 @@
 #include "smith/smith_config.hpp"
 
 #ifndef SMITH_USE_ENZYME
-#error "This file requires Enzyme to be enabled
+#error "This file requires Enzyme to be enabled"
 #endif
 
 #include "smith/numerics/functional/domain.hpp"
@@ -37,11 +37,98 @@ class TribolFiniteDiff : public testing::TestWithParam<std::pair<ContactEnforcem
 TEST_P(TribolFiniteDiff, patch)
 {
   constexpr double eps = 1.0e-7;
+  constexpr double tol = 2.0 * eps;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
   std::string name = "tribol_fd_" + GetParam().second;
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, name + "_data");
+
+  // Construct the appropriate dimension mesh and give it to the data store
+
+  // clang-format off
+  auto pmesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .translate({0.0, 0.999})
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(3, 9)
+      .updateBdrAttrib(1, 6),
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(1, 8)
+      .updateBdrAttrib(3, 5)
+  }), "patch_mesh", 0, 0);
+  // clang-format on
+
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
+                                 .enforcement = GetParam().first,
+                                 .type = ContactType::Frictionless,
+                                 .penalty = 0.1,
+                                 .jacobian = ContactJacobian::Exact};
+  ContactData contact_data(pmesh->mfemParMesh());
+  constexpr int interaction_id = 0;
+  contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
+
+  mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.numPressureDofs());
+  u = 0.0;
+  mfem::Vector u_shape(pmesh->mfemParMesh().GetNodes()->Size());
+  u_shape = 0.0;
+  mfem::Vector f(u.Size());
+  f = 0.0;
+  contact_data.residualFunction(u_shape, u, f);
+
+  double max_diff = 0.0;
+  auto J_op = contact_data.mergedJacobian();
+  mfem::Vector u_dot(u.Size());
+  u_dot = 0.0;
+  // wiggle displacement (col = j)
+  for (int j{0}; j < u.Size(); ++j) {
+    u_dot[j] = 1.0;
+    mfem::Vector J_exact(u.Size());
+    J_exact = 0.0;
+    J_op->Mult(u_dot, J_exact);
+    u_dot[j] = 0.0;
+    u[j] += eps;
+    mfem::Vector J_fd(u.Size());
+    J_fd = 0.0;
+    contact_data.residualFunction(u_shape, u, J_fd);
+    J_fd -= f;
+    J_fd /= eps;
+    u[j] -= eps;
+    // loop through forces (row = k)
+    for (int k{0}; k < u.Size(); ++k) {
+      if (J_exact[k] != 1.0 && (std::abs(J_exact[k]) > 1.0e-15 || std::abs(J_fd[k]) > 1.0e-15)) {
+        auto diff = std::abs(J_exact[k] - J_fd[k]);
+        if (diff > max_diff) {
+          max_diff = diff;
+        }
+        if (diff > tol) {
+          std::cout << "(" << k << ", " << j << "):  J_exact = " << std::setprecision(15) << J_exact[k]
+                    << "   J_fd = " << std::setprecision(15) << J_fd[k] << "   |diff| = " << std::setprecision(15)
+                    << diff << std::endl;
+        }
+        EXPECT_NEAR(J_exact[k], J_fd[k], tol);
+      }
+    }
+  }
+  std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
+}
+
+INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff,
+                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")));
+
+class TribolFiniteDiff3D : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
+
+TEST_P(TribolFiniteDiff3D, patch)
+{
+  constexpr double eps = 1.0e-7;
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // Create DataStore
+  std::string name = "tribol_fd_3d_" + GetParam().second;
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -117,7 +204,7 @@ TEST_P(TribolFiniteDiff, patch)
   std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
 }
 
-INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff,
+INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff3D,
                          testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
                                          std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
 

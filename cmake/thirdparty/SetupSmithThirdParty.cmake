@@ -103,34 +103,18 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     #------------------------------------------------------------------------------
-    # Conduit (required by Axom)
+    # Conduit (found via Axom)
     #------------------------------------------------------------------------------
     if(NOT CONDUIT_DIR)
         MESSAGE(FATAL_ERROR "Could not find Conduit. Conduit requires explicit CONDUIT_DIR.")
     endif()
 
-    smith_assert_is_directory(DIR_VARIABLE CONDUIT_DIR)
-
-    set(_conduit_config "${CONDUIT_DIR}/lib/cmake/conduit/ConduitConfig.cmake")
-    if(NOT EXISTS ${_conduit_config})
-        MESSAGE(FATAL_ERROR "Could not find Conduit CMake include file ${_conduit_config}")
+    #------------------------------------------------------------------------------
+    # HDF5 (found via Axom)
+    #------------------------------------------------------------------------------
+    if (NOT HDF5_DIR)
+        MESSAGE(FATAL_ERROR "Could not find HDF5. HDF5 requires explicit HDF5_DIR.")
     endif()
-
-    find_dependency(Conduit REQUIRED
-                    PATHS "${CONDUIT_DIR}"
-                          "${CONDUIT_DIR}/lib/cmake/conduit")
-
-    smith_assert_find_succeeded(PROJECT_NAME Conduit
-                                TARGET       conduit::conduit
-                                DIR_VARIABLE CONDUIT_DIR)
-    message(STATUS "Conduit support is ON")
-    set(CONDUIT_FOUND TRUE)
-
-    # Manually set includes as system includes
-    get_target_property(_dirs conduit::conduit INTERFACE_INCLUDE_DIRECTORIES)
-    set_property(TARGET conduit::conduit 
-                 APPEND PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
-                 "${_dirs}")
 
     #------------------------------------------------------------------------------
     # Sundials
@@ -735,19 +719,17 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
     endif()
 
-    # On Apple, Spack-built cmake configs embed literal -Wl,-rpath,... entries in
-    # INTERFACE_LINK_LIBRARIES. These duplicate CMake's own rpath management
-    # (CMAKE_INSTALL_RPATH_USE_LINK_PATH) and cause ld "duplicate -rpath" warnings.
+    # Prevent unhelpful warnings by removing duplicate rpaths set in MFEM's config.mk MFEM_EXT_LIBS
     if(APPLE)
         foreach(_target ${_mfem_targets})
             if(TARGET ${_target})
-                get_target_property(_link_libs ${_target} INTERFACE_LINK_LIBRARIES)
-                if(_link_libs)
-                    list(FILTER _link_libs EXCLUDE REGEX "^-Wl,-rpath,")
-                    set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
-                endif()
+                get_target_property(_link_str ${_target} INTERFACE_LINK_LIBRARIES)
+                separate_arguments(_link_list UNIX_COMMAND "${_link_str}")
+                list(REMOVE_DUPLICATES _link_list)
+                set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_list}")
             endif()
         endforeach()
+        unset(_link_str)
         unset(_link_libs)
     endif()
     unset(_mfem_targets)
