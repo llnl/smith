@@ -45,8 +45,6 @@ spack:
             cxx: /opt/homebrew/opt/llvm@19/bin/clang++
           flags:
             fflags: -fPIC
-          extra_rpaths:
-          - /opt/homebrew/lib/gcc/15
 
     # Providers
     mpi:
@@ -83,14 +81,12 @@ spack:
       externals:
       - spec: bzip2@1.0.8
         prefix: /opt/homebrew/opt/bzip2
-    # NOTE: CMake v4.0 causes metis and other package to fail. Brew doesn't allow older versions
-    # of CMake to be installed, so I installed CMake manually https://cmake.org/files/v3.30/cmake-3.30.9-macos-universal.dmg
     cmake:
-      version: [3.30.9]
+      version: [4.3.4]
       buildable: false
       externals:
-      - spec: cmake@3.30.9
-        prefix: /Applications/CMake.app/Contents
+      - spec: cmake@4.3.4
+        prefix: /opt/homebrew
     diffutils:
       buildable: false
       externals:
