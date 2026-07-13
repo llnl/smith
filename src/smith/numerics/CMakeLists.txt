@@ -7,7 +7,6 @@
 add_subdirectory(functional)
 set(numerics_headers
     equation_solver.hpp
-    steihaug_toint_cg.hpp
     nonlinear_convergence.hpp
     odes.hpp
     solver_config.hpp
@@ -15,6 +14,10 @@ set(numerics_headers
     petsc_solvers.hpp
     trust_region_solver.hpp
     block_preconditioner.hpp
+    )
+
+set(numerics_private_headers
+    steihaug_toint_cg.hpp
     )
 
 set(numerics_sources
@@ -31,7 +34,7 @@ set(numerics_depends smith_infrastructure smith_functional smith_boundary_condit
 
 smith_add_library(
     NAME        smith_numerics
-    HEADERS     ${numerics_headers}
+    HEADERS     ${numerics_headers} ${numerics_private_headers}
     SOURCES     ${numerics_sources}
     DEPENDS_ON  ${numerics_depends}
     )

@@ -10,8 +10,6 @@ namespace smith {
 
 namespace {
 
-bool isDescentDirection(double directional_derivative) { return directional_derivative < 0.0; }
-
 void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd, double dd)
 {
   const double deltadelta_m_zz = std::max(delta * delta - zz, 0.0);
@@ -21,21 +19,6 @@ void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double d
 }
 
 }  // namespace
-
-std::vector<double> dotMany(const std::vector<DotPair>& pairs)
-{
-  std::vector<double> products(pairs.size(), 0.0);
-  for (size_t i = 0; i < pairs.size(); ++i) {
-    MFEM_ASSERT(pairs[i].first->Size() == pairs[i].second->Size(), "Incompatible vector sizes.");
-    products[i] = (*pairs[i].first) * (*pairs[i].second);
-  }
-  return products;
-}
-
-bool isDescentDirection(const mfem::Vector& direction, const mfem::Vector& residual, const DotManyFunction& dot_many)
-{
-  return isDescentDirection(dot_many({{&direction, &residual}})[0]);
-}
 
 void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
                      const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
@@ -83,7 +66,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
     double zd = dots[2];
     double dd = dots[3];
 
-    if (!isDescentDirection(descent_check)) {
+    if (descent_check >= 0.0) {
       results.interior_status = TrustRegionResults::Status::NonDescentDirection;
       return;
     }

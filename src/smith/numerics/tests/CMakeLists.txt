@@ -14,8 +14,12 @@ set(numerics_serial_test_sources
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
     test_block_preconditioner_custom_operators.cpp
-    test_trust_region_solver_mfem.cpp
     )
+
+if(MFEM_USE_LAPACK)
+    list(APPEND numerics_serial_test_sources
+         test_trust_region_solver_mfem.cpp)
+endif()
 
 smith_add_tests( SOURCES       ${numerics_serial_test_sources}
                  DEPENDS_ON    ${numerics_test_dependencies}

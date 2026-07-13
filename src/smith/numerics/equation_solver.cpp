@@ -455,18 +455,14 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     convergence_manager_ = std::move(convergence_manager);
   }
 
-  /// compute several vector inner products with a single MPI reduction when possible
-  std::vector<double> dot_many(const std::vector<DotPair>& pairs) const
+  /// compute several Euclidean vector inner products with a single MPI reduction when possible
+  std::vector<double> globalDotMany(const std::vector<DotPair>& pairs) const
   {
-    if (dot_oper) {
-      std::vector<double> products(pairs.size(), 0.0);
-      for (size_t i = 0; i < pairs.size(); ++i) {
-        products[i] = Dot(*pairs[i].first, *pairs[i].second);
-      }
-      return products;
+    std::vector<double> products(pairs.size(), 0.0);
+    for (size_t i = 0; i < pairs.size(); ++i) {
+      MFEM_ASSERT(pairs[i].first->Size() == pairs[i].second->Size(), "Incompatible vector sizes.");
+      products[i] = (*pairs[i].first) * (*pairs[i].second);
     }
-
-    std::vector<double> products = smith::dotMany(pairs);
 
 #ifdef MFEM_USE_MPI
     const MPI_Comm dot_comm = GetComm();
@@ -568,7 +564,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   void doglegStep(const mfem::Vector& cp, const mfem::Vector& newtonP, double trSize, mfem::Vector& s) const
   {
     SMITH_MARK_FUNCTION;
-    const auto dots = dot_many({{&cp, &cp}, {&newtonP, &newtonP}});
+    const auto dots = globalDotMany({{&cp, &cp}, {&newtonP, &newtonP}});
     const double cc = dots[0];
     const double nn = dots[1];
     double tt = trSize * trSize;
@@ -583,7 +579,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       add(s, 1.0, cp, s);
     } else if (nn > tt) {  // on the dogleg (we have nn >= cc, and tt >= cc)
       add(s, 1.0, cp, s);
-      double cn = Dot(cp, newtonP);
+      double cn = globalDotMany({{&cp, &newtonP}})[0];
       projectToBoundaryBetweenWithCoefs(s, newtonP, trSize, cc, cn, nn);
     } else {
       s = newtonP;
@@ -595,11 +591,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   double computeEnergy(const mfem::Vector& r_local, const HessVecFunc& H, const mfem::Vector& z) const
   {
     SMITH_MARK_FUNCTION;
-    double rz = Dot(r_local, z);
     mfem::Vector tmp(r_local);
     tmp = 0.0;
     H(z, tmp);
-    return rz + 0.5 * Dot(z, tmp);
+    const auto dots = globalDotMany({{&r_local, &z}, {&z, &tmp}});
+    return dots[0] + 0.5 * dots[1];
   }
 
   /// Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
@@ -607,7 +603,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                          const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
                          double r0_norm_squared) const
   {
-    auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
+    auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return globalDotMany(pairs); };
     steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda);
   }
 
@@ -617,12 +613,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       mfem::out << reason << "; using cauchy point fallback." << std::endl;
     }
     results.d = results.cauchy_point;
-  }
-
-  bool isDescentStep(const mfem::Vector& step, const mfem::Vector& residual) const
-  {
-    auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return dot_many(pairs); };
-    return smith::isDescentDirection(step, residual, dot_many_lambda);
   }
 
   void saveAcceptedStep(const mfem::Vector& step) const
@@ -912,7 +902,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           }
         }
 
-        if (subspace_unavailable || !isDescentStep(trResults.d, r)) {
+        const bool is_descent_step = globalDotMany({{&trResults.d, &r}})[0] < 0.0;
+        if (subspace_unavailable || !is_descent_step) {
           fallbackToCauchyPoint(
               trResults, subspace_unavailable ? "Subspace step unavailable" : "Fallback step is not a descent step");
         }
@@ -920,7 +911,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         static constexpr double roundOffTol = 0.0;  // 1e-14;
 
         hess_vec_func(trResults.d, trResults.H_d);
-        const auto dots = dot_many({{&trResults.d, &trResults.H_d}, {&r, &trResults.d}});
+        const auto dots = globalDotMany({{&trResults.d, &trResults.H_d}, {&r, &trResults.d}});
         const double dHd = dots[0];
         const double rd = dots[1];
         double modelObjective = rd + 0.5 * dHd - roundOffTol;

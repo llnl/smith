@@ -494,7 +494,7 @@ struct NonlinearSolverOptions {
   int num_leftmost = 1;
 
   /// Number of previous accepted steps to include in trust-region subspace solves
-  int num_previous_steps = 1;
+  int num_previous_steps = 2;
 
   /// Relative CG forcing term for TrustRegion model solves.
   double cg_forcing_rel = 1.2981521889723316e-05;

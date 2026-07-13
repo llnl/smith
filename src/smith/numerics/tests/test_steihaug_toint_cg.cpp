@@ -4,8 +4,23 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <vector>
+
 #include <gtest/gtest.h>
 #include "smith/numerics/steihaug_toint_cg.hpp"
+
+namespace {
+
+std::vector<double> localDotMany(const std::vector<smith::DotPair>& pairs)
+{
+  std::vector<double> products(pairs.size(), 0.0);
+  for (size_t i = 0; i < pairs.size(); ++i) {
+    products[i] = (*pairs[i].first) * (*pairs[i].second);
+  }
+  return products;
+}
+
+}  // namespace
 
 TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
 {
@@ -28,8 +43,7 @@ TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
 
   mfem::Vector rCurrent(size);
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(),
-                         smith::dotMany);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), localDotMany);
 
   // Solution should be H^{-1} (-r0)
   // x = -0.5, y = -0.25
@@ -56,8 +70,7 @@ TEST(SteihaugTointCG, HitsBoundary)
 
   mfem::Vector rCurrent(size);
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(),
-                         smith::dotMany);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), localDotMany);
 
   EXPECT_NEAR(results.z.Norml2(), 0.5, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::OnBoundary);
@@ -81,25 +94,9 @@ TEST(SteihaugTointCG, DetectsNegativeCurvature)
 
   mfem::Vector rCurrent(size);
 
-  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(),
-                         smith::dotMany);
+  smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), localDotMany);
 
   // For negative curvature, it should go to boundary
   EXPECT_NEAR(results.z.Norml2(), 2.0, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::NegativeCurvature);
-}
-
-TEST(SteihaugTointCG, DetectsDirectlyFlippedAscentDirection)
-{
-  mfem::Vector residual(2);
-  residual[0] = 1.0;
-  residual[1] = -2.0;
-
-  mfem::Vector descent_direction(residual);
-  descent_direction *= -1.0;
-  EXPECT_TRUE(smith::isDescentDirection(descent_direction, residual, smith::dotMany));
-
-  mfem::Vector ascent_direction(descent_direction);
-  ascent_direction *= -1.0;
-  EXPECT_FALSE(smith::isDescentDirection(ascent_direction, residual, smith::dotMany));
 }
