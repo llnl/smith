@@ -136,6 +136,7 @@ inline double checkGradWrt(const gretl::State<double>& objective, smith::FieldSt
 
   std::vector<double> grad_errors;
   auto [grad, grad_fd] = checkGradients(objective, input, *dual_vec, objectiveBase, graph, eps);
+  if (printmore) std::cout << "grad    = " << grad << "\ngrad fd = " << grad_fd << std::endl;
   grad_errors.push_back(std::abs(grad - grad_fd));
 
   for (size_t step = 1; step < num_fd_steps; ++step) {

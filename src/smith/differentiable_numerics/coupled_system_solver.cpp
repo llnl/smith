@@ -65,6 +65,10 @@ std::vector<FieldState> CoupledSystemSolver::solve(
     stage.solver->setInnerToleranceMultiplier(inner_tol_factor);
   }
 
+  const bool print_staggered_progress = std::all_of(active_stages.begin(), active_stages.end(), [](const auto& stage) {
+    return stage.solver && stage.solver->printLevel() > 0;
+  });
+
   // Reset each stage solver's convergence tracking (e.g. initial residual norm for rel-tol)
   for (const auto& stage : active_stages) {
     stage.solver->resetConvergenceState();
@@ -102,13 +106,17 @@ std::vector<FieldState> CoupledSystemSolver::solve(
   }
 
   for (int iter = 0; iter < max_staggered_iterations_; ++iter) {
-    SLIC_INFO_ROOT("Solving staggered iteration " << iter);
-    smith::logger::flush();
+    if (print_staggered_progress) {
+      SLIC_INFO_ROOT("Solving staggered iteration " << iter);
+      smith::logger::flush();
+    }
 
     // --- Run each stage ---
     for (size_t stage_idx = 0; stage_idx < active_stages.size(); ++stage_idx) {
-      SLIC_INFO_ROOT("Solving stage " << stage_idx);
-      smith::logger::flush();
+      if (print_staggered_progress) {
+        SLIC_INFO_ROOT("Solving stage " << stage_idx);
+        smith::logger::flush();
+      }
 
       const auto& stage = active_stages[stage_idx];
       size_t num_stage_blocks = stage.block_indices.size();

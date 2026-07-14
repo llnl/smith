@@ -27,12 +27,13 @@ namespace smith {
  * @tparam dim Spatial dimension.
  * @tparam disp_order Order of the displacement basis.
  * @tparam parameter_space Finite element spaces for optional parameters.
- * 
+ *
  * This system rely on a fixed-point iteration to solve plasticity equivalent to the traditional
  * inner-outer Newton method.
  * n \in [0, N] denotes the timestep and k \in [0, L] denotes the fixed-point iteration count.
- * At every new timestep n+1, first predict new displacement by [u^{n+1,k}, Fp^{n+1,k}, epsilon_p^{n+1,k}] ---> u^{n+1,k+1}.
- * Then update internal state variables [u^{n+1,k+1}, Fp^n, epsilon_p^n] ---> [Fp^{n+1,k+1}, epsilon_p^{n+1,k+1}].
+ * At every new timestep n+1, first predict new displacement by [u^{n+1,k}, Fp^{n+1,k}, epsilon_p^{n+1,k}] --->
+ * u^{n+1,k+1}. Then update internal state variables [u^{n+1,k+1}, Fp^n, epsilon_p^n] ---> [Fp^{n+1,k+1},
+ * epsilon_p^{n+1,k+1}].
  */
 template <int dim, int disp_order, typename... parameter_space>
 struct PlasticMechanicsSystem : public SystemBase {
@@ -42,33 +43,35 @@ struct PlasticMechanicsSystem : public SystemBase {
       dim, H1<disp_order, dim>,
       Parameters<H1<disp_order, dim>, L2<disp_order, dim * dim>, L2<disp_order>, parameter_space...>>;
 
-  /// @brief using for PlasticDeformWeakFormType with inputs [Fp^{n+1, k+1}, Fp^n, epsilon_p^{n+1, k+1}, epsilon_p^n, u^{n+1, k+1}]
-  using PlasticDeformWeakFormType = TimeDiscretizedWeakForm<
-      dim, L2<disp_order, dim * dim>,
-      Parameters<L2<disp_order, dim * dim>, L2<disp_order, dim * dim>, L2<disp_order>,
-                 L2<disp_order>, H1<disp_order, dim>, parameter_space...>>;
+  /// @brief using for PlasticDeformWeakFormType with inputs [Fp^{n+1, k+1}, Fp^n, epsilon_p^{n+1, k+1}, epsilon_p^n,
+  /// u^{n+1, k+1}]
+  using PlasticDeformWeakFormType =
+      TimeDiscretizedWeakForm<dim, L2<disp_order, dim * dim>,
+                              Parameters<L2<disp_order, dim * dim>, L2<disp_order, dim * dim>, L2<disp_order>,
+                                         L2<disp_order>, H1<disp_order, dim>, parameter_space...>>;
 
-  /// @brief using for PlasticStrainWeakFormType with inputs [epsilon_p^{n+1, k+1}, epsilon_p^n, Fp^{n+1, k+1}, Fp^n, u^{n+1, k+1}]
-  using PlasticStrainWeakFormType = TimeDiscretizedWeakForm<
-      dim, L2<disp_order>,
-      Parameters<L2<disp_order>, L2<disp_order>, L2<disp_order, dim * dim>, L2<disp_order, dim * dim>,
-                 H1<disp_order, dim>, parameter_space...>>;
+  /// @brief using for PlasticStrainWeakFormType with inputs [epsilon_p^{n+1, k+1}, epsilon_p^n, Fp^{n+1, k+1}, Fp^n,
+  /// u^{n+1, k+1}]
+  using PlasticStrainWeakFormType =
+      TimeDiscretizedWeakForm<dim, L2<disp_order>,
+                              Parameters<L2<disp_order>, L2<disp_order>, L2<disp_order, dim * dim>,
+                                         L2<disp_order, dim * dim>, H1<disp_order, dim>, parameter_space...>>;
 
   // Primary weak forms
-  std::shared_ptr<SolidWeakFormType>         solid_weak_form;               ///< Solid mechanics weak form.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
 
   // Internal variable weak forms to update in staggered solve
-  std::shared_ptr<PlasticDeformWeakFormType> plastic_deform_weak_form;       ///< Plastic deformation weak form.
-  std::shared_ptr<PlasticStrainWeakFormType> plastic_strain_weak_form;       ///< Plastic deformation weak form.
+  std::shared_ptr<PlasticDeformWeakFormType> plastic_deform_weak_form;  ///< Plastic deformation weak form.
+  std::shared_ptr<PlasticStrainWeakFormType> plastic_strain_weak_form;  ///< Plastic deformation weak form.
 
   // Primary variable bcs
-  std::shared_ptr<DirichletBoundaryConditions> disp_bc;                      ///< Displacement boundary conditions.
+  std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
 
   // Internal variable bcs
   std::shared_ptr<DirichletBoundaryConditions> plastic_deform_bc;
   std::shared_ptr<DirichletBoundaryConditions> plastic_strain_bc;
 
-  std::shared_ptr<QuasiStaticRule>                            qusistatic_time_rule;
+  std::shared_ptr<QuasiStaticRule> qusistatic_time_rule;
   std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> backward_euler_time_rule;
 
   // Helper functions for plastic deformation gradient bookkeeping
@@ -119,16 +122,34 @@ struct PlasticMechanicsSystem : public SystemBase {
   }
 
   /**
+   * @brief Get the list of physical state fields for visualization.
+   * @return std::vector<FieldState> List of physical fields suitable for output.
+   */
+  std::vector<FieldState> getOutputFieldStates() const
+  {
+    return {field_store->getField(prefix("displacement")), field_store->getField(prefix("plastic_defgrad")),
+            field_store->getField(prefix("plastic_strain"))};
+  }
+
+  /**
+   * @brief Get information about reaction fields for this system.
+   * @return List of ReactionInfo structures.
+   */
+  std::vector<ReactionInfo> getReactionInfos() const
+  {
+    return {{prefix("solid_force"), &field_store->getField(prefix("displacement")).get()->space()}};
+  }
+
+  /**
    * @brief Create a DifferentiablePhysics object for this system.
    * @param physics_name The name of the physics.
    * @return std::shared_ptr<DifferentiablePhysics> The differentiable physics object.
    */
   std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
   {
-    return std::make_shared<DifferentiablePhysics>(
-        field_store->getMesh(), field_store->graph(), field_store->getShapeDisp(), getStateFields(),
-        getParameterFields(), advancer, physics_name,
-        std::vector<std::string>{prefix("solid_force")});
+    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
+                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
+                                                   advancer, physics_name, getReactionInfos());
   }
 
   /**
@@ -140,16 +161,16 @@ struct PlasticMechanicsSystem : public SystemBase {
   template <typename MaterialType>
   void setMaterial(const std::string& domain_name, const MaterialType& mat)
   {
-    solid_weak_form->addBodyIntegral(domain_name,
-        [&](auto t_info, auto /* X */, auto u, auto Fp, auto epsilon_p, auto... params) {
-              auto du_dX = get<DERIVATIVE>(u);
-              auto Fp_tensor = this->recoverTensor(get<VALUE>(Fp));
-              auto dt = t_info.dt();
+    solid_weak_form->addBodyIntegral(
+        domain_name, [&](auto t_info, auto /* X */, auto u, auto Fp, auto epsilon_p, auto... params) {
+          auto du_dX = get<DERIVATIVE>(u);
+          auto Fp_tensor = this->recoverTensor(get<VALUE>(Fp));
+          auto dt = t_info.dt();
 
-              auto P = mat.firstPiolaStress(dt, du_dX, Fp_tensor, get<VALUE>(epsilon_p), params...);
+          auto P = mat.firstPiolaStress(dt, du_dX, Fp_tensor, get<VALUE>(epsilon_p), params...);
 
-              return tuple{zero{}, P};
-            });
+          return tuple{zero{}, P};
+        });
   }
 
   /**
@@ -163,29 +184,32 @@ struct PlasticMechanicsSystem : public SystemBase {
   {
     auto captured_strain_rule = backward_euler_time_rule;
 
-    plastic_deform_weak_form->addBodyIntegral(domain_name,
-        [=, this](auto t_info, auto /* X */, auto Fp, auto Fp_old, auto epsilon_p, auto epsilon_p_old, auto u, auto... params) {
-              auto du_dX = get<DERIVATIVE>(u);
-              auto Fp_old_tensor = this->recoverTensor(get<VALUE>(Fp_old));
-              auto [epsilon_current, epsilon_dot] = captured_strain_rule->interpolate(t_info, epsilon_p, epsilon_p_old);
-              auto dt = t_info.dt();
+    plastic_deform_weak_form->addBodyIntegral(
+        domain_name, [=, this](auto t_info, auto /* X */, auto Fp, auto Fp_old, auto epsilon_p, auto epsilon_p_old,
+                               auto u, auto... params) {
+          auto du_dX = get<DERIVATIVE>(u);
+          auto Fp_old_tensor = this->recoverTensor(get<VALUE>(Fp_old));
+          auto [epsilon_current, epsilon_dot] = captured_strain_rule->interpolate(t_info, epsilon_p, epsilon_p_old);
+          auto dt = t_info.dt();
 
-              auto Fp_predict_tensor = mat.plasticDeformGrad(dt, Fp_old_tensor, get<VALUE>(epsilon_dot), du_dX, params...);
-              auto Fp_predict = this->flattenTensor(Fp_predict_tensor);
+          auto Fp_predict_tensor = mat.plasticDeformGrad(dt, Fp_old_tensor, get<VALUE>(epsilon_dot), du_dX, params...);
+          auto Fp_predict = this->flattenTensor(Fp_predict_tensor);
 
-              return tuple(get<VALUE>(Fp) - Fp_predict, zero{});
-            });
+          return tuple(get<VALUE>(Fp) - Fp_predict, zero{});
+        });
 
-    plastic_strain_weak_form->addBodyIntegral(domain_name,
-        [=, this](auto t_info, auto /* X */, auto epsilon_p, auto epsilon_p_old, auto /* Fp */, auto Fp_old, auto u, auto... params) {
-              auto du_dX = get<DERIVATIVE>(u);
-              auto Fp_old_tensor = this->recoverTensor(get<VALUE>(Fp_old));
-              auto [epsilon_current, epsilon_dot] = captured_strain_rule->interpolate(t_info, epsilon_p, epsilon_p_old);
-              auto dt = t_info.dt();
+    plastic_strain_weak_form->addBodyIntegral(domain_name, [=, this](auto t_info, auto /* X */, auto epsilon_p,
+                                                                     auto epsilon_p_old, auto /* Fp */, auto Fp_old,
+                                                                     auto u, auto... params) {
+      auto du_dX = get<DERIVATIVE>(u);
+      auto Fp_old_tensor = this->recoverTensor(get<VALUE>(Fp_old));
+      auto [epsilon_current, epsilon_dot] = captured_strain_rule->interpolate(t_info, epsilon_p, epsilon_p_old);
+      auto dt = t_info.dt();
 
-              auto epsilon_dot_predict = mat.plasticStrain(dt, get<VALUE>(epsilon_current), get<VALUE>(epsilon_dot), Fp_old_tensor, du_dX);
-              return tuple(get<VALUE>(epsilon_dot) - epsilon_dot_predict, zero{});
-            });
+      auto epsilon_dot_predict =
+          mat.plasticStrain(dt, get<VALUE>(epsilon_current), get<VALUE>(epsilon_dot), Fp_old_tensor, du_dX, params...);
+      return tuple(get<VALUE>(epsilon_dot) - epsilon_dot_predict, zero{});
+    });
   }
 };
 
@@ -194,8 +218,8 @@ struct PlasticMechanicsSystem : public SystemBase {
  */
 template <int dim, int disp_order, typename... parameter_space>
 PlasticMechanicsSystem<dim, disp_order, parameter_space...> buildPlasticMechanicsSystem(
-  std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver,
-  std::string prepend_name = "", FieldType<parameter_space>... parameter_types)
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, std::string prepend_name = "",
+    FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
 
@@ -238,8 +262,7 @@ PlasticMechanicsSystem<dim, disp_order, parameter_space...> buildPlasticMechanic
   std::string solid_res_name = prefix("solid_residual");
   auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-      field_store->createSpaces(solid_res_name, disp_type.name, disp_type,
-                                plastic_defgrad_type, plastic_strain_type,
+      field_store->createSpaces(solid_res_name, disp_type.name, disp_type, plastic_defgrad_type, plastic_strain_type,
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   std::string plastic_defgrad_res_name = prefix("plastic_defgrad_residual");
@@ -257,13 +280,18 @@ PlasticMechanicsSystem<dim, disp_order, parameter_space...> buildPlasticMechanic
                                 FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
 
   // Build solver and advancer
-  std::vector<std::shared_ptr<WeakForm>> weak_forms{
-    solid_weak_form, plastic_defgrad_weak_form, plastic_strain_weak_form};
+  std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, plastic_defgrad_weak_form,
+                                                    plastic_strain_weak_form};
   auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
   return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
-      solid_weak_form, plastic_defgrad_weak_form, plastic_strain_weak_form,
-      disp_bc, plastic_defgrad_bc, plastic_strain_bc, quasistatic_time_rule,
-      backward_euler_time_rule};
+                    solid_weak_form,
+                    plastic_defgrad_weak_form,
+                    plastic_strain_weak_form,
+                    disp_bc,
+                    plastic_defgrad_bc,
+                    plastic_strain_bc,
+                    quasistatic_time_rule,
+                    backward_euler_time_rule};
 }
-} // namespace smith
+}  // namespace smith
