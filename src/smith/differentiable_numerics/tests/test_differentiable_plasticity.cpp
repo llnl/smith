@@ -338,8 +338,7 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   EXPECT_GT(checkGradWrt(disp_squared, params[1], 100.0, 4, true), 0.95);
 
   std::vector<FieldState> sensitivity_fields{shape_disp, params[0], params[1]};
-  auto sens_writer =
-      createParaviewWriter(*mesh, sensitivity_fields, physics_name + "_final_sensitivities");
+  auto sens_writer = createParaviewWriter(*mesh, sensitivity_fields, physics_name + "_final_sensitivities");
 
   auto& graph = disp_squared.data_store();
   graph.reset();
