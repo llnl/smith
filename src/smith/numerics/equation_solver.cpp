@@ -104,7 +104,7 @@ bool linearSolverSupportsBlockOperator(LinearSolver linear_solver)
     case LinearSolver::PetscCG:
     case LinearSolver::PetscGMRES:
 #endif
-    case LinearSolver::None:
+    case LinearSolver::PrecondOnly:
       return true;
     default:
       return false;
@@ -1386,7 +1386,7 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
       exit(1);
       break;
 #endif
-    case LinearSolver::None:
+    case LinearSolver::PrecondOnly:
       iter_lin_solver = std::make_unique<PreconditionerOnlySolver>(comm);
       break;
     default:

@@ -9,7 +9,7 @@
  * @brief Dynamic solid-mechanics example using composable differentiable numerics systems.
  */
 
-#include <iostream>
+#include <format>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -70,6 +70,7 @@ int main(int argc, char* argv[])
   constexpr int dim = 3;
   constexpr int order = 1;
 
+  // Build a slender beam mesh and name the loaded and fixed boundaries.
   auto mesh = std::make_shared<smith::Mesh>(
       mfem::Mesh::MakeCartesian3D(8, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 0.1, 0.1), "mesh", 0, 0);
   mesh->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
@@ -93,6 +94,7 @@ int main(int argc, char* argv[])
   // _solver_end
 
   // _build_start
+  // Build a dynamic solid system with Young's modulus as a differentiable field parameter.
   auto solid_system = smith::buildSolidMechanicsSystem<dim, order>(
       nonlinear_options, linear_options, output_options, mesh, smith::FieldType<smith::L2<0>>("youngs_modulus"));
 
@@ -102,6 +104,7 @@ int main(int argc, char* argv[])
   // _build_end
 
   // _bc_start
+  // Clamp selected components on the left and load the beam through body force and traction terms.
   solid_system->setDisplacementBC(mesh->domain("left"), std::vector<int>{0, 2});
   solid_system->addBodyForce(mesh->entireBodyName(), [](double, auto X, auto, auto, auto, auto... /*args*/) {
     auto body_force = 0.0 * X;
@@ -137,6 +140,7 @@ int main(int argc, char* argv[])
     return velocity;
   };
 
+  // Seed all time-integration states before the initial acceleration solve.
   physics->getInitialFieldState("displacement_solve_state").get()->setFromFieldFunction(initial_displacement);
   physics->getInitialFieldState("displacement").get()->setFromFieldFunction(initial_displacement);
   physics->getInitialFieldState("velocity").get()->setFromFieldFunction(initial_velocity);
@@ -147,6 +151,7 @@ int main(int argc, char* argv[])
 
   // _run_start
   using DispSpace = smith::H1<order, dim>;
+  // Accumulate a scalar QoI over the trajectory for reverse-mode sensitivity checks.
   const auto qoi_fields = std::vector<smith::FieldState>{physics->getInitialFieldState("displacement"),
                                                          physics->getInitialFieldState("velocity")};
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, DispSpace>> qoi("solid_dynamic_energy_proxy", mesh,
@@ -172,25 +177,26 @@ int main(int argc, char* argv[])
                                          smith::TimeInfo(physics->time(), dt, static_cast<size_t>(physics->cycle())));
   }
 
-  std::cout << "reaction norm: " << physics->getReactionStates().front().get()->Norml2() << '\n';
+  SLIC_INFO_ROOT(std::format("reaction norm: {}", physics->getReactionStates().front().get()->Norml2()));
   gretl::set_as_objective(qoi_state);
-  std::cout << "QoI value: " << qoi_state.get() << '\n';
+  SLIC_INFO_ROOT(std::format("QoI value: {}", qoi_state.get()));
   qoi_state.data_store().back_prop();
   auto shape_displacement = physics->getShapeDispFieldState();
   auto initial_displacement_state = physics->getInitialFieldState("displacement");
   auto initial_velocity_state = physics->getInitialFieldState("velocity");
   auto youngs_modulus_state = physics->getFieldParam("param_youngs_modulus");
-  std::cout << "dQoI/d(shape) norm: " << shape_displacement.get_dual()->Norml2() << '\n';
-  std::cout << "dQoI/d(youngs_modulus) norm: " << youngs_modulus_state.get_dual()->Norml2() << '\n';
-  std::cout << "dQoI/d(initial displacement) norm: " << initial_displacement_state.get_dual()->Norml2() << '\n';
-  std::cout << "dQoI/d(initial velocity) norm: " << initial_velocity_state.get_dual()->Norml2() << '\n';
-  std::cout << "shape FD rate: \n" << smith::checkGradWrt(qoi_state, shape_displacement, 1.0e-2, 4, false) << '\n';
-  std::cout << "youngs_modulus FD rate: \n"
-            << smith::checkGradWrt(qoi_state, youngs_modulus_state, 5.0e-2, 4, false) << '\n';
-  std::cout << "initial displacement FD rate: \n"
-            << smith::checkGradWrt(qoi_state, initial_displacement_state, 5.0e-3, 4, false) << '\n';
-  std::cout << "initial velocity FD rate: \n"
-            << smith::checkGradWrt(qoi_state, initial_velocity_state, 5.0e-3, 4, false) << '\n';
+  SLIC_INFO_ROOT(std::format("dQoI/d(shape) norm: {}", shape_displacement.get_dual()->Norml2()));
+  SLIC_INFO_ROOT(std::format("dQoI/d(youngs_modulus) norm: {}", youngs_modulus_state.get_dual()->Norml2()));
+  SLIC_INFO_ROOT(std::format("dQoI/d(initial displacement) norm: {}", initial_displacement_state.get_dual()->Norml2()));
+  SLIC_INFO_ROOT(std::format("dQoI/d(initial velocity) norm: {}", initial_velocity_state.get_dual()->Norml2()));
+  SLIC_INFO_ROOT(
+      std::format("shape FD rate: {}", smith::checkGradWrt(qoi_state, shape_displacement, 1.0e-2, 4, false)));
+  SLIC_INFO_ROOT(std::format("youngs_modulus FD rate: {}",
+                             smith::checkGradWrt(qoi_state, youngs_modulus_state, 5.0e-2, 4, false)));
+  SLIC_INFO_ROOT(std::format("initial displacement FD rate: {}",
+                             smith::checkGradWrt(qoi_state, initial_displacement_state, 5.0e-3, 4, false)));
+  SLIC_INFO_ROOT(std::format("initial velocity FD rate: {}",
+                             smith::checkGradWrt(qoi_state, initial_velocity_state, 5.0e-3, 4, false)));
   // _run_end
 
   // _output_start
@@ -198,7 +204,7 @@ int main(int argc, char* argv[])
       smith::createParaviewWriter(*mesh, physics->getFieldStatesAndParamStates(), "paraview_composable_solid_mechanics",
                                   smith::ParaviewWriter::Options{.write_duals = false});
   writer.write(physics->cycle(), physics->time(), physics->getFieldStatesAndParamStates());
-  std::cout << "ParaView output: paraview_composable_solid_mechanics\n";
+  SLIC_INFO_ROOT("ParaView output: paraview_composable_solid_mechanics");
   // _output_end
 
   return 0;

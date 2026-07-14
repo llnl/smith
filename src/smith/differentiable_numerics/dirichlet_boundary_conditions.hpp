@@ -163,9 +163,11 @@ class DirichletBoundaryConditions {
   /// @brief Return the value-level smith BoundaryConditionManager.
   const smith::BoundaryConditionManager& getBoundaryConditionManager() const { return bcs_; }
 
-  /// @brief Return the BC manager whose prescribed values are the second time derivative of the
-  ///        value-level BC, computed by one-sided three-point forward FD with step
-  ///        @c h = 1e-4 * max(1,|t|).
+  /// @brief Return the BC manager for acceleration and other second-time-derivative fields.
+  ///
+  /// For a value-level essential boundary condition @c u_b(t), this manager constrains a dependent
+  /// second-derivative field to @c u_b''(t), computed by one-sided three-point forward FD with step
+  /// @c h = 1e-4 * max(1,|t|).
   ///
   /// Rebuilt on each call from current value-level essentials, so late additions are reflected.
   const smith::BoundaryConditionManager& getSecondDerivativeManager() const;

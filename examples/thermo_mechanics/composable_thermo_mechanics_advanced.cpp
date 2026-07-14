@@ -10,7 +10,7 @@
  *        finite-difference verification, and ParaView output including Cauchy stress.
  */
 
-#include <iostream>
+#include <format>
 #include <memory>
 #include <vector>
 
@@ -49,6 +49,7 @@ int main(int argc, char* argv[])
   using DispSpace = smith::H1<order, dim>;
   using TempSpace = smith::H1<order>;
 
+  // Build a small beam mesh and name boundaries used by thermal and mechanical loads.
   auto mesh = std::make_shared<smith::Mesh>(
       mfem::Mesh::MakeCartesian3D(8, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 0.1, 0.1), "mesh", 0, 0);
   mesh->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
@@ -70,6 +71,7 @@ int main(int argc, char* argv[])
 
   auto field_store = std::make_shared<smith::FieldStore>(mesh, 200);
 
+  // Register coupled displacement, temperature, and parameter fields in one shared store.
   smith::SolidMechanicsOptions solid_options{.enable_stress_output = true, .output_cauchy_stress = true};
   auto solid_fields = smith::registerSolidMechanicsFields<dim, order, smith::QuasiStaticSecondOrderTimeIntegrationRule>(
       field_store, solid_options);
@@ -85,6 +87,7 @@ int main(int argc, char* argv[])
   auto thermal_system = smith::buildThermalSystem(nullptr, smith::ThermalOptions{}, thermal_fields,
                                                   smith::couplingFields(solid_fields), param_fields);
 
+  // Wrap the material so integrands can read TimeInfo while remaining composable.
   auto material =
       smith::makeTimeInfoMaterial(smith::thermomechanics::ParameterizedGreenSaintVenantThermoelasticMaterial{
           1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05});
@@ -94,6 +97,7 @@ int main(int argc, char* argv[])
   coupled_solver->addSubsystemSolver({0, 1}, smith::buildNonlinearBlockSolver(coupled_nonlin, coupled_linear, *mesh),
                                      1.0);
 
+  // Combine thermal and solid residuals into a monolithic coupled solve.
   auto coupled_system = smith::combineSystems(coupled_solver, solid_system, thermal_system);
   std::string physics_name = "composable_thermo_mechanics_advanced";
   auto physics = smith::makeDifferentiablePhysics(coupled_system, physics_name);
@@ -106,6 +110,7 @@ int main(int argc, char* argv[])
   // _bc_start
   field_store->getParameterFields()[0].get()->setFromFieldFunction([](smith::tensor<double, dim>) { return 1.0; });
 
+  // Clamp one end, impose a thermal gradient, then apply traction and heat source loads.
   solid_system->setDisplacementBC(mesh->domain("left"));
   thermal_system->setTemperatureBC(mesh->domain("left"), [](auto, auto) { return 1.0; });
   thermal_system->setTemperatureBC(mesh->domain("right"), [](auto, auto) { return 0.0; });
@@ -124,6 +129,7 @@ int main(int argc, char* argv[])
   auto fetch_qoi_fields = [&]() {
     return std::vector<smith::FieldState>{field_store->getField("displacement"), field_store->getField("temperature")};
   };
+  // Track a differentiable energy proxy depending on displacement and temperature.
   smith::FunctionalObjective<dim, smith::Parameters<DispSpace, TempSpace>> qoi("thermo_mechanical_energy_proxy", mesh,
                                                                                smith::spaces(fetch_qoi_fields()));
   qoi.addBodyIntegral(mesh->entireBodyName(), [](auto, auto /*X*/, auto U, auto Theta) {
@@ -151,23 +157,24 @@ int main(int argc, char* argv[])
   // _output_start
   output_writer.write(physics->cycle(), physics->time(), field_store->getOutputFieldStates());
 
-  std::cout << "ParaView output: paraview_composable_thermo_mechanics_advanced\n";
+  SLIC_INFO_ROOT("ParaView output: paraview_composable_thermo_mechanics_advanced");
   // _output_end
 
   // _sensitivity_start
+  // Differentiate the QoI with respect to the thermal-expansion scaling field.
   gretl::set_as_objective(qoi_state);
   auto qoi_value = qoi_state.get();
-  std::cout << "QoI value: " << qoi_value << '\n';
+  SLIC_INFO_ROOT(std::format("QoI value: {}", qoi_value));
   qoi_state.data_store().back_prop();
 
   auto parameter_state = field_store->getParameterFields()[0];
   auto parameter_sensitivity = parameter_state.get_dual()->Norml2();
 
-  std::cout << "dQoI/d(thermal_expansion_scaling) norm: " << parameter_sensitivity << '\n';
+  SLIC_INFO_ROOT(std::format("dQoI/d(thermal_expansion_scaling) norm: {}", parameter_sensitivity));
   SLIC_ERROR_ROOT_IF(parameter_sensitivity <= 0.0, "Expected non-zero QoI sensitivity.");
 
   auto fd_order = smith::checkGradWrt(qoi_state, parameter_state, 5.0e-2, 4, true);
-  std::cout << "finite-difference convergence rate: " << fd_order << '\n';
+  SLIC_INFO_ROOT(std::format("finite-difference convergence rate: {}", fd_order));
   SLIC_ERROR_ROOT_IF(fd_order < 0.7, "Finite-difference check did not converge.");
   // _sensitivity_end
 

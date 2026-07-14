@@ -112,7 +112,6 @@ class QuasiStaticRule : public TimeIntegrationRule {
   /// @brief get the number of states required by the rule
   int num_args() const override { return num_states; }
 
-  /// @brief evaluate value of the ode state as used by the integration rule
   template <typename T1>
   /// @brief Return the static field value.
   SMITH_HOST_DEVICE auto value(const TimeInfo& /*t*/, const T1& field_new) const
@@ -120,7 +119,6 @@ class QuasiStaticRule : public TimeIntegrationRule {
     return field_new;
   }
 
-  /// @brief evaluate time derivative discretization of the ode state as used by the integration rule
   template <typename T1>
   /// @brief Return zero first derivative for a static field.
   SMITH_HOST_DEVICE auto dot(const TimeInfo& /*t*/, const T1& /*field_new*/) const
