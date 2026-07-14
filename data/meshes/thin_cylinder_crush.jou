@@ -1,0 +1,55 @@
+# Thin hollow cylinder for axial crush / buckling studies.
+#
+# Usage:
+#   cubit -batch thin_cylinder_crush.jou
+#
+# Build an annular end surface, mesh it with Cubit's annulus-aware `hole`
+# scheme, then sweep that surface along z into a hex mesh. This avoids the
+# periodic 360-degree rotational sweep that was producing invalid volume meshes.
+
+reset
+undo off
+compress ids all
+
+#{outer_radius        = 1.0}
+#{wall_thickness      = outer_radius / 20.0}
+#{inner_radius        = outer_radius - wall_thickness}
+#{height              = 2.0 * outer_radius}
+#{n_through_thickness = 3}
+#{n_along_height      = 40}
+#{n_around            = 96}
+#{eps                 = 1.0e-6}
+#{outfile             = "thin_cylinder_crush.g"}
+
+# Build a planar annulus and extrude it into the cylinder volume.
+create curve arc center 0 0 0 radius {outer_radius} normal 0 0 1 start angle 0 stop angle 360
+create curve arc center 0 0 0 radius {inner_radius} normal 0 0 1 start angle 0 stop angle 360
+create surface curve 1 2
+
+sweep surface 1 vector 0 0 {height} merge
+compress ids all
+
+# Circular loops on the two end caps control the circumferential resolution.
+curve 1 2 3 5 interval {n_around}
+
+# The two seam curves on the inner and outer cylindrical surfaces control
+# the axial layers.
+curve 4 6 interval {n_along_height}
+
+surface 4 scheme hole rad_intervals {n_through_thickness}
+mesh surface 4
+
+volume 1 scheme sweep source surface 4 target surface 1
+mesh volume 1
+
+block 1 add volume all
+block 1 name "ring"
+
+# Boundary conditions are applied on the end caps.
+sideset 1 add face in volume all with z_coord < {eps}
+sideset 1 name "bottom"
+
+sideset 2 add face in volume all with z_coord > {height - eps}
+sideset 2 name "top"
+
+export genesis "{outfile}" overwrite

@@ -40,3 +40,6 @@ add_subdirectory(uniaxial)
 
 # Add the inertia relief example
 add_subdirectory(inertia_relief)
+
+# Add solver-comparison examples
+add_subdirectory(solver_comparison)

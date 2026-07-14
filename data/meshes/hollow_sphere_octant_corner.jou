@@ -1,0 +1,85 @@
+# Hollow spherical-octant shell for corner-contact snap-through studies.
+#
+# Usage:
+#   cubit -batch hollow_sphere_octant_corner.jou
+#
+# This keeps the positive octant of an outer sphere volume, then subtracts an
+# inset positive octant of an inner sphere volume to create a closed shell.
+# The curved shell thickness is set by the radial gap between the two spheres,
+# while the shell thickness normal to the coordinate planes is doubled by
+# insetting the inner octant cut planes by `2 * curved_thickness`.
+#
+# The boundary is partitioned into the same non-overlapping sidesets used by the
+# example code:
+#   1. inner_surface
+#   2. outer_surface
+
+reset
+undo off
+compress ids all
+
+#{outer_radius        = 1.0}
+#{curved_thickness    = outer_radius / 25.0}
+#{inner_radius        = outer_radius - curved_thickness}
+#{plane_thickness     = 2.0 * curved_thickness}
+#{initial_gap         = 0.02 * outer_radius}
+#{surface_size_factor = 6}
+#{element_size        = 0.12 * outer_radius}
+#{outfile             = "hollow_sphere_octant_corner.g"}
+#{park_offset         = 10.0}
+
+create sphere radius {outer_radius}
+webcut volume 1 with plane xplane offset 0
+delete volume all with x_coord < 0
+compress ids all
+
+webcut volume 1 with plane yplane offset 0
+delete volume all with y_coord < 0
+compress ids all
+
+webcut volume 1 with plane zplane offset 0
+delete volume all with z_coord < 0
+compress ids all
+
+# Park the finished outer octant so the coordinate-based deletes for the inner
+# octant do not accidentally remove the outer body.
+move volume 1 x {park_offset} y {park_offset} z {park_offset}
+
+create sphere radius {inner_radius}
+webcut volume 2 with plane xplane offset {plane_thickness}
+delete volume all with x_coord < {plane_thickness}
+compress ids all
+
+webcut volume 2 with plane yplane offset {plane_thickness}
+delete volume all with y_coord < {plane_thickness}
+compress ids all
+
+webcut volume 2 with plane zplane offset {plane_thickness}
+delete volume all with z_coord < {plane_thickness}
+compress ids all
+
+move volume 1 x {-park_offset} y {-park_offset} z {-park_offset}
+
+subtract volume 2 from volume 1
+compress ids all
+
+move volume all x {initial_gap} y {initial_gap} z {initial_gap}
+
+surface all size auto factor {surface_size_factor}
+volume all scheme tetmesh
+volume all size {element_size}
+mesh volume all
+
+block 1 add volume all
+block 1 name "sphere_shell"
+
+# Surfaces 1-4 are the exterior: three coordinate-plane caps plus the outer
+# spherical patch. Surfaces 5-8 are the enclosed cavity: three inset planar
+# faces plus the inner spherical patch.
+sideset 1 add surface 5 6 7 8
+sideset 1 name "inner_surface"
+
+sideset 2 add surface 1 2 3 4
+sideset 2 name "outer_surface"
+
+export genesis "{outfile}" overwrite
