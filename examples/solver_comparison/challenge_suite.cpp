@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
 #include <limits>
 #include <map>
@@ -581,8 +582,9 @@ void parseCommandLine(int& argc, char** argv)
   }
 }
 
-template <int order, int dim>
-double averageBoundaryDisplacementComponent(const SolidMechanics<order, dim>& solid, Domain& domain, int component)
+template <int order, int dim, typename... Parameters>
+double averageBoundaryDisplacementComponent(const SolidMechanics<order, dim, Parameters...>& solid, Domain& domain,
+                                            int component)
 {
   Functional<double(H1<order, dim>)> boundary_integral({&solid.displacement().space()});
   boundary_integral.AddBoundaryIntegral(
@@ -595,8 +597,8 @@ double averageBoundaryDisplacementComponent(const SolidMechanics<order, dim>& so
   return boundary_integral(solid.time(), solid.displacement()) / area;
 }
 
-template <int order, int dim>
-double sumReactionComponent(const SolidMechanics<order, dim>& solid, Domain& domain, int component)
+template <int order, int dim, typename... Parameters>
+double sumReactionComponent(const SolidMechanics<order, dim, Parameters...>& solid, Domain& domain, int component)
 {
   auto dof_list = domain.dof_list(&solid.displacement().space());
   solid.displacement().space().DofsToVDofs(component, dof_list);
@@ -766,6 +768,7 @@ double boundaryTractionResultant(const SolidSolver& solid, Domain& domain, Tract
 #include "euler.hpp"
 #include "shallow_arch.hpp"
 #include "cylinder_crush.hpp"
+#include "viscoelastic_buckling.hpp"
 #include "contact_arch.hpp"
 #include "sphere_into_corner.hpp"
 #include "circ_in_circ.hpp"
@@ -795,6 +798,10 @@ int main(int argc, char** argv)
   }
   if (smith::selectedCaseMatches({"03", "03/cylinder_crush_benchmark", "cylinder_crush_benchmark"})) {
     smith::runTimedCase(timings, "03/cylinder_crush_benchmark", smith::runCylinderCrushBenchmark);
+    ran_case = true;
+  }
+  if (smith::selectedCaseMatches({"04", "04/viscoelastic_buckling", "viscoelastic_buckling"})) {
+    smith::runTimedCase(timings, "04/viscoelastic_buckling", smith::runViscoelasticBuckling);
     ran_case = true;
   }
   if (smith::selectedCaseMatches({"06", "06/contact_arch", "contact_arch"})) {
@@ -840,8 +847,9 @@ int main(int argc, char** argv)
   }
 
   SLIC_ERROR_ROOT("Unknown --case value '" + smith::selected_case +
-                  "'; use all, 01/euler, 02/shallow_arch, 03/cylinder_crush_benchmark, 06/contact_arch, "
-                  "07/sphere_into_corner, 08/circ_in_circ, 09/third_medium_c_bracket, "
+                  "'; use all, 01/euler, 02/shallow_arch, 03/cylinder_crush_benchmark, "
+                  "04/viscoelastic_buckling, 06/contact_arch, 07/sphere_into_corner, "
+                  "08/circ_in_circ, 09/third_medium_c_bracket, "
                   "10/thin_beam_bending, 11/near_incompressible_block, 12/sphere_penalty_contact, "
                   "13/twisted_beam, or 14/thin_shell_bending");
   return 1;

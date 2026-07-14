@@ -1056,4 +1056,24 @@ auto sqrt_symm(tensor<T, 3, 3> A)
   return symmetric_mat3_function(A, [](double x) { return std::sqrt(x); }, g);
 }
 
+/**
+ * @brief Logarithm of a symmetric matrix plus identity
+ *
+ * @param A Matrix to operate on. A + I must be SPD. This is not checked.
+ * @return The logarithmic mapping of \p A + I.
+ */
+template <typename T>
+auto logIp_symm(tensor<T, 3, 3> A)
+{
+  auto g = [](double lam1, double lam2) {
+    if (std::abs(lam1 - lam2) < std::numeric_limits<double>::epsilon()) {
+      return 1.0 / (lam1 + 1.0);
+    } else {
+      double y = (1.0 + lam1) / (1.0 + lam2);
+      return (std::log(y) / (y - 1.0)) / (1.0 + lam2);
+    }
+  };
+  return symmetric_mat3_function(A, [](double x) { return std::log1p(x); }, g);
+}
+
 }  // namespace smith

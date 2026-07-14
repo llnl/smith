@@ -21,6 +21,7 @@ set(materials_headers
     solid_material.hpp
     thermal_material_input.hpp
     thermal_material.hpp
+    viscoelastic.hpp
     )
 
 set(materials_depends
