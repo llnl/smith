@@ -96,7 +96,7 @@ class SmithObstacleDesignProblem : public ObstacleDesignProblem {
                          const mfem::Vector& obstacle) override;
 };
 
-double forcing(const mfem::Vector& x);  // TODO: update this name
+double obstacle_forcing(const mfem::Vector& x);
 double flat_obstacle(const mfem::Vector& x);
 
 int main(int argc, char* argv[])
@@ -119,9 +119,9 @@ int main(int argc, char* argv[])
   double gamma2 = 1.e-6;  // scaling for design objective component: \gamma_2 / 2 * \int_{\Omega} p * p dV
   double gamma3 = 1.e-3;  // scaling for design objective component: \gamma_3 / 2 * \int_{\Omega} ||\nabla p||_{2}^2 dV
 
-  // Solver options
-  double nonlinear_solve_tol = 1e-6;
-  int nonlinear_solve_maxiter = 10000;
+  // Nonlinear solver options
+  double tol = 1e-6;
+  int maxiter = 100;
   // Handle command line arguments
   axom::CLI::App app{"Obstacle design."};
   // Mesh options
@@ -131,12 +131,12 @@ int main(int argc, char* argv[])
   app.add_option("--ylength", ylength, "extent of problem domain along y-axis")
       ->default_val("1.0")  // Matches value set above
       ->check(axom::CLI::PositiveNumber);
-  app.add_option("--serial-refinement", serial_refinement, "Serial refinement steps")
+  app.add_option("--serial-refinement", serial_refinement, "Serial mesh refinement steps")
       ->default_val("0")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
-  app.add_option("--parallel-refinement", parallel_refinement, "Parallel refinement steps")
+      ->check(axom::CLI::NonNegativeNumber);
+  app.add_option("--parallel-refinement", parallel_refinement, "Parallel mesh refinement steps")
       ->default_val("0")  // Matches value set above
-      ->check(axom::CLI::PositiveNumber);
+      ->check(axom::CLI::NonNegativeNumber);
   app.add_option("--visualize", visualize, "solution visualization")
       ->default_val("0")  // Matches value set above
       ->check(axom::CLI::Range(0, 1));
@@ -164,10 +164,6 @@ int main(int argc, char* argv[])
   smith::FiniteElementState displacement = smith::StateManager::newState(StateSpace{}, "displacement", mesh->tag());
   smith::FiniteElementState pressure = smith::StateManager::newState(PressureSpace{}, "pressure", mesh->tag());
   smith::FiniteElementState obstacle = smith::StateManager::newState(ObstacleSpace{}, "obstacle", mesh->tag());
-  [[maybe_unused]] smith::FiniteElementState grad =
-      smith::StateManager::newState(VectorSpace{}, "gradient", mesh->tag());
-  [[maybe_unused]] std::unique_ptr<smith::FiniteElementState> shape_disp =
-      std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
 
   std::vector<smith::FiniteElementState> states;
   states = {displacement, pressure, obstacle};
@@ -221,18 +217,18 @@ int main(int argc, char* argv[])
   auto [Vh, unused] = smith::generateParFiniteElementSpace<StateSpace>(&mesh->mfemParMesh());
   (void)unused;
   int dimU = Vh->GetTrueVSize();
-  ParamObstacleProblem problem(Vh.get(), &forcing, &flat_obstacle);
+  ParamObstacleProblem problem(Vh.get(), &obstacle_forcing, &flat_obstacle);
   SmithObstacleDesignProblem smithdesignproblem(&problem, state_ptrs, mesh, design_objective,
                                                 weak_form_objective_grad_displacement,
                                                 weak_form_objective_grad_pressure, weak_form_objective_grad_design);
-  int dimPrimal = smithdesignproblem.GetDimU();
+  int dimPrimal = smithdesignproblem.GetDimU();  // dim(displacement) + dim(pressure) + dim(obstacle) + ...
   mfem::Vector X0(dimPrimal);
   X0 = 0.0;
   mfem::Vector Xf(dimPrimal);
   Xf = 0.0;
   MPECSolver designoptimizer(&smithdesignproblem);
-  designoptimizer.SetTol(nonlinear_solve_tol);
-  designoptimizer.SetMaxIter(nonlinear_solve_maxiter);
+  designoptimizer.SetTol(tol);
+  designoptimizer.SetMaxIter(maxiter);
   designoptimizer.SetPrintLevel(2);
   designoptimizer.EnableMassWeightedNorms();
   designoptimizer.Mult(X0, Xf);
@@ -242,17 +238,17 @@ int main(int argc, char* argv[])
   auto writer = createParaviewWriter(mesh->mfemParMesh(), vis_states, "obstacledesign");
 
   if (visualize) {
-    mfem::Vector uf(Xf, 0, dimU);          // displacement
-    mfem::Vector pf(Xf, dimU, dimU);       // pressure
-    mfem::Vector thf(Xf, 2 * dimU, dimU);  // obstacle
-    states[0] = uf;
-    states[1] = pf;
-    states[2] = thf;
+    mfem::Vector displacementf(Xf, 0, dimU);     // displacement
+    mfem::Vector pressuref(Xf, dimU, dimU);      // pressure
+    mfem::Vector obstaclef(Xf, 2 * dimU, dimU);  // obstacle
+    states[0] = displacementf;
+    states[1] = pressuref;
+    states[2] = obstaclef;
     writer.write(0, 0.0, vis_states);
   }
 }
 
-double forcing(const mfem::Vector& x)
+double obstacle_forcing(const mfem::Vector& x)
 {
   double fx = 0.;
   fx = 0.2 - 2.0 * (std::pow(x(0), 3) - 1.5 * std::pow(x(0), 2.) - 6 * x(0) + 3.) +
