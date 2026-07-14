@@ -571,15 +571,22 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /// @brief Scoped setter for active TimeInfo during WeakForm interface evaluations.
   class SetCurrentTimeInfoRAII {
    public:
+    /// @brief Set active TimeInfo pointer until this guard is destroyed.
+    /// @param[in,out] current_time_info Active TimeInfo pointer to update.
+    /// @param[in] time_info TimeInfo to expose through FunctionalWeakForm::timeInfo().
     SetCurrentTimeInfoRAII(const TimeInfo*& current_time_info, const TimeInfo& time_info)
         : current_time_info_(current_time_info)
     {
       current_time_info_ = &time_info;
     }
 
+    /// @brief Clear active TimeInfo pointer.
     ~SetCurrentTimeInfoRAII() { current_time_info_ = nullptr; }
 
+    /// @brief Disable copying.
     SetCurrentTimeInfoRAII(const SetCurrentTimeInfoRAII&) = delete;
+
+    /// @brief Disable copy assignment.
     SetCurrentTimeInfoRAII& operator=(const SetCurrentTimeInfoRAII&) = delete;
 
    private:
