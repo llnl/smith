@@ -43,7 +43,7 @@ void runCircInCirc()
   solid.setMaterial(material3, mesh->domain("center"));
 
   double jelly_K = third_medium_scale * (3 * lambda + 2 * G) / 3;
-  NeoHookeanAdditiveSplit mat_jelly{.density = third_medium_scale * rho, .K = jelly_K, .G = 1.4 * jelly_K};
+  solid_mechanics::NeoHookeanAdditiveSplit mat_jelly{.density = third_medium_scale * rho, .K = jelly_K, .G = 1.4 * jelly_K};
   mesh->addDomainOfBodyElements("jelly1", by_attr<dim>(2));
   mesh->addDomainOfBodyElements("jelly2", by_attr<dim>(4));
   solid.setMaterial(mat_jelly, mesh->domain("jelly1"));
