@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file electro_mechanics_system.hpp
- * @brief Defines the ElectroMechanicsystem struct and its factory function
+ * @file plastic_mechanics_system.hpp
+ * @brief Defines the PlasticMechanicsystem struct and its factory function
  */
 
 #pragma once
@@ -30,7 +30,7 @@ namespace smith {
  *
  * This system rely on a fixed-point iteration to solve plasticity equivalent to the traditional
  * inner-outer Newton method.
- * n \in [0, N] denotes the timestep and k \in [0, L] denotes the fixed-point iteration count.
+ * $$n \in [0, N]$$ denotes the timestep and $$k \in [0, L]$$ denotes the fixed-point iteration count.
  * At every new timestep n+1, first predict new displacement by [u^{n+1,k}, Fp^{n+1,k}, epsilon_p^{n+1,k}] --->
  * u^{n+1,k+1}. Then update internal state variables [u^{n+1,k+1}, Fp^n, epsilon_p^n] ---> [Fp^{n+1,k+1},
  * epsilon_p^{n+1,k+1}].
@@ -68,13 +68,16 @@ struct PlasticMechanicsSystem : public SystemBase {
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
 
   // Internal variable bcs
-  std::shared_ptr<DirichletBoundaryConditions> plastic_deform_bc;
-  std::shared_ptr<DirichletBoundaryConditions> plastic_strain_bc;
+  std::shared_ptr<DirichletBoundaryConditions> plastic_deform_bc;  ///< Plastic deformation gradient conditions.
+  std::shared_ptr<DirichletBoundaryConditions> plastic_strain_bc;  ///< Plastic strain conditions
 
-  std::shared_ptr<QuasiStaticRule> qusistatic_time_rule;
-  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> backward_euler_time_rule;
+  std::shared_ptr<QuasiStaticRule> qusistatic_time_rule;  ///< Quasistatic time integration rule
+  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule>
+      backward_euler_time_rule;  ///< Backward euler time integration rule
 
-  // Helper functions for plastic deformation gradient bookkeeping
+  /**
+   * @brief Transform tensor variable stored as [dim * dim, 1] to [dim, dim]
+   */
   template <typename T>
   SMITH_HOST_DEVICE tensor<T, dim, dim> recoverTensor(const tensor<T, dim * dim> F_state)
   {
@@ -89,6 +92,9 @@ struct PlasticMechanicsSystem : public SystemBase {
     return F_state_tensor;
   }
 
+  /**
+   * @brief Transform tensor variable stored as [dim, dim] to [dim * dim, 1]
+   */
   template <typename T>
   SMITH_HOST_DEVICE tensor<T, dim * dim> flattenTensor(const tensor<T, dim, dim> F_state)
   {
@@ -155,8 +161,8 @@ struct PlasticMechanicsSystem : public SystemBase {
   /**
    * @brief Set the material model for a domain, defining integrals for weak form.
    * @tparam MaterialType The material model type.
-   * @param material The material model instance.
    * @param domain_name The name of the domain to apply the material to.
+   * @param mat The material model instance.
    */
   template <typename MaterialType>
   void setMaterial(const std::string& domain_name, const MaterialType& mat)
@@ -176,8 +182,8 @@ struct PlasticMechanicsSystem : public SystemBase {
   /**
    * @brief Set the plasticity update model for a domain, defining integrals for weak form.
    * @tparam MaterialType The material model type.
-   * @param material The material model instance.
    * @param domain_name The name of the domain to apply the material to.
+   * @param mat The material model instance.
    */
   template <typename MaterialType>
   void setPlasticity(const std::string& domain_name, const MaterialType& mat)
