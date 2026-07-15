@@ -33,7 +33,7 @@ cmake --build build -j
 ctest --test-dir build
 ```
 
-## Co-develop Smith (MFEM + Axom + Tribol)
+## Co-develop Smith (MFEM + Axom)
 
 Use this only when you intend to modify/build Smith against the submodules.
 
