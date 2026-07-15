@@ -15,7 +15,7 @@
 
 namespace smith {
 
-/// Internal structure for storing trust region settings
+/// Trust-region settings for Steihaug-Toint CG solves.
 struct TrustRegionSettings {
   /// cg tol
   double cg_tol = 1e-8;
@@ -41,7 +41,7 @@ struct TrustRegionSettings {
   double eta4 = 4.2;
 };
 
-/// Internal structure for storing trust region stateful data
+/// Trust-region workspace and results for Steihaug-Toint CG solves.
 struct TrustRegionResults {
   /// Constructor takes the size of the solution vector
   TrustRegionResults(int size)
