@@ -145,7 +145,9 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
     auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time_info.time(),
                                     shape_disp, fields);
     auto g = smith::get<DERIVATIVE>(grads[field_ordinal](time_info.time(), shape_disp, fields));
-    auto result = *assemble(g);
+    auto assembled = assemble(g);
+    mfem::Vector result(assembled->Size());
+    result = *assembled;
     current_time_info_ = nullptr;
     return result;
   }
@@ -158,7 +160,9 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
 
     auto g = smith::get<DERIVATIVE>(
         (*objective_)(DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *fields[parameter_indices]...));
-    auto result = *assemble(g);
+    auto assembled = assemble(g);
+    mfem::Vector result(assembled->Size());
+    result = *assembled;
     current_time_info_ = nullptr;
     return result;
   }

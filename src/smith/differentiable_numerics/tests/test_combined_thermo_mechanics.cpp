@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <cmath>
 #include <memory>
 #include "gtest/gtest.h"
 
@@ -339,9 +340,10 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
       "staggered_qoi", mesh_,
       spaces({coupled_system->field_store->getField("displacement"),
               coupled_system->field_store->getField("temperature")}));
-  qoi.addBodyIntegral(DependsOn<0>{}, mesh_->entireBodyName(), [](auto, auto, auto U) {
+  qoi.addBodyIntegral(mesh_->entireBodyName(), [](auto, auto, auto U, auto Theta) {
     auto u = get<VALUE>(U);
-    return 0.5 * u[0] * u[0];
+    auto theta = get<VALUE>(Theta);
+    return 0.5 * u[0] * u[0] + 0.05 * theta * theta;
   });
 
   physics->advanceTimestep(0.5);
@@ -354,6 +356,7 @@ TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughStaggeredPhysics)
   obj.data_store().back_prop();
 
   auto param_sens = coupled_system->field_store->getParameterFields()[0].get_dual();
+  EXPECT_TRUE(std::isfinite(param_sens->Norml2()));
   EXPECT_TRUE(param_sens->Norml2() > 0.0);
 }
 

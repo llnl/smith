@@ -29,13 +29,16 @@ DoubleState evaluateObjective(const ScalarObjective& objective, const FieldState
       });
 
   value.set_vjp([time_info, objective_ptr](gretl::UpstreamStates& upstreams, const gretl::DownstreamState& downstream) {
+    const double downstream_dual = downstream.get_dual<double, double>();
+    if (downstream_dual == 0.0) {
+      return;
+    }
+
     auto shape = upstreams[0].get<FEFieldPtr>();
     std::vector<FEFieldPtr> fields;
     for (size_t i = 1; i < upstreams.size(); ++i) {
       fields.push_back(upstreams[i].get<FEFieldPtr>());
     }
-
-    const double downstream_dual = downstream.get_dual<double, double>();
 
     upstreams[0].get_dual<FEDualPtr, FEFieldPtr>()->Add(
         downstream_dual,
