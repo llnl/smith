@@ -56,3 +56,7 @@ blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS DEFAULT ${_extra_flags
 # Clang specific warnings
 # Note: pedantic is a gcc flag but throws a false positive in src/smith/numerics/petsc_solvers.cpp
 blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wpedantic -Wunused-private-field")
+
+# Temporarily quiet warnings produced by Tribol
+# TODO: remove this
+blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wno-shorten-64-to-32")
