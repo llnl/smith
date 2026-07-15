@@ -30,7 +30,7 @@ namespace smith {
  *
  * This system rely on a fixed-point iteration to solve plasticity equivalent to the traditional
  * inner-outer Newton method.
- * $$n \in [0, N]$$ denotes the timestep and $$k \in [0, L]$$ denotes the fixed-point iteration count.
+ * n in [0, N] denotes the timestep and k in [0, L] denotes the fixed-point iteration count.
  * At every new timestep n+1, first predict new displacement by [u^{n+1,k}, Fp^{n+1,k}, epsilon_p^{n+1,k}] --->
  * u^{n+1,k+1}. Then update internal state variables [u^{n+1,k+1}, Fp^n, epsilon_p^n] ---> [Fp^{n+1,k+1},
  * epsilon_p^{n+1,k+1}].
