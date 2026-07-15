@@ -419,6 +419,30 @@ TEST_F(ContactSensitivityFixture, ContactForceDualAdjointBcsMatchesEquivalentAdj
   EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-10);
 }
 
+TEST_F(ContactSensitivityFixture, ContactForceDualAdjointAcceptsPrefixedName)
+{
+  constexpr int contact_interaction_id = 0;
+
+  auto solver = createContactSolver(mesh, nonlinear_opts, dyn_opts, mat);
+
+  FiniteElementState seed(solver->state("displacement").space(), "contact_force_seed");
+  fillDirection(*solver, seed);
+
+  const auto prefixed_name = solver->dual(std::format("contact_force_{}", contact_interaction_id)).name();
+  solver->setDualAdjointBcs({{prefixed_name, seed}});
+
+  const auto& stored_seed = solver->dualAdjoint(std::format("contact_force_{}", contact_interaction_id));
+  const auto& stored_prefixed_seed = solver->dualAdjoint(prefixed_name);
+
+  FiniteElementState diff(stored_seed);
+  diff.Add(-1.0, seed);
+  EXPECT_NEAR(diff.Norml2(), 0.0, 1.0e-12);
+
+  FiniteElementState prefixed_diff(stored_prefixed_seed);
+  prefixed_diff.Add(-1.0, seed);
+  EXPECT_NEAR(prefixed_diff.Norml2(), 0.0, 1.0e-12);
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
