@@ -21,7 +21,7 @@ LC GitLab jobs run through Jacamar and create working directories under
 to move the real storage for this directory to a file system with more space and
 leave ``${HOME}/.jacamar-ci`` as a symlink.
 
-Choose a directory on a file system appropriate for build artifacts, we recommend
+Choose a directory on a file system appropriate for build artifacts, we recommend 
 ``/usr/workspace``, then run:
 
 .. code-block:: bash
@@ -80,7 +80,7 @@ last 4 days of build directories:
 .. code-block:: bash
 
    MAILTO="youremail@here.com"
-
+   
    0 2 * * * /usr/bin/env bash ${HOME}/bin/cleanup_gitlab_builds.sh -d 4 -f
 
 This will email you what got deleted and which machine the cleanup ran on. Keep

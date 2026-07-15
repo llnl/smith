@@ -12,12 +12,10 @@ set(numerics_headers
     solver_config.hpp
     stdfunction_operator.hpp
     petsc_solvers.hpp
-    trust_region_solver.hpp
-    block_preconditioner.hpp
-    )
-
-set(numerics_private_headers
     steihaug_toint_cg.hpp
+    trust_region_solver.hpp
+    trust_region_subspace_cache.hpp
+    block_preconditioner.hpp
     )
 
 set(numerics_sources
@@ -34,7 +32,7 @@ set(numerics_depends smith_infrastructure smith_functional smith_boundary_condit
 
 smith_add_library(
     NAME        smith_numerics
-    HEADERS     ${numerics_headers} ${numerics_private_headers}
+    HEADERS     ${numerics_headers}
     SOURCES     ${numerics_sources}
     DEPENDS_ON  ${numerics_depends}
     )
