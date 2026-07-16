@@ -29,13 +29,13 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
 
         if(example_name STREQUAL "ironing_2D")
             smith_add_example_test(NAME           contact_ironing_2D_square
-                                   COMMAND        contact_${example_name} --case square
+                                   COMMAND        contact_${example_name} --case square --num-steps 3
                                    NUM_MPI_TASKS  4)
             smith_add_example_test(NAME           contact_ironing_2D_circle
-                                   COMMAND        contact_${example_name} --case circle
+                                   COMMAND        contact_${example_name} --case circle --num-steps 3
                                    NUM_MPI_TASKS  4)
             smith_add_example_test(NAME           contact_ironing_2D_twisted
-                                   COMMAND        contact_${example_name} --case twisted
+                                   COMMAND        contact_${example_name} --case twisted --num-steps 3
                                    NUM_MPI_TASKS  4)
         elseif(example_name STREQUAL "energy_mortar_patch_2D")
             smith_add_example_test(NAME           contact_${example_name}

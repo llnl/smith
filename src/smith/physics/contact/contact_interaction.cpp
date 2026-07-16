@@ -20,6 +20,16 @@
 
 namespace smith {
 
+namespace {
+
+#ifdef SMITH_USE_ENZYME
+bool isEnergyMortar(const ContactOptions& opts) { return opts.method == ContactMethod::EnergyMortar; }
+#else
+bool isEnergyMortar(const ContactOptions&) { return false; }
+#endif
+
+}  // namespace
+
 static void mark_dofs(const mfem::Array<int>& dofs, mfem::Array<int>& mark_array)
 {
   for (int i = 0; i < dofs.Size(); i++) {
@@ -38,14 +48,12 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
                                        ContactOptions contact_opts)
     : interaction_id_{interaction_id}, contact_opts_{contact_opts}, current_coords_{current_coords}
 {
+  SLIC_ERROR_ROOT_IF(isEnergyMortar(contact_opts_) && contact_opts_.enforcement != ContactEnforcement::Penalty,
+                     "Smith's EnergyMortar integration currently supports penalty enforcement only.");
+
   int mesh1_id = 2 * interaction_id;      // unique id for the first Tribol mesh
   int mesh2_id = 2 * interaction_id + 1;  // unique id for the second Tribol mesh
-#ifdef SMITH_USE_ENZYME
-  auto tribol_method =
-      getContactOptions().method == ContactMethod::EnergyMortar ? tribol::PENALTY : tribol::LAGRANGE_MULTIPLIER;
-#else
-  auto tribol_method = tribol::LAGRANGE_MULTIPLIER;
-#endif
+  auto tribol_method = isEnergyMortar(getContactOptions()) ? tribol::PENALTY : tribol::LAGRANGE_MULTIPLIER;
   tribol::registerMfemCouplingScheme(interaction_id, mesh1_id, mesh2_id, mesh, current_coords, bdry_attr_surf1,
                                      bdry_attr_surf2, tribol::SURFACE_TO_SURFACE, tribol::NO_CASE, getMethod(),
                                      tribol::FRICTIONLESS, tribol_method);
@@ -76,9 +84,8 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
   }
 
 #ifdef SMITH_USE_ENZYME
-  if (getContactOptions().method == ContactMethod::EnergyMortar) {
-    contact_opts_.enforcement = ContactEnforcement::NotRequired;
-    tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty2);
+  if (isEnergyMortar(getContactOptions())) {
+    tribol::setMfemKinematicConstantPenalty(interaction_id, contact_opts_.penalty, contact_opts_.penalty);
   }
 #endif
 
@@ -103,7 +110,7 @@ FiniteElementDual ContactInteraction::forces() const
 {
   FiniteElementDual f(*current_coords_.ParFESpace());
 #ifdef SMITH_USE_ENZYME
-  if (getContactOptions().method == ContactMethod::EnergyMortar) {
+  if (isEnergyMortar(getContactOptions())) {
     f = tribol::getMfemTDofForce(getInteractionId());
   } else {
 #endif
@@ -120,7 +127,7 @@ FiniteElementState ContactInteraction::pressure() const
 {
   FiniteElementState p(pressureSpace());
 #ifdef SMITH_USE_ENZYME
-  if (getContactOptions().method == ContactMethod::EnergyMortar) {
+  if (isEnergyMortar(getContactOptions())) {
     p = tribol::getMfemTDofPressure(getInteractionId());
   } else {
 #endif
@@ -136,7 +143,7 @@ FiniteElementDual ContactInteraction::gaps() const
 {
   FiniteElementDual g(pressureSpace());
 #ifdef SMITH_USE_ENZYME
-  if (getContactOptions().method == ContactMethod::EnergyMortar) {
+  if (isEnergyMortar(getContactOptions())) {
     g = tribol::getMfemTDofGap(getInteractionId());
   } else {
 #endif
@@ -163,7 +170,7 @@ std::unique_ptr<mfem::BlockOperator> ContactInteraction::jacobianContribution() 
   auto out = std::make_unique<mfem::BlockOperator>(offsets);
   out->owns_blocks = true;
 
-  if (getContactOptions().enforcement == ContactEnforcement::NotRequired) {
+  if (isEnergyMortar(getContactOptions())) {
     out->SetBlock(0, 0, tribol::getMfemJacobian(getInteractionId()).release());
     return out;
   }
@@ -236,7 +243,7 @@ mfem::ParFiniteElementSpace& ContactInteraction::pressureSpace() const
 void ContactInteraction::setPressure(const FiniteElementState& pressure) const
 {
 #ifdef SMITH_USE_ENZYME
-  if (getContactOptions().method == ContactMethod::EnergyMortar) {
+  if (isEnergyMortar(getContactOptions())) {
     tribol::getMfemTDofPressure(getInteractionId()) = pressure;
   } else {
 #endif

@@ -6,16 +6,13 @@
 from spack.package import *
 from spack.spec import UnsupportedCompilerError
 from spack.util.executable import which_string
+
 from spack_repo.builtin.build_systems.cached_cmake import (
     CachedCMakePackage,
     cmake_cache_option,
     cmake_cache_path,
     cmake_cache_string,
 )
-from spack_repo.builtin.build_systems.cuda import CudaPackage
-from spack_repo.builtin.build_systems.rocm import ROCmPackage
-
-from spack_repo.builtin.build_systems.cached_cmake import CachedCMakePackage
 from spack_repo.builtin.build_systems.cuda import CudaPackage
 from spack_repo.builtin.build_systems.rocm import ROCmPackage
 
@@ -50,10 +47,15 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     maintainers("chapman39", "white238")
 
-    homepage = "https://www.github.com/LLNL/smith"
-    git      = "https://github.com/LLNL/smith.git"
+    homepage   = "https://www.github.com/LLNL/smith"
+    git        = "https://github.com/LLNL/smith.git"
+    submodules = True
 
-    version("develop", branch="develop", submodules=True, preferred=True)
+    license("BSD-3-Clause")
+
+    version("main", branch="main")
+    version("develop", branch="develop")
+    version("0.1.0", tag="v0.1.0", commit="cbe2e173eb1cbc36525ba454a386e4fe0b7e6440")
 
     # -----------------------------------------------------------------------
     # Variants
@@ -112,8 +114,10 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("enzyme@0.0.180:", when="+enzyme")
     depends_on("cuda+allow-unsupported-compilers", when="+enzyme+cuda")
     depends_on("enzyme %libllvm=llvm-amdgpu", when="+enzyme+rocm")
+    requires("%cxx=llvm-amdgpu", when="+enzyme+rocm")
+    requires("%cxx=llvm", when="+enzyme~rocm")
 
-    # Devtool dependencies these need to match smith_devtools/package.py
+    # Devtool dependencies these need to match smithdevtools/package.py
     with when("+devtools"):
         depends_on("cppcheck")
         depends_on("doxygen")
@@ -123,9 +127,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     with when("+sundials"):
         # MFEM is deprecating the monitoring support with sundials v6.0 and later
-        # NOTE: Sundials must be built static to prevent the following runtime error:
-        # "error while loading shared libraries: libsundials_nvecserial.so.6:
-        # cannot open shared object file: No such file or directory"
         depends_on("sundials+hypre~trilinos~monitoring~examples~examples-install+static~shared~petsc")
         depends_on("sundials+asan", when="+asan")
 
@@ -142,7 +143,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("mfem+openmp", when="+openmp")
     depends_on("mfem+enzyme", when="+enzyme")
 
-    depends_on("netcdf-c@4.7.4")
+    depends_on("netcdf-c")
 
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
@@ -164,11 +165,9 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on("tribol+enzyme", when="+enzyme")
         depends_on("tribol~enzyme", when="~enzyme")
 
-    # Needs to be first due to a bug with the Spack concretizer
-    # Note: Certain combinations of CMake and Conduit do not like +mpi
-    #  and cause FindHDF5.cmake to fail and only return mpi information
-    #  (includes, libs, etc) instead of hdf5 info
-    depends_on("hdf5@1.8.21:+hl~mpi cflags=-Wno-int-conversion")
+    depends_on("conduit+hdf5+mpi~python~test~silo")
+
+    depends_on("hdf5+hl")
 
     depends_on("camp@2024.02.0:")
 
@@ -187,13 +186,11 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("axom~raja", when="~raja")
     depends_on("axom+umpire", when="+umpire")
     depends_on("axom~umpire", when="~umpire")
-    depends_on("axom~openmp", when="~openmp")
     depends_on("axom+openmp", when="+openmp")
+    depends_on("axom~openmp", when="~openmp")
 
     depends_on("metis@5.1.0")
     depends_on("parmetis@4.0.3")
-
-    depends_on("conduit~python~test~silo")
 
     depends_on("adiak+mpi", when="+adiak")
 
@@ -210,73 +207,54 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on("strumpack~openmp", when="~openmp")
 
     #
-    # Forward variants
-    # NOTE: propagating variants to dependencies should be removed when pushing this recipe up to Spack
+    # CUDA
     #
+    depends_on("amgx", when="+cuda")
 
-    # CMake packages "build_type=RelWithDebInfo|Debug|Release|MinSizeRel"
+    for val in CudaPackage.cuda_arch_values:
+        ext_cuda_dep = f"+cuda cuda_arch={val}"
 
-    # Optional (require our variant in "when")
-    for dep in ["raja", "strumpack"]:
-        depends_on("{0} build_type=Debug".format(dep), when="+{0} build_type=Debug".format(dep))
-        depends_on("{0}+shared".format(dep), when="+{0}+shared".format(dep))
-        depends_on("{0}~shared".format(dep), when="+{0}~shared".format(dep))
-    
-    # Umpire needs it's own section due do +shared+cuda conflict
-    depends_on("umpire build_type=Debug".format(dep), when="+umpire build_type=Debug".format(dep))
-    # Only propagate shared if not CUDA
-    depends_on("umpire+shared".format(dep), when="+umpire+shared~cuda".format(dep))
-    depends_on("umpire~shared".format(dep), when="+umpire~shared".format(dep))
+        # required
+        depends_on(f"axom {ext_cuda_dep}", when=f"{ext_cuda_dep}")
+        depends_on(f"mfem {ext_cuda_dep}", when=f"{ext_cuda_dep}")
+        depends_on(f"hypre {ext_cuda_dep}", when=f"{ext_cuda_dep}")
 
-    # Don't add propagate shared variant to sundials
-    depends_on("sundials build_type=Debug".format(dep), when="+sundials build_type=Debug".format(dep))
-
-    # Optional (require when="+profile")
-    depends_on("adiak build_type=Debug".format(dep), when="+adiak build_type=Debug")
-    depends_on("adiak+shared".format(dep), when="+adiak+shared")
-    depends_on("adiak~shared".format(dep), when="+adiak~shared")
-
-    # Don't propagate ~shared to caliper in rocm builds
-    depends_on("caliper build_type=Debug".format(dep), when="+caliper build_type=Debug")
-    depends_on("caliper+shared".format(dep), when="+caliper+shared")
-    depends_on("caliper~shared".format(dep), when="+caliper~shared~rocm")
-
-    # Required
-    for dep in ["axom", "hdf5", "metis", "parmetis", "superlu-dist"]:
-        depends_on("{0} build_type=Debug".format(dep), when="build_type=Debug")
-        depends_on("{0}+shared".format(dep), when="+shared")
-        depends_on("{0}~shared".format(dep), when="~shared")
-
-    # Don't propagate +shared to conduit, since it doesn't concretize in rocm builds
-    depends_on("conduit build_type=Debug".format(dep), when="build_type=Debug")
-
-    # Optional packages that are controlled by variants
-    for dep in ["petsc"]:
-        depends_on("{0}+debug".format(dep), when="+{0} build_type=Debug".format(dep))
-        depends_on("{0}+shared".format(dep), when="+{0}+shared".format(dep))
-        depends_on("{0}~shared".format(dep), when="+{0}~shared".format(dep))
-
-    # Package name doesnt match variant name
-    # netcdf-c does not have a debug variant
-    depends_on("netcdf-c+shared", when="+shared")
-    depends_on("netcdf-c~shared", when="~shared")
-
-    # Tribol does not have shared variant
-    depends_on("tribol build_type=Debug", when="+tribol build_type=Debug")
-
-    # Required but not CMake
-    for dep in ["hypre", "mfem"]:
-        depends_on("{0}+debug".format(dep), when="build_type=Debug")
-        depends_on("{0}+shared".format(dep), when="+shared")
-        depends_on("{0}~shared".format(dep), when="~shared")
-
-    # MFEM has a static variant
-    depends_on("mfem+static", when="~shared")
-    depends_on("mfem~static", when="+shared")
+        # optional
+        depends_on(f"caliper {ext_cuda_dep}", when=f"+caliper {ext_cuda_dep}")
+        depends_on(f"petsc {ext_cuda_dep}", when=f"+petsc {ext_cuda_dep}")
+        depends_on(f"raja {ext_cuda_dep}", when=f"+raja {ext_cuda_dep}")
+        depends_on(f"slepc {ext_cuda_dep}", when=f"+slepc {ext_cuda_dep}")
+        depends_on(f"sundials {ext_cuda_dep}", when=f"+sundials {ext_cuda_dep}")
+        depends_on(f"tribol {ext_cuda_dep}", when=f"+tribol {ext_cuda_dep}")
+        depends_on(f"umpire {ext_cuda_dep}", when=f"+umpire {ext_cuda_dep}")
 
     #
+    # ROCm
+    #
+    for val in ROCmPackage.amdgpu_targets:
+        ext_rocm_dep = f"+rocm amdgpu_target={val}"
+
+        # required
+        depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"mfem+raja+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+        depends_on(f"hypre {ext_rocm_dep}", when=f"{ext_rocm_dep}")
+
+        # optional
+        depends_on(f"caliper {ext_rocm_dep}", when=f"+caliper {ext_rocm_dep}")
+        depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
+        depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
+        depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")
+        depends_on(f"sundials {ext_rocm_dep}", when=f"+sundials {ext_rocm_dep}")
+        depends_on(f"tribol {ext_rocm_dep}", when=f"+tribol {ext_rocm_dep}")
+        depends_on(f"umpire {ext_rocm_dep}", when=f"+umpire {ext_rocm_dep}")
+
+    depends_on("rocprim", when="+rocm")
+    depends_on("hipblas", when="+rocm")
+
+
+    # -----------------------------------------------------------------------
     # Conflicts
-    #
+    # -----------------------------------------------------------------------
 
     # Enzyme required an LLVM-based compiler
     for compiler_ in ["aocc", "cce", "gcc", "nag", "fj", "intel", "nvhpc", "xl"]:
@@ -286,15 +264,14 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     requires("%cxx=llvm", when="+enzyme~rocm")
 
     conflicts("+openmp", when="+rocm")
-    conflicts("+cuda", when="+rocm")
     conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
-
-    conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
-
     conflicts("~petsc", when="+slepc", msg="PETSc must be built when building with SLEPc!")
 
-    conflicts("sundials+shared", when="+sundials",
-              msg="Sundials causes runtime errors if shared!")
+    conflicts("+cuda", when="+rocm")
+    conflicts("cuda_arch=none", when="+cuda", msg="CUDA architecture is required")
+    conflicts("amdgpu_target=none", when="+rocm", msg="AMD GPU target is required when building with ROCm")
+
+    conflicts("%intel", msg="Intel has a bug with C++17 support as of May 2020")
 
     # ASan is only supported by GCC and (some) LLVM-derived
     # compilers.
@@ -311,56 +288,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             when="+asan",
             msg="{0} compilers do not support Address Sanitizer".format(compiler_)
         )
-
-    #
-    # CUDA
-    #
-    conflicts("cuda_arch=none", when="+cuda",
-              msg="CUDA architecture is required")
-    depends_on("amgx", when="+cuda")
-
-    for val in CudaPackage.cuda_arch_values:
-        ext_cuda_dep = f"+cuda cuda_arch={val}"
-
-        # required
-        depends_on(f"axom {ext_cuda_dep}", when=f"{ext_cuda_dep}")
-        depends_on(f"mfem {ext_cuda_dep}", when=f"{ext_cuda_dep}")
-        depends_on(f"hypre {ext_cuda_dep}", when=f"{ext_cuda_dep}")
-
-        # optional
-        depends_on(f"caliper {ext_cuda_dep}", when=f"^caliper {ext_cuda_dep}")
-        depends_on(f"petsc {ext_cuda_dep}", when=f"+petsc {ext_cuda_dep}")
-        depends_on(f"raja {ext_cuda_dep}", when=f"+raja {ext_cuda_dep}")
-        depends_on(f"slepc {ext_cuda_dep}", when=f"+slepc {ext_cuda_dep}")
-        depends_on(f"sundials {ext_cuda_dep}", when=f"+sundials {ext_cuda_dep}")
-        depends_on(f"tribol {ext_cuda_dep}", when=f"+tribol {ext_cuda_dep}")
-        depends_on(f"umpire {ext_cuda_dep}", when=f"+umpire {ext_cuda_dep}")
-
-    #
-    # ROCm
-    #
-    conflicts("amdgpu_target=none", when="+rocm",
-              msg="AMD GPU target is required when building with ROCm")
-
-    for val in ROCmPackage.amdgpu_targets:
-        ext_rocm_dep = f"+rocm amdgpu_target={val}"
-
-        # required
-        depends_on(f"axom {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"mfem+raja+umpire {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-        depends_on(f"hypre {ext_rocm_dep}", when=f"{ext_rocm_dep}")
-
-        # optional
-        depends_on(f"caliper {ext_rocm_dep}", when=f"^caliper {ext_rocm_dep}")
-        depends_on(f"petsc {ext_rocm_dep}", when=f"+petsc {ext_rocm_dep}")
-        depends_on(f"raja {ext_rocm_dep}", when=f"+raja {ext_rocm_dep}")
-        depends_on(f"slepc {ext_rocm_dep}", when=f"+slepc {ext_rocm_dep}")
-        depends_on(f"sundials {ext_rocm_dep}", when=f"+sundials {ext_rocm_dep}")
-        depends_on(f"tribol {ext_rocm_dep}", when=f"+tribol {ext_rocm_dep}")
-        depends_on(f"umpire {ext_rocm_dep}", when=f"+umpire {ext_rocm_dep}")
-
-    depends_on("rocprim", when="+rocm")
-    depends_on("hipblas", when="+rocm")
 
 
     def _get_sys_type(self, spec):
@@ -409,22 +336,14 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             entries.append(cmake_cache_option("ENABLE_CUDA", True))
             entries.append(cmake_cache_option("CMAKE_CUDA_SEPARABLE_COMPILATION", True))
 
-            if spec.satisfies("cuda_arch=none"):
-                msg = ("# No cuda_arch specified in Spack spec, "
-                       "this is likely to fail\n\n")
-                entries.append(msg)
-            else:
-                # CXX flags will be propagated to the host compiler
-                cxxflags = " ".join(spec.compiler_flags["cxxflags"])
-                cuda_flags = cxxflags
-                cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
-                entries.append(cmake_cache_string("CMAKE_CUDA_FLAGS",
-                                                  cuda_flags, force=True))
+            # CXX flags will be propagated to the host compiler
+            cxxflags = " ".join(spec.compiler_flags["cxxflags"])
+            cuda_flags = cxxflags
+            cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
+            entries.append(cmake_cache_string("CMAKE_CUDA_FLAGS", cuda_flags, force=True))
 
-                entries.append(
-                    "# nvcc does not like gtest's 'pthreads' flag\n")
-                entries.append(
-                    cmake_cache_option("gtest_disable_pthreads", True))
+            entries.append("# nvcc does not like gtest's 'pthreads' flag\n")
+            entries.append(cmake_cache_option("gtest_disable_pthreads", True))
 
         if spec.satisfies("+rocm"):
             entries.append(cmake_cache_option("ENABLE_HIP", True))
@@ -463,11 +382,9 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
                 )
 
             # Additional libraries for TOSS4
-            hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr "
-            hip_link_flags += "-lpgmath "
+            hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr -lpgmath "
             if spec.satisfies("+openmp"):
                 hip_link_flags += "-lompstub "
-
             if spec.satisfies("^hipblas"):
                 hip_link_flags += "-lhipblas "
 
@@ -503,16 +420,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         if spec["mpi"].name == "spectrum-mpi":
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "mpibind"))
-
-        # Replace /usr/bin/srun path with srun flux wrapper path on TOSS 4
-        # TODO Remove this once we move past https://github.com/spack/spack/pull/49033
-        if 'toss_4' in self._get_sys_type(spec):
-            srun_wrapper = which_string("srun")
-            mpi_exec_index = [index for index,entry in enumerate(entries)
-                                                  if "MPIEXEC_EXECUTABLE" in entry]
-            if len(mpi_exec_index) != 0:
-                del entries[mpi_exec_index[0]]
-            entries.append(cmake_cache_path("MPIEXEC_EXECUTABLE", srun_wrapper))
 
         return entries
 

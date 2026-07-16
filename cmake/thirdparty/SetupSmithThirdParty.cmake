@@ -103,34 +103,18 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     #------------------------------------------------------------------------------
-    # Conduit (required by Axom)
+    # Conduit (found via Axom)
     #------------------------------------------------------------------------------
     if(NOT CONDUIT_DIR)
         MESSAGE(FATAL_ERROR "Could not find Conduit. Conduit requires explicit CONDUIT_DIR.")
     endif()
 
-    smith_assert_is_directory(DIR_VARIABLE CONDUIT_DIR)
-
-    set(_conduit_config "${CONDUIT_DIR}/lib/cmake/conduit/ConduitConfig.cmake")
-    if(NOT EXISTS ${_conduit_config})
-        MESSAGE(FATAL_ERROR "Could not find Conduit CMake include file ${_conduit_config}")
+    #------------------------------------------------------------------------------
+    # HDF5 (found via Axom)
+    #------------------------------------------------------------------------------
+    if (NOT HDF5_DIR)
+        MESSAGE(FATAL_ERROR "Could not find HDF5. HDF5 requires explicit HDF5_DIR.")
     endif()
-
-    find_dependency(Conduit REQUIRED
-                    PATHS "${CONDUIT_DIR}"
-                          "${CONDUIT_DIR}/lib/cmake/conduit")
-
-    smith_assert_find_succeeded(PROJECT_NAME Conduit
-                                TARGET       conduit::conduit
-                                DIR_VARIABLE CONDUIT_DIR)
-    message(STATUS "Conduit support is ON")
-    set(CONDUIT_FOUND TRUE)
-
-    # Manually set includes as system includes
-    get_target_property(_dirs conduit::conduit INTERFACE_INCLUDE_DIRECTORIES)
-    set_property(TARGET conduit::conduit 
-                 APPEND PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
-                 "${_dirs}")
 
     #------------------------------------------------------------------------------
     # Sundials
