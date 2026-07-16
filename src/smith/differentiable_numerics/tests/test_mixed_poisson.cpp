@@ -78,7 +78,6 @@ std::string BlockParamNameGenerator(const ::testing::TestParamInfo<BlockTestPara
 
 class MeshFixture : public testing::Test {
  protected:
-
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
 
