@@ -59,4 +59,4 @@ blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wpedantic -Wun
 
 # Temporarily quiet warnings produced by Tribol
 # TODO: remove this
-blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wno-shorten-64-to-32")
+blt_append_custom_compiler_flag(FLAGS_VAR CMAKE_CXX_FLAGS CLANG "-Wno-shorten-64-to-32 -Wno-double-promotion -Wno-float-conversion -Wno-implicit-int-float-conversion")
