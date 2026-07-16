@@ -78,11 +78,6 @@ std::string BlockParamNameGenerator(const ::testing::TestParamInfo<BlockTestPara
 
 class MeshFixture : public testing::Test {
  protected:
-  double length = 1.0;
-  double width = 1.0;
-  int num_elements_x = 32;
-  int num_elements_y = 32;
-  double elem_size = length / num_elements_x;
 
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
@@ -165,10 +160,10 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   } else if (test_params.solver_type == BlockSolverType::Iterative) {
     smith::LinearSolverOptions iter_solver_options = {.linear_solver = smith::LinearSolver::GMRES,
                                                       .preconditioner = smith::Preconditioner::HypreAMG,
-                                                      .relative_tol = 1.0e-3,
-                                                      .absolute_tol = 1.0e-6,
-                                                      .max_iterations = 100,
-                                                      .print_level = 1};
+                                                      .relative_tol = 0.0,
+                                                      .absolute_tol = 0.0,
+                                                      .max_iterations = 5,
+                                                      .print_level = 0};
     linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
     linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
   } else if (test_params.solver_type == BlockSolverType::BoomerAMG) {
