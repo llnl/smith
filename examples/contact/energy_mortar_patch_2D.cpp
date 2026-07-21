@@ -158,7 +158,6 @@ int main(int argc, char* argv[])
                                         .enforcement = smith::ContactEnforcement::Penalty,
                                         .type = smith::ContactType::Frictionless,
                                         .penalty = penalty,
-                                        .penalty2 = 0.0,
                                         .jacobian = smith::ContactJacobian::Exact};
 
   smith::SolidMechanicsContact<P, DIM> solid_solver(

@@ -52,8 +52,6 @@ std::string_view contactEnforcementName(ContactEnforcement enforcement)
       return "penalty";
     case ContactEnforcement::LagrangeMultiplier:
       return "lagrange-multiplier";
-    case ContactEnforcement::NotRequired:
-      return "not-required";
     default:
       return "unknown";
   }

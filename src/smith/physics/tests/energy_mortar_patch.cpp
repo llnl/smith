@@ -156,7 +156,8 @@ TEST(EnergyMortarResidualGapCheck, AssembledGapIsShiftedByArea)
   evaluator_without_residual.compute_gtilde_and_area(tribol::InterfacePair(0, 0), mesh1.getView(), mesh2.getView(), g0,
                                                      area0);
 
-  params.residual_gap = 0.15;
+  // A negative residual gap activates contact under Tribol's g_n - residual_gap convention.
+  params.residual_gap = -0.15;
   double g_residual[2] = {0.0, 0.0};
   double area_residual[2] = {0.0, 0.0};
   tribol::EnergyMortarCalculator evaluator_with_residual(params);
@@ -165,7 +166,7 @@ TEST(EnergyMortarResidualGapCheck, AssembledGapIsShiftedByArea)
 
   for (int i = 0; i < 2; ++i) {
     EXPECT_NEAR(area_residual[i], area0[i], 1.0e-14);
-    EXPECT_NEAR(g_residual[i], g0[i] - params.residual_gap * area0[i], 1.0e-14);
+    EXPECT_NEAR(g_residual[i], g0[i] + params.residual_gap * area0[i], 1.0e-14);
   }
 }
 
@@ -193,7 +194,8 @@ TEST(EnergyMortarResidualGapCheck, QuadraturePointOpenGapBecomesActive)
       tribol::InterfacePair(0, 0), mesh1.getView(), mesh2.getView());
   EXPECT_EQ(inactive.energy, 0.0);
 
-  params.residual_gap = 0.15;
+  // A negative residual gap activates contact under Tribol's g_n - residual_gap convention.
+  params.residual_gap = -0.15;
   tribol::EnergyMortarCalculator evaluator_with_residual(params);
   const auto active = evaluator_with_residual.compute_quadrature_point_penalty_data(tribol::InterfacePair(0, 0),
                                                                                     mesh1.getView(), mesh2.getView());
