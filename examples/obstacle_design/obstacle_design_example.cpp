@@ -23,7 +23,6 @@
 
 // ContinuationSolver headers
 #include "continuationsolvers/problems/ObstacleProblems.hpp"
-#include "continuationsolvers/problems/OptProblems.hpp"
 #include "continuationsolvers/problems/MPECProblems.hpp"
 #include "continuationsolvers/solvers/MPECSolver.hpp"
 
@@ -120,15 +119,15 @@ int main(int argc, char* argv[])
   double gamma3 = 1.e-3;  // scaling for design objective component: \gamma_3 / 2 * \int_{\Omega} ||\nabla p||_{2}^2 dV
 
   // Nonlinear solver options
-  double tol = 1e-6;
+  double tol = 1.e-6;
   int maxiter = 100;
   // Handle command line arguments
   axom::CLI::App app{"Obstacle design."};
   // Mesh options
-  app.add_option("--xlength", xlength, "extent of problem domain along x-axis")
+  app.add_option("--xlength", xlength, "Extent of problem domain along x-axis")
       ->default_val("1.0")  // Matches value set above
       ->check(axom::CLI::PositiveNumber);
-  app.add_option("--ylength", ylength, "extent of problem domain along y-axis")
+  app.add_option("--ylength", ylength, "Extent of problem domain along y-axis")
       ->default_val("1.0")  // Matches value set above
       ->check(axom::CLI::PositiveNumber);
   app.add_option("--serial-refinement", serial_refinement, "Serial mesh refinement steps")
@@ -137,9 +136,15 @@ int main(int argc, char* argv[])
   app.add_option("--parallel-refinement", parallel_refinement, "Parallel mesh refinement steps")
       ->default_val("0")  // Matches value set above
       ->check(axom::CLI::NonNegativeNumber);
-  app.add_option("--visualize", visualize, "solution visualization")
+  app.add_option("--visualize", visualize, "Solution visualization")
       ->default_val("0")  // Matches value set above
       ->check(axom::CLI::Range(0, 1));
+  app.add_option("--tol", tol, "Nonlinear solver tolerance")
+      ->default_val("1.e-6")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
+  app.add_option("--maxiter", maxiter, "Nonlinear solver maximum iterations")
+      ->default_val("100")  // Matches value set above
+      ->check(axom::CLI::PositiveNumber);
   app.set_help_flag("--help");
 
   CLI11_PARSE(app, argc, argv);
@@ -216,31 +221,30 @@ int main(int argc, char* argv[])
 
   auto [Vh, unused] = smith::generateParFiniteElementSpace<StateSpace>(&mesh->mfemParMesh());
   (void)unused;
-  int dimU = Vh->GetTrueVSize();
+  int dim_displacement = Vh->GetTrueVSize();
   ParamObstacleProblem problem(Vh.get(), &obstacle_forcing, &flat_obstacle);
   SmithObstacleDesignProblem smithdesignproblem(&problem, state_ptrs, mesh, design_objective,
                                                 weak_form_objective_grad_displacement,
                                                 weak_form_objective_grad_pressure, weak_form_objective_grad_design);
   int dimPrimal = smithdesignproblem.GetDimU();  // dim(displacement) + dim(pressure) + dim(obstacle) + ...
   mfem::Vector X0(dimPrimal);
-  X0 = 0.0;
+  X0 = 0.0;  // initial value of optimization variable X = (displacement, pressure, obstacle, ...)
   mfem::Vector Xf(dimPrimal);
-  Xf = 0.0;
+  Xf = 0.0;  // to be final value of optimization variable
   MPECSolver designoptimizer(&smithdesignproblem);
-  designoptimizer.SetTol(tol);
-  designoptimizer.SetMaxIter(maxiter);
-  designoptimizer.SetPrintLevel(2);
-  designoptimizer.EnableMassWeightedNorms();
-  designoptimizer.Mult(X0, Xf);
-
-  std::vector<const smith::FiniteElementState*> vis_states{const_state_ptrs[0], const_state_ptrs[1],
-                                                           const_state_ptrs[2]};
-  auto writer = createParaviewWriter(mesh->mfemParMesh(), vis_states, "obstacledesign");
+  designoptimizer.SetTol(tol);                // set absolute tolerance
+  designoptimizer.SetMaxIter(maxiter);        // set maximum number of nonlinear iterations
+  designoptimizer.SetPrintLevel(2);           // print level
+  designoptimizer.EnableMassWeightedNorms();  // enable mass weighting for asymptotically mesh independent performance
+  designoptimizer.Mult(X0, Xf);               // determine numerical optimizer Xf from initial starting point X0
 
   if (visualize) {
-    mfem::Vector displacementf(Xf, 0, dimU);     // displacement
-    mfem::Vector pressuref(Xf, dimU, dimU);      // pressure
-    mfem::Vector obstaclef(Xf, 2 * dimU, dimU);  // obstacle
+    std::vector<const smith::FiniteElementState*> vis_states{const_state_ptrs[0], const_state_ptrs[1],
+                                                             const_state_ptrs[2]};
+    auto writer = createParaviewWriter(mesh->mfemParMesh(), vis_states, "obstacledesign");
+    mfem::Vector displacementf(Xf, 0, dim_displacement);                 // displacement
+    mfem::Vector pressuref(Xf, dim_displacement, dim_displacement);      // pressure
+    mfem::Vector obstaclef(Xf, 2 * dim_displacement, dim_displacement);  // obstacle
     states[0] = displacementf;
     states[1] = pressuref;
     states[2] = obstaclef;
@@ -250,9 +254,9 @@ int main(int argc, char* argv[])
 
 double obstacle_forcing(const mfem::Vector& x)
 {
-  double fx = 0.;
-  fx = 0.2 - 2.0 * (std::pow(x(0), 3) - 1.5 * std::pow(x(0), 2.) - 6 * x(0) + 3.) +
-       (1. + std::pow(2. * M_PI, 2)) * std::cos(2. * M_PI * x(0));
+  // forcing term at point x
+  double fx = 0.2 - 2.0 * (std::pow(x(0), 3) - 1.5 * std::pow(x(0), 2.) - 6 * x(0) + 3.) +
+              (1. + std::pow(2. * M_PI, 2)) * std::cos(2. * M_PI * x(0));
   return fx;
 }
 
@@ -283,18 +287,15 @@ SmithObstacleDesignProblem::SmithObstacleDesignProblem(ParamObstacleProblem* par
   Mduallump /= Mlump;
   mfem::BlockVector MUlump_blk(primal_blockoffsets);
   mfem::BlockVector MClump_blk(constraint_blockoffsets);
-  // U = (u, p, theta, s, z)
-  MUlump_blk.GetBlock(0).Set(1.0, Mlump);      // u
-  MUlump_blk.GetBlock(1).Set(1.0, Mlump);      // p
-  MUlump_blk.GetBlock(2).Set(1.0, Mlump);      // theta
-  MUlump_blk.GetBlock(3).Set(1.0, Mduallump);  // s
-  MUlump_blk.GetBlock(4).Set(1.0, Mlump);      // z
 
-  // C = \nabla_u L, g - s, p - z, \Phi_{FB}
+  // U = (u, p, theta)
+  MUlump_blk.GetBlock(0).Set(1.0, Mlump);  // u
+  MUlump_blk.GetBlock(1).Set(1.0, Mlump);  // p
+  MUlump_blk.GetBlock(2).Set(1.0, Mlump);  // theta
+
+  // C = \nabla_u L, \Phi_{FB}
   MClump_blk.GetBlock(0).Set(1.0, Mduallump);  // \nabla_u L
-  MClump_blk.GetBlock(1).Set(1.0, Mduallump);  // g - s
-  MClump_blk.GetBlock(2).Set(1.0, Mlump);      // p - z
-  MClump_blk.GetBlock(3).Set(1.0, Mlump);      // \Phi_{FB}
+  MClump_blk.GetBlock(1).Set(1.0, Mlump);      // \Phi_{FB}
 
   Mulump.Set(1.0, MUlump_blk);
   Mclump.Set(1.0, MClump_blk);
