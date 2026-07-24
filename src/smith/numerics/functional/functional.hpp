@@ -282,7 +282,7 @@ template <typename test, typename... trials, ExecutionSpace exec>
 class Functional<test(trials...), exec> {
   static constexpr tuple<trials...> trial_spaces{};
   static constexpr uint32_t num_trial_spaces = sizeof...(trials);
-  static constexpr auto Q = std::max({test::order, trials::order...}) + 1;
+  static constexpr auto Q = std::max({test::order, trials::order...}) + 2; // + 1 by default
 
   static constexpr mfem::Geometry::Type elem_geom[4] = {mfem::Geometry::INVALID, mfem::Geometry::SEGMENT,
                                                         mfem::Geometry::SQUARE, mfem::Geometry::CUBE};

@@ -234,6 +234,25 @@ TEST(StateManager, StoresHighOrderMeshes)
   EXPECT_GT(area, 1e-6);
 }
 
+TEST(StateManager, ResetDoesNotDeleteExternallySharedMesh)
+{
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, "shared_mesh_output_test");
+
+  const std::string filename = SMITH_REPO_DIR "/data/meshes/single_curved_quad.g";
+  auto mesh = std::shared_ptr<mfem::ParMesh>(mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0));
+  auto* raw_mesh = mesh.get();
+
+  auto& stored_mesh = smith::StateManager::setMesh(mesh, "shared_mesh");
+  EXPECT_EQ(raw_mesh, &stored_mesh);
+
+  smith::StateManager::reset();
+
+  ASSERT_NE(nullptr, mesh);
+  EXPECT_EQ(raw_mesh, mesh.get());
+  EXPECT_EQ(2, mesh->Dimension());
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])
