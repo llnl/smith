@@ -99,50 +99,26 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 FiniteElementDual ContactInteraction::forces() const
 {
   FiniteElementDual f(*current_coords_.ParFESpace());
-#ifdef SMITH_USE_ENZYME
-  if (isEnergyMortar(getContactOptions())) {
-    f = tribol::getMfemTDofForce(getInteractionId());
-  } else {
-#endif
-    auto& f_loc = f.linearForm();
-    tribol::getMfemResponse(getInteractionId(), f_loc);
-    f.setFromLinearForm(f_loc);
-#ifdef SMITH_USE_ENZYME
-  }
-#endif
+  auto& f_loc = f.linearForm();
+  tribol::getMfemResponse(getInteractionId(), f_loc);
+  f.setFromLinearForm(f_loc);
   return f;
 }
 
 FiniteElementState ContactInteraction::pressure() const
 {
   FiniteElementState p(pressureSpace());
-#ifdef SMITH_USE_ENZYME
-  if (isEnergyMortar(getContactOptions())) {
-    p = tribol::getMfemTDofPressure(getInteractionId());
-  } else {
-#endif
-    auto& p_tribol = tribol::getMfemPressure(getInteractionId());
-    p.setFromGridFunction(p_tribol);
-#ifdef SMITH_USE_ENZYME
-  }
-#endif
+  auto& p_tribol = tribol::getMfemPressure(getInteractionId());
+  p.setFromGridFunction(p_tribol);
   return p;
 }
 
 FiniteElementDual ContactInteraction::gaps() const
 {
   FiniteElementDual g(pressureSpace());
-#ifdef SMITH_USE_ENZYME
-  if (isEnergyMortar(getContactOptions())) {
-    g = tribol::getMfemTDofGap(getInteractionId());
-  } else {
-#endif
-    auto& g_loc = g.linearForm();
-    tribol::getMfemGap(getInteractionId(), g_loc);
-    g.setFromLinearForm(g_loc);
-#ifdef SMITH_USE_ENZYME
-  }
-#endif
+  auto& g_loc = g.linearForm();
+  tribol::getMfemGap(getInteractionId(), g_loc);
+  g.setFromLinearForm(g_loc);
   return g;
 }
 
@@ -161,7 +137,7 @@ std::unique_ptr<mfem::BlockOperator> ContactInteraction::jacobianContribution() 
   out->owns_blocks = true;
 
   if (isEnergyMortar(getContactOptions())) {
-    out->SetBlock(0, 0, tribol::getMfemJacobian(getInteractionId()).release());
+    out->SetBlock(0, 0, tribol::getMfemBlockJacobian(getInteractionId()).release());
     return out;
   }
 
@@ -232,15 +208,7 @@ mfem::ParFiniteElementSpace& ContactInteraction::pressureSpace() const
 
 void ContactInteraction::setPressure(const FiniteElementState& pressure) const
 {
-#ifdef SMITH_USE_ENZYME
-  if (isEnergyMortar(getContactOptions())) {
-    tribol::getMfemTDofPressure(getInteractionId()) = pressure;
-  } else {
-#endif
-    tribol::getMfemPressure(getInteractionId()) = pressure.gridFunction();
-#ifdef SMITH_USE_ENZYME
-  }
-#endif
+  tribol::getMfemPressure(getInteractionId()) = pressure.gridFunction();
 }
 
 const mfem::Array<int>& ContactInteraction::inactiveDofs() const { return inactiveDofs(pressure()); }
@@ -282,7 +250,7 @@ tribol::ContactMethod ContactInteraction::getMethod() const
       return tribol::SINGLE_MORTAR;
 #ifdef SMITH_USE_ENZYME
     case ContactMethod::EnergyMortar:
-      return tribol::ENERGY_MORTAR;
+      return tribol::SINGLE_MORTAR;
 #endif
     default:
       SLIC_ERROR_ROOT("Unsupported contact method.");
