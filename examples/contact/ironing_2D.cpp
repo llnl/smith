@@ -403,7 +403,6 @@ CaseConfig makeCaseConfig(IroningCase ironing_case)
       config.substrate_contact_attrs = {9};
       config.indenter_contact_attrs = {8};
       config.nonlinear_options.absolute_tol = 1.0e-8;
-      config.nonlinear_options.max_iterations = 5000;
       break;
     case IroningCase::Twisted:
       config.mesh = buildSquareMesh(config.mesh_tag);
@@ -434,7 +433,7 @@ int main(int argc, char* argv[])
   bool qp_frozen_integration = false;
   bool eta_gap_scaling = true;
   bool eta_angle_smoothing = false;
-  double eta_angle_smoothing_start_angle = 80.0;
+  double eta_angle_smoothing_start_angle = 45.0;
   bool nodal_energy_angle_smoothing = true;
   double active_set_smoothing_gap = 0.001;
   double qp_derivative_blend_min_gap = 0.0;

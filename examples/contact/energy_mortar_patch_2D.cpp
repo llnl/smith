@@ -68,7 +68,7 @@ int main(int argc, char* argv[])
   std::string name = "energy_mortar_patch_2D";
   std::string eta_smoothing_type = "angle";
   bool eta_smoothing = false;
-  double eta_angle_smoothing_start_angle = 80.0;
+  double eta_angle_smoothing_start_angle = 45.0;
   bool projection_smoothing = false;
   std::string projection_smoothing_curve = "quadratic";
   bool check_error = true;

@@ -15,6 +15,7 @@ if(TRIBOL_FOUND AND STRUMPACK_DIR)
     if(ENZYME_FOUND)
         list(APPEND CONTACT_EXAMPLES_SOURCES
             energy_mortar_patch_2D.cpp
+            energy_mortar_lm_patch_2D.cpp
             ironing_2D.cpp
         )
     endif()
