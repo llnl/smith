@@ -34,6 +34,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     if(POLICY CMP0074)
         set(CMAKE_POLICY_DEFAULT_CMP0074 NEW)
     endif()
+    if(POLICY CMP0144)
+        cmake_policy(SET CMP0144 NEW)
+    endif()
 
     include(CMakeFindDependencyMacro)
 
@@ -339,24 +342,39 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(MFEM_CUSTOM_TARGET_PREFIX "mfem_" CACHE STRING "")
 
         # Tweaks needed after Spack converted to the HDF5 CMake build system
+        # MFEM's NetCDF finder may need HDF5 targets before Axom is configured.
+        find_dependency(hdf5 REQUIRED COMPONENTS C HL static
+                        PATHS "${HDF5_DIR}/cmake" "${HDF5_DIR}"
+                        NO_DEFAULT_PATH)
+
         # NOTE: we check if an hdf5 target is namespaced or not, since some versions
         #       of hdf5 do not namespace their targets and others do
-        set(HDF5_TARGET_NAMES "" CACHE STRING "")
+        set(HDF5_TARGET_NAMES "")
         if(TARGET hdf5::hdf5-static)
             list(APPEND HDF5_TARGET_NAMES hdf5::hdf5-static)
-        else()
+        elseif(TARGET hdf5-static)
             list(APPEND HDF5_TARGET_NAMES hdf5-static)
         endif()
         if(TARGET hdf5::hdf5-shared)
             list(APPEND HDF5_TARGET_NAMES hdf5::hdf5-shared)
-        else()
+        elseif(TARGET hdf5-shared)
             list(APPEND HDF5_TARGET_NAMES hdf5-shared)
         endif()
+        set(HDF5_TARGET_NAMES "${HDF5_TARGET_NAMES}" CACHE STRING "" FORCE)
 
         if(TARGET hdf5::hdf5_hl-static)
-            set(HDF5_C_LIBRARY_hdf5_hl hdf5::hdf5_hl-static CACHE STRING "")
+            set(HDF5_C_LIBRARY_hdf5_hl hdf5::hdf5_hl-static CACHE STRING "" FORCE)
+        elseif(TARGET hdf5_hl-static)
+            set(HDF5_C_LIBRARY_hdf5_hl hdf5_hl-static CACHE STRING "" FORCE)
         else()
-            set(HDF5_C_LIBRARY_hdf5_hl hdf5_hl-static CACHE STRING "")
+            find_library(SMITH_HDF5_HL_LIBRARY
+                         NAMES hdf5_hl
+                         PATHS "${HDF5_DIR}/lib"
+                         NO_DEFAULT_PATH)
+            if(NOT SMITH_HDF5_HL_LIBRARY)
+                message(FATAL_ERROR "Could not find HDF5 high-level library in ${HDF5_DIR}/lib")
+            endif()
+            set(HDF5_C_LIBRARY_hdf5_hl "${SMITH_HDF5_HL_LIBRARY}" CACHE STRING "" FORCE)
         endif()
 
         set(HDF5_IMPORT_CONFIG "RELEASE" CACHE STRING "")
