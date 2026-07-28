@@ -28,6 +28,7 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/infrastructure/application_manager.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace smith {
 
@@ -154,6 +155,7 @@ TEST_P(ContactFiniteDiff3D, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {6}, {7}, contact_options);
+  tribol::setEnergyMortarPenaltyMode(0, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -333,6 +335,7 @@ TEST_P(ContactFiniteDiff2D, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
+  tribol::setEnergyMortarPenaltyMode(0, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
 
   // Finalize the data structures
   solid_solver.completeSetup();

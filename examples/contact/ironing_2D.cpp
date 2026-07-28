@@ -25,6 +25,7 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/smith.hpp"
 #include "smith/smith_config.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace {
 
@@ -282,9 +283,11 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
+  tribol::setEnergyMortarPenaltyMode(0, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
+    tribol::setEnergyMortarPenaltyMode(1, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
   }
 
   const std::string paraview_name = config.name + "_paraview";
