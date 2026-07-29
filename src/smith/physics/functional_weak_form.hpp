@@ -130,7 +130,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     addBodyIntegralImpl(body_name, integrand, std::integer_sequence<int, active_parameters...>{});
   }
 
-  /// @brief Add a body integral to the weak form.
+  /// @brief Add a body integral depending on all input fields to the weak form.
   template <typename BodyIntegralType>
   void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
   {
@@ -218,7 +218,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     addBoundaryIntegralImpl(boundary_name, integrand, std::integer_sequence<int, active_parameters...>{});
   }
 
-  /// @brief Add a boundary integral to the weak form.
+  /// @brief Add a boundary integral depending on all input fields to the weak form.
   template <typename BoundaryIntegrandType>
   void addBoundaryIntegral(std::string boundary_name, const BoundaryIntegrandType& integrand)
   {
@@ -269,7 +269,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     addInteriorBoundaryIntegralImpl(interior_name, integrand, std::integer_sequence<int, active_parameters...>{});
   }
 
-  /// @brief Add an interior boundary integral to the weak form.
+  /// @brief Add an interior boundary integral depending on all input fields to the weak form.
   template <typename InteriorIntegrandType>
   void addInteriorBoundaryIntegral(std::string interior_name, const InteriorIntegrandType& integrand)
   {
