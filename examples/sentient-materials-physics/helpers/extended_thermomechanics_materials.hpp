@@ -1,4 +1,3 @@
-
 // Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
@@ -500,12 +499,10 @@ struct ViscoThermalStiffeningMaterial {
   double K;      ///< material bulk modulus
   double beta;   ///< material volumetric thermal expansion coefficient
   
-  double Gmeq0;  ///< matrix equilibrium shear modulus, MPa
-  double Gmneq0; ///< matrix nonequilibrium shear modulus, MPa
+  double Gm_beta;///< matrix nonequilibrium shear modulus scale factor, Gmneq=Gmeq*Gm_beta
   double etam;   ///< matrix viscosity, MPa-s
 
-  double Gceq0;  ///< chain equilibrium shear modulus, MPa
-  double Gcneq0; ///< chain nonequilibrium shear modulus, MPa
+  double Gc_beta;///< chain nonequilibrium shear modulus scale factor, Gcneq=Gceq*Gc_beta
   double etac;   ///< chain viscosity, MPa-s
   double Jcm;    ///< relative volume change between matrix and chains (maybe not linked to Fcm yet)
 
@@ -514,17 +511,17 @@ struct ViscoThermalStiffeningMaterial {
   double rho0;   ///< material initial density
 
   double c;      ///< rate-dependent entanglement dissipation term
-  double modscale; ///< scaling parameter since moduli are hard-coded as Pa
+  double mscale; ///< scaling parameter since moduli are hard-coded as Pa
 
   // E_a and R can be SI units since they cancel out in the exponent
-  double Af;    ///< forward (low-high) exponential prefactor, 1/s
-  double E_af;  ///< forward (low-high) activation energy, J/mol
-  double Ar;    ///< reverse exponential prefactor, 1/s
-  double E_ar;  ///< reverse activation energy, J/mol
-  double R;     ///< universal gas constant, J/mol/K
-  double Tr;    ///< reference temperature, K
+  double Af;     ///< forward (low-high) exponential prefactor, 1/s
+  double E_af;   ///< forward (low-high) activation energy, J/mol
+  double Ar;     ///< reverse exponential prefactor, 1/s
+  double E_ar;   ///< reverse activation energy, J/mol
+  double R;      ///< universal gas constant, J/mol/K
+  double Tr;     ///< reference temperature, K
 
-  double gw;  ///< particle weight fraction
+  double gw;     ///< particle weight fraction
 
   using State = smith::Empty;
 
@@ -661,14 +658,13 @@ struct ViscoThermalStiffeningMaterial {
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
     
-    return (Gmeq0*G*1.e9)/modscale;        // convert to Pa*modscale
+    return (G*1.e9)/mscale;        // convert to Pa*mscale
   }
 
   template <typename scalar>
   SMITH_HOST_DEVICE auto fGmneq(scalar g) const
   {
     using std::pow;
-    auto Betam = 0.1;      //scale factor on modulus
     // percolation parameters
     auto Gr = 0.017;      //GPa, rigid modulus
     auto Gs0 = 1.7e-6;    //GPa, soft modulus
@@ -694,7 +690,7 @@ struct ViscoThermalStiffeningMaterial {
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
     
-    return (Betam*Gmneq0*G*1.e9)/modscale;        // convert to Pa*modscale
+    return (Gm_beta*G*1.e9)/mscale;        // convert to Pa*mscale
   }
 
   template <typename scalar>
@@ -744,14 +740,13 @@ struct ViscoThermalStiffeningMaterial {
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
     
-    return (Gceq0*G*1.e9)/modscale;        // convert to Pa*modscale
+    return (G*1.e9)/mscale;        // convert to Pa*mscale
   }
 
   template <typename scalar>
   SMITH_HOST_DEVICE auto fGcneq(scalar g) const
   {
     using std::pow;
-    auto Betac = 0.1;     //scale factor on modulus
     // percolation parameters
     auto Gr = 0.12;      //GPa, rigid modulus
     auto Gs0 = 6.5e-7;    //GPa, soft modulus
@@ -777,11 +772,11 @@ struct ViscoThermalStiffeningMaterial {
     auto Gdenom = (1.-X)*Gr+(X-psi)*Gs;
     auto G = Gnum/Gdenom; // this is in GPa
     
-    return (Betac*Gcneq0*G*1.e9)/modscale;        // convert to Pa*modscale
+    return (Gc_beta*G*1.e9)/mscale;        // convert to Pa*mscale
   }
 
   template <typename scalar>
-  SMITH_HOST_DEVICE auto fAf(scalar g) const
+  SMITH_HOST_DEVICE auto fS(scalar g) const
   {
     using std::pow;
     //auto G4 = 1.
@@ -801,7 +796,7 @@ struct ViscoThermalStiffeningMaterial {
     
     return 1./fID; //multiply this by Af0
   }
-
+/*
   template <typename scalar>
   SMITH_HOST_DEVICE auto fAr(scalar g) const
   {
@@ -823,7 +818,7 @@ struct ViscoThermalStiffeningMaterial {
     
     return 1./fID; //multiply this by Ar0
   }
-
+*/
   template <typename T1, typename T2, typename T3, typename T4, typename T5, int d, int sd>
   auto operator()(double dt, State&, const smith::tensor<T1, d, d>& grad_u, const T2& grad_v, T3 theta,
                   const smith::tensor<T4, d>& grad_theta, const smith::tensor<T5, sd>& alpha_old) const
@@ -843,9 +838,8 @@ struct ViscoThermalStiffeningMaterial {
     auto F = grad_u + I;
 
     // calculate forward and reverse reaction rates
-    auto kf = Af * fAf(gw) * exp(-E_af / (R * theta)) +thetap-thetap;
-    auto kr = Ar * fAr(gw) * exp(-E_ar / (R * theta));
-    //std::cout << "fAf,fAr" <<fAf(gw)<<", "<<fAr(gw)<< " \n";
+    auto kf = Af * fS(gw) * exp(-E_af / (R * theta)) +thetap-thetap;
+    auto kr = Ar * fS(gw) * exp(-E_ar / (R * theta));
     auto ksum = kf+kr;
     // exponential integration to get new entanglement fraction
     auto w = 0.0*kf;
@@ -866,7 +860,6 @@ struct ViscoThermalStiffeningMaterial {
     auto Gmneq = fGmneq(gw) * F1(theta);
     auto Gceq = fGceq(gw);
     auto Gcneq = fGcneq(gw);
-    //std::cout << "Gmeq,Gmneq,Gceq,Gcneq: " <<Gmeq<<", "<<Gmneq<<", "<<Gceq<<", "<<Gcneq << " \n";
     // do some kinematics
     auto J = det(F);
     auto B = dot(F,transpose(F));
@@ -900,7 +893,7 @@ struct ViscoThermalStiffeningMaterial {
     // get approximation to lambda_dot
     auto junk = double_dot(Mcm,Mcm);
     auto lamdot = 0.0 * junk;
-    if (dw > 0) {
+    if (dw > 100) {
       auto Qtr = double_dot(Mcm,Mcm);
       if (Qtr != 0.0) {
         auto alph = 2.0*w*Jcm*Gceq*dt;
@@ -915,13 +908,13 @@ struct ViscoThermalStiffeningMaterial {
     // update Dcm as needed
     auto Dcm = Mcm*lamdot/(1.+2*lamdot*w*Jcm*Gceq*dt);
     //Mcm = 0.0 * Dcm;
-    if (dw > 0 && lamdot != 0.0) {
+    if (dw > 100 && lamdot != 0.0) {
       // get the Mandel stress
       Mcm = Dcm/lamdot;
     }
     // update Fcm
     auto Fcm = Fcmp + 0.0 * Dcm; // necessary for typing reasons
-    if (dw > 0) {
+    if (dw > 100) {
       Fcm = dot(exp_symm(dt*Dcm),Fcmp);
     }
     // get Fc
@@ -934,7 +927,7 @@ struct ViscoThermalStiffeningMaterial {
     auto Fcetr = dot(Fc,inv(Fcvp));
     auto Ccetr = dot(transpose(Fcetr),Fcetr);
     auto Hcetr = 0.5*log_symm(Ccetr);
-    auto Mce = 2.0*Gcneq*dev(Hcetr);
+    auto Mce = 2.0*w*Jcm*Gcneq*dev(Hcetr);
     // update Dcv
     auto Dcv = Mce/(2.*(etac+w*Jcm*Gcneq*dt));
     Mce = Mce - 2.*w*Jcm*Gcneq*dt*Dcv;
@@ -945,11 +938,8 @@ struct ViscoThermalStiffeningMaterial {
     // nonequilibrium Cauchy chain stress
     auto Tcneq = dot(transpose(inv(Fce)),dot(Mce,transpose(Fce)))/J;
 
-    //std::cout << "Hcetr,Dcv,Mce,Fcv: " <<", "<<Hcetr<<", "<<Dcv<<", "<<Mce<<", "<<Fcv << " \n";
-
     // total Cauchy stress
     auto T = Tvol + Tmeq + Tmneq + Tceq + Tcneq;
-    //std::cout << "Tmeq,Tmneq,Tceq,Tcneq: " <<", "<<Tmeq<<", "<<Tmneq<<", "<<Tceq<<", "<<Tcneq << " \n";
     // Kirchoff stress
     auto TK = J*T;
     // 1st Piola from Kirchhoff

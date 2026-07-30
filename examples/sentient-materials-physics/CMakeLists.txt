@@ -65,6 +65,19 @@ smith_add_executable(NAME       Visco_PNC_driver
                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
                      DEPENDS_ON smith
                      )
+
+smith_add_executable(NAME       Visco_PNC_driver_shear
+                     SOURCES   Visco_PNC_driver_shear.cpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
+
+smith_add_executable(NAME       Visco_PNC_driver_shear_v2
+                     SOURCES   Visco_PNC_driver_shear_v2.cpp
+                     OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                     DEPENDS_ON smith
+                     )
+
 install(
     FILES
         PNC_double_network_test.cpp
@@ -105,6 +118,20 @@ install(
         Visco_PNC_driver.cpp
     DESTINATION
         examples/smith/Visco_PNC_driver
+)
+
+install(
+    FILES
+        Visco_PNC_driver_shear.cpp
+    DESTINATION
+        examples/smith/Visco_PNC_driver_shear
+)
+
+install(
+    FILES
+        Visco_PNC_driver_shear_v2.cpp
+    DESTINATION
+        examples/smith/Visco_PNC_driver_shear_v2
 )
 
 if(SMITH_ENABLE_TESTS)

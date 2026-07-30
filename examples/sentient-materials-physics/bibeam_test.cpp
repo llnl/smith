@@ -193,7 +193,7 @@
      // should really take inputs as a vector and loop over vector size
      auto fn = 1.0;
      if (tau1 != 0.0) {
-      fn = 1.-g1*(1.-exp(-time/tau1));
+      fn -= g1*(1.-exp(-time/tau1));
      }
      if (tau2 != 0.0) {
       fn -= g2*(1.-exp(-time/tau2));

@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /*
-This is my original PNC_visco driver, it applies sinusoidal compression in the Y-direction (normal)
+This is built off PNC_visco driver, it was supposed to apply sinusoidal shear in the X-direction (tangential)
+but that didn't work well, it runs normal compression faster right now
 */
 
 #include <cmath>
@@ -247,22 +248,19 @@ std::shared_ptr<smith::CoupledSystemSolver> makeCoupledSolver(const std::shared_
   return coupled_solver;
 }
 
-using MaterialModel = ViscoThermalStiffeningMaterial;
-
-ViscoThermalStiffeningMaterial makeViscoThermalStiffeningMaterial()
-{
-  double K = 0.5e6/1e6;
+struct MaterialParams {
+  double K = 0.5e6;
   double beta = 0.0;
   double Gm_beta = 0.1;
-  double etam = 1e3/1e6;
+  double etam = 1e3;
   double Gc_beta = 0.1;
-  double etac = 1e4/1e6;
+  double etac = 1e3;
   double Jcm = 1.0;
   double C_v = 1.5;
   double kappa = 30.0;
   double rho0 = 1.0;
   double c = 0.1;
-  double mscale = 1.0e6;
+  double mscale = 1.0;
   double Af = 1.e16; 
   double E_af = 1.525e5;
   double Ar = 0.5e-20;
@@ -270,13 +268,47 @@ ViscoThermalStiffeningMaterial makeViscoThermalStiffeningMaterial()
   double R = 8.314;
   double Tr = 353.0;
   double gw = 0.2;
+};
 
-  return ViscoThermalStiffeningMaterial{K,     beta,    Gm_beta,  etam,   Gc_beta,
-                                        etac,  Jcm,     C_v,      kappa,  rho0, c,     mscale,
-                                        Af,    E_af,    Ar,       E_ar,   R,    Tr,    gw};
+using MaterialModel = ViscoThermalStiffeningMaterial;
+
+ViscoThermalStiffeningMaterial makeViscoThermalStiffeningMaterial(const MaterialParams& p)
+{
+  return ViscoThermalStiffeningMaterial{p.K,     p.beta,    p.Gm_beta,  p.etam,   p.Gc_beta,
+                                        p.etac,  p.Jcm,     p.C_v,      p.kappa,  p.rho0, p.c,     p.mscale,
+                                        p.Af,    p.E_af,    p.Ar,       p.E_ar,   p.R,    p.Tr,    p.gw};
 }
 
-MaterialModel makeMaterialModel() { return makeViscoThermalStiffeningMaterial(); }
+MaterialModel makeMaterialModel(const MaterialParams& p) 
+{ 
+  return makeViscoThermalStiffeningMaterial(p); 
+}
+
+void writeMaterialParamsCSV(const MaterialParams& p, const std::string& filename)
+{
+  std::ofstream out(filename);
+  out << std::setprecision(16) << std::scientific;
+  out << "name,value\n";
+  out << "K," << p.K << "\n";
+  out << "beta," << p.beta << "\n";
+  out << "Gm_beta," << p.Gm_beta << "\n";
+  out << "etam," << p.etam << "\n";
+  out << "Gc_beta," << p.Gc_beta << "\n";
+  out << "etac," << p.etac << "\n";
+  out << "Jcm," << p.Jcm << "\n";
+  out << "C_v," << p.C_v << "\n";
+  out << "kappa," << p.kappa << "\n";
+  out << "rho0," << p.rho0 << "\n";
+  out << "c," << p.c << "\n";
+  out << "mscale," << p.mscale << "\n";
+  out << "Af," << p.Af << "\n";
+  out << "E_af," << p.E_af << "\n";
+  out << "Ar," << p.Ar << "\n";
+  out << "E_ar," << p.E_ar << "\n";
+  out << "R," << p.R << "\n";
+  out << "Tr," << p.Tr << "\n";
+  out << "gw," << p.gw << "\n";
+}
 
 int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double dt, double T,
                                CoupledLinearSolver linear_solver,
@@ -287,7 +319,8 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
       //(mesh->mfemParMesh().GetBoundingBox().Max()[0] - mesh->mfemParMesh().GetBoundingBox().Min()[0]) *
       //(mesh->mfemParMesh().GetBoundingBox().Max()[2] - mesh->mfemParMesh().GetBoundingBox().Min()[2]);
   double initial_temperature = 0.0;
-  auto material = makeMaterialModel();
+  MaterialParams material_params;
+  auto material = makeMaterialModel(material_params);
 
   auto coupled_solver = makeCoupledSolver(mesh, linear_solver, gmres_block_preconditioner);
 
@@ -344,7 +377,9 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   system.disp_bc->setVectorBCs<dim>(mesh->domain("top"), std::vector<int>{1},
                                                 [](double t, auto X) {
                                                   auto output = 0.0 * X;
-                                                  output[1] = -0.50 * std::sin(example_etm::pi * t / 2.0);
+                                                  output[1] = -0.25 * std::sin(5. * t);
+                                                  // should be 0.5% strain at 5 rad/s
+                                                  // to get pi: example_etm::pi
                                                   return output;
                                                 });
   system.disp_bc->setVectorBCs<dim>(mesh->domain("front"), std::vector<int>{2},
@@ -361,15 +396,16 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
                                                 });
                                                 
   system.temperature_bc->setScalarBCs<dim>(mesh->domain("front"), [](double t, auto) { 
-    if (t < 360) {
-      return 120.0*(t/360.); //only the temperature differential here
+    if (t < 1440) {
+      // temperature rises 120 degrees at 5 deg/min
+      return 120.0*(t/1440.); //only the temperature differential here
     }
     else {
       return 120.0;
     } });
   system.temperature_bc->setScalarBCs<dim>(mesh->domain("back"), [](double t, auto) {
-    if (t < 360) {
-      return 120.0*(t/360.); //only the temperature differential here
+    if (t < 1440) {
+      return 120.0*(t/1440.); //only the temperature differential here
     }
     else {
       return 120.0;
@@ -379,7 +415,7 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
    // function for the BC - need for reaction forces
   std::function<double(double, smith::tensor<double,dim>)> boundary_condition;
   boundary_condition = [](double t, smith::tensor<double,dim> /*X*/) -> double {
-    return -0.50 * std::sin(example_etm::pi * t / 2.0);
+    return -0.25 * std::sin(5. * t);
   };
 
   // Initialize displacement fields (avoid solver starting from uninitialized/NaN values).
@@ -414,7 +450,13 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   std::string pv_dir = "paraview_extended_thermomechanics";
   auto pv_writer = smith::createParaviewWriter(*mesh, system.getStateFields(), pv_dir);
   std::ofstream file;
-  const std::string stress_strain_output = pv_dir + "/_test.csv";
+  std::string run_id = "run1";
+  const std::string stress_strain_output = pv_dir + "/_stress_strain_" + run_id +".csv";
+  const std::string params_output = pv_dir + "/_params_" + run_id +".csv";
+
+  if (mfem::Mpi::Root()) {
+  writeMaterialParamsCSV(material_params, params_output);
+}
 
   if (mfem::Mpi::Root()) {
     if (axom::utilities::filesystem::makeDirsForPath(pv_dir) != 0) {
@@ -513,8 +555,8 @@ int main(int argc, char** argv)
   int num_elements_x = 4;
   int num_elements_y = 4;
   int num_elements_z = 1;
-  double dt = 0.2;
-  double T = 500.0;
+  double dt = 0.0625;
+  double T =1440.0;
   auto solver_type = example_etm::CoupledLinearSolver::Strumpack;
   auto gmres_block_preconditioner = example_etm::GmresBlockPreconditioner::Diagonal;
 
