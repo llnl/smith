@@ -75,7 +75,7 @@ class ContactData {
                              const std::set<int>& bdry_attr_surf2, ContactOptions contact_opts);
 
   /**
-   * @brief Updates only the gap contributions associated with contact
+   * @brief Updates the contact geometry and gap data
    *
    * @param cycle The current simulation cycle
    * @param time The current time
@@ -84,25 +84,26 @@ class ContactData {
    * @param u Optional current displacement dof values
    * @param eval_jacobian Whether to also evaluate the Jacobian contributions (default false)
    */
-  void updateGaps(int cycle, double time, double& dt,
-                  std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
-                  std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
-                  bool eval_jacobian = false);
+  void updateGeometry(int cycle, double time, double& dt,
+                      std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+                      std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
+                      bool eval_jacobian = false);
 
   /**
-   * @brief Updates the positions, forces, and Jacobian contributions associated with contact
+   * @brief Updates the contact forces and Jacobian contributions for the current configuration
    *
    * @param cycle The current simulation cycle
    * @param time The current time
    * @param dt The timestep size to attempt
-   * @param u_shape Optional shape displacement vector
-   * @param u Optional current displacement dof values
-   * @param p Optional current pressure true dof values
+   * @param u_shape Optional shape displacement vector; if provided with @p u, the geometry is refreshed first
+   * @param u Optional current displacement dof values; if provided with @p u_shape, the geometry is refreshed first
+   * @param p Optional current pressure true dof values. Required for Lagrange multiplier enforcement and ignored for
+   * penalty enforcement.
    */
-  void update(int cycle, double time, double& dt,
-              std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
-              std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
-              std::optional<std::reference_wrapper<const mfem::Vector>> p = std::nullopt);
+  void updateForcesAndJacobian(int cycle, double time, double& dt,
+                               std::optional<std::reference_wrapper<const mfem::Vector>> u_shape = std::nullopt,
+                               std::optional<std::reference_wrapper<const mfem::Vector>> u = std::nullopt,
+                               std::optional<std::reference_wrapper<const mfem::Vector>> p = std::nullopt);
 
   /**
    * @brief Resets the contact pressures to zero
@@ -115,7 +116,8 @@ class ContactData {
    *
    * @return Nodal contact forces on the true DOFs
    *
-   * @pre update() must be called with the current configuration so the force contributions are up-to-date
+   * @pre updateForcesAndJacobian() must be called with the current configuration so the force contributions are
+   * up-to-date
    */
   FiniteElementDual forces() const;
 
@@ -140,7 +142,8 @@ class ContactData {
    * @param [in] zero_inactive Sets inactive t-dofs to zero gap
    * @return Nodal gap true degrees of freedom on each contact interaction (merged into one mfem::HypreParVector)
    *
-   * @pre update() must be called with the current configuration so the gap values are up-to-date
+   * @pre updateGeometry() or updateForcesAndJacobian() must be called with the current configuration so the gap values
+   * are up-to-date
    */
   mfem::HypreParVector mergedGaps(bool zero_inactive = false) const;
 
@@ -148,9 +151,9 @@ class ContactData {
    * @brief Returns a 2x2 block Jacobian on displacement/pressure true degrees of
    * freedom from contact constraints
    *
-   * The element Jacobian contributions are computed upon calling update(). This method does MPI communication to move
-   * Jacobian contributions to the correct rank, then assembles the contributions.  The pressure degrees of freedom for
-   * all contact interactions are merged into a single block.
+   * The element Jacobian contributions are computed upon calling updateForcesAndJacobian(). This method does MPI
+   * communication to move Jacobian contributions to the correct rank, then assembles the contributions. The pressure
+   * degrees of freedom for all contact interactions are merged into a single block.
    *
    * @note The blocks are owned by the BlockOperator
    *
@@ -168,7 +171,8 @@ class ContactData {
    *
    * @pre The current coordinates must be up-to-date
    *
-   * @note This method calls update() to compute residual and Jacobian contributions based on the current configuration
+   * @note This method calls updateForcesAndJacobian() to compute residual and Jacobian contributions based on the
+   * current configuration
    */
   void residualFunction(const mfem::Vector& u_shape, const mfem::Vector& u, mfem::Vector& r);
 
@@ -178,7 +182,8 @@ class ContactData {
    * @param orig_J The non-contact terms of the Jacobian, not including essential boundary conditions
    * @return Jacobian with contact terms, not including essential boundary conditions
    *
-   * @pre update() must be called with the current configuration so the Jacobian contributions are up-to-date
+   * @pre updateForcesAndJacobian() must be called with the current configuration so the Jacobian contributions are
+   * up-to-date
    */
   std::unique_ptr<mfem::BlockOperator> jacobianFunction(std::unique_ptr<mfem::HypreParMatrix> orig_J) const;
 

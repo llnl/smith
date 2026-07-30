@@ -123,16 +123,6 @@ if(NOT SMITH_FOUND)
     find_dependency(raja REQUIRED PATHS "${RAJA_DIR}")
   endif()
 
-  # Conduit
-  if(SMITH_USE_CONDUIT)
-    # Load mpi targets because we require the optional Conduit mpi targets
-    find_package(MPI REQUIRED)
-
-    find_dependency(Conduit REQUIRED
-                    PATHS "${CONDUIT_DIR}"
-                          "${CONDUIT_DIR}/lib/cmake/conduit")
-  endif()
-
   # MFEM
   if(SMITH_USE_MFEM AND NOT TARGET mfem)
     set(SMITH_MFEM_BUILT_WITH_CMAKE @MFEM_BUILT_WITH_CMAKE@)
@@ -148,7 +138,7 @@ if(NOT SMITH_FOUND)
   endif()
 
   # Axom
-  # also covers fmt/cli11
+  # also covers cli11, conduit, and hdf5
   if(SMITH_USE_AXOM)
     find_dependency(Axom REQUIRED NO_DEFAULT_PATH PATHS "${AXOM_DIR}/lib/cmake")
   endif()
