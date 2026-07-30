@@ -837,7 +837,8 @@ struct ViscoThermalStiffeningMaterial {
     static constexpr auto I = smith::Identity<d>();
     auto F = grad_u + I;
 
-    // calculate forward and reverse reaction rates
+    // calculate forward and reverse reaction rates 
+    // (haven't removed thetap as internal variable yet, +- here just so I don't get error)
     auto kf = Af * fS(gw) * exp(-E_af / (R * theta)) +thetap-thetap;
     auto kr = Ar * fS(gw) * exp(-E_ar / (R * theta));
     auto ksum = kf+kr;
@@ -893,28 +894,28 @@ struct ViscoThermalStiffeningMaterial {
     // get approximation to lambda_dot
     auto junk = double_dot(Mcm,Mcm);
     auto lamdot = 0.0 * junk;
-    if (dw > 100) {
+    if (dw > 0) {
       auto Qtr = double_dot(Mcm,Mcm);
       if (Qtr != 0.0) {
         auto alph = 2.0*w*Jcm*Gceq*dt;
         auto Aa = 1.0+0.5*dw/w;
         auto Bb = 2.0*alph*c*what*what/Qtr;
+        //todo: believe I need the positive root but then need check to avoid 1-2*Aa*Bb<0
         //auto MM = (0.5*Qtr/(Aa*Aa))*(1.0-Aa*Bb+sqrt(1.0-2.*Aa*Bb));
         auto MM = (0.5*Qtr/(Aa*Aa))*(1.0-Aa*Bb+sqrt(abs(1.0-2.*Aa*Bb)));
-        //std::cout << "dw,Qtr,Aa,Bb,MM: " <<dw<<", "<<Qtr<<", "<<Aa<<", "<<Bb<<", "<<MM << " \n";
         lamdot = what/(4.*w*w*Jcm*Gceq) + c*what*what/MM;
       }
     }
     // update Dcm as needed
     auto Dcm = Mcm*lamdot/(1.+2*lamdot*w*Jcm*Gceq*dt);
     //Mcm = 0.0 * Dcm;
-    if (dw > 100 && lamdot != 0.0) {
+    if (dw > 0 && lamdot != 0.0) {
       // get the Mandel stress
       Mcm = Dcm/lamdot;
     }
     // update Fcm
     auto Fcm = Fcmp + 0.0 * Dcm; // necessary for typing reasons
-    if (dw > 100) {
+    if (dw > 0) {
       Fcm = dot(exp_symm(dt*Dcm),Fcmp);
     }
     // get Fc
@@ -948,15 +949,15 @@ struct ViscoThermalStiffeningMaterial {
     // heat flux
     const auto q0 = -kappa * grad_theta;
 
-    // did not do these yet
-    // internal heat power
+    // did not update this part with new theory yet
+    // leaving generic expression here just so something gets done
     auto green_strain_rate = greenStrainRate(grad_u, grad_v);
+    const auto s0 = -K * beta * theta * tr(green_strain_rate);
     // viscous stress
     //auto Sv = 2 * ((1. - we) * etam + we * etae) * dot(Ci, dot(green_strain_rate, Ci));
     // derivative of elastic S with respect to T
     //auto dtmdT = Gm0(gw) * df1(theta) * pow(J, -2. / 3) * B_bar - Km * J * betam * I;
     //auto dSedT = dot(inv(F), dot(wm * dtmdT, transpose(inv(F))));
-    const auto s0 = -K * beta * theta * tr(green_strain_rate);
     //tr(dot(Sv + theta * dSedT, green_strain_rate));
     // const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
 

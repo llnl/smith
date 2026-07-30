@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /*
-This is built off PNC_visco driver, it was supposed to apply sinusoidal shear in the X-direction (tangential)
-but that didn't work well, it runs normal compression faster right now
+This is built off PNC_visco driver_shear (which doesn't do shear), it applies sinusoidal shear in the X direction
 */
 
 #include <cmath>
@@ -450,7 +449,7 @@ int runExtendedThermomechanics(const std::shared_ptr<smith::Mesh>& mesh, double 
   });
   const_cast<smith::FiniteElementState&>(*system.field_store->getField("state").get()) = state_pred;
 
-  std::string run_id = "temp5";
+  std::string run_id = "run0";
   std::string pv_dir = "PNC_shear_"+run_id+"_thermomechanics";
   auto pv_writer = smith::createParaviewWriter(*mesh, system.getStateFields(), pv_dir);
   std::ofstream file;
@@ -562,7 +561,7 @@ int main(int argc, char** argv)
   int num_elements_x = 1;
   int num_elements_y = 1;
   int num_elements_z = 1;
-  double dt = 0.0625;
+  double dt = 0.25;//0.0625;
   double T =1440.0;
   auto solver_type = example_etm::CoupledLinearSolver::Strumpack;
   auto gmres_block_preconditioner = example_etm::GmresBlockPreconditioner::Diagonal;
