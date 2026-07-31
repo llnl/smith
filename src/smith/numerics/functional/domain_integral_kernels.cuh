@@ -83,7 +83,7 @@ SMITH_HOST_DEVICE constexpr derivatives_type& AccessDerivatives(derivatives_type
  * @tparam position_type quadrature point position
  *
  * @param[in] u The element DOF values (primary input)
- * @param[inout] r The element residuals (primary output)
+ * @param[in,out] r The element residuals (primary output)
  * @param[out] derivatives_ptr The address at which derivatives of @a lambda with
  * respect to its arguments will be stored
  * @param[in] J The Jacobians of the element transformation at all quadrature points
@@ -91,7 +91,7 @@ SMITH_HOST_DEVICE constexpr derivatives_type& AccessDerivatives(derivatives_type
  * @see mfem::GeometricFactors
  * @param[in] num_elements The number of elements in the mesh
  * @param[in] qf The actual quadrature function, see @p lambda
- * @param[inout] data The data for each quadrature point
+ * @param[in,out] data The data for each quadrature point
  */
 
 template <mfem::Geometry::Type g, typename test, typename trial, int Q, typename derivatives_type, typename lambda,
@@ -178,7 +178,7 @@ __global__ void eval_cuda_element(const solution_type u, residual_type r, deriva
  * @tparam position_type quadrature point position
  *
  * @param[in] u The element DOF values (primary input)
- * @param[inout] r The element residuals (primary output)
+ * @param[in,out] r The element residuals (primary output)
  * @param[out] derivatives_ptr The address at which derivatives of @a lambda with
  * respect to its arguments will be stored
  * @param[in] J The Jacobians of the element transformation at all quadrature points
@@ -186,7 +186,7 @@ __global__ void eval_cuda_element(const solution_type u, residual_type r, deriva
  * @see mfem::GeometricFactors
  * @param[in] num_elements The number of elements in the mesh
  * @param[in] qf The actual quadrature function, see @p lambda
- * @param[inout] data The data for each quadrature point
+ * @param[in,out] data The data for each quadrature point
  */
 template <mfem::Geometry::Type g, typename test, typename trial, int Q, typename derivatives_type, typename lambda,
           typename solution_type, typename residual_type, typename jacobian_type, typename position_type,
@@ -263,7 +263,7 @@ __global__ void eval_cuda_quadrature(const solution_type u, residual_type r,
  *
  * @param[in] config Execution configuration for the GPU kernel
  * @param[in] U The full set of per-element DOF values (primary input)
- * @param[inout] R The full set of per-element residuals (primary output)
+ * @param[in,out] R The full set of per-element residuals (primary output)
  * @param[out] derivatives_ptr The address at which derivatives of @a lambda with
  * respect to its arguments will be stored
  * @param[in] J_ The Jacobians of the element transformations at all quadrature points
@@ -271,7 +271,7 @@ __global__ void eval_cuda_quadrature(const solution_type u, residual_type r,
  * @see mfem::GeometricFactors
  * @param[in] num_elements The number of elements in the mesh
  * @param[in] qf The actual quadrature function, see @p lambda
- * @param[inout] data The data for each quadrature point
+ * @param[in,out] data The data for each quadrature point
  */
 
 template <mfem::Geometry::Type g, typename test, typename trial, int Q,
@@ -337,7 +337,7 @@ void evaluation_kernel_cuda(smith::detail::GPULaunchConfiguration config, const 
  * @tparam dresidual_type element residual
  *
  * @param[in] dU The element DOF values (primary input)
- * @param[inout] dR The element residuals (primary output)
+ * @param[in,out] dR The element residuals (primary output)
  * @param[in] derivatives_ptr The address at which derivatives of the q-function with
  * respect to its arguments are stored
  * @param[in] J_ The Jacobians of the element transformations at all quadrature points
@@ -414,7 +414,7 @@ __global__ void gradient_cuda_element(const dsolution_type du, dresidual_type dr
  * @tparam dresidual_type element residual
  *
  * @param[in] dU The element DOF values (primary input)
- * @param[inout] dR The element residuals (primary output)
+ * @param[in,out] dR The element residuals (primary output)
  * @param[in] derivatives_ptr The address at which derivatives of the q-function with
  * respect to its arguments are stored
  * @param[in] J_ The Jacobians of the element transformations at all quadrature points
@@ -490,7 +490,7 @@ __global__ void gradient_cuda_quadrature(const dsolution_type du, dresidual_type
  *
  * @param[in] config Execution configuration for the GPU kernel
  * @param[in] dU The full set of per-element DOF values (primary input)
- * @param[inout] dR The full set of per-element residuals (primary output)
+ * @param[in,out] dR The full set of per-element residuals (primary output)
  * @param[in] derivatives_ptr The address at which derivatives of the q-function with
  * respect to its arguments are stored
  * @param[in] J_ The Jacobians of the element transformations at all quadrature points

@@ -92,7 +92,7 @@ class BoundaryConditionManager {
 
   /**
    * @brief Eliminates all essential BCs from a matrix
-   * @param[inout] matrix The matrix to eliminate from, will be modified
+   * @param[in,out] matrix The matrix to eliminate from, will be modified
    * @return The eliminated matrix entries
    * @note The sum of the eliminated matrix and the modified parameter is
    * equal to the initial state of the parameter

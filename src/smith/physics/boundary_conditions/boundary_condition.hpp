@@ -113,7 +113,7 @@ class BoundaryCondition {
   /**
    * @brief Projects the associated coefficient over a solution vector on the DOFs constrained by the boundary condition
    * @param[in] time The time at which to project the boundary condition
-   * @param[inout] state The field to project over
+   * @param[in,out] state The field to project over
    */
   void setDofs(mfem::Vector& state, const double time = 0.0) const;
 
@@ -134,9 +134,9 @@ class BoundaryCondition {
    * these equations only apply to the non-essential dofs. For the essential rows, \f$ A \f$ is modified to contain one
    * on the diagonal and the right hand side is modified to contain the essential value originally contained in \f$ x
    * \f$. If \f$ A \f$ is given as the input @a k_mat , \f$ A_e \f$ is returned in @a k_mat .
-   * @param[inout] k_mat A stiffness (system) matrix. The rows and cols of the essential dofs will be set to zero with a
+   * @param[in,out] k_mat A stiffness (system) matrix. The rows and cols of the essential dofs will be set to zero with a
    * one on the diagonal after the return of this method.
-   * @param[inout] rhs The RHS vector for the system. At return, this vector contains \f$ b - A_e x \f$.
+   * @param[in,out] rhs The RHS vector for the system. At return, this vector contains \f$ b - A_e x \f$.
    * @param[in] state The state from which the solution DOF values are extracted and used to modify @a k_mat
    * @pre The input state solution must contain the correct essential DOFs. This can be done by calling the @a
    * BoundaryCondition::setDofs method.
