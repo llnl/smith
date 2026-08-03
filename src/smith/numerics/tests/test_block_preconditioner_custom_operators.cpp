@@ -195,7 +195,7 @@ class Exact2x2Solver : public mfem::Solver {
   mfem::DenseMatrix inv_;
 };
 
-class GuessSensitiveIterativeSolver : public mfem::IterativeSolver {
+class NoOpIterativeSolver : public mfem::IterativeSolver {
  public:
   void SetOperator(const mfem::Operator& op) override
   {
@@ -205,6 +205,9 @@ class GuessSensitiveIterativeSolver : public mfem::IterativeSolver {
 
   void Mult(const mfem::Vector& x, mfem::Vector& y) const override
   {
+    // When iterative_mode is true, MFEM iterative solvers read y as an initial
+    // guess. The NaN branch makes accidental use of that mode deterministic
+    // instead of allocator-state dependent.
     if (iterative_mode) {
       y = std::numeric_limits<double>::quiet_NaN();
       return;
@@ -556,9 +559,9 @@ TEST(BlockSchurPreconditionerCustom, WrappedIterativeSubSolversIgnoreTemporaryIn
 
   std::vector<std::unique_ptr<Solver>> solvers;
   solvers.push_back(
-      std::make_unique<smith::SolverWithPreconditioner>(std::make_unique<GuessSensitiveIterativeSolver>(), nullptr));
+      std::make_unique<smith::SolverWithPreconditioner>(std::make_unique<NoOpIterativeSolver>(), nullptr));
   solvers.push_back(
-      std::make_unique<smith::SolverWithPreconditioner>(std::make_unique<GuessSensitiveIterativeSolver>(), nullptr));
+      std::make_unique<smith::SolverWithPreconditioner>(std::make_unique<NoOpIterativeSolver>(), nullptr));
 
   smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Lower, smith::SchurApproxType::A22Only);
   P.SetOperator(A);
