@@ -39,7 +39,11 @@ class SolverWithPreconditioner : public mfem::Solver {
   /// @brief Apply the underlying linear solver.
   /// @param x Input vector.
   /// @param y Output vector.
-  void Mult(const mfem::Vector& x, mfem::Vector& y) const override { linear_solver_->Mult(x, y); }
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    linear_solver_->iterative_mode = iterative_mode;
+    linear_solver_->Mult(x, y);
+  }
 
   /// @brief Non-owning access to the underlying linear solver.
   mfem::Solver* linearSolver() const { return linear_solver_.get(); }

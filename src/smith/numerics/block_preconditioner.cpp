@@ -79,6 +79,7 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
     }
 
     mfem_solvers_[si]->SetOperator(*op);
+    mfem_solvers_[si]->iterative_mode = false;
 
     // Place the solver into the diagonal block of solver_diag_
     solver_diag_->SetBlock(i, i, mfem_solvers_[static_cast<size_t>(i)].get());
@@ -235,6 +236,7 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
     }
 
     mfem_solvers_[si]->SetOperator(*op);
+    mfem_solvers_[si]->iterative_mode = false;
   }
 }
 
@@ -322,7 +324,6 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
     case BlockSchurType::Lower: {
       // x = [A11^-1, 0; 0, S^-1][I, 0; -A21 A11^-1, I] b
       mfem::Vector tmp(out.Size());
-      tmp = 0.0;  // Explicit initialization to prevent NaN propagation from uninitialized memory
       LowerBlock(in, tmp);
       solver_diag_->Mult(tmp, out);
       break;
@@ -331,7 +332,6 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
     case BlockSchurType::Upper: {
       // x = [I, -A11^-1 A12; 0, I][A11^-1, 0; 0, S^-1] b
       mfem::Vector tmp(out.Size());
-      tmp = 0.0;  // Explicit initialization to prevent NaN propagation from uninitialized memory
       solver_diag_->Mult(in, tmp);
       UpperBlock(tmp, out);
       break;
@@ -340,9 +340,7 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
     case BlockSchurType::Full: {
       // x = [I, -A11^-1 A12; 0, I][A11^-1, 0; 0, S^-1][I, 0; -A21 A11^-1, I] b
       mfem::Vector tmp(out.Size());
-      tmp = 0.0;  // Explicit initialization to prevent NaN propagation from uninitialized memory
       mfem::Vector tmp2(out.Size());
-      tmp2 = 0.0;  // Explicit initialization to prevent NaN propagation from uninitialized memory
       LowerBlock(in, tmp);
       solver_diag_->Mult(tmp, tmp2);
       UpperBlock(tmp2, out);
@@ -443,6 +441,7 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
     op = A11;  // use Jacobian diagonal block
   }
   mfem_solvers_[0]->SetOperator(*op);
+  mfem_solvers_[0]->iterative_mode = false;
   // Build Schur complement approximation
   if (approxType_ == SchurApproxType::DiagInv) {
     S_approx_owned_.reset(BuildSchurDiagApprox_(*A11, *A12, *A21, *A22));
@@ -459,6 +458,7 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
 
   // Set the Schur complement preconditioner for block (1,1)
   mfem_solvers_[1]->SetOperator(*S_approx_view_);
+  mfem_solvers_[1]->iterative_mode = false;
 
   // Set up block diagonal operator
   solver_diag_->SetBlock(0, 0, mfem_solvers_[0].get());

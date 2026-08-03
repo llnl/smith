@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -11,6 +12,7 @@
 #include "mfem.hpp"
 
 #include "smith/numerics/block_preconditioner.hpp"
+#include "smith/numerics/solver_with_preconditioner.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 
 using namespace mfem;
@@ -191,6 +193,24 @@ class Exact2x2Solver : public mfem::Solver {
 
  private:
   mfem::DenseMatrix inv_;
+};
+
+class GuessSensitiveIterativeSolver : public mfem::IterativeSolver {
+ public:
+  void SetOperator(const mfem::Operator& op) override
+  {
+    height = op.Height();
+    width = op.Width();
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    if (iterative_mode) {
+      y = std::numeric_limits<double>::quiet_NaN();
+      return;
+    }
+    y = x;
+  }
 };
 
 std::vector<std::unique_ptr<mfem::Solver>> makeExactDiagonalSolvers(int nblocks)
@@ -516,6 +536,42 @@ TEST(BlockSchurPreconditionerCustom, FullWithExactSchurOverrideIsExactInverse)
   Vector r(Ax);
   r -= rhs;
   EXPECT_NEAR(r.Norml2(), 0.0, 1e-12);
+}
+
+TEST(BlockSchurPreconditionerCustom, WrappedIterativeSubSolversIgnoreTemporaryInitialGuesses)
+{
+  constexpr int n = 2;
+  Array<int> offsets({0, n, 2 * n});
+
+  auto A11o = makeHypreScaledIdentity(n, 2.0);
+  auto A12o = makeHypreScaledIdentity(n, 0.0);
+  auto A21o = makeHypreScaledIdentity(n, 0.0);
+  auto A22o = makeHypreScaledIdentity(n, 3.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0, 0, A11o.A.get());
+  A.SetBlock(0, 1, A12o.A.get());
+  A.SetBlock(1, 0, A21o.A.get());
+  A.SetBlock(1, 1, A22o.A.get());
+
+  std::vector<std::unique_ptr<Solver>> solvers;
+  solvers.push_back(
+      std::make_unique<smith::SolverWithPreconditioner>(std::make_unique<GuessSensitiveIterativeSolver>(), nullptr));
+  solvers.push_back(
+      std::make_unique<smith::SolverWithPreconditioner>(std::make_unique<GuessSensitiveIterativeSolver>(), nullptr));
+
+  smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Lower, smith::SchurApproxType::A22Only);
+  P.SetOperator(A);
+
+  Vector b(2 * n), x(2 * n);
+  b.Randomize();
+  x = std::numeric_limits<double>::quiet_NaN();
+
+  P.Mult(b, x);
+
+  for (int i = 0; i < x.Size(); i++) {
+    EXPECT_TRUE(std::isfinite(x[i]));
+  }
 }
 
 TEST(BlockSchurPreconditionerCustom, Block0OverrideIsUsed)
