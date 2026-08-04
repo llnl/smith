@@ -694,6 +694,74 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   };
 
   /**
+   * @brief Axisymmetric 2D-to-3D displacement gradient.
+   */
+  template <typename Position, typename Displacement>
+  static auto SMITH_HOST_DEVICE axisymmetricDisplacementGradient(Position position, Displacement displacement)
+  {
+    auto X = get<VALUE>(position);
+    auto u = get<VALUE>(displacement);
+    auto du_dX = get<DERIVATIVE>(displacement);
+    auto zero = 0.0 * (X[0] + u[0] + du_dX[0][0]);
+    return make_tensor<3, 3>([&](int i, int j) {
+      if (i < dim && j < dim) {
+        return du_dX[i][j] + zero;
+      }
+      if (i == 2 && j == 2) {
+        return u[0] / X[0] + zero;
+      }
+      return zero;
+    });
+  }
+
+  /**
+   * @brief Axisymmetric pullback from 3D stress to 2D source and flux.
+   */
+  template <typename Position, typename Stress, typename Acceleration>
+  static auto SMITH_HOST_DEVICE axisymmetricSourceAndFlux(Position position, Stress stress, Acceleration acceleration,
+                                                          double density)
+  {
+    auto r = get<VALUE>(position)[0];
+    auto d2u_dt2 = get<VALUE>(acceleration);
+    auto zero = 0.0 * (r * density * d2u_dt2[0] + stress[2][2]);
+    auto source = make_tensor<dim>([&](int i) {
+      auto source_i = r * density * d2u_dt2[i] + zero;
+      if (i == 0) {
+        return source_i + stress[2][2];
+      }
+      return source_i;
+    });
+
+    auto flux = make_tensor<dim, dim>([&](int i, int j) { return r * stress[i][j]; });
+    return smith::tuple{source, flux};
+  }
+
+  /**
+   * @brief Functor representing an axisymmetric material stress.
+   */
+  template <typename Material>
+  struct AxisymmetricMaterialStressFunctor {
+    /// @brief Constructor for the functor
+    AxisymmetricMaterialStressFunctor(Material material) : material_(material) {}
+
+    /// @brief Material model
+    Material material_;
+
+    /**
+     * @brief Axisymmetric material stress response call
+     */
+    template <typename X, typename State, typename Displacement, typename Acceleration, typename... Params>
+    auto SMITH_HOST_DEVICE operator()(double, X position, State& state, Displacement displacement,
+                                      Acceleration acceleration, Params... params) const
+    {
+      auto du_dX = SolidMechanics::axisymmetricDisplacementGradient(position, displacement);
+      auto stress = material_(state, du_dX, params...);
+
+      return SolidMechanics::axisymmetricSourceAndFlux(position, stress, acceleration, material_.density);
+    }
+  };
+
+  /**
    * @brief Set the material stress response and mass properties for the physics module
    *
    * @tparam MaterialType The solid material type
@@ -744,6 +812,32 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /**
+   * @brief Set an axisymmetric material stress response and mass properties.
+   *
+   * @note Only valid for 2D meshes interpreted as (r, z). The material receives a full 3D displacement gradient.
+   * @note This method must be called prior to completeSetup()
+   */
+  template <int... active_parameters, typename MaterialType, typename StateType = Empty>
+  void setAxisymmetricMaterial(DependsOn<active_parameters...>, const MaterialType& material, Domain& domain,
+                               qdata_type<StateType> qdata = EmptyQData)
+  {
+    static_assert(dim == 2, "axisymmetric materials require a 2D mesh");
+    static_assert(std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename MaterialType::State>,
+                  "invalid quadrature data provided in setAxisymmetricMaterial()");
+    AxisymmetricMaterialStressFunctor<MaterialType> material_functor(material);
+    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+                                 std::move(material_functor), domain, qdata);
+  }
+
+  /// @overload
+  template <typename MaterialType, typename StateType = Empty>
+  void setAxisymmetricMaterial(const MaterialType& material, Domain& domain,
+                               std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  {
+    setAxisymmetricMaterial(DependsOn<>{}, material, domain, qdata);
+  }
+
+  /**
    * Functor for materials that get dt as an argument
    *
    * Wraps materials that have the signature
@@ -791,6 +885,37 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   };
 
   /**
+   * @brief Functor representing an axisymmetric rate-dependent material stress.
+   */
+  template <typename Material>
+  struct AxisymmetricRateDependentMaterialStressFunctor {
+    /// @brief Constructor for the functor
+    AxisymmetricRateDependentMaterialStressFunctor(Material material, const double* dt)
+        : material_(material), time_increment_(dt)
+    {
+    }
+
+    /// @brief Material model
+    Material material_;
+
+    /// @brief Current time step
+    const double* time_increment_;
+
+    /**
+     * @brief Axisymmetric material stress response call
+     */
+    template <typename X, typename State, typename Displacement, typename Acceleration, typename... Params>
+    auto SMITH_HOST_DEVICE operator()(double, X position, State& state, Displacement displacement,
+                                      Acceleration acceleration, Params... params) const
+    {
+      auto du_dX = SolidMechanics::axisymmetricDisplacementGradient(position, displacement);
+      auto stress = material_(state, *time_increment_, du_dX, params...);
+
+      return SolidMechanics::axisymmetricSourceAndFlux(position, stress, acceleration, material_.density);
+    }
+  };
+
+  /**
    * Set a material that gets dt as an argument
    */
   template <int... active_parameters, typename RateDependentMaterialType, typename StateType = Empty>
@@ -817,6 +942,30 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                                 std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
   {
     setRateDependentMaterial(DependsOn<>{}, material, domain, qdata);
+  }
+
+  /**
+   * @brief Set an axisymmetric material that gets dt as an argument.
+   */
+  template <int... active_parameters, typename RateDependentMaterialType, typename StateType = Empty>
+  void setAxisymmetricRateDependentMaterial(DependsOn<active_parameters...>, const RateDependentMaterialType& material,
+                                            Domain& domain, qdata_type<StateType> qdata = EmptyQData)
+  {
+    static_assert(dim == 2, "axisymmetric materials require a 2D mesh");
+    static_assert(
+        std::is_same_v<StateType, Empty> || std::is_same_v<StateType, typename RateDependentMaterialType::State>,
+        "invalid quadrature data provided in setAxisymmetricRateDependentMaterial()");
+    AxisymmetricRateDependentMaterialStressFunctor<RateDependentMaterialType> material_functor(material, &dt_);
+    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+                                 std::move(material_functor), domain, qdata);
+  }
+
+  /// @overload
+  template <typename RateDependentMaterialType, typename StateType = Empty>
+  void setAxisymmetricRateDependentMaterial(const RateDependentMaterialType& material, Domain& domain,
+                                            std::shared_ptr<QuadratureData<StateType>> qdata = EmptyQData)
+  {
+    setAxisymmetricRateDependentMaterial(DependsOn<>{}, material, domain, qdata);
   }
 
   /**
@@ -894,6 +1043,28 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   };
 
   /**
+   * @brief Functor representing an axisymmetric body force integrand.
+   */
+  template <typename BodyForceType>
+  struct AxisymmetricBodyForceIntegrand {
+    /// @brief Body force model
+    BodyForceType body_force_;
+
+    /// @brief Constructor for the functor
+    AxisymmetricBodyForceIntegrand(BodyForceType body_force) : body_force_(body_force) {}
+
+    /**
+     * @brief Axisymmetric body force call
+     */
+    template <typename T, typename Position, typename Displacement, typename Acceleration, typename... Params>
+    auto SMITH_HOST_DEVICE operator()(T t, Position position, Displacement, Acceleration, Params... params) const
+    {
+      auto X = get<VALUE>(position);
+      return smith::tuple{-X[0] * body_force_(X, t, params...), zero{}};
+    }
+  };
+
+  /**
    * @brief Set the body forcefunction
    *
    * @tparam BodyForceType The type of the body force load
@@ -924,6 +1095,27 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void addBodyForce(BodyForceType body_force, Domain& domain)
   {
     addBodyForce(DependsOn<>{}, body_force, domain);
+  }
+
+  /**
+   * @brief Set an axisymmetric body force function.
+   *
+   * @note Only valid for 2D meshes interpreted as (r, z).
+   * @note This method must be called prior to completeSetup()
+   */
+  template <int... active_parameters, typename BodyForceType>
+  void addAxisymmetricBodyForce(DependsOn<active_parameters...>, BodyForceType body_force, Domain& domain)
+  {
+    static_assert(dim == 2, "axisymmetric body forces require a 2D mesh");
+    residual_->AddDomainIntegral(Dimension<dim>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+                                 AxisymmetricBodyForceIntegrand<BodyForceType>(body_force), domain);
+  }
+
+  /// @overload
+  template <typename BodyForceType>
+  void addAxisymmetricBodyForce(BodyForceType body_force, Domain& domain)
+  {
+    addAxisymmetricBodyForce(DependsOn<>{}, body_force, domain);
   }
 
   /**
@@ -967,6 +1159,35 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void setTraction(TractionType traction_function, Domain& domain)
   {
     setTraction(DependsOn<>{}, traction_function, domain);
+  }
+
+  /**
+   * @brief Set an axisymmetric traction boundary condition.
+   *
+   * @note Only valid for 2D meshes interpreted as (r, z).
+   * @note This traction is applied in the reference configuration.
+   * @note This method must be called prior to completeSetup()
+   */
+  template <int... active_parameters, typename TractionType>
+  void setAxisymmetricTraction(DependsOn<active_parameters...>, TractionType traction_function, Domain& domain)
+  {
+    static_assert(dim == 2, "axisymmetric tractions require a 2D mesh");
+    residual_->AddBoundaryIntegral(
+        Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+        [traction_function](double t, auto X, auto /* displacement */, auto /* acceleration */, auto... params) {
+          auto n = cross(get<DERIVATIVE>(X));
+          auto X0 = get<VALUE>(X);
+
+          return -X0[0] * traction_function(X0, normalize(n), t, params...);
+        },
+        domain);
+  }
+
+  /// @overload
+  template <typename TractionType>
+  void setAxisymmetricTraction(TractionType traction_function, Domain& domain)
+  {
+    setAxisymmetricTraction(DependsOn<>{}, traction_function, domain);
   }
 
   /**
@@ -1025,6 +1246,37 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   void setPressure(PressureType pressure_function, Domain& domain)
   {
     setPressure(DependsOn<>{}, pressure_function, domain);
+  }
+
+  /**
+   * @brief Apply an axisymmetric pressure-type follower load.
+   *
+   * @note Only valid for 2D meshes interpreted as (r, z).
+   * @note Pressure is applied in the deformed configuration.
+   * @note This method must be called prior to completeSetup()
+   */
+  template <int... active_parameters, typename PressureType>
+  void setAxisymmetricPressure(DependsOn<active_parameters...>, PressureType pressure_function, Domain& domain)
+  {
+    static_assert(dim == 2, "axisymmetric pressure requires a 2D mesh");
+    residual_->AddBoundaryIntegral(
+        Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+        [pressure_function](double t, auto X, auto displacement, auto /* acceleration */, auto... params) {
+          auto x = X + displacement;
+          auto n = cross(get<DERIVATIVE>(x));
+          auto X0 = get<VALUE>(X);
+          auto x0 = get<VALUE>(x);
+
+          return pressure_function(X0, t, params...) * x0[0] * (n / norm(cross(get<DERIVATIVE>(X))));
+        },
+        domain);
+  }
+
+  /// @overload
+  template <typename PressureType>
+  void setAxisymmetricPressure(PressureType pressure_function, Domain& domain)
+  {
+    setAxisymmetricPressure(DependsOn<>{}, pressure_function, domain);
   }
 
   /// @brief Build the quasi-static operator corresponding to the total Lagrangian formulation
