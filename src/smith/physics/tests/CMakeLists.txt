@@ -24,7 +24,7 @@ set(physics_serial_test_sources
     thermal_statics_patch.cpp
     thermal_dynamics_patch.cpp
     solid_finite_diff.cpp
-    solid_axisymmetric.cpp
+    test_solid_axisymmetric.cpp
     solid_statics_patch.cpp
     solid_dynamics_patch.cpp
     dynamic_solid_adjoint.cpp
