@@ -116,37 +116,9 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
   configure_amg(mfem_solver, best->space().GetVDim());
 
   // Block preconditioners: configure per-block AMG with each block's vdim.
-  struct BlockSolverAccessor {
-    int n = 0;
-    mfem::Solver* (*get)(void*, int) = nullptr;
-    void* self = nullptr;
-  };
-
-  const BlockSolverAccessor acc = [&]() {
-    if (auto* p = dynamic_cast<smith::BlockDiagonalPreconditioner*>(mfem_solver)) {
-      return BlockSolverAccessor{p->numSubSolvers(), static_cast<mfem::Solver* (*)(void*, int)>([](void* self, int i) {
-                                   return static_cast<smith::BlockDiagonalPreconditioner*>(self)->subSolver(i);
-                                 }),
-                                 p};
-    }
-    if (auto* p = dynamic_cast<smith::BlockTriangularPreconditioner*>(mfem_solver)) {
-      return BlockSolverAccessor{p->numSubSolvers(), static_cast<mfem::Solver* (*)(void*, int)>([](void* self, int i) {
-                                   return static_cast<smith::BlockTriangularPreconditioner*>(self)->subSolver(i);
-                                 }),
-                                 p};
-    }
-    if (auto* p = dynamic_cast<smith::BlockSchurPreconditioner*>(mfem_solver)) {
-      return BlockSolverAccessor{p->numSubSolvers(), static_cast<mfem::Solver* (*)(void*, int)>([](void* self, int i) {
-                                   return static_cast<smith::BlockSchurPreconditioner*>(self)->subSolver(i);
-                                 }),
-                                 p};
-    }
-    return BlockSolverAccessor{};
-  }();
-
-  if (acc.get) {
-    for (int i = 0; i < acc.n && static_cast<size_t>(i) < us.size(); ++i) {
-      configure_amg(acc.get(acc.self, i), us[static_cast<size_t>(i)]->space().GetVDim());
+  if (auto* block_preconditioner = dynamic_cast<smith::BlockPreconditioner*>(mfem_solver)) {
+    for (int i = 0; i < block_preconditioner->numSubSolvers() && static_cast<size_t>(i) < us.size(); ++i) {
+      configure_amg(block_preconditioner->subSolver(i), us[static_cast<size_t>(i)]->space().GetVDim());
     }
   }
 

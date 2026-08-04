@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <functional>
+#include <utility>
 #include <vector>
 #include "mfem.hpp"
 
@@ -19,6 +20,47 @@ namespace smith {
 using BlockOverride = std::pair<int, std::unique_ptr<const mfem::Operator>>;
 
 /**
+ * @class BlockPreconditioner
+ * @brief Base class for block preconditioners that own one sub-solver per block.
+ */
+class BlockPreconditioner : public mfem::Solver {
+ public:
+  /** @brief Return the number of sub-solvers owned by this preconditioner. */
+  int numSubSolvers() const { return num_blocks_; }
+
+  /**
+   * @brief Access a sub-solver by index.
+   * @param i Sub-solver index in [0, numSubSolvers()).
+   * @return Pointer to the requested sub-solver (owned by this object).
+   */
+  mfem::Solver* subSolver(int i) const
+  {
+    MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockPreconditioner::subSolver index out of range");
+    return mfem_solvers_[static_cast<size_t>(i)].get();
+  }
+
+  virtual ~BlockPreconditioner();
+
+ protected:
+  explicit BlockPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers);
+
+  // Offsets for extracting block vector segments, populated by SetOperator().
+  mfem::Array<int> block_offsets_;
+
+  // Number of blocks
+  const int num_blocks_;
+
+  // Jacobian view for block access
+  const mfem::BlockOperator* block_jacobian_;
+
+  // mfem solvers for each block
+  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
+
+  // size num_blocks_, nullptr means "use Jacobian diagonal block"
+  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
+};
+
+/**
  * @class BlockDiagonalPreconditioner
  * @brief Simple block diagonal preconditioner for block systems.
  *
@@ -28,7 +70,7 @@ using BlockOverride = std::pair<int, std::unique_ptr<const mfem::Operator>>;
  * Call SetOperator() with an mfem::BlockOperator, then use Mult() to apply the
  * preconditioner.
  */
-class BlockDiagonalPreconditioner : public mfem::Solver {
+class BlockDiagonalPreconditioner : public BlockPreconditioner {
  public:
   /**
    * @brief Construct a new N by N block diagonal preconditioner.
@@ -57,38 +99,9 @@ class BlockDiagonalPreconditioner : public mfem::Solver {
 
   virtual ~BlockDiagonalPreconditioner();
 
-  /** @brief Return the number of sub-solvers owned by this preconditioner. */
-  int numSubSolvers() const { return num_blocks_; }
-
-  /**
-   * @brief Access a sub-solver by index.
-   * @param i Sub-solver index in [0, numSubSolvers()).
-   * @return Pointer to the requested sub-solver (owned by this object).
-   */
-  mfem::Solver* subSolver(int i) const
-  {
-    MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockDiagonalPreconditioner::subSolver index out of range");
-    return mfem_solvers_[static_cast<size_t>(i)].get();
-  }
-
  private:
-  // Offsets for extracting block vector segments, populated by SetOperator().
-  mfem::Array<int> block_offsets_;
-
-  // Number of blocks
-  const int num_blocks_;
-
-  // Jacobian view for block access
-  const mfem::BlockOperator* block_jacobian_;
-
   // The diagonal part of the preconditioner containing BoomerAMG applications
   std::unique_ptr<mfem::BlockOperator> solver_diag_;
-
-  // mfem solvers for each block
-  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
-
-  // size num_blocks_, nullptr means "use Jacobian diagonal block"
-  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
 };
 
 /**
@@ -112,7 +125,7 @@ enum class BlockTriangularType
  * Call SetOperator() with an mfem::BlockOperator, then use Mult() to apply the
  * preconditioner.
  */
-class BlockTriangularPreconditioner : public mfem::Solver {
+class BlockTriangularPreconditioner : public BlockPreconditioner {
  public:
   /**
    * @brief Construct a new nxn block triangular preconditioner.
@@ -143,33 +156,7 @@ class BlockTriangularPreconditioner : public mfem::Solver {
 
   virtual ~BlockTriangularPreconditioner();
 
-  /** @brief Return the number of sub-solvers owned by this preconditioner. */
-  int numSubSolvers() const { return num_blocks_; }
-
-  /**
-   * @brief Access a sub-solver by index.
-   * @param i Sub-solver index in [0, numSubSolvers()).
-   * @return Pointer to the requested sub-solver (owned by this object).
-   */
-  mfem::Solver* subSolver(int i) const
-  {
-    MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockTriangularPreconditioner::subSolver index out of range");
-    return mfem_solvers_[static_cast<size_t>(i)].get();
-  }
-
  private:
-  // Offsets for extracting block vector segments, populated by SetOperator().
-  mfem::Array<int> block_offsets_;
-
-  // Number of blocks
-  const int num_blocks_;
-
-  // Jacobian view for block access
-  const mfem::BlockOperator* block_jacobian_;
-
-  // mfem solvers for each block
-  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
-
   // Block Triangular type
   BlockTriangularType type_;
 
@@ -188,9 +175,6 @@ class BlockTriangularPreconditioner : public mfem::Solver {
    * @param out The block output vector P_upper^-1(b_1, ..., b_n)
    */
   void UpperSweep(const mfem::Vector& in, mfem::Vector& out) const;
-
-  // size num_blocks_, nullptr means "use Jacobian diagonal block"
-  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
 };
 
 /**
@@ -224,7 +208,7 @@ enum class SchurApproxType
  * Call SetOperator() with an mfem::BlockOperator, then use Mult() to apply the
  * selected Schur preconditioner type.
  */
-class BlockSchurPreconditioner : public mfem::Solver {
+class BlockSchurPreconditioner : public BlockPreconditioner {
  public:
   /**
    * @brief Construct a new 2x2 block Schur complement preconditioner.
@@ -261,33 +245,9 @@ class BlockSchurPreconditioner : public mfem::Solver {
 
   virtual ~BlockSchurPreconditioner();
 
-  /** @brief Return the number of sub-solvers owned by this preconditioner. */
-  int numSubSolvers() const { return static_cast<int>(mfem_solvers_.size()); }
-
-  /**
-   * @brief Access a sub-solver by index.
-   * @param i Sub-solver index in [0, numSubSolvers()).
-   * @return Pointer to the requested sub-solver (owned by this object).
-   */
-  mfem::Solver* subSolver(int i) const
-  {
-    MFEM_VERIFY(i >= 0 && i < static_cast<int>(mfem_solvers_.size()),
-                "BlockSchurPreconditioner::subSolver index out of range");
-    return mfem_solvers_[static_cast<size_t>(i)].get();
-  }
-
  private:
-  // Offsets for extracting block vector segments, populated by SetOperator().
-  mfem::Array<int> block_offsets_;
-
-  // Jacobian view for block access
-  const mfem::BlockOperator* block_jacobian_;
-
   // The diagonal part of the preconditioner containing BoomerAMG applications
   std::unique_ptr<mfem::BlockOperator> solver_diag_;
-
-  // mfem solvers for each block
-  mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
   // Views of the linearized Jacobian blocks
   const mfem::Operator* A_12_ = nullptr;
@@ -320,9 +280,6 @@ class BlockSchurPreconditioner : public mfem::Solver {
    * @param out The block output vector [I - A11^-1 A12; 0, I](b_1, b_2)
    */
   void UpperBlock(const mfem::Vector& in, mfem::Vector& out) const;
-
-  // size num_blocks_, nullptr means "use Jacobian diagonal block"
-  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
 
   mfem::HypreParMatrix* BuildSchurDiagApprox_(const mfem::HypreParMatrix& A11, const mfem::HypreParMatrix& A12,
                                               const mfem::HypreParMatrix& A21, const mfem::HypreParMatrix& A22) const;

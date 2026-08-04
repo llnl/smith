@@ -36,14 +36,20 @@ void applyOverrides(int num_blocks, std::vector<std::unique_ptr<const mfem::Oper
 
 }  // namespace
 
-BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
-                                                         std::vector<BlockOverride> overrides)
+BlockPreconditioner::BlockPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers)
     : block_offsets_(),
       num_blocks_(static_cast<int>(solvers.size())),
       block_jacobian_(nullptr),
-      solver_diag_(nullptr),
       mfem_solvers_(std::move(solvers)),
       block_op_overrides_(static_cast<size_t>(num_blocks_))
+{
+}
+
+BlockPreconditioner::~BlockPreconditioner() {}
+
+BlockDiagonalPreconditioner::BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
+                                                         std::vector<BlockOverride> overrides)
+    : BlockPreconditioner(std::move(solvers)), solver_diag_(nullptr)
 {
   applyOverrides(num_blocks_, block_op_overrides_, std::move(overrides));
 }
@@ -91,12 +97,7 @@ BlockDiagonalPreconditioner::~BlockDiagonalPreconditioner() {}
 BlockTriangularPreconditioner::BlockTriangularPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                              BlockTriangularType type,
                                                              std::vector<BlockOverride> overrides)
-    : block_offsets_(),
-      num_blocks_(static_cast<int>(solvers.size())),
-      block_jacobian_(nullptr),
-      mfem_solvers_(std::move(solvers)),
-      type_(type),
-      block_op_overrides_(static_cast<size_t>(num_blocks_))
+    : BlockPreconditioner(std::move(solvers)), type_(type)
 {
   applyOverrides(num_blocks_, block_op_overrides_, std::move(overrides));
 }
@@ -245,14 +246,9 @@ BlockTriangularPreconditioner::~BlockTriangularPreconditioner() {}
 BlockSchurPreconditioner::BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                                    BlockSchurType type, SchurApproxType approxType,
                                                    std::vector<BlockOverride> overrides)
-    : block_offsets_(),
-      block_jacobian_(nullptr),
-      solver_diag_(nullptr),
-      mfem_solvers_(std::move(solvers)),
-      type_(type),
-      approxType_(approxType),
-      block_op_overrides_(static_cast<size_t>(2))
+    : BlockPreconditioner(std::move(solvers)), solver_diag_(nullptr), type_(type), approxType_(approxType)
 {
+  block_op_overrides_.resize(2);
   SLIC_ERROR_IF(mfem_solvers_.size() != 2, "This precondition is specifically for 2X2 block systems");
 
   applyOverrides(2, block_op_overrides_, std::move(overrides));
