@@ -4,9 +4,9 @@
 "package_final_phase" : "initconfig",
 "package_source_dir" : "../..",
 "spack_url": "https://github.com/spack/spack.git",
-"spack_commit": "5f5d3328847e8e1c50c82951fc7d66cc2c33be41",
+"spack_commit": "195595ec296a29b006701279ad46fa146739665a",
 "spack_packages_url": "https://github.com/spack/spack-packages.git",
-"spack_packages_commit": "1e377ba450d1d1e6458c72663f02826db098886d",
+"spack_packages_commit": "1a7245cb1abc8cba0e7282c2ed98407a88ade51a",
 "spack_configs_path": "scripts/spack/configs",
 "spack_packages_path": ["scripts/spack/spack_repo/smith/packages"]
 }

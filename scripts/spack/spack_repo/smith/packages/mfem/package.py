@@ -11,11 +11,14 @@ class Mfem(BuiltinMfem):
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    version("4.9.0.3", commit="60c2ac77d19a2b0702328840ba101a8b11f8d52d")
+    # Note the x.x.1.x is to prevent a patch from being applied
+    version("4.9.1.4", commit="1c19aba72a2b91ee918a332e668cf00922848321")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
     depends_on("fortran", type="build", when="+strumpack")
+
+    patch("amgx-rm-legacy-nvtools.patch")
 
     # AddressSanitizer (ASan) is only supported by GCC and (some) LLVM-derived
     # compilers. Denylist compilers not known to support ASan
