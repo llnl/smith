@@ -695,7 +695,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
   /**
    * @brief Axisymmetric 2D-to-3D displacement gradient.
-   * @note The radial coordinate must be positive at quadrature points.
    */
   template <typename Position, typename Displacement>
   static auto SMITH_HOST_DEVICE axisymmetricDisplacementGradient(Position position, Displacement displacement)
@@ -816,7 +815,6 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    * @brief Set an axisymmetric material stress response and mass properties.
    *
    * @note Only valid for 2D meshes interpreted as (r, z). The material receives a full 3D displacement gradient.
-   * @note Meshes must exclude quadrature points with r = 0.
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
@@ -1102,7 +1100,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
    * @brief Set an axisymmetric body force function.
    *
-   * @note Only valid for 2D meshes interpreted as (r, z). Meshes must exclude quadrature points with r = 0.
+   * @note Only valid for 2D meshes interpreted as (r, z).
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename BodyForceType>
@@ -1166,7 +1164,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
    * @brief Set an axisymmetric traction boundary condition.
    *
-   * @note Only valid for 2D meshes interpreted as (r, z). Meshes must exclude quadrature points with r = 0.
+   * @note Only valid for 2D meshes interpreted as (r, z).
    * @note This traction is applied in the reference configuration.
    * @note This method must be called prior to completeSetup()
    */
@@ -1253,7 +1251,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
    * @brief Apply an axisymmetric pressure-type follower load.
    *
-   * @note Only valid for 2D meshes interpreted as (r, z). Meshes must exclude quadrature points with r = 0.
+   * @note Only valid for 2D meshes interpreted as (r, z).
    * @note Pressure is applied in the deformed configuration.
    * @note This method must be called prior to completeSetup()
    */
