@@ -20,7 +20,7 @@ concretizer:
 packages:
   caliper:
     require:
-    - spec: "~kokkos"
+    - spec: "~kokkos+shared"
   conduit:
     require:
     - spec: "~shared~test~examples~utilities"
@@ -30,6 +30,9 @@ packages:
   mfem:
     require:
     - spec: "cxxstd=17"
+  petsc:
+    require:
+    - spec: "+shared"
   raja:
     require:
     - spec: "~shared~examples~exercises"
@@ -75,16 +78,12 @@ packages:
     - spec: "^axom+shared ^hypre+shared ^metis+shared ^mfem+shared~static ^netcdf-c+shared ^parmetis+shared ^superlu-dist+shared"
       when: "+shared"
     # Optional dependencies
-    - spec: "^petsc+shared"
-      when: "+shared+petsc"
     - spec: "^strumpack+shared"
       when: "+shared+strumpack"
     - spec: "^raja+shared"
       when: "+shared+raja"
     - spec: "^umpire+shared"
       when: "+shared+umpire"
-    - spec: "^caliper+shared"
-      when: "+shared+caliper"
     - spec: "^adiak+shared"
       when: "+shared+adiak"
     - spec: "^sundials+shared"
@@ -96,14 +95,10 @@ packages:
     - spec: "^axom~shared ^hypre~shared ^metis~shared ^mfem~shared+static ^netcdf-c~shared ^parmetis~shared ^superlu-dist~shared"
       when: "~shared"
     # Optional dependencies
-    - spec: "^petsc~shared"
-      when: "~shared+petsc"
     - spec: "^raja~shared"
       when: "~shared+raja"
     - spec: "^umpire~shared"
       when: "~shared+umpire"
-    - spec: "^caliper~shared"
-      when: "~shared+caliper"
     - spec: "^adiak~shared"
       when: "~shared+adiak"
     - spec: "^sundials~shared"
