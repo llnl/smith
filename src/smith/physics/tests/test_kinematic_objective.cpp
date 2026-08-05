@@ -52,8 +52,10 @@ struct ConstrainedWeakFormFixture : public testing::Test {
 
   auto constructWeakForm(const std::string& physics_name)
   {
-    auto solid_mechanics_weak_form =
-        std::make_shared<SolidWeakFormT>(physics_name, mesh, states[DISP].space(), getSpaces(params));
+    auto solid_mechanics_weak_form_inputs = getSpaces(states);
+    solid_mechanics_weak_form_inputs.push_back(&params[0].space());
+    auto solid_mechanics_weak_form = std::make_shared<SolidWeakFormT>(
+        physics_name, mesh, states[DISP].space(), solid_mechanics_weak_form_inputs);
     // setup material model
     SolidMaterial mat;
     mat.K = 1.0;
@@ -89,7 +91,7 @@ struct ConstrainedWeakFormFixture : public testing::Test {
     ObjectiveT::SpacesT param_space_ptrs{&input_fields[DISP]->space(), &input_fields[DENSITY]->space()};
 
     ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
-    mass_objective.addBodyIntegral(mesh->entireBodyName(),
+    mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
                                    [](auto /*t_info*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
 
     double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
