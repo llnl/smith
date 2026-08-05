@@ -819,24 +819,21 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    *
    * @tparam MaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for MaterialType
-   * @param material A material that provides a function to evaluate 3D stress from axisymmetric kinematics.
+   * @param material A material that evaluates 3D stress from axisymmetric kinematics.
    * @param domain The subdomain which will use this material. Must be a domain of elements.
    * @param qdata the buffer of material internal variables at each quadrature point
    *
    * @pre material must be an object that can be called with the following arguments:
-   *    1. `MaterialType::State& state`, a mutable reference to the internal variables for this quadrature point
+   *    1. `MaterialType::State& state`, mutable internal variables for this quadrature point
    *    2. `tensor<T,3,3> du_dX`, the 3D axisymmetric displacement gradient at this quadrature point
-   *    3. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
-   *            specified in the `DependsOn<...>` argument.
+   *    3. `tuple{value, derivative}`, one tuple for each parameter field specified in `DependsOn<...>`
    * @pre MaterialType must have a public member variable `density`
    * @pre MaterialType must define operator() that returns the 3D First Piola stress as `tensor<T,3,3>`
    *
-   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-   * 3>`)
+   * @note Direct evaluation passes `double`, `tensor<double, ...>` or tuples thereof. Differentiation replaces the
+   *   differentiated inputs with `dual` values.
    * @note Only valid for 2D meshes interpreted as (r, z). The material receives a full 3D displacement gradient.
-   * @note This method integrates the full volume of revolution by applying the axisymmetric weight 2*pi*r.
+   * @note Integrates the full volume of revolution using the axisymmetric weight 2*pi*r.
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
@@ -971,26 +968,22 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
    *
    * @tparam RateDependentMaterialType The solid material type
    * @tparam StateType the type that contains the internal variables for RateDependentMaterialType
-   * @param material A material that provides a function to evaluate 3D stress from axisymmetric kinematics.
+   * @param material A material that evaluates 3D stress from axisymmetric kinematics and dt.
    * @param domain The subdomain which will use this material. Must be a domain of elements.
    * @param qdata the buffer of material internal variables at each quadrature point
    *
    * @pre material must be an object that can be called with the following arguments:
-   *    1. `RateDependentMaterialType::State& state`, a mutable reference to the internal variables for this quadrature
-   *       point
+   *    1. `RateDependentMaterialType::State& state`, mutable internal variables for this quadrature point
    *    2. `double dt`, the current time step size
    *    3. `tensor<T,3,3> du_dX`, the 3D axisymmetric displacement gradient at this quadrature point
-   *    4. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
-   *            specified in the `DependsOn<...>` argument.
+   *    4. `tuple{value, derivative}`, one tuple for each parameter field specified in `DependsOn<...>`
    * @pre RateDependentMaterialType must have a public member variable `density`
    * @pre RateDependentMaterialType must define operator() that returns the 3D First Piola stress as `tensor<T,3,3>`
    *
-   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
-   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
-   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
-   * 3>`)
+   * @note Direct evaluation passes `double`, `tensor<double, ...>` or tuples thereof. Differentiation replaces the
+   *   differentiated inputs with `dual` values.
    * @note Only valid for 2D meshes interpreted as (r, z). The material receives a full 3D displacement gradient.
-   * @note This method integrates the full volume of revolution by applying the axisymmetric weight 2*pi*r.
+   * @note Integrates the full volume of revolution using the axisymmetric weight 2*pi*r.
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename RateDependentMaterialType, typename StateType = Empty>
