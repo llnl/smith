@@ -32,6 +32,24 @@ namespace {
 
 constexpr double two_pi = 2.0 * M_PI;
 
+struct HoopStressMaterial {
+  using State = Empty;
+
+  double density = 0.0;
+
+  template <typename T, int dim>
+  SMITH_HOST_DEVICE auto operator()(State&, const tensor<T, dim, dim>& du_dX) const
+  {
+    auto zero = 0.0 * du_dX[0][0];
+    return make_tensor<dim, dim>([&](int i, int j) {
+      if (i == 2 && j == 2) {
+        return 1.0 + zero;
+      }
+      return zero;
+    });
+  }
+};
+
 std::shared_ptr<Mesh> makeAxisymmetricMesh()
 {
   constexpr int nr = 2;
@@ -183,6 +201,17 @@ TEST(SolidMechanics, AxisymmetricLoadJacobianSymmetry)
   StateManager::initialize(datastore, "axisymmetric_load_symmetry");
 
   expectAxisymmetricJacobianSymmetric(true, true, true, true);
+}
+
+TEST(SolidMechanics, AxisymmetricHoopStressResultant)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "axisymmetric_hoop_resultant");
+
+  auto residual = residualForLoad(
+      [](auto& solid, auto& mesh) { solid.setAxisymmetricMaterial(HoopStressMaterial{}, mesh.entireBody()); });
+
+  expectResultant(residual, tensor<double, 2>{{two_pi, 0.0}});
 }
 
 TEST(SolidMechanics, AxisymmetricBodyForceResultant)

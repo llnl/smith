@@ -696,6 +696,8 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
   /**
    * @brief Axisymmetric 2D-to-3D displacement gradient.
+   *
+   * @note Mesh nodes must satisfy r >= 0, and quadrature points must have r > 0.
    */
   template <typename Position, typename Displacement>
   static auto SMITH_HOST_DEVICE axisymmetricDisplacementGradient(Position position, Displacement displacement)
@@ -722,18 +724,18 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   static auto SMITH_HOST_DEVICE axisymmetricSourceAndFlux(Position position, Stress stress, Acceleration acceleration,
                                                           double density)
   {
-    auto r = 2.0 * M_PI * get<VALUE>(position)[0];
+    auto circumference = 2.0 * M_PI * get<VALUE>(position)[0];
     auto d2u_dt2 = get<VALUE>(acceleration);
-    auto zero = 0.0 * (r * density * d2u_dt2[0] + stress[2][2]);
+    auto zero = 0.0 * (circumference * density * d2u_dt2[0] + stress[2][2]);
     auto source = make_tensor<dim>([&](int i) {
-      auto source_i = r * density * d2u_dt2[i] + zero;
+      auto source_i = circumference * density * d2u_dt2[i] + zero;
       if (i == 0) {
-        return source_i + stress[2][2];
+        return source_i + 2.0 * M_PI * stress[2][2];
       }
       return source_i;
     });
 
-    auto flux = make_tensor<dim, dim>([&](int i, int j) { return r * stress[i][j]; });
+    auto flux = make_tensor<dim, dim>([&](int i, int j) { return circumference * stress[i][j]; });
     return smith::tuple{source, flux};
   }
 
@@ -815,7 +817,26 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
    * @brief Set an axisymmetric material stress response and mass properties.
    *
+   * @tparam MaterialType The solid material type
+   * @tparam StateType the type that contains the internal variables for MaterialType
+   * @param material A material that provides a function to evaluate 3D stress from axisymmetric kinematics.
+   * @param domain The subdomain which will use this material. Must be a domain of elements.
+   * @param qdata the buffer of material internal variables at each quadrature point
+   *
+   * @pre material must be an object that can be called with the following arguments:
+   *    1. `MaterialType::State& state`, a mutable reference to the internal variables for this quadrature point
+   *    2. `tensor<T,3,3> du_dX`, the 3D axisymmetric displacement gradient at this quadrature point
+   *    3. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
+   *            specified in the `DependsOn<...>` argument.
+   * @pre MaterialType must have a public member variable `density`
+   * @pre MaterialType must define operator() that returns the 3D First Piola stress as `tensor<T,3,3>`
+   *
+   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
+   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
+   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
+   * 3>`)
    * @note Only valid for 2D meshes interpreted as (r, z). The material receives a full 3D displacement gradient.
+   * @note This method integrates the full volume of revolution by applying the axisymmetric weight 2*pi*r.
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename MaterialType, typename StateType = Empty>
@@ -946,7 +967,31 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   }
 
   /**
-   * @brief Set an axisymmetric material that gets dt as an argument.
+   * @brief Set an axisymmetric rate-dependent material stress response and mass properties.
+   *
+   * @tparam RateDependentMaterialType The solid material type
+   * @tparam StateType the type that contains the internal variables for RateDependentMaterialType
+   * @param material A material that provides a function to evaluate 3D stress from axisymmetric kinematics.
+   * @param domain The subdomain which will use this material. Must be a domain of elements.
+   * @param qdata the buffer of material internal variables at each quadrature point
+   *
+   * @pre material must be an object that can be called with the following arguments:
+   *    1. `RateDependentMaterialType::State& state`, a mutable reference to the internal variables for this quadrature
+   *       point
+   *    2. `double dt`, the current time step size
+   *    3. `tensor<T,3,3> du_dX`, the 3D axisymmetric displacement gradient at this quadrature point
+   *    4. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
+   *            specified in the `DependsOn<...>` argument.
+   * @pre RateDependentMaterialType must have a public member variable `density`
+   * @pre RateDependentMaterialType must define operator() that returns the 3D First Piola stress as `tensor<T,3,3>`
+   *
+   * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
+   *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
+   *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
+   * 3>`)
+   * @note Only valid for 2D meshes interpreted as (r, z). The material receives a full 3D displacement gradient.
+   * @note This method integrates the full volume of revolution by applying the axisymmetric weight 2*pi*r.
+   * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename RateDependentMaterialType, typename StateType = Empty>
   void setAxisymmetricRateDependentMaterial(DependsOn<active_parameters...>, const RateDependentMaterialType& material,
@@ -1101,7 +1146,19 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
    * @brief Set an axisymmetric body force function.
    *
+   * @tparam BodyForceType The type of the body force load
+   * @param body_force A function describing the body force per unit reference volume.
+   * @param domain which part of the mesh to apply the body force to
+   *
+   * @pre body_force must be an object that can be called with the following arguments:
+   *    1. `tensor<T,2> X`, the reference coordinates for the quadrature point
+   *    2. `double t`, the time
+   *    3. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
+   *            specified in the `DependsOn<...>` argument.
+   * @pre body_force must return `tensor<T,2>`
+   *
    * @note Only valid for 2D meshes interpreted as (r, z).
+   * @note This method integrates the full volume of revolution by multiplying by 2*pi*r.
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename BodyForceType>
@@ -1165,8 +1222,22 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
    * @brief Set an axisymmetric traction boundary condition.
    *
+   * @tparam TractionType The type of the traction load
+   * @param traction_function A function describing the reference traction applied to a boundary.
+   * @param domain The domain over which the traction is applied.
+   *
+   * @pre traction_function must be an object that can be called with the following arguments:
+   *    1. `tensor<T,2> X`, the reference coordinates for the quadrature point
+   *    2. `tensor<T,2> n`, the outward-facing unit normal in the reference configuration
+   *    3. `double t`, the time
+   *    4. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
+   *            specified in the `DependsOn<...>` argument.
+   * @pre traction_function must return `tensor<T,2>`
+   *
    * @note Only valid for 2D meshes interpreted as (r, z).
    * @note This traction is applied in the reference configuration.
+   * @note The traction is a reference force per swept area. This method integrates the full surface of revolution by
+   *   multiplying by 2*pi*r.
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename TractionType>
@@ -1252,8 +1323,21 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   /**
    * @brief Apply an axisymmetric pressure-type follower load.
    *
+   * @tparam PressureType The type of the pressure load
+   * @param pressure_function A function describing the pressure applied to a boundary.
+   * @param domain The domain over which the pressure is applied.
+   *
+   * @pre pressure_function must be an object that can be called with the following arguments:
+   *    1. `tensor<T,2> X`, the reference coordinates for the quadrature point
+   *    2. `double t`, the time
+   *    3. `tuple{value, derivative}`, a tuple of values and derivatives for each parameter field
+   *            specified in the `DependsOn<...>` argument.
+   * @pre pressure_function must return a scalar pressure
+   *
    * @note Only valid for 2D meshes interpreted as (r, z).
    * @note Pressure is applied in the deformed configuration.
+   * @note This method integrates the full surface of revolution by multiplying by 2*pi*r, where r is the deformed
+   *   radius.
    * @note This method must be called prior to completeSetup()
    */
   template <int... active_parameters, typename PressureType>
