@@ -21,8 +21,9 @@
 using namespace smith;
 
 using ShapeDispSpace = H1<1, 2>;
+// Taylor-Hood elements
 using Space = H1<1>;
-using GammaSpace = L2<1>;
+using VectorSpace = H1<2, 2>;
 
 enum class BlockSolverType
 {
@@ -32,15 +33,10 @@ enum class BlockSolverType
 };
 enum class BlockPrecondType
 {
-  Diagonal,
-  TriLower,
-  TriUpper,
-  TriSym,
   SchurLower,
   SchurUpper,
   SchurDiag,
   SchurFull,
-  SchurFullA22,
   SchurFullCustom
 };
 
@@ -64,14 +60,6 @@ std::string BlockParamNameGenerator(const ::testing::TestParamInfo<BlockTestPara
   };
   auto precond_to_str = [](BlockPrecondType t) {
     switch (t) {
-      case BlockPrecondType::Diagonal:
-        return "Diag";
-      case BlockPrecondType::TriLower:
-        return "TriLower";
-      case BlockPrecondType::TriUpper:
-        return "TriUpper";
-      case BlockPrecondType::TriSym:
-        return "TriSym";
       case BlockPrecondType::SchurLower:
         return "SchurLower";
       case BlockPrecondType::SchurUpper:
@@ -80,8 +68,6 @@ std::string BlockParamNameGenerator(const ::testing::TestParamInfo<BlockTestPara
         return "SchurDiag";
       case BlockPrecondType::SchurFull:
         return "SchurFull";
-      case BlockPrecondType::SchurFullA22:
-        return "SchurFullA22";
       case BlockPrecondType::SchurFullCustom:
         return "SchurFullCustom";
     }
@@ -90,37 +76,17 @@ std::string BlockParamNameGenerator(const ::testing::TestParamInfo<BlockTestPara
   return std::string(solver_to_str(info.param.solver_type)) + "_" + precond_to_str(info.param.precond_type);
 }
 
-struct HeatSinkOptions {
-  double kappa_0 = 0.5;
-  double sigma_0 = 5.0;
-  double eta = 1.5;
-  double epsilon_m = 1.0;
-  double epsilon_n = 0.5;
-  double a_m = 0.0;
-  double a_n = 5e+6;
-  double h = 0.01;
-  double q_app = 0.0;
-  double T_app = 0.0;
-  double f_mb = 1.0;
-};
-
 class MeshFixture : public testing::Test {
  protected:
-  double length = 1.0;
-  double width = 1.0;
-  int num_elements_x = 32;
-  int num_elements_y = 32;
-  double elem_size = length / num_elements_x;
-
   axom::sidre::DataStore datastore;
   std::shared_ptr<smith::Mesh> mesh;
 
   void SetUp() override
   {
-    smith::StateManager::initialize(datastore, "porous_heat");
+    smith::StateManager::initialize(datastore, "mixed_poisson");
 
     MPI_Barrier(MPI_COMM_WORLD);
-    int serial_refinement = 0;
+    int serial_refinement = 4;
     int parallel_refinement = 0;
 
     std::string filename = SMITH_REPO_DIR "/data/meshes/square_attribute.mesh";
@@ -137,86 +103,53 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 {
   const auto& test_params = GetParam();
 
-  std::string physics_name = "heatsink";
+  std::string physics_name = "mixed_poisson";
   auto graph = std::make_shared<gretl::DataStore>(std::make_unique<gretl::WangCheckpointStrategy>(100));
   auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
-  auto T1 = createFieldState(*graph, Space{}, physics_name + "_T1", mesh->tag());
-  auto T2 = createFieldState(*graph, Space{}, physics_name + "_T2", mesh->tag());
-  auto gamma = createFieldState(*graph, GammaSpace{}, physics_name + "_gamma", mesh->tag());
-  smith::FunctionalWeakForm<2, Space, smith::Parameters<Space, Space, GammaSpace>> T1_form("T1_eqn", mesh, space(T1),
-                                                                                           spaces({T1, T2, gamma}));
-  smith::FunctionalWeakForm<2, Space, smith::Parameters<Space, Space, GammaSpace>> T2_form("T2_eqn", mesh, space(T2),
-                                                                                           spaces({T1, T2, gamma}));
+  auto flux = createFieldState(*graph, VectorSpace{}, physics_name + "_flux", mesh->tag());
+  auto potential = createFieldState(*graph, Space{}, physics_name + "_potential", mesh->tag());
+  smith::FunctionalWeakForm<2, VectorSpace, smith::Parameters<VectorSpace, Space>> con_form(
+      "constitutive_eqn", mesh, space(flux), spaces({flux, potential}));
+  smith::FunctionalWeakForm<2, Space, smith::Parameters<VectorSpace, Space>> bal_form(
+      "balance_eqn", mesh, space(potential), spaces({flux, potential}));
 
-  HeatSinkOptions heatsink_options{.kappa_0 = 0.5, .sigma_0 = 5., .a_n = 1000.0, .h = 0.01, .q_app = -10.0};
+  con_form.addBodyIntegral(DependsOn<0, 1>{}, mesh->entireBodyName(),
+                           [](double /* t */, auto /* x */, auto SIGMA, auto U) {
+                             auto sigma = get<VALUE>(SIGMA);
+                             auto u = get<VALUE>(U);
+                             // Need to wrap u in a tensor to convert grad(test_function) to . div(test_function)
+                             using Scalar = decltype(u);
+                             smith::tensor<Scalar, 2, 2> u_{};
+                             u_[0][0] = u;
+                             u_[1][1] = u;
+                             return smith::tuple{sigma, -u_};
+                           });
 
-  auto epsilon = [heatsink_options = heatsink_options](auto gamma_) {
-    return (1.0 - gamma_) * heatsink_options.epsilon_m + heatsink_options.f_mb * gamma_ * heatsink_options.epsilon_n;
-  };
+  bal_form.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [](double /* t */, auto X, auto SIGMA) {
+    const auto& x = get<VALUE>(X);
+    auto div_sigma = smith::tr(get<DERIVATIVE>(SIGMA));
+    double pi = M_PI;
+    auto f = 2.0 * pi * pi * sin(pi * x[0]) * sin(pi * x[1]);
+    return smith::tuple{-f + div_sigma, smith::zero{}};
+  });
+  // u_exact = sin(M_PI * x(0)) * sin(M_PI * x(1));
+  // sigma_exact
+  // pi * cos(pi * x(0)) * sin(pi * x(1))
+  // pi * sin(pi * x(0)) * cos(pi * x(1));
 
-  auto a = [heatsink_options = heatsink_options](auto gamma_) {
-    return (1.0 - gamma_) * heatsink_options.a_m + gamma_ * heatsink_options.a_n;
-  };
-
-  auto sigma = [heatsink_options = heatsink_options, epsilon](auto gamma_) {
-    using std::pow;
-    return pow(1.0 - epsilon(gamma_), heatsink_options.eta) * heatsink_options.sigma_0;
-  };
-
-  auto kappa = [heatsink_options = heatsink_options, epsilon](auto gamma_) {
-    using std::pow;
-    return pow(epsilon(gamma_), heatsink_options.eta) * heatsink_options.kappa_0;
-  };
-
-  auto q_n = [heatsink_options = heatsink_options](auto T_1, auto T_2) { return heatsink_options.h * (T_1 - T_2); };
-
-  auto gamma_fun = [](const mfem::Vector& x) -> double {
-    if (x[0] >= 4.0 / 16.0 && x[0] <= 7.0 / 16.0 && x[1] >= 5.0 / 16.0)
-      return 1.0;
-    else if (x[0] >= 14.0 / 16.0 && x[1] >= 5.0 / 16.0)
-      return 1.0;
-    else if (x[1] >= 13.0 / 16.0)
-      return 1.0;
-
-    return 1e-8;
-  };
-
-  auto gamma_coef = std::make_shared<mfem::FunctionCoefficient>(gamma_fun);
-  gamma.get()->project(gamma_coef);
-
-  T1_form.addBodyIntegral(DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
-                          [sigma, a, q_n](double /* t */, auto /* x */, auto T_1, auto T_2, auto gamma_) {
-                            auto [T_1_val, dT_1_dX] = T_1;
-                            auto [T_2_val, dT_2_dX] = T_2;
-                            auto [gamma_val, dgamma_dX] = gamma_;
-                            return smith::tuple{a(gamma_val) * q_n(T_1_val, T_2_val), sigma(gamma_val) * dT_1_dX};
-                          });
-  T2_form.addBodyIntegral(DependsOn<0, 1, 2>{}, mesh->entireBodyName(),
-                          [kappa, a, q_n](double /* t */, auto /* x */, auto T_1, auto T_2, auto gamma_) {
-                            auto [T_1_val, dT_1_dX] = T_1;
-                            auto [T_2_val, dT_2_dX] = T_2;
-                            auto [gamma_val, dgamma_dX] = gamma_;
-                            return smith::tuple{-1.0 * a(gamma_val) * q_n(T_1_val, T_2_val),
-                                                kappa(gamma_val) * dT_2_dX};
-                          });
-
-  auto T1_bc_manager = std::make_shared<smith::BoundaryConditionManager>(mesh->mfemParMesh());
-  auto T2_bc_manager = std::make_shared<smith::BoundaryConditionManager>(mesh->mfemParMesh());
+  auto flux_bc_manager = std::make_shared<smith::BoundaryConditionManager>(mesh->mfemParMesh());
+  auto potential_bc_manager = std::make_shared<smith::BoundaryConditionManager>(mesh->mfemParMesh());
 
   auto zero_bcs = std::make_shared<mfem::FunctionCoefficient>([](const mfem::Vector&) { return 0.0; });
-  T2_bc_manager->addEssential(std::set<int>{1}, zero_bcs, space(T2), 0);
-
-  mesh->addDomainOfBoundaryElements("heat_spreader", by_attr<2>(2));
-  T1_form.addBoundaryIntegral(DependsOn<>{}, "heat_spreader",
-                              [heatsink_options = heatsink_options](double, auto) { return heatsink_options.q_app; });
+  potential_bc_manager->addEssential(std::set<int>{1, 2, 3, 4}, zero_bcs, space(potential), 0);
 
   // Block Preconditioner Options
   smith::LinearSolverOptions linear_options;
   linear_options.linear_solver = smith::LinearSolver::GMRES;
-  linear_options.relative_tol = 1.0e-3;
-  linear_options.absolute_tol = 1.0e-6;
+  linear_options.relative_tol = 1.0e-10;
+  linear_options.absolute_tol = 1.0e-14;
   linear_options.max_iterations = 100;
-  linear_options.print_level = 0;
+  linear_options.print_level = 1;
 
   // Parameter sweep: construct solvers according to test parameters
   if (test_params.solver_type == BlockSolverType::Direct) {
@@ -226,10 +159,10 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   } else if (test_params.solver_type == BlockSolverType::Iterative) {
     smith::LinearSolverOptions iter_solver_options = {.linear_solver = smith::LinearSolver::GMRES,
                                                       .preconditioner = smith::Preconditioner::HypreAMG,
-                                                      .relative_tol = 1.0e-3,
-                                                      .absolute_tol = 1.0e-6,
-                                                      .max_iterations = 100,
-                                                      .print_level = 1};
+                                                      .relative_tol = 0.0,
+                                                      .absolute_tol = 0.0,
+                                                      .max_iterations = 5,
+                                                      .print_level = 0};
     linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
     linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
   } else if (test_params.solver_type == BlockSolverType::BoomerAMG) {
@@ -245,27 +178,12 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   auto dt = graph->create_state<double, double>(0.025);
   size_t cycle = 0;
   std::vector<smith::FieldState> params;
-  auto& T1_params = params;
-  auto& T2_params = params;
-  std::vector<FieldState> T1_arguments{T1, T2, gamma};
-  std::vector<FieldState> T2_arguments{T1, T2, gamma};
+  auto& flux_params = params;
+  auto& potential_params = params;
+  std::vector<FieldState> con_arguments{flux, potential};
+  std::vector<FieldState> bal_arguments{flux, potential};
 
   switch (test_params.precond_type) {
-    case BlockPrecondType::Diagonal:
-      linear_options.preconditioner = smith::Preconditioner::BlockDiagonal;
-      break;
-    case BlockPrecondType::TriLower:
-      linear_options.preconditioner = smith::Preconditioner::BlockTriangular;
-      linear_options.block_triangular_type = smith::BlockTriangularType::Lower;
-      break;
-    case BlockPrecondType::TriUpper:
-      linear_options.preconditioner = smith::Preconditioner::BlockTriangular;
-      linear_options.block_triangular_type = smith::BlockTriangularType::Upper;
-      break;
-    case BlockPrecondType::TriSym:
-      linear_options.preconditioner = smith::Preconditioner::BlockTriangular;
-      linear_options.block_triangular_type = smith::BlockTriangularType::Symmetric;
-      break;
     case BlockPrecondType::SchurLower:
       linear_options.preconditioner = smith::Preconditioner::BlockSchur;
       linear_options.block_schur_type = smith::BlockSchurType::Lower;
@@ -281,11 +199,6 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     case BlockPrecondType::SchurFull:
       linear_options.preconditioner = smith::Preconditioner::BlockSchur;
       linear_options.block_schur_type = smith::BlockSchurType::Full;
-      break;
-    case BlockPrecondType::SchurFullA22:
-      linear_options.preconditioner = smith::Preconditioner::BlockSchur;
-      linear_options.block_schur_type = smith::BlockSchurType::Full;
-      linear_options.schur_approx_type = smith::SchurApproxType::A22Only;
       break;
     case BlockPrecondType::SchurFullCustom:
       linear_options.preconditioner = smith::Preconditioner::BlockSchur;
@@ -303,48 +216,54 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 
   auto nonlinear_block_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
 
-  auto sols = block_solve({&T1_form, &T2_form}, {{0, 1}, {0, 1}}, shape_disp, {T1_arguments, T2_arguments},
-                          {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
-                          nonlinear_block_solver.get(), {T1_bc_manager.get(), T2_bc_manager.get()});
+  auto sols = block_solve({&con_form, &bal_form}, {{0, 1}, {0, 1}}, shape_disp, {con_arguments, bal_arguments},
+                          {flux_params, potential_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
+                          nonlinear_block_solver.get(), {flux_bc_manager.get(), potential_bc_manager.get()});
 
   auto pv_writer = smith::createParaviewWriter(*mesh, sols, physics_name);
   pv_writer.write(0, 0.0, sols);
 
+  // Calculate error versus exact solution
+  auto u_exact_fun = [](const mfem::Vector& X) -> double {
+    double x = X(0), y = X(1);
+    return std::sin(M_PI * x) * std::sin(M_PI * y);
+  };
+  mfem::FunctionCoefficient u_exact_coef(u_exact_fun);
+
+  auto sigma_exact_fun = [](const mfem::Vector& X, mfem::Vector& S) {
+    double x = X(0), y = X(1);
+    S.SetSize(2);
+    S(0) = -M_PI * std::cos(M_PI * x) * std::sin(M_PI * y);
+    S(1) = -M_PI * std::sin(M_PI * x) * std::cos(M_PI * y);
+  };
+  mfem::VectorFunctionCoefficient sigma_exact_coef(2, sigma_exact_fun);
+  double u_err = smith::computeL2Error(*sols[1].get(), u_exact_coef);
+  double sigma_err = smith::computeL2Error(*sols[0].get(), sigma_exact_coef);
+
+  EXPECT_LT(u_err, 5e-3);
+  EXPECT_LT(sigma_err, 5e-2);
   SUCCEED();
 }
 
 INSTANTIATE_TEST_SUITE_P(BlockPrecondSweep, BlockPreconditionerTest,
                          ::testing::Values(
                              // Direct solvers
-                             BlockTestParams{BlockSolverType::Direct, BlockPrecondType::Diagonal},
-                             BlockTestParams{BlockSolverType::Direct, BlockPrecondType::TriLower},
-                             BlockTestParams{BlockSolverType::Direct, BlockPrecondType::TriUpper},
-                             BlockTestParams{BlockSolverType::Direct, BlockPrecondType::TriSym},
                              BlockTestParams{BlockSolverType::Direct, BlockPrecondType::SchurLower},
                              BlockTestParams{BlockSolverType::Direct, BlockPrecondType::SchurUpper},
                              BlockTestParams{BlockSolverType::Direct, BlockPrecondType::SchurDiag},
                              BlockTestParams{BlockSolverType::Direct, BlockPrecondType::SchurFull},
 
                              // Iterative solvers
-                             BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::Diagonal},
-                             BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::TriLower},
-                             BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::TriUpper},
-                             BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::TriSym},
                              BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::SchurLower},
                              BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::SchurUpper},
                              BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::SchurDiag},
                              BlockTestParams{BlockSolverType::Iterative, BlockPrecondType::SchurFull},
 
                              // BoomerAMG solvers
-                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::Diagonal},
-                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::TriLower},
-                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::TriUpper},
-                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::TriSym},
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurLower},
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurUpper},
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurDiag},
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurFull},
-                             BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurFullA22},
                              BlockTestParams{BlockSolverType::BoomerAMG, BlockPrecondType::SchurFullCustom}),
                          BlockParamNameGenerator);
 
