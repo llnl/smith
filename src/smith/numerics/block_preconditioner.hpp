@@ -42,21 +42,25 @@ class BlockPreconditioner : public mfem::Solver {
   virtual ~BlockPreconditioner();
 
  protected:
+  /**
+   * @brief Construct a block preconditioner from one owned solver per block.
+   * @param solvers Sub-solvers owned by this preconditioner.
+   */
   explicit BlockPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers);
 
-  // Offsets for extracting block vector segments, populated by SetOperator().
+  /// @brief Offsets for extracting block vector segments, populated by SetOperator().
   mfem::Array<int> block_offsets_;
 
-  // Number of blocks
+  /// @brief Number of blocks in the block system.
   const int num_blocks_;
 
-  // Jacobian view for block access
+  /// @brief Non-owning view of the block Jacobian supplied by SetOperator().
   const mfem::BlockOperator* block_jacobian_;
 
-  // mfem solvers for each block
+  /// @brief Owned MFEM solver for each block.
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
-  // size num_blocks_, nullptr means "use Jacobian diagonal block"
+  /// @brief Optional per-block operators; null entries use the corresponding Jacobian diagonal block.
   std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
 };
 
