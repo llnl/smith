@@ -30,6 +30,8 @@ namespace smith {
 
 namespace {
 
+constexpr double two_pi = 2.0 * M_PI;
+
 std::shared_ptr<Mesh> makeAxisymmetricMesh()
 {
   constexpr int nr = 2;
@@ -71,7 +73,7 @@ void expectJacobianSymmetric(mfem_ext::StdFunctionOperator& op)
   EXPECT_NEAR(lhs, rhs, 1.0e-10);
 }
 
-std::unique_ptr<SolidMechanics<1, 2>> makeAxisymmetricSolid(std::shared_ptr<Mesh> mesh)
+std::unique_ptr<SolidMechanics<1, 2>> makeAxisymmetricSolidMechanics(std::shared_ptr<Mesh> mesh)
 {
   NonlinearSolverOptions nonlinear_options{.nonlin_solver = NonlinearSolver::Newton,
                                            .relative_tol = 0.0,
@@ -92,7 +94,7 @@ void expectAxisymmetricJacobianSymmetric(bool use_material, bool use_body_force,
   auto mesh = makeAxisymmetricMesh();
 
   constexpr int dim = 2;
-  auto solid = makeAxisymmetricSolid(mesh);
+  auto solid = makeAxisymmetricSolidMechanics(mesh);
 
   if (use_material) {
     solid->setAxisymmetricMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = 3.0, .G = 2.0}, mesh->entireBody());
@@ -129,7 +131,7 @@ std::pair<std::shared_ptr<Mesh>, mfem::Vector> residualForLoad(LoadFunction add_
   MPI_Barrier(MPI_COMM_WORLD);
 
   auto mesh = makeAxisymmetricMesh();
-  auto solid = makeAxisymmetricSolid(mesh);
+  auto solid = makeAxisymmetricSolidMechanics(mesh);
   add_load(*solid, *mesh);
   solid->completeSetup();
 
@@ -143,18 +145,16 @@ std::pair<std::shared_ptr<Mesh>, mfem::Vector> residualForLoad(LoadFunction add_
 
 void expectResultant(const std::pair<std::shared_ptr<Mesh>, mfem::Vector>& load_residual, tensor<double, 2> expected)
 {
-  FiniteElementState load(load_residual.first->mfemParMesh(), smith::H1<1, 2>{}, "load_state");
-  load = load_residual.second;
-
-  auto constant_one = [](tensor<double, 2>) { return tensor<double, 2>{{1.0, 1.0}}; };
-  FiniteElementState virtual_displacement(load.space(), "virtual_displacement");
+  FiniteElementState virtual_displacement(load_residual.first->mfemParMesh(), smith::H1<1, 2>{},
+                                          "virtual_displacement");
 
   for (int component = 0; component < 2; ++component) {
-    virtual_displacement.setFromFieldFunction([component, &constant_one](tensor<double, 2> X) {
-      auto value = constant_one(X);
-      return tensor<double, 2>{{component == 0 ? value[0] : 0.0, component == 1 ? value[1] : 0.0}};
+    virtual_displacement.setFromFieldFunction([component](tensor<double, 2> X) {
+      auto value = 0.0 * X;
+      value[component] = 1.0;
+      return value;
     });
-    EXPECT_NEAR(mfem::InnerProduct(load, virtual_displacement), expected[component], 1.0e-12);
+    EXPECT_NEAR(mfem::InnerProduct(load_residual.second, virtual_displacement), expected[component], 1.0e-12);
   }
 }
 
@@ -191,11 +191,11 @@ TEST(SolidMechanics, AxisymmetricBodyForceResultant)
   StateManager::initialize(datastore, "axisymmetric_body_resultant");
 
   constexpr tensor<double, 2> body_force{{0.25, -0.125}};
-  auto residual = residualForLoad([](auto& solid, auto& mesh) {
-    solid.addAxisymmetricBodyForce([](auto, double) { return tensor<double, 2>{{0.25, -0.125}}; }, mesh.entireBody());
+  auto residual = residualForLoad([body_force](auto& solid, auto& mesh) {
+    solid.addAxisymmetricBodyForce([body_force](auto, double) { return body_force; }, mesh.entireBody());
   });
 
-  constexpr double weighted_area = 1.5;
+  constexpr double weighted_area = 1.5 * two_pi;
   expectResultant(residual, -weighted_area * body_force);
 }
 
@@ -205,13 +205,12 @@ TEST(SolidMechanics, AxisymmetricTractionResultant)
   StateManager::initialize(datastore, "axisymmetric_traction_resultant");
 
   constexpr tensor<double, 2> traction{{0.1, 0.05}};
-  auto residual = residualForLoad([](auto& solid, auto& mesh) {
+  auto residual = residualForLoad([traction](auto& solid, auto& mesh) {
     addBoundaryDomains(mesh);
-    solid.setAxisymmetricTraction([](auto, auto, double) { return tensor<double, 2>{{0.1, 0.05}}; },
-                                  mesh.domain("top"));
+    solid.setAxisymmetricTraction([traction](auto, auto, double) { return traction; }, mesh.domain("top"));
   });
 
-  constexpr double weighted_length = 1.5;
+  constexpr double weighted_length = 1.5 * two_pi;
   expectResultant(residual, -weighted_length * traction);
 }
 
@@ -221,12 +220,12 @@ TEST(SolidMechanics, AxisymmetricPressureOuterResultant)
   StateManager::initialize(datastore, "axisymmetric_pressure_outer_resultant");
 
   constexpr double pressure = 0.1;
-  auto residual = residualForLoad([](auto& solid, auto& mesh) {
+  auto residual = residualForLoad([pressure](auto& solid, auto& mesh) {
     addBoundaryDomains(mesh);
-    solid.setAxisymmetricPressure([](auto, double) { return 0.1; }, mesh.domain("outer"));
+    solid.setAxisymmetricPressure([pressure](auto, double) { return pressure; }, mesh.domain("outer"));
   });
 
-  constexpr double expected_radial = pressure * 2.0;
+  constexpr double expected_radial = pressure * 2.0 * two_pi;
   expectResultant(residual, tensor<double, 2>{{expected_radial, 0.0}});
 }
 
@@ -236,12 +235,12 @@ TEST(SolidMechanics, AxisymmetricPressureInnerResultant)
   StateManager::initialize(datastore, "axisymmetric_pressure_inner_resultant");
 
   constexpr double pressure = 0.1;
-  auto residual = residualForLoad([](auto& solid, auto& mesh) {
+  auto residual = residualForLoad([pressure](auto& solid, auto& mesh) {
     addBoundaryDomains(mesh);
-    solid.setAxisymmetricPressure([](auto, double) { return 0.1; }, mesh.domain("inner"));
+    solid.setAxisymmetricPressure([pressure](auto, double) { return pressure; }, mesh.domain("inner"));
   });
 
-  constexpr double expected_radial = -pressure;
+  constexpr double expected_radial = -pressure * two_pi;
   expectResultant(residual, tensor<double, 2>{{expected_radial, 0.0}});
 }
 

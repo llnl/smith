@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cmath>
 #include <array>
 #include <functional>
 #include <memory>
@@ -721,7 +722,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
   static auto SMITH_HOST_DEVICE axisymmetricSourceAndFlux(Position position, Stress stress, Acceleration acceleration,
                                                           double density)
   {
-    auto r = get<VALUE>(position)[0];
+    auto r = 2.0 * M_PI * get<VALUE>(position)[0];
     auto d2u_dt2 = get<VALUE>(acceleration);
     auto zero = 0.0 * (r * density * d2u_dt2[0] + stress[2][2]);
     auto source = make_tensor<dim>([&](int i) {
@@ -1060,7 +1061,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     auto SMITH_HOST_DEVICE operator()(T t, Position position, Displacement, Acceleration, Params... params) const
     {
       auto X = get<VALUE>(position);
-      return smith::tuple{-X[0] * body_force_(X, t, params...), zero{}};
+      return smith::tuple{-2.0 * M_PI * X[0] * body_force_(X, t, params...), zero{}};
     }
   };
 
@@ -1178,7 +1179,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
           auto n = cross(get<DERIVATIVE>(X));
           auto X0 = get<VALUE>(X);
 
-          return -X0[0] * traction_function(X0, normalize(n), t, params...);
+          return -2.0 * M_PI * X0[0] * traction_function(X0, normalize(n), t, params...);
         },
         domain);
   }
@@ -1267,7 +1268,7 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
           auto X0 = get<VALUE>(X);
           auto x0 = get<VALUE>(x);
 
-          return pressure_function(X0, t, params...) * x0[0] * (n / norm(cross(get<DERIVATIVE>(X))));
+          return 2.0 * M_PI * pressure_function(X0, t, params...) * x0[0] * (n / norm(cross(get<DERIVATIVE>(X))));
         },
         domain);
   }
