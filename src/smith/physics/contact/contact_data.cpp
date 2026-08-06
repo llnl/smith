@@ -333,6 +333,10 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 {
   updateDofOffsets();
   for (size_t i{0}; i < interactions_.size(); ++i) {
+    if (interactions_[i].getContactOptions().method == ContactMethod::EnergyMortar) {
+      continue;
+    }
+
     FiniteElementState p_interaction(interactions_[i].pressureSpace());
     if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::LagrangeMultiplier) {
       // merged_pressures_const should not change; const cast is to create a vector view for copying to tribol pressures
