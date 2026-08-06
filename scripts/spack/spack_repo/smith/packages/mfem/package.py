@@ -18,6 +18,8 @@ class Mfem(BuiltinMfem):
 
     depends_on("fortran", type="build", when="+strumpack")
 
+    # This patch removes the -lnvTools library, because it no longer exists in newer versions of CUDA and
+    # is not used in newer versions of AMGX.
     patch("amgx-rm-legacy-nvtools.patch")
 
     # AddressSanitizer (ASan) is only supported by GCC and (some) LLVM-derived
