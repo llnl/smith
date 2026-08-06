@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if (SMITH_ENABLE_CONTINUATION AND STRUMPACK_DIR)
+if (SMITH_ENABLE_CONTINUATION AND STRUMPACK_FOUND)
     smith_add_executable( NAME        obstacle_design_example
                           SOURCES     obstacle_design_example.cpp
                           OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
