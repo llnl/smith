@@ -68,7 +68,7 @@ TEST(LinearSolverPrecondOnly, Identity)
   }
 }
 
-TEST(LinearSolverPrecondOnly, Jacobi)
+TEST(LinearSolverPrecondOnly, DiagonalWithNoPreconditioner)
 {
   int size = 10;
   mfem::Vector d(size);
@@ -77,9 +77,7 @@ TEST(LinearSolverPrecondOnly, Jacobi)
 
   LinearSolverOptions linear_opts;
   linear_opts.linear_solver = LinearSolver::PrecondOnly;
-  linear_opts.preconditioner = Preconditioner::None;  // We'll set this manually if needed, but wait.
-  // Actually, Preconditioner::None with LinearSolver::PrecondOnly should be Identity.
-  // Let's test that first.
+  linear_opts.preconditioner = Preconditioner::None;
 
   NonlinearSolverOptions nonlinear_opts;
   nonlinear_opts.nonlin_solver = NonlinearSolver::Newton;
@@ -91,7 +89,7 @@ TEST(LinearSolverPrecondOnly, Jacobi)
   mfem::Vector x(size);
   x = 1.0;
   // f(x) = 2x. df/dx = 2I.
-  // If LinearSolver::PrecondOnly and Preconditioner::None, it uses identity:
+  // LinearSolver::PrecondOnly with Preconditioner::None uses identity:
   // x_new = x - I * (2x) = x - 2x = -x.
 
   solver.solve(x);
