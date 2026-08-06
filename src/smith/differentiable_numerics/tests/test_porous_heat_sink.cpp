@@ -234,7 +234,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
   } else if (test_params.solver_type == BlockSolverType::BoomerAMG) {
     smith::LinearSolverOptions amg_solver_options;
-    amg_solver_options.linear_solver = smith::LinearSolver::None;
+    amg_solver_options.linear_solver = smith::LinearSolver::PrecondOnly;
     amg_solver_options.preconditioner = smith::Preconditioner::HypreAMG;
     linear_options.sub_block_linear_solver_options.push_back(amg_solver_options);
     linear_options.sub_block_linear_solver_options.push_back(amg_solver_options);

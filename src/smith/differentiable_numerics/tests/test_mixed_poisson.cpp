@@ -114,7 +114,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
       "balance_eqn", mesh, space(potential), spaces({flux, potential}));
 
   con_form.addBodyIntegral(DependsOn<0, 1>{}, mesh->entireBodyName(),
-                           [](double /* t */, auto /* x */, auto SIGMA, auto U) {
+                           [](auto /* t */, auto /* x */, auto SIGMA, auto U) {
                              auto sigma = get<VALUE>(SIGMA);
                              auto u = get<VALUE>(U);
                              // Need to wrap u in a tensor to convert grad(test_function) to . div(test_function)
@@ -125,7 +125,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
                              return smith::tuple{sigma, -u_};
                            });
 
-  bal_form.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [](double /* t */, auto X, auto SIGMA) {
+  bal_form.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(), [](auto /* t */, auto X, auto SIGMA) {
     const auto& x = get<VALUE>(X);
     auto div_sigma = smith::tr(get<DERIVATIVE>(SIGMA));
     double pi = M_PI;
@@ -167,7 +167,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     linear_options.sub_block_linear_solver_options.push_back(iter_solver_options);
   } else if (test_params.solver_type == BlockSolverType::BoomerAMG) {
     smith::LinearSolverOptions amg_solver_options;
-    amg_solver_options.linear_solver = smith::LinearSolver::None;
+    amg_solver_options.linear_solver = smith::LinearSolver::PrecondOnly;
     amg_solver_options.preconditioner = smith::Preconditioner::HypreAMG;
     linear_options.sub_block_linear_solver_options.push_back(amg_solver_options);
     linear_options.sub_block_linear_solver_options.push_back(amg_solver_options);
