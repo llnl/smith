@@ -101,7 +101,7 @@ MeshPtr buildCircleMesh(const std::string& mesh_tag)
            .updateBdrAttrib(1, 6)
            .updateBdrAttrib(3, 9)
            .scale({1.0, 0.25}),
-       shared::MeshBuilder::SemiCircularShell(mesh_factor * 3 / 2, 10 * mesh_factor, 0.075, 0.125)
+       shared::MeshBuilder::HalfCylinder2D(mesh_factor * 3 / 2, 10 * mesh_factor, 0.075, 0.125)
            .translate({0.125, 0.375})
            .updateBdrAttrib(1, 5)
            .updateBdrAttrib(2, 8)
@@ -283,11 +283,11 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
-  tribol::setEnergyMortarPenaltyMode(0, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
+  tribol::setEnergyMortarEnforcementOption(0, tribol::EnergyMortarEnforcementOption::NodalGap);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
-    tribol::setEnergyMortarPenaltyMode(1, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
+    tribol::setEnergyMortarEnforcementOption(1, tribol::EnergyMortarEnforcementOption::NodalGap);
   }
 
   const std::string paraview_name = config.name + "_paraview";

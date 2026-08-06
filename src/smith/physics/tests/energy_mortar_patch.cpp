@@ -88,7 +88,7 @@ TEST(EnergyMortarPatch, patch)
   solid_solver.setFixedBCs(mesh->domain("y0_faces"), Component::Y);
   solid_solver.setDisplacementBCs(applied_disp_function, mesh->domain("ymax_face"), Component::Y);
   solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
-  tribol::setEnergyMortarPenaltyMode(0, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
+  tribol::setEnergyMortarEnforcementOption(0, tribol::EnergyMortarEnforcementOption::NodalGap);
   solid_solver.completeSetup();
 
   solid_solver.advanceTimestep(1.0);

@@ -155,7 +155,7 @@ TEST_P(ContactFiniteDiff3D, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {6}, {7}, contact_options);
-  tribol::setEnergyMortarPenaltyMode(0, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
+  tribol::setEnergyMortarEnforcementOption(0, tribol::EnergyMortarEnforcementOption::NodalGap);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -335,7 +335,7 @@ TEST_P(ContactFiniteDiff2D, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
-  tribol::setEnergyMortarPenaltyMode(0, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
+  tribol::setEnergyMortarEnforcementOption(0, tribol::EnergyMortarEnforcementOption::NodalGap);
 
   // Finalize the data structures
   solid_solver.completeSetup();

@@ -30,6 +30,7 @@
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "tribol/mesh/CouplingScheme.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace smith {
 
@@ -62,7 +63,7 @@ TEST(TribolShapeReferenceCoords, ShapeDisplacementIncluded)
   ContactData contact_data(pmesh->mfemParMesh());
   constexpr int interaction_id = 0;
   contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
-  tribol::setEnergyMortarPenaltyMode(interaction_id, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
+  tribol::setEnergyMortarEnforcementOption(interaction_id, tribol::EnergyMortarEnforcementOption::NodalGap);
 
   mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.numPressureDofs());
   u = 0.0;
@@ -121,7 +122,7 @@ TEST_P(TribolFiniteDiff, patch)
   ContactData contact_data(pmesh->mfemParMesh());
   constexpr int interaction_id = 0;
   contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
-  tribol::setEnergyMortarPenaltyMode(interaction_id, tribol::EnergyMortarPenaltyMode::QUADRATURE_POINT_GAP);
+  tribol::setEnergyMortarEnforcementOption(interaction_id, tribol::EnergyMortarEnforcementOption::NodalGap);
 
   mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.numPressureDofs());
   u = 0.0;
