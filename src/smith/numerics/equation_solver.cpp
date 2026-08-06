@@ -6,6 +6,7 @@
 
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/block_preconditioner.hpp"
+#include "smith/numerics/solver_with_preconditioner.hpp"
 
 #include <cstdlib>
 #include <iomanip>
@@ -25,27 +26,35 @@
 namespace smith {
 
 namespace {
-
-class SolverWithPreconditioner : public mfem::Solver {
+/**
+ * @brief Simple solver wrapper that only applies a preconditioner.
+ */
+class PreconditionerOnlySolver : public mfem::IterativeSolver {
  public:
-  SolverWithPreconditioner(std::unique_ptr<mfem::Solver> linear_solver, std::unique_ptr<mfem::Solver> preconditioner)
-      : linear_solver_(std::move(linear_solver)), preconditioner_(std::move(preconditioner))
+  PreconditionerOnlySolver(MPI_Comm mpi_comm) : mfem::IterativeSolver(mpi_comm) {}
+
+  /// @overload
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
   {
-    SLIC_ERROR_IF(!linear_solver_, "SolverWithPreconditioner requires a non-null linear solver");
+    if (prec) {
+      prec->Mult(x, y);
+    } else {
+      y = x;
+    }
   }
 
+  /// @overload
   void SetOperator(const mfem::Operator& op) override
   {
-    height = op.Height();
+    if (prec) {
+      prec->SetOperator(op);
+    }
     width = op.Width();
-    linear_solver_->SetOperator(op);
+    height = op.Height();
   }
 
-  void Mult(const mfem::Vector& x, mfem::Vector& y) const override { linear_solver_->Mult(x, y); }
-
  private:
-  std::unique_ptr<mfem::Solver> linear_solver_;
-  std::unique_ptr<mfem::Solver> preconditioner_;
+  // Note: mfem::IterativeSolver already has a 'prec' member (mfem::Solver*)
 };
 
 bool preconditionerSupportsBlockOperator(Preconditioner preconditioner)
@@ -74,6 +83,7 @@ bool linearSolverSupportsBlockOperator(LinearSolver linear_solver)
     case LinearSolver::PetscCG:
     case LinearSolver::PetscGMRES:
 #endif
+    case LinearSolver::None:
       return true;
     default:
       return false;
@@ -1355,6 +1365,9 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
       exit(1);
       break;
 #endif
+    case LinearSolver::None:
+      iter_lin_solver = std::make_unique<PreconditionerOnlySolver>(comm);
+      break;
     default:
       SLIC_ERROR_ROOT("Linear solver type not recognized.");
       exit(1);
@@ -1485,7 +1498,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
     for (const auto& opt : linear_opts.sub_block_linear_solver_options) {
       auto [lin, prec] = buildLinearSolverAndPreconditioner(opt, comm);
-      inner_solvers.push_back(std::make_unique<SolverWithPreconditioner>(std::move(lin), std::move(prec)));
+      inner_solvers.push_back(std::make_unique<smith::SolverWithPreconditioner>(std::move(lin), std::move(prec)));
     }
 
     if (preconditioner == Preconditioner::BlockDiagonal) {
