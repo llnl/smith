@@ -664,6 +664,30 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
     drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
 
+#ifdef SMITH_USE_TRIBOL
+    if (!contact_interaction_force_adjoint_bcs_.empty()) {
+      FiniteElementDual contact_force_load(displacement_.space(), "contact_force_dual_adjoint_load");
+      contact_force_load = 0.0;
+
+      for (const auto& [interaction_id, force_seed] : contact_interaction_force_adjoint_bcs_) {
+        if (!force_seed || force_seed->Norml2() == 0.0) {
+          continue;
+        }
+
+        const auto interaction_J = contactInteraction(interaction_id).jacobianContribution();
+        auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
+        SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+        FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
+        tmp = 0.0;
+        J00->MultTranspose(*force_seed, tmp);
+        contact_force_load.Add(1.0, tmp);
+      }
+
+      shape_displacement_dual_.Add(1.0, contact_force_load);
+    }
+#endif
+
     return BasePhysics::shapeDisplacementSensitivity();
   }
 

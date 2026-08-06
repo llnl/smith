@@ -188,9 +188,8 @@ void updateStaticInputs(BasePhysics& physics)
     physics.setParameter(i, parameter_value);
   }
 
-  FiniteElementState zero_shape(physics.shapeDisplacement().space(), "zero_shape");
-  zero_shape = 0.0;
-  physics.setShapeDisplacement(zero_shape);
+  FiniteElementState shape_value(physics.shapeDisplacement());
+  physics.setShapeDisplacement(shape_value);
 }
 
 void setStaticStateGuesses(BasePhysics& physics)
@@ -372,6 +371,123 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveCanRepeatForBasePhysicsTypes)
         EXPECT_TRUE(std::isfinite(parameter_norm));
       }
       EXPECT_TRUE(std::isfinite(first.shape_l2_norm));
+    }
+  }
+}
+
+double computeQoI(const BasePhysics& physics, const AdjointSeed& seed)
+{
+  double q = 0.0;
+  if (seed.kind == AdjointSeedKind::State) {
+    const auto& state = physics.state(seed.name);
+    FiniteElementDual ones(state.space());
+    ones = 1.0;
+    q = innerProduct(state, ones);
+  } else {
+    const auto& dual = physics.dual(seed.name);
+    FiniteElementState ones(dual.space());
+    ones = 1.0;
+    q = innerProduct(dual, ones);
+  }
+  return q;
+}
+
+double fd_param_sensitivity(BasePhysics& physics, const AdjointSeed& seed, size_t param_idx)
+{
+  const double epsilon = 1.0e-5;
+  const auto& param = physics.parameter(param_idx);
+  FiniteElementState p0(param);
+  FiniteElementState ones(p0.space());
+  ones = 1.0;
+
+  FiniteElementState p_plus(p0);
+  p_plus.Add(epsilon, ones);
+  physics.setParameter(param_idx, p_plus);
+  runStaticForwardPass(physics);
+  double q_plus = computeQoI(physics, seed);
+
+  FiniteElementState p_minus(p0);
+  p_minus.Add(-epsilon, ones);
+  physics.setParameter(param_idx, p_minus);
+  runStaticForwardPass(physics);
+  double q_minus = computeQoI(physics, seed);
+
+  physics.setParameter(param_idx, p0);
+  return (q_plus - q_minus) / (2.0 * epsilon);
+}
+
+double fd_shape_sensitivity(BasePhysics& physics, const AdjointSeed& seed)
+{
+  const double epsilon = 1.0e-5;
+  const auto& shape_disp = physics.shapeDisplacement();
+  FiniteElementState shape0(shape_disp);
+  FiniteElementState ones(shape0.space());
+  ones = 1.0;
+
+  FiniteElementState shape_plus(shape0);
+  shape_plus.Add(epsilon, ones);
+  physics.setShapeDisplacement(shape_plus);
+  runStaticForwardPass(physics);
+  double q_plus = computeQoI(physics, seed);
+
+  FiniteElementState shape_minus(shape0);
+  shape_minus.Add(-epsilon, ones);
+  physics.setShapeDisplacement(shape_minus);
+  runStaticForwardPass(physics);
+  double q_minus = computeQoI(physics, seed);
+
+  physics.setShapeDisplacement(shape0);
+  return (q_plus - q_minus) / (2.0 * epsilon);
+}
+
+TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveFiniteDifference)
+{
+  MPI_Barrier(MPI_COMM_WORLD);
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "adjoint_workflow_static_fd");
+
+  for (auto& test_case : createPhysicsCases()) {
+    SCOPED_TRACE(test_case.name);
+    auto& physics = *test_case.physics;
+
+    for (const auto& seed : adjointSeeds(physics)) {
+      SCOPED_TRACE(seedLabel(seed));
+      
+      runStaticForwardPass(physics);
+      runStaticAdjointPass(physics, seed);
+
+      std::vector<double> adj_param_sens(physics.parameterNames().size());
+      for (std::size_t param_idx = 0; param_idx < physics.parameterNames().size(); ++param_idx) {
+        const auto& param_sens = physics.computeTimestepSensitivity(param_idx);
+        FiniteElementState ones(param_sens.space());
+        ones = 1.0;
+        adj_param_sens[param_idx] = innerProduct(param_sens, ones);
+      }
+
+      const auto& shape_sens = physics.computeTimestepShapeSensitivity();
+      FiniteElementState shape_ones(shape_sens.space());
+      shape_ones = 1.0;
+      double adj_shape_sens = innerProduct(shape_sens, shape_ones);
+
+      for (std::size_t param_idx = 0; param_idx < physics.parameterNames().size(); ++param_idx) {
+        double fd_sens = fd_param_sensitivity(physics, seed, param_idx);
+        
+        double diff = std::abs(adj_param_sens[param_idx] - fd_sens);
+        if (std::abs(fd_sens) > 1.0e-5) {
+          EXPECT_LT(diff / std::abs(fd_sens), 5.0e-3);
+        } else {
+          EXPECT_LT(diff, 1.0e-5);
+        }
+      }
+
+      double fd_shape_sens_val = fd_shape_sensitivity(physics, seed);
+      
+      double shape_diff = std::abs(adj_shape_sens - fd_shape_sens_val);
+      if (std::abs(fd_shape_sens_val) > 1.0e-5) {
+        EXPECT_LT(shape_diff / std::abs(fd_shape_sens_val), 5.0e-3);
+      } else {
+        EXPECT_LT(shape_diff, 1.0e-5);
+      }
     }
   }
 }
