@@ -42,6 +42,12 @@ enum class IroningCase
   Twisted
 };
 
+enum class EnergyMortarGapMode
+{
+  Nodal,
+  QuadraturePoint
+};
+
 IroningCase parseCase(const std::string& value)
 {
   if (value == "square") {
@@ -71,6 +77,45 @@ std::string caseName(IroningCase ironing_case)
 
   SLIC_ERROR_ROOT("Unsupported ironing case.");
   return "square";
+}
+
+EnergyMortarGapMode parseEnergyMortarGapMode(const std::string& value)
+{
+  if (value == "nodal") {
+    return EnergyMortarGapMode::Nodal;
+  }
+  if (value == "quadrature-point") {
+    return EnergyMortarGapMode::QuadraturePoint;
+  }
+
+  SLIC_ERROR_ROOT("Unknown EnergyMortar gap mode '" << value << "'. Expected one of: nodal, quadrature-point.");
+  return EnergyMortarGapMode::Nodal;
+}
+
+tribol::EnergyMortarEnforcementOption tribolGapOption(EnergyMortarGapMode gap_mode)
+{
+  switch (gap_mode) {
+    case EnergyMortarGapMode::Nodal:
+      return tribol::EnergyMortarEnforcementOption::NodalGap;
+    case EnergyMortarGapMode::QuadraturePoint:
+      return tribol::EnergyMortarEnforcementOption::QuadraturePointGap;
+  }
+
+  SLIC_ERROR_ROOT("Unsupported EnergyMortar gap mode.");
+  return tribol::EnergyMortarEnforcementOption::NodalGap;
+}
+
+std::string gapModeOutputName(EnergyMortarGapMode gap_mode)
+{
+  switch (gap_mode) {
+    case EnergyMortarGapMode::Nodal:
+      return "nodal_gaps";
+    case EnergyMortarGapMode::QuadraturePoint:
+      return "quadrature_point_gaps";
+  }
+
+  SLIC_ERROR_ROOT("Unsupported EnergyMortar gap mode.");
+  return "nodal_gaps";
 }
 
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
@@ -219,10 +264,14 @@ int main(int argc, char* argv[])
   smith::ApplicationManager applicationManager(argc, argv);
 
   std::string selected_case = "square";
+  std::string energy_mortar_gap_mode = "quadrature-point";
   int num_steps = -1;
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
       ->check(axom::CLI::IsMember({"square", "circle", "twisted"}));
+  app.add_option("--energy-mortar-gap-mode", energy_mortar_gap_mode,
+                 "EnergyMortar gap evaluation mode: nodal or quadrature-point")
+      ->check(axom::CLI::IsMember({"nodal", "quadrature-point"}));
   app.add_option("--num-steps", num_steps, "Override the number of timesteps to run");
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
@@ -233,10 +282,14 @@ int main(int argc, char* argv[])
 #endif
 
   const auto ironing_case = parseCase(selected_case);
+  const auto gap_mode = parseEnergyMortarGapMode(energy_mortar_gap_mode);
+  const auto gap_option = tribolGapOption(gap_mode);
+  const std::string output_name = "contact_ironing_2D_" + caseName(ironing_case) + "_" + gapModeOutputName(gap_mode);
   axom::sidre::DataStore datastore;
-  smith::StateManager::initialize(datastore, "contact_ironing_2D_" + caseName(ironing_case) + "_example_data");
+  smith::StateManager::initialize(datastore, output_name + "_example_data");
 
   CaseConfig config = makeCaseConfig(ironing_case);
+  config.name = output_name + "_example";
   if (num_steps > 0) {
     config.num_steps = num_steps;
   }
@@ -283,11 +336,11 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
-  tribol::setEnergyMortarEnforcementOption(0, tribol::EnergyMortarEnforcementOption::NodalGap);
+  tribol::setEnergyMortarEnforcementOption(0, gap_option);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
-    tribol::setEnergyMortarEnforcementOption(1, tribol::EnergyMortarEnforcementOption::NodalGap);
+    tribol::setEnergyMortarEnforcementOption(1, gap_option);
   }
 
   const std::string paraview_name = config.name + "_paraview";
