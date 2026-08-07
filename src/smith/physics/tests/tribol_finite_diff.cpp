@@ -34,97 +34,13 @@
 
 namespace smith {
 
-class TribolFiniteDiff : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
+struct TribolFiniteDiffParam {
+  ContactEnforcement enforcement;
+  tribol::EnergyMortarEnforcementOption gap_option;
+  std::string name;
+};
 
-TEST(TribolShapeReferenceCoords, ShapeDisplacementIncluded)
-{
-  axom::sidre::DataStore datastore;
-  StateManager::initialize(datastore, "tribol_shape_reference_coords_data");
-
-  // clang-format off
-  auto pmesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1, 1)
-      .translate({0.0, 0.999})
-      .updateBdrAttrib(4, 7)
-      .updateBdrAttrib(3, 9)
-      .updateBdrAttrib(1, 6),
-    shared::MeshBuilder::SquareMesh(1, 1)
-      .updateBdrAttrib(4, 7)
-      .updateBdrAttrib(1, 8)
-      .updateBdrAttrib(3, 5)
-  }), "patch_mesh", 0, 0);
-  // clang-format on
-
-  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
-                                 .enforcement = ContactEnforcement::Penalty,
-                                 .type = ContactType::Frictionless,
-                                 .penalty = 0.1,
-                                 .jacobian = ContactJacobian::Approximate};
-  ContactData contact_data(pmesh->mfemParMesh());
-  constexpr int interaction_id = 0;
-  contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
-  tribol::setEnergyMortarEnforcementOption(interaction_id, tribol::EnergyMortarEnforcementOption::NodalGap);
-
-  mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.numPressureDofs());
-  u = 0.0;
-  mfem::Vector u_shape(pmesh->mfemParMesh().GetNodes()->Size());
-  u_shape = 0.125;
-  mfem::Vector f(u.Size());
-  f = 0.0;
-  contact_data.residualFunction(u_shape, u, f);
-
-  auto& cs = tribol::CouplingSchemeManager::getInstance().at(interaction_id);
-  auto check_mesh = [](auto& mesh) {
-    const auto view = mesh.getView();
-    ASSERT_TRUE(view.hasReferencePosition());
-    for (tribol::IndexT node = 0; node < view.numberOfNodes(); ++node) {
-      EXPECT_NEAR(view.getPosition()[0][node], view.getReferencePosition()[0][node], 1.0e-14);
-      EXPECT_NEAR(view.getPosition()[1][node], view.getReferencePosition()[1][node], 1.0e-14);
-    }
-  };
-  check_mesh(cs.getMesh1());
-  check_mesh(cs.getMesh2());
-}
-
-TEST(TribolQuadraturePointGaps, UpdateForcesAndJacobianDoesNotRequestNodalGaps)
-{
-  axom::sidre::DataStore datastore;
-  StateManager::initialize(datastore, "tribol_qp_gap_no_nodal_gap_data");
-
-  // clang-format off
-  auto pmesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
-    shared::MeshBuilder::SquareMesh(1, 1)
-      .translate({0.0, 0.999})
-      .updateBdrAttrib(4, 7)
-      .updateBdrAttrib(3, 9)
-      .updateBdrAttrib(1, 6),
-    shared::MeshBuilder::SquareMesh(1, 1)
-      .updateBdrAttrib(4, 7)
-      .updateBdrAttrib(1, 8)
-      .updateBdrAttrib(3, 5)
-  }), "patch_mesh", 0, 0);
-  // clang-format on
-
-  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
-                                 .enforcement = ContactEnforcement::Penalty,
-                                 .type = ContactType::Frictionless,
-                                 .penalty = 0.1,
-                                 .jacobian = ContactJacobian::Exact};
-  ContactData contact_data(pmesh->mfemParMesh());
-  constexpr int interaction_id = 0;
-  contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
-  tribol::setEnergyMortarEnforcementOption(interaction_id, tribol::EnergyMortarEnforcementOption::QuadraturePointGap);
-
-  mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size());
-  u = 0.0;
-  mfem::Vector u_shape(pmesh->mfemParMesh().GetNodes()->Size());
-  u_shape = 0.0;
-  double dt = 1.0;
-  contact_data.updateForcesAndJacobian(0, 0.0, dt, u_shape, u);
-
-  EXPECT_TRUE(std::isfinite(contact_data.forces().Norml2()));
-  EXPECT_NE(nullptr, contact_data.mergedJacobian().get());
-}
+class TribolFiniteDiff : public testing::TestWithParam<TribolFiniteDiffParam> {};
 
 TEST_P(TribolFiniteDiff, patch)
 {
@@ -134,7 +50,7 @@ TEST_P(TribolFiniteDiff, patch)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string name = "tribol_fd_" + GetParam().second;
+  std::string name = "tribol_fd_" + GetParam().name;
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -155,14 +71,14 @@ TEST_P(TribolFiniteDiff, patch)
   // clang-format on
 
   ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
-                                 .enforcement = GetParam().first,
+                                 .enforcement = GetParam().enforcement,
                                  .type = ContactType::Frictionless,
                                  .penalty = 0.1,
                                  .jacobian = ContactJacobian::Exact};
   ContactData contact_data(pmesh->mfemParMesh());
   constexpr int interaction_id = 0;
   contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
-  tribol::setEnergyMortarEnforcementOption(interaction_id, tribol::EnergyMortarEnforcementOption::NodalGap);
+  tribol::setEnergyMortarEnforcementOption(interaction_id, GetParam().gap_option);
 
   mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size() + contact_data.numPressureDofs());
   u = 0.0;
@@ -209,8 +125,14 @@ TEST_P(TribolFiniteDiff, patch)
   std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
 }
 
-INSTANTIATE_TEST_SUITE_P(tribol, TribolFiniteDiff,
-                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")));
+INSTANTIATE_TEST_SUITE_P(
+    tribol, TribolFiniteDiff,
+    testing::Values(TribolFiniteDiffParam{.enforcement = ContactEnforcement::Penalty,
+                                          .gap_option = tribol::EnergyMortarEnforcementOption::NodalGap,
+                                          .name = "penalty_nodal_gap"},
+                    TribolFiniteDiffParam{.enforcement = ContactEnforcement::Penalty,
+                                          .gap_option = tribol::EnergyMortarEnforcementOption::QuadraturePointGap,
+                                          .name = "penalty_quadrature_point_gap"}));
 
 class TribolFiniteDiff3D : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
 

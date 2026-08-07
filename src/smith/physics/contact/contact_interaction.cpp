@@ -89,18 +89,9 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
   }
 #endif
 
-  const bool use_exact_jacobian = getContactOptions().jacobian == ContactJacobian::Exact;
+  if (getContactOptions().jacobian == ContactJacobian::Exact) {
 #ifdef SMITH_USE_ENZYME
-  const bool use_energy_mortar = getContactOptions().method == ContactMethod::EnergyMortar;
-#else
-  const bool use_energy_mortar = false;
-#endif
-
-  if (use_exact_jacobian || use_energy_mortar) {
-#ifdef SMITH_USE_ENZYME
-    if (use_exact_jacobian) {
-      tribol::enableEnzyme(interaction_id, true);
-    }
+    tribol::enableEnzyme(interaction_id, true);
 #endif
     tribol::registerMfemReferenceCoords(interaction_id, shaped_reference_coords);
   }

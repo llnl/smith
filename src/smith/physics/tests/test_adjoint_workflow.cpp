@@ -95,18 +95,12 @@ struct PhysicsCase {
 };
 
 #ifdef SMITH_USE_TRIBOL
-enum class ContactGapEvaluation
-{
-  Nodal,
-  QuadraturePoint
-};
-
-struct EnergyContactPhysicsCaseConfig {
+struct EnergyMortarContactCaseConfig {
   std::string name;
   ContactOptions options;
   int interaction_id;
 #ifdef SMITH_USE_ENZYME
-  ContactGapEvaluation gap_evaluation = ContactGapEvaluation::Nodal;
+  tribol::EnergyMortarEnforcementOption gap_option = tribol::EnergyMortarEnforcementOption::NodalGap;
 #endif
 };
 #endif
@@ -200,7 +194,7 @@ std::unique_ptr<BasePhysics> createSingleMortarContactSolver(std::shared_ptr<Mes
   return solid;
 }
 
-std::shared_ptr<Mesh> createEnergyContactMesh(const std::string& mesh_name)
+std::shared_ptr<Mesh> createEnergyMortarContactMesh(const std::string& mesh_name)
 {
   // clang-format off
   auto mesh = std::make_shared<Mesh>(shared::MeshBuilder::Unify({
@@ -221,8 +215,8 @@ std::shared_ptr<Mesh> createEnergyContactMesh(const std::string& mesh_name)
   return mesh;
 }
 
-std::unique_ptr<BasePhysics> createEnergyContactSolver(std::shared_ptr<Mesh> mesh,
-                                                       const EnergyContactPhysicsCaseConfig& config)
+std::unique_ptr<BasePhysics> createEnergyMortarContactSolver(std::shared_ptr<Mesh> mesh,
+                                                             const EnergyMortarContactCaseConfig& config)
 {
   auto nonlinear_options = NonlinearSolverOptions{.nonlin_solver = NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-13,
@@ -248,10 +242,7 @@ std::unique_ptr<BasePhysics> createEnergyContactSolver(std::shared_ptr<Mesh> mes
   solid->addContactInteraction(config.interaction_id, {3}, {5}, config.options);
 #ifdef SMITH_USE_ENZYME
   if (config.options.method == ContactMethod::EnergyMortar) {
-    auto tribol_gap_option = config.gap_evaluation == ContactGapEvaluation::Nodal
-                                 ? tribol::EnergyMortarEnforcementOption::NodalGap
-                                 : tribol::EnergyMortarEnforcementOption::QuadraturePointGap;
-    tribol::setEnergyMortarEnforcementOption(config.interaction_id, tribol_gap_option);
+    tribol::setEnergyMortarEnforcementOption(config.interaction_id, config.gap_option);
   }
 #endif
 
@@ -259,27 +250,27 @@ std::unique_ptr<BasePhysics> createEnergyContactSolver(std::shared_ptr<Mesh> mes
   return solid;
 }
 
-std::vector<EnergyContactPhysicsCaseConfig> energyContactPhysicsCaseConfigs()
+std::vector<EnergyMortarContactCaseConfig> energyMortarContactCaseConfigs()
 {
-  std::vector<EnergyContactPhysicsCaseConfig> configs;
+  std::vector<EnergyMortarContactCaseConfig> configs;
 #ifdef SMITH_USE_ENZYME
-  configs.push_back(EnergyContactPhysicsCaseConfig{.name = "solid_mechanics_contact_energy_mortar_nodal_gaps",
-                                                   .options = ContactOptions{.method = ContactMethod::EnergyMortar,
-                                                                             .enforcement = ContactEnforcement::Penalty,
-                                                                             .type = ContactType::Frictionless,
-                                                                             .penalty = 1.0e-1,
-                                                                             .jacobian = ContactJacobian::Exact},
-                                                   .interaction_id = 1,
-                                                   .gap_evaluation = ContactGapEvaluation::Nodal});
+  configs.push_back(EnergyMortarContactCaseConfig{.name = "solid_mechanics_contact_energy_mortar_nodal_gaps",
+                                                  .options = ContactOptions{.method = ContactMethod::EnergyMortar,
+                                                                            .enforcement = ContactEnforcement::Penalty,
+                                                                            .type = ContactType::Frictionless,
+                                                                            .penalty = 1.0e-1,
+                                                                            .jacobian = ContactJacobian::Exact},
+                                                  .interaction_id = 1,
+                                                  .gap_option = tribol::EnergyMortarEnforcementOption::NodalGap});
   configs.push_back(
-      EnergyContactPhysicsCaseConfig{.name = "solid_mechanics_contact_energy_mortar_quadrature_point_gaps",
-                                     .options = ContactOptions{.method = ContactMethod::EnergyMortar,
-                                                               .enforcement = ContactEnforcement::Penalty,
-                                                               .type = ContactType::Frictionless,
-                                                               .penalty = 1.0e-1,
-                                                               .jacobian = ContactJacobian::Exact},
-                                     .interaction_id = 2,
-                                     .gap_evaluation = ContactGapEvaluation::QuadraturePoint});
+      EnergyMortarContactCaseConfig{.name = "solid_mechanics_contact_energy_mortar_quadrature_point_gaps",
+                                    .options = ContactOptions{.method = ContactMethod::EnergyMortar,
+                                                              .enforcement = ContactEnforcement::Penalty,
+                                                              .type = ContactType::Frictionless,
+                                                              .penalty = 1.0e-1,
+                                                              .jacobian = ContactJacobian::Exact},
+                                    .interaction_id = 2,
+                                    .gap_option = tribol::EnergyMortarEnforcementOption::QuadraturePointGap});
 #endif
   return configs;
 }
@@ -438,9 +429,9 @@ std::vector<PhysicsCase> createPhysicsCases()
   cases.push_back(PhysicsCase{.name = single_mortar_name,
                               .physics = createSingleMortarContactSolver(single_mortar_mesh, single_mortar_name, 0)});
 
-  for (const auto& config : energyContactPhysicsCaseConfigs()) {
-    auto contact_mesh = createEnergyContactMesh(config.name + "_mesh");
-    cases.push_back(PhysicsCase{.name = config.name, .physics = createEnergyContactSolver(contact_mesh, config)});
+  for (const auto& config : energyMortarContactCaseConfigs()) {
+    auto contact_mesh = createEnergyMortarContactMesh(config.name + "_mesh");
+    cases.push_back(PhysicsCase{.name = config.name, .physics = createEnergyMortarContactSolver(contact_mesh, config)});
   }
 #endif
 
