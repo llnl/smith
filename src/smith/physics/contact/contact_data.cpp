@@ -25,6 +25,23 @@ namespace smith {
 
 #ifdef SMITH_USE_TRIBOL
 
+namespace {
+
+bool hasIndependentPressureState(const ContactOptions& options)
+{
+#ifdef SMITH_USE_ENZYME
+  if (options.method == ContactMethod::EnergyMortar) {
+    // Smith currently supports EnergyMortar with penalty enforcement only. For nodal gaps, Tribol owns a pressure
+    // vector but recomputes it from the current gap on update; quadrature-point gaps do not expose a nodal pressure
+    // vector. In both cases there is no independent pressure state to reset or set here.
+    return false;
+  }
+#endif
+  return true;
+}
+
+}  // namespace
+
 ContactData::ContactData(const mfem::ParMesh& mesh)
     : mesh_{mesh},
       reference_nodes_{static_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
@@ -78,9 +95,11 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
 void ContactData::reset()
 {
   for (auto& interaction : interactions_) {
-    FiniteElementState zero = interaction.pressure();
-    zero = 0.0;
-    interaction.setPressure(zero);
+    if (hasIndependentPressureState(interaction.getContactOptions())) {
+      FiniteElementState zero = interaction.pressure();
+      zero = 0.0;
+      interaction.setPressure(zero);
+    }
   }
 }
 
@@ -333,7 +352,7 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 {
   updateDofOffsets();
   for (size_t i{0}; i < interactions_.size(); ++i) {
-    if (interactions_[i].getContactOptions().method == ContactMethod::EnergyMortar) {
+    if (!hasIndependentPressureState(interactions_[i].getContactOptions())) {
       continue;
     }
 

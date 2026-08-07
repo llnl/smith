@@ -29,6 +29,7 @@
 #include "smith/numerics/functional/finite_element.hpp"
 #include "smith/numerics/functional/tensor.hpp"
 #include "smith/numerics/solver_config.hpp"
+#include "shared/mesh/MeshBuilder.hpp"
 #include "smith/mesh_utils/mesh_utils.hpp"
 #include "smith/physics/base_physics.hpp"
 #include "smith/physics/boundary_conditions/components.hpp"
@@ -43,6 +44,9 @@
 #ifdef SMITH_USE_TRIBOL
 #include "smith/physics/contact/contact_config.hpp"
 #include "smith/physics/solid_mechanics_contact.hpp"
+#ifdef SMITH_USE_ENZYME
+#include "tribol/interface/tribol.hpp"
+#endif
 #endif
 
 namespace smith {
@@ -50,11 +54,13 @@ namespace {
 
 constexpr int p = 1;
 constexpr int dim = 2;
-constexpr int contact_dim = 3;
+constexpr int contact_2d_dim = 2;
+constexpr int contact_3d_dim = 3;
 
 using ParametricSolid = SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>>;
 #ifdef SMITH_USE_TRIBOL
-using ContactSolid = SolidMechanicsContact<p, contact_dim>;
+using EnergyContactSolid = SolidMechanicsContact<p, contact_2d_dim>;
+using SingleMortarContactSolid = SolidMechanicsContact<p, contact_3d_dim>;
 #endif
 
 const std::string mesh_tag{"mesh"};
@@ -87,6 +93,23 @@ struct PhysicsCase {
   std::string name;
   std::unique_ptr<BasePhysics> physics;
 };
+
+#ifdef SMITH_USE_TRIBOL
+enum class ContactGapEvaluation
+{
+  Nodal,
+  QuadraturePoint
+};
+
+struct EnergyContactPhysicsCaseConfig {
+  std::string name;
+  ContactOptions options;
+  int interaction_id;
+#ifdef SMITH_USE_ENZYME
+  ContactGapEvaluation gap_evaluation = ContactGapEvaluation::Nodal;
+#endif
+};
+#endif
 
 constexpr double time_step = 1.0;
 
@@ -134,16 +157,17 @@ std::unique_ptr<BasePhysics> createSolidSolver(std::shared_ptr<Mesh> mesh)
 }
 
 #ifdef SMITH_USE_TRIBOL
-std::shared_ptr<Mesh> createContactMesh()
+std::shared_ptr<Mesh> createSingleMortarContactMesh(const std::string& mesh_name)
 {
   const std::string filename = SMITH_REPO_DIR "/data/meshes/contact_two_blocks.g";
-  auto mesh = std::make_shared<Mesh>(buildMeshFromFile(filename), "contact_mesh", 0, 0);
-  mesh->addDomainOfBoundaryElements("two", by_attr<contact_dim>(2));
-  mesh->addDomainOfBoundaryElements("four", by_attr<contact_dim>(4));
+  auto mesh = std::make_shared<Mesh>(buildMeshFromFile(filename), mesh_name, 0, 0);
+  mesh->addDomainOfBoundaryElements("two", by_attr<contact_3d_dim>(2));
+  mesh->addDomainOfBoundaryElements("four", by_attr<contact_3d_dim>(4));
   return mesh;
 }
 
-std::unique_ptr<BasePhysics> createContactSolver(std::shared_ptr<Mesh> mesh)
+std::unique_ptr<BasePhysics> createSingleMortarContactSolver(std::shared_ptr<Mesh> mesh, const std::string& name,
+                                                             int interaction_id)
 {
   auto nonlinear_options = NonlinearSolverOptions{.nonlin_solver = NonlinearSolver::Newton,
                                                   .relative_tol = 1.0e-13,
@@ -151,21 +175,21 @@ std::unique_ptr<BasePhysics> createContactSolver(std::shared_ptr<Mesh> mesh)
                                                   .max_iterations = 20,
                                                   .print_level = 0};
 
-  auto solid = std::make_unique<ContactSolid>(nonlinear_options, solid_mechanics::direct_linear_options,
-                                              solid_mechanics::default_quasistatic_options, "contact_solid", mesh);
+  auto solid = std::make_unique<SingleMortarContactSolid>(nonlinear_options, solid_mechanics::direct_linear_options,
+                                                          solid_mechanics::default_quasistatic_options, name, mesh);
 
   solid_mechanics::NeoHookean material{1.0, 10.0, 0.25};
   solid->setMaterial(material, mesh->entireBody());
   solid->setFixedBCs(mesh->domain("two"));
   solid->setDisplacementBCs(
-      [](tensor<double, contact_dim> x, double) {
+      [](tensor<double, contact_3d_dim> x, double) {
         auto displacement = 0.0 * x;
         displacement[1] = -0.1;
         return displacement;
       },
       mesh->domain("four"), Component::ALL);
 
-  solid->addContactInteraction(0, {3}, {5},
+  solid->addContactInteraction(interaction_id, {3}, {5},
                                ContactOptions{.method = ContactMethod::SingleMortar,
                                               .enforcement = ContactEnforcement::Penalty,
                                               .type = ContactType::TiedNormal,
@@ -174,6 +198,90 @@ std::unique_ptr<BasePhysics> createContactSolver(std::shared_ptr<Mesh> mesh)
 
   solid->completeSetup();
   return solid;
+}
+
+std::shared_ptr<Mesh> createEnergyContactMesh(const std::string& mesh_name)
+{
+  // clang-format off
+  auto mesh = std::make_shared<Mesh>(shared::MeshBuilder::Unify({
+      shared::MeshBuilder::SquareMesh(1, 1)
+          .translate({0.0, 0.999})
+          .updateBdrAttrib(4, 7)
+          .updateBdrAttrib(3, 9)
+          .updateBdrAttrib(1, 6),
+      shared::MeshBuilder::SquareMesh(1, 1)
+          .updateBdrAttrib(4, 7)
+          .updateBdrAttrib(1, 8)
+          .updateBdrAttrib(3, 5)}),
+      mesh_name, 0, 0);
+  // clang-format on
+  mesh->addDomainOfBoundaryElements("x0_faces", by_attr<contact_2d_dim>(7));
+  mesh->addDomainOfBoundaryElements("y0_faces", by_attr<contact_2d_dim>(8));
+  mesh->addDomainOfBoundaryElements("ymax_face", by_attr<contact_2d_dim>(9));
+  return mesh;
+}
+
+std::unique_ptr<BasePhysics> createEnergyContactSolver(std::shared_ptr<Mesh> mesh,
+                                                       const EnergyContactPhysicsCaseConfig& config)
+{
+  auto nonlinear_options = NonlinearSolverOptions{.nonlin_solver = NonlinearSolver::Newton,
+                                                  .relative_tol = 1.0e-13,
+                                                  .absolute_tol = 1.0e-13,
+                                                  .max_iterations = 20,
+                                                  .print_level = 0};
+
+  auto solid = std::make_unique<EnergyContactSolid>(nonlinear_options, solid_mechanics::direct_linear_options,
+                                                    solid_mechanics::default_quasistatic_options, config.name, mesh);
+
+  solid_mechanics::NeoHookean material{1.0, 10.0, 0.25};
+  solid->setMaterial(material, mesh->entireBody());
+  solid->setFixedBCs(mesh->domain("x0_faces"), Component::X);
+  solid->setFixedBCs(mesh->domain("y0_faces"), Component::Y);
+  solid->setDisplacementBCs(
+      [](tensor<double, contact_2d_dim> x, double) {
+        auto displacement = 0.0 * x;
+        displacement[1] = -1.0e-2;
+        return displacement;
+      },
+      mesh->domain("ymax_face"), Component::Y);
+
+  solid->addContactInteraction(config.interaction_id, {3}, {5}, config.options);
+#ifdef SMITH_USE_ENZYME
+  if (config.options.method == ContactMethod::EnergyMortar) {
+    auto tribol_gap_option = config.gap_evaluation == ContactGapEvaluation::Nodal
+                                 ? tribol::EnergyMortarEnforcementOption::NodalGap
+                                 : tribol::EnergyMortarEnforcementOption::QuadraturePointGap;
+    tribol::setEnergyMortarEnforcementOption(config.interaction_id, tribol_gap_option);
+  }
+#endif
+
+  solid->completeSetup();
+  return solid;
+}
+
+std::vector<EnergyContactPhysicsCaseConfig> energyContactPhysicsCaseConfigs()
+{
+  std::vector<EnergyContactPhysicsCaseConfig> configs;
+#ifdef SMITH_USE_ENZYME
+  configs.push_back(EnergyContactPhysicsCaseConfig{.name = "solid_mechanics_contact_energy_mortar_nodal_gaps",
+                                                   .options = ContactOptions{.method = ContactMethod::EnergyMortar,
+                                                                             .enforcement = ContactEnforcement::Penalty,
+                                                                             .type = ContactType::Frictionless,
+                                                                             .penalty = 1.0e-1,
+                                                                             .jacobian = ContactJacobian::Exact},
+                                                   .interaction_id = 1,
+                                                   .gap_evaluation = ContactGapEvaluation::Nodal});
+  configs.push_back(
+      EnergyContactPhysicsCaseConfig{.name = "solid_mechanics_contact_energy_mortar_quadrature_point_gaps",
+                                     .options = ContactOptions{.method = ContactMethod::EnergyMortar,
+                                                               .enforcement = ContactEnforcement::Penalty,
+                                                               .type = ContactType::Frictionless,
+                                                               .penalty = 1.0e-1,
+                                                               .jacobian = ContactJacobian::Exact},
+                                     .interaction_id = 2,
+                                     .gap_evaluation = ContactGapEvaluation::QuadraturePoint});
+#endif
+  return configs;
 }
 #endif
 
@@ -325,8 +433,15 @@ std::vector<PhysicsCase> createPhysicsCases()
   cases.push_back(PhysicsCase{.name = "solid_mechanics", .physics = createSolidSolver(solid_mesh)});
 
 #ifdef SMITH_USE_TRIBOL
-  auto contact_mesh = createContactMesh();
-  cases.push_back(PhysicsCase{.name = "solid_mechanics_contact", .physics = createContactSolver(contact_mesh)});
+  const std::string single_mortar_name = "solid_mechanics_contact_single_mortar";
+  auto single_mortar_mesh = createSingleMortarContactMesh(single_mortar_name + "_mesh");
+  cases.push_back(PhysicsCase{.name = single_mortar_name,
+                              .physics = createSingleMortarContactSolver(single_mortar_mesh, single_mortar_name, 0)});
+
+  for (const auto& config : energyContactPhysicsCaseConfigs()) {
+    auto contact_mesh = createEnergyContactMesh(config.name + "_mesh");
+    cases.push_back(PhysicsCase{.name = config.name, .physics = createEnergyContactSolver(contact_mesh, config)});
+  }
 #endif
 
   return cases;
@@ -452,7 +567,7 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveFiniteDifference)
 
     for (const auto& seed : adjointSeeds(physics)) {
       SCOPED_TRACE(seedLabel(seed));
-      
+
       runStaticForwardPass(physics);
       runStaticAdjointPass(physics, seed);
 
@@ -471,7 +586,7 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveFiniteDifference)
 
       for (std::size_t param_idx = 0; param_idx < physics.parameterNames().size(); ++param_idx) {
         double fd_sens = fd_param_sensitivity(physics, seed, param_idx);
-        
+
         double diff = std::abs(adj_param_sens[param_idx] - fd_sens);
         if (std::abs(fd_sens) > 1.0e-5) {
           EXPECT_LT(diff / std::abs(fd_sens), 5.0e-3);
@@ -481,7 +596,7 @@ TEST(AdjointWorkflow, QuasistaticStaticAdjointSolveFiniteDifference)
       }
 
       double fd_shape_sens_val = fd_shape_sensitivity(physics, seed);
-      
+
       double shape_diff = std::abs(adj_shape_sens - fd_shape_sens_val);
       if (std::abs(fd_shape_sens_val) > 1.0e-5) {
         EXPECT_LT(shape_diff / std::abs(fd_shape_sens_val), 5.0e-3);

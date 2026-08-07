@@ -591,14 +591,6 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
 
     contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_);
 
-    auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
-                                  acceleration_, *parameters_[parameter_indices].state...);
-
-    auto block_J = contact_.jacobianFunction(assemble(drdu));
-    block_J->owns_blocks = false;
-    auto jacobian = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
-    auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
-
     // If a QoI depends on per-interaction contact force duals, the dual-adjoint seeds define an additional contribution
     // to the adjoint load:
     //   dJ/du += (df_i/du)^T * dJ/df_i
@@ -630,8 +622,17 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
       }
 
       displacement_adjoint_load_.Add(-1.0, contact_force_load);
+      contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_);
     }
 #endif
+
+    auto [_, drdu] = (*residual_)(time_, BasePhysics::shapeDisplacement(), differentiate_wrt(displacement_),
+                                  acceleration_, *parameters_[parameter_indices].state...);
+
+    auto block_J = contact_.jacobianFunction(assemble(drdu));
+    block_J->owns_blocks = false;
+    auto jacobian = std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+    auto J_T = std::unique_ptr<mfem::HypreParMatrix>(jacobian->Transpose());
 
     auto J_e_T = bcs_.eliminateAllEssentialDofsFromMatrix(*J_T);
     auto& constrained_dofs = bcs_.allEssentialTrueDofs();
@@ -653,21 +654,12 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     double dt = this->getCheckpointedTimestep(cycle_);
     contact_.updateForcesAndJacobian(cycle_ + 1, time_end_step_, dt, BasePhysics::shapeDisplacement(), displacement_);
 
-    auto drdshape =
-        smith::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(BasePhysics::shapeDisplacement()),
-                                            displacement_, acceleration_, *parameters_[parameter_indices].state...));
-
-    auto block_J = contact_.jacobianFunction(assemble(drdshape));
-    block_J->owns_blocks = false;
-    auto drdshape_mat =
-        std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
-
-    drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
-
 #ifdef SMITH_USE_TRIBOL
+    std::unique_ptr<FiniteElementDual> contact_force_shape_load;
     if (!contact_interaction_force_adjoint_bcs_.empty()) {
-      FiniteElementDual contact_force_load(displacement_.space(), "contact_force_dual_adjoint_load");
-      contact_force_load = 0.0;
+      contact_force_shape_load =
+          std::make_unique<FiniteElementDual>(displacement_.space(), "contact_force_dual_adjoint_load");
+      *contact_force_shape_load = 0.0;
 
       for (const auto& [interaction_id, force_seed] : contact_interaction_force_adjoint_bcs_) {
         if (!force_seed || force_seed->Norml2() == 0.0) {
@@ -681,10 +673,30 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
         FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
         tmp = 0.0;
         J00->MultTranspose(*force_seed, tmp);
-        contact_force_load.Add(1.0, tmp);
+        contact_force_shape_load->Add(1.0, tmp);
       }
 
-      shape_displacement_dual_.Add(1.0, contact_force_load);
+      // EnergyMortar's df/dx matrix is transferred out of Tribol when jacobianContribution() is called. Refresh contact
+      // forces/Jacobians before assembling dr/dshape below so that path has its own df/dx matrix rather than reusing a
+      // consumed one.
+      contact_.updateForcesAndJacobian(cycle_ + 1, time_end_step_, dt, BasePhysics::shapeDisplacement(), displacement_);
+    }
+#endif
+
+    auto drdshape =
+        smith::get<DERIVATIVE>((*residual_)(time_end_step_, differentiate_wrt(BasePhysics::shapeDisplacement()),
+                                            displacement_, acceleration_, *parameters_[parameter_indices].state...));
+
+    auto block_J = contact_.jacobianFunction(assemble(drdshape));
+    block_J->owns_blocks = false;
+    auto drdshape_mat =
+        std::unique_ptr<mfem::HypreParMatrix>(static_cast<mfem::HypreParMatrix*>(&block_J->GetBlock(0, 0)));
+
+    drdshape_mat->MultTranspose(adjoint_displacement_, shape_displacement_dual_);
+
+#ifdef SMITH_USE_TRIBOL
+    if (contact_force_shape_load) {
+      shape_displacement_dual_.Add(1.0, *contact_force_shape_load);
     }
 #endif
 

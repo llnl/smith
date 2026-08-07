@@ -86,6 +86,46 @@ TEST(TribolShapeReferenceCoords, ShapeDisplacementIncluded)
   check_mesh(cs.getMesh2());
 }
 
+TEST(TribolQuadraturePointGaps, UpdateForcesAndJacobianDoesNotRequestNodalGaps)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "tribol_qp_gap_no_nodal_gap_data");
+
+  // clang-format off
+  auto pmesh = std::make_shared<smith::Mesh>(shared::MeshBuilder::Unify({
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .translate({0.0, 0.999})
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(3, 9)
+      .updateBdrAttrib(1, 6),
+    shared::MeshBuilder::SquareMesh(1, 1)
+      .updateBdrAttrib(4, 7)
+      .updateBdrAttrib(1, 8)
+      .updateBdrAttrib(3, 5)
+  }), "patch_mesh", 0, 0);
+  // clang-format on
+
+  ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
+                                 .enforcement = ContactEnforcement::Penalty,
+                                 .type = ContactType::Frictionless,
+                                 .penalty = 0.1,
+                                 .jacobian = ContactJacobian::Exact};
+  ContactData contact_data(pmesh->mfemParMesh());
+  constexpr int interaction_id = 0;
+  contact_data.addContactInteraction(interaction_id, {6}, {5}, contact_options);
+  tribol::setEnergyMortarEnforcementOption(interaction_id, tribol::EnergyMortarEnforcementOption::QuadraturePointGap);
+
+  mfem::Vector u(pmesh->mfemParMesh().GetNodes()->Size());
+  u = 0.0;
+  mfem::Vector u_shape(pmesh->mfemParMesh().GetNodes()->Size());
+  u_shape = 0.0;
+  double dt = 1.0;
+  contact_data.updateForcesAndJacobian(0, 0.0, dt, u_shape, u);
+
+  EXPECT_TRUE(std::isfinite(contact_data.forces().Norml2()));
+  EXPECT_NE(nullptr, contact_data.mergedJacobian().get());
+}
+
 TEST_P(TribolFiniteDiff, patch)
 {
   constexpr double eps = 1.0e-7;
