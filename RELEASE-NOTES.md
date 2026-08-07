@@ -20,6 +20,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ### Added
 
 - Added this release notes file to track changes in project
+- Added axisymmetric solid mechanics materials and loads for 2D `(r, z)` meshes.
 
 ### Removed
 
