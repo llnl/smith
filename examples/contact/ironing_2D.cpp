@@ -42,12 +42,6 @@ enum class IroningCase
   Twisted
 };
 
-enum class EnergyMortarGapMode
-{
-  Nodal,
-  QuadraturePoint
-};
-
 IroningCase parseCase(const std::string& value)
 {
   if (value == "square") {
@@ -79,38 +73,25 @@ std::string caseName(IroningCase ironing_case)
   return "square";
 }
 
-EnergyMortarGapMode parseEnergyMortarGapMode(const std::string& value)
+tribol::EnergyMortarEnforcementOption parseEnergyMortarGapMode(const std::string& value)
 {
   if (value == "nodal") {
-    return EnergyMortarGapMode::Nodal;
+    return tribol::EnergyMortarEnforcementOption::NodalGap;
   }
   if (value == "quadrature-point") {
-    return EnergyMortarGapMode::QuadraturePoint;
+    return tribol::EnergyMortarEnforcementOption::QuadraturePointGap;
   }
 
   SLIC_ERROR_ROOT("Unknown EnergyMortar gap mode '" << value << "'. Expected one of: nodal, quadrature-point.");
-  return EnergyMortarGapMode::Nodal;
-}
-
-tribol::EnergyMortarEnforcementOption tribolGapOption(EnergyMortarGapMode gap_mode)
-{
-  switch (gap_mode) {
-    case EnergyMortarGapMode::Nodal:
-      return tribol::EnergyMortarEnforcementOption::NodalGap;
-    case EnergyMortarGapMode::QuadraturePoint:
-      return tribol::EnergyMortarEnforcementOption::QuadraturePointGap;
-  }
-
-  SLIC_ERROR_ROOT("Unsupported EnergyMortar gap mode.");
   return tribol::EnergyMortarEnforcementOption::NodalGap;
 }
 
-std::string gapModeOutputName(EnergyMortarGapMode gap_mode)
+std::string gapModeOutputName(tribol::EnergyMortarEnforcementOption gap_mode)
 {
   switch (gap_mode) {
-    case EnergyMortarGapMode::Nodal:
+    case tribol::EnergyMortarEnforcementOption::NodalGap:
       return "nodal_gaps";
-    case EnergyMortarGapMode::QuadraturePoint:
+    case tribol::EnergyMortarEnforcementOption::QuadraturePointGap:
       return "quadrature_point_gaps";
   }
 
@@ -283,7 +264,6 @@ int main(int argc, char* argv[])
 
   const auto ironing_case = parseCase(selected_case);
   const auto gap_mode = parseEnergyMortarGapMode(energy_mortar_gap_mode);
-  const auto gap_option = tribolGapOption(gap_mode);
   const std::string output_name = "contact_ironing_2D_" + caseName(ironing_case) + "_" + gapModeOutputName(gap_mode);
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, output_name + "_example_data");
@@ -336,11 +316,11 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
-  tribol::setEnergyMortarEnforcementOption(0, gap_option);
+  tribol::setEnergyMortarEnforcementOption(0, gap_mode);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
-    tribol::setEnergyMortarEnforcementOption(1, gap_option);
+    tribol::setEnergyMortarEnforcementOption(1, gap_mode);
   }
 
   const std::string paraview_name = config.name + "_paraview";
