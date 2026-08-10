@@ -19,9 +19,9 @@
   extends: [.src_build_script, .on_matrix, .src_workflow]
   needs: []
 
-.full_build_on_matrix:
+.tpl_build_on_matrix:
   variables:
-  extends: [.full_build_script, .on_matrix, .full_workflow]
+  extends: [.tpl_build_script, .on_matrix, .tpl_workflow]
   needs: []
 
 ####
@@ -33,9 +33,9 @@ matrix-gcc_13_3_1_cuda-src:
   extends: .src_build_on_matrix
 
 ####
-# Full Build jobs
-matrix-gcc_13_3_1_cuda-full:
+# TPL Build jobs
+matrix-gcc_13_3_1_cuda-tpl:
   variables:
     COMPILER: "gcc-13"
     SPEC: "+devtools+adiak+caliper+enzyme cuda_arch=90 %${COMPILER}"
-  extends: .full_build_on_matrix
+  extends: .tpl_build_on_matrix
