@@ -182,7 +182,7 @@ int main(int argc, char* argv[])
 
   design_objective->addBodyIntegral(
       smith::DependsOn<1, 2>{}, mesh->entireBodyName(),
-      [gamma0, gamma1, gamma2, gamma3](double /*t*/, auto /*X*/, auto PRESSURE, auto OBSTACLE) {
+      [gamma0, gamma1, gamma2, gamma3](auto /*t*/, auto /*X*/, auto PRESSURE, auto OBSTACLE) {
         auto fo1 = 0.5 * gamma0 * smith::get<smith::VALUE>(OBSTACLE) * smith::get<smith::VALUE>(OBSTACLE);
         auto fo2 = 0.5 * gamma1 *
                    smith::inner(smith::get<smith::DERIVATIVE>(OBSTACLE), smith::get<smith::DERIVATIVE>(OBSTACLE));
@@ -197,13 +197,13 @@ int main(int argc, char* argv[])
       std::make_shared<WeakFormT>("design_obj_disp_residual", mesh, displacement.space(), space_ptrs);
   weak_form_objective_grad_displacement->addBodyIntegral(
       smith::DependsOn<>{}, mesh->entireBodyName(),
-      [](double /*t*/, auto /*X*/) { return smith::tuple{smith::zero{}, smith::zero{}}; });
+      [](auto /*t*/, auto /*X*/) { return smith::tuple{smith::zero{}, smith::zero{}}; });
 
   // weak form for gradient (w.r.t. pressure) and subsequent Hessian callbacks of design objective
   auto weak_form_objective_grad_pressure =
       std::make_shared<WeakFormT>("design_obj_pres_residual", mesh, pressure.space(), space_ptrs);
   weak_form_objective_grad_pressure->addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
-                                                     [gamma2, gamma3](double /*t*/, auto /*X*/, auto PRESSURE) {
+                                                     [gamma2, gamma3](auto /*t*/, auto /*X*/, auto PRESSURE) {
                                                        auto resp1 = gamma2 * smith::get<smith::VALUE>(PRESSURE);
                                                        auto resp2 = gamma3 * smith::get<smith::DERIVATIVE>(PRESSURE);
                                                        return smith::tuple{resp1, resp2};
@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
   auto weak_form_objective_grad_design =
       std::make_shared<WeakFormT>("design_obj_design_residual", mesh, obstacle.space(), space_ptrs);
   weak_form_objective_grad_design->addBodyIntegral(smith::DependsOn<2>{}, mesh->entireBodyName(),
-                                                   [gamma0, gamma1](double /*t*/, auto /*X*/, auto OBSTACLE) {
+                                                   [gamma0, gamma1](auto /*t*/, auto /*X*/, auto OBSTACLE) {
                                                      auto reso1 = gamma0 * smith::get<smith::VALUE>(OBSTACLE);
                                                      auto reso2 = gamma1 * smith::get<smith::DERIVATIVE>(OBSTACLE);
                                                      return smith::tuple{reso1, reso2};

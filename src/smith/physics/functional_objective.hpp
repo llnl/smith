@@ -67,12 +67,29 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
    * @param body_name string specifying the domain to integrate over
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
+  template <typename FuncOfTimeSpaceAndParams, int... all_params>
+  void addBodyIntegralImpl(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction,
+                           std::integer_sequence<int, all_params...>)
+  {
+    objective_->AddDomainIntegral(
+        smith::Dimension<spatial_dim>{}, smith::DependsOn<all_params...>{},
+        [this, qfunction](double /*time*/, auto X, auto... params) { return qfunction(timeInfo(), X, params...); },
+        mesh_->domain(body_name));
+  }
+
+  /// @brief Add a body integral depending only on selected input fields.
   template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
   void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name,
                        const FuncOfTimeSpaceAndParams& qfunction)
   {
-    objective_->AddDomainIntegral(smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{}, qfunction,
-                                  mesh_->domain(body_name));
+    addBodyIntegralImpl(body_name, qfunction, std::integer_sequence<int, active_parameters...>{});
+  }
+
+  /// @brief Add a body integral depending on all input fields.
+  template <typename FuncOfTimeSpaceAndParams>
+  void addBodyIntegral(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    addBodyIntegralImpl(body_name, qfunction, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
@@ -82,48 +99,72 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
    * @param boundary_name string specifying the boundary to integrate over
    * @param qfunction a callable that returns a tuple of body-force and stress
    */
+  template <typename FuncOfTimeSpaceAndParams, int... all_params>
+  void addBoundaryIntegralImpl(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction,
+                               std::integer_sequence<int, all_params...>)
+  {
+    objective_->AddBoundaryIntegral(
+        smith::Dimension<spatial_dim>{}, smith::DependsOn<all_params...>{},
+        [this, qfunction](double /*time*/, auto X, auto... params) { return qfunction(timeInfo(), X, params...); },
+        mesh_->domain(boundary_name));
+  }
+
+  /// @brief Add a boundary integral depending only on selected input fields.
   template <int... active_parameters, typename FuncOfTimeSpaceAndParams>
   void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name,
                            const FuncOfTimeSpaceAndParams& qfunction)
   {
-    objective_->AddBoundaryIntegral(smith::Dimension<spatial_dim>{}, smith::DependsOn<active_parameters...>{},
-                                    qfunction, mesh_->domain(boundary_name));
+    addBoundaryIntegralImpl(boundary_name, qfunction, std::integer_sequence<int, active_parameters...>{});
+  }
+
+  /// @brief Add a boundary integral depending on all input fields.
+  template <typename FuncOfTimeSpaceAndParams>
+  void addBoundaryIntegral(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction)
+  {
+    addBoundaryIntegralImpl(boundary_name, qfunction, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /// @overload
-  virtual double evaluate(TimeInfo time_info, ConstFieldPtr shape_disp,
+  virtual double evaluate(const TimeInfo& time_info, ConstFieldPtr shape_disp,
                           const std::vector<ConstFieldPtr>& fields) const override
   {
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
+    current_time_info_ = &time_info;
 
-    return evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time_info.time(),
-                             shape_disp, fields);
+    double value = evaluateObjective(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time_info.time(),
+                                     shape_disp, fields);
+    current_time_info_ = nullptr;
+    return value;
   }
 
   /// @overload
-  virtual mfem::Vector gradient(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-                                size_t field_ordinal) const override
+  virtual mfem::Vector gradient(const TimeInfo& time_info, ConstFieldPtr shape_disp,
+                                const std::vector<ConstFieldPtr>& fields, size_t field_ordinal) const override
   {
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
+    current_time_info_ = &time_info;
 
     auto grads = gradientEvaluators(std::make_integer_sequence<int, sizeof...(parameter_indices)>{}, time_info.time(),
                                     shape_disp, fields);
     auto g = smith::get<DERIVATIVE>(grads[field_ordinal](time_info.time(), shape_disp, fields));
-    return *assemble(g);
+    auto assembled = assemble(g);
+    mfem::Vector result(assembled->Size());
+    result = *assembled;
+    current_time_info_ = nullptr;
+    return result;
   }
 
   /// @overload
-  virtual mfem::Vector mesh_coordinate_gradient(TimeInfo time_info, ConstFieldPtr shape_disp,
+  virtual mfem::Vector mesh_coordinate_gradient(const TimeInfo& time_info, ConstFieldPtr shape_disp,
                                                 const std::vector<ConstFieldPtr>& fields) const override
   {
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
+    current_time_info_ = &time_info;
 
     auto g = smith::get<DERIVATIVE>(
         (*objective_)(DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *fields[parameter_indices]...));
-    return *assemble(g);
+    auto assembled = assemble(g);
+    mfem::Vector result(assembled->Size());
+    result = *assembled;
+    current_time_info_ = nullptr;
+    return result;
   }
 
  private:
@@ -148,11 +189,16 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
         }...};
   }
 
-  /// @brief timestep, this needs to be held here and modified for rate dependent applications.
-  mutable double dt_ = std::numeric_limits<double>::max();
+  /// @brief Return active TimeInfo for ScalarObjective interface evaluations.
+  const TimeInfo& timeInfo() const
+  {
+    SLIC_ERROR_IF(current_time_info_ == nullptr,
+                  "FunctionalObjective integrands require evaluation through the ScalarObjective interface.");
+    return *current_time_info_;
+  }
 
-  /// @brief cycle or step or iteration.  This counter is useful for certain time integrators.
-  mutable size_t cycle_ = 0;
+  /// @brief Active time information forwarded to integrands.
+  mutable const TimeInfo* current_time_info_ = nullptr;
 
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;
