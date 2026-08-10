@@ -597,31 +597,9 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     // Following SolidMechanics::setAdjointLoad() sign convention, displacement_adjoint_load_ stores the negative of the
     // provided dJ/du, so we subtract these contributions here.
 #ifdef SMITH_USE_TRIBOL
-    if (!contact_interaction_force_adjoint_bcs_.empty()) {
-      FiniteElementDual contact_force_load(displacement_.space(), "contact_force_dual_adjoint_load");
-      contact_force_load = 0.0;
-
-      for (const auto& [interaction_id, force_seed] : contact_interaction_force_adjoint_bcs_) {
-        if (!force_seed) {
-          continue;
-        }
-
-        // Only apply if the seed is nonzero.
-        if (force_seed->Norml2() == 0.0) {
-          continue;
-        }
-
-        const auto interaction_J = contactInteraction(interaction_id).jacobianContribution();
-        auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
-        SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
-
-        FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
-        tmp = 0.0;
-        J00->MultTranspose(*force_seed, tmp);
-        contact_force_load.Add(1.0, tmp);
-      }
-
-      displacement_adjoint_load_.Add(-1.0, contact_force_load);
+    auto contact_force_load = computeContactForceDualAdjointLoad("contact_force_dual_adjoint_load");
+    if (contact_force_load) {
+      displacement_adjoint_load_.Add(-1.0, *contact_force_load);
       contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_);
     }
 #endif
@@ -655,27 +633,8 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     contact_.updateForcesAndJacobian(cycle_ + 1, time_end_step_, dt, BasePhysics::shapeDisplacement(), displacement_);
 
 #ifdef SMITH_USE_TRIBOL
-    std::unique_ptr<FiniteElementDual> contact_force_shape_load;
-    if (!contact_interaction_force_adjoint_bcs_.empty()) {
-      contact_force_shape_load =
-          std::make_unique<FiniteElementDual>(displacement_.space(), "contact_force_dual_adjoint_load");
-      *contact_force_shape_load = 0.0;
-
-      for (const auto& [interaction_id, force_seed] : contact_interaction_force_adjoint_bcs_) {
-        if (!force_seed || force_seed->Norml2() == 0.0) {
-          continue;
-        }
-
-        const auto interaction_J = contactInteraction(interaction_id).jacobianContribution();
-        auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
-        SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
-
-        FiniteElementDual tmp(displacement_.space(), "contact_force_dual_adjoint_load_tmp");
-        tmp = 0.0;
-        J00->MultTranspose(*force_seed, tmp);
-        contact_force_shape_load->Add(1.0, tmp);
-      }
-
+    auto contact_force_shape_load = computeContactForceDualAdjointLoad("contact_force_dual_adjoint_shape_load");
+    if (contact_force_shape_load) {
       // EnergyMortar's df/dx matrix is transferred out of Tribol when jacobianContribution() is called. Refresh contact
       // forces/Jacobians before assembling dr/dshape below so that path has its own df/dx matrix rather than reusing a
       // consumed one.
@@ -716,6 +675,40 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
     }
 #endif
   }
+
+#ifdef SMITH_USE_TRIBOL
+  std::unique_ptr<FiniteElementDual> computeContactForceDualAdjointLoad(const std::string& name) const
+  {
+    if (contact_interaction_force_adjoint_bcs_.empty()) {
+      return nullptr;
+    }
+
+    auto contact_force_load = std::make_unique<FiniteElementDual>(displacement_.space(), name);
+    *contact_force_load = 0.0;
+    bool has_nonzero_seed = false;
+
+    for (const auto& [interaction_id, force_seed] : contact_interaction_force_adjoint_bcs_) {
+      if (!force_seed || norm(*force_seed) == 0.0) {
+        continue;
+      }
+
+      has_nonzero_seed = true;
+      const auto interaction_J = contactInteraction(interaction_id).jacobianContribution();
+      auto* J00 = dynamic_cast<mfem::HypreParMatrix*>(&interaction_J->GetBlock(0, 0));
+      SLIC_ERROR_ROOT_IF(!J00, "Expected HypreParMatrix (0,0) block for contact interaction Jacobian.");
+
+      FiniteElementDual tmp(displacement_.space(), name + "_tmp");
+      tmp = 0.0;
+      J00->MultTranspose(*force_seed, tmp);
+      contact_force_load->Add(1.0, tmp);
+    }
+
+    if (!has_nonzero_seed) {
+      return nullptr;
+    }
+    return contact_force_load;
+  }
+#endif
 
   using BasePhysics::bcs_;
   using BasePhysics::cycle_;
