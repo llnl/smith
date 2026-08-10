@@ -43,12 +43,6 @@ class TrustRegionException : public std::exception {
 using TrustRegionSubspaceResult =
     std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector<double>, double>;
 
-/// @brief computes the global size of mfem::Vector
-int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm);
-
-/// @brief computes the l2 inner product between two mfem::Vector in parallal
-double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm& comm);
-
 /// @brief returns the solution, as well as a list of the N leftmost eigenvectors
 /// and their eigenvalues, and the predicted model energy change
 TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,

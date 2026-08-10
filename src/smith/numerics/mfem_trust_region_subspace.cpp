@@ -14,19 +14,6 @@
 
 namespace smith {
 
-int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm)
-{
-  int local_size = parallel_v.Size();
-  int global_size;
-  MPI_Allreduce(&local_size, &global_size, 1, MPI_INT, MPI_SUM, comm);
-  return global_size;
-}
-
-double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm& comm)
-{
-  return mfem::InnerProduct(comm, a, b);
-}
-
 #ifdef MFEM_USE_LAPACK
 
 namespace {

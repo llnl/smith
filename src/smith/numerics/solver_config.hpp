@@ -504,28 +504,28 @@ struct NonlinearSolverOptions {
   int num_previous_steps = 2;
 
   /// Relative CG forcing term for TrustRegion model solves.
-  double cg_forcing_rel = 1.2981521889723316e-05;
+  double cg_forcing_rel = 1.2981522e-05;
 
   /// Reject non-energy-callback steps whose predicted residual grows too much.
-  double residual_growth_cap = 8.195074738257377;
+  double residual_growth_cap = 8.1950747;
 
   /// Trust-region radius decrease factor on rejected / low-quality steps.
-  double tr_decrease_factor = 0.38624275583816037;
+  double tr_decrease_factor = 0.38624276;
 
   /// Trust-region radius increase factor on high-quality boundary steps.
-  double tr_increase_factor = 1.9742659010008659;
+  double tr_increase_factor = 1.9742659;
 
   /// Worst-case work-ratio rho for accepting a step.
   double tr_eta1 = 1.0e-9;
 
   /// rho below which the radius shrinks.
-  double tr_eta2 = 0.12631113528152121;
+  double tr_eta2 = 0.12631114;
 
   /// rho above which a boundary step grows the radius.
-  double tr_eta3 = 0.5494445482814023;
+  double tr_eta3 = 0.54944455;
 
   /// rho ceiling: steps above this are distrusted.
-  double tr_eta4 = 1.8368324568136323;
+  double tr_eta4 = 1.8368325;
 };
 // _nonlinear_options_end
 
