@@ -205,6 +205,10 @@ class DifferentiablePhysics : public BasePhysics {
       0.0;  ///< previous time increment, saved to reconstruct the start of step time used in computing reaction forces
   int cycle_prev_ =
       0;  ///< previous cycle, saved to reconstruct the start of step time used in computing reaction forces
+
+  /// @brief forward time history (indexed by cycle)
+  /// @details Required so that BasePhysics::time() remains consistent with cycle_ during reverse replay.
+  std::vector<double> time_history_;
 };
 
 template <typename SystemType>
