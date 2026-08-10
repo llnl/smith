@@ -14,6 +14,7 @@ set(numerics_serial_test_sources
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
     test_block_preconditioner_custom_operators.cpp
+    test_linear_solver_precond_only.cpp
     )
 
 if(MFEM_USE_LAPACK)

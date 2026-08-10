@@ -250,7 +250,9 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-        input_fields[row_i][block_indices[row_i][col_j]] = diagonal_fields[col_j];
+        if (block_indices[row_i][col_j] != invalid_block_index) {
+          input_fields[row_i][block_indices[row_i][col_j]] = diagonal_fields[col_j];
+        }
       }
     }
 
@@ -349,7 +351,9 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     // No sensitivity needed for primal fields
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-        field_sensitivities[row_i][block_indices[row_i][col_j]] = nullptr;
+        if (block_indices[row_i][col_j] != invalid_block_index) {
+          field_sensitivities[row_i][block_indices[row_i][col_j]] = nullptr;
+        }
       }
     }
 

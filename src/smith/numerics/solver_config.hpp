@@ -103,12 +103,13 @@ struct TimesteppingOptions {
 /// Linear solution method indicator
 enum class LinearSolver
 {
-  CG,        /**< Conjugate gradient */
-  GMRES,     /**< Generalized minimal residual method */
-  SuperLU,   /**< SuperLU MPI-enabled direct nodal solver */
-  Strumpack, /**< Strumpack MPI-enabled direct frontal solver*/
-  PetscCG,   /**< PETSc MPI-enabled conjugate gradient solver */
-  PetscGMRES /**< PETSc MPI-enabled generalize minimal residual solver */
+  CG,         /**< Conjugate gradient */
+  GMRES,      /**< Generalized minimal residual method */
+  SuperLU,    /**< SuperLU MPI-enabled direct nodal solver */
+  Strumpack,  /**< Strumpack MPI-enabled direct frontal solver*/
+  PetscCG,    /**< PETSc MPI-enabled conjugate gradient solver */
+  PetscGMRES, /**< PETSc MPI-enabled generalize minimal residual solver */
+  PrecondOnly /**< Preconditioner application only; no Krylov iterations */
 };
 // _linear_solvers_end
 
@@ -128,6 +129,8 @@ inline std::string linearName(const LinearSolver& s)
       return "PetscCG";
     case LinearSolver::PetscGMRES:
       return "PetscGMRES";
+    case LinearSolver::PrecondOnly:
+      return "PrecondOnly";
   }
   // This cannot happen, but GCC doesn't know that
   return "UNKNOWN";
@@ -138,9 +141,13 @@ inline std::ostream& operator<<(std::ostream& os, LinearSolver s) { return os <<
 
 /// string->value matching for optionally entering options as string in command line
 inline std::map<std::string, LinearSolver> linearSolverMap = {
-    {"CG", LinearSolver::CG},           {"GMRES", LinearSolver::GMRES},
-    {"SuperLU", LinearSolver::SuperLU}, {"Strumpack", LinearSolver::Strumpack},
-    {"PetscCG", LinearSolver::PetscCG}, {"PetscGMRES", LinearSolver::PetscGMRES},
+    {"CG", LinearSolver::CG},
+    {"GMRES", LinearSolver::GMRES},
+    {"SuperLU", LinearSolver::SuperLU},
+    {"Strumpack", LinearSolver::Strumpack},
+    {"PetscCG", LinearSolver::PetscCG},
+    {"PetscGMRES", LinearSolver::PetscGMRES},
+    {"PrecondOnly", LinearSolver::PrecondOnly},
 };
 
 // Add a custom list of strings? conduit node?
