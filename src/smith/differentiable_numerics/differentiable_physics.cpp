@@ -93,6 +93,13 @@ void DifferentiablePhysics::resetStates(int cycle, double time)
   initializeReactionStates();
   time_ = time;
   cycle_ = cycle;
+
+  // Maintain a time history so that time() can be made cycle-consistent during
+  // reverse replay. This implementation assumes cycle == 0 for resets.
+  time_history_.clear();
+  time_history_.push_back(time_);
+  SLIC_ERROR_IF(cycle_ != 0,
+                std::format("DifferentiablePhysics::resetStates called with cycle {} (expected 0)", cycle_));
 }
 
 void DifferentiablePhysics::resetAdjointStates()
@@ -100,6 +107,12 @@ void DifferentiablePhysics::resetAdjointStates()
   checkpointer_->finalize_graph();
   checkpointer_->reset_for_backprop();
   gretl_assert(checkpointer_->check_validity());
+
+  // Ensure that time reflects the end of the forward run when starting adjoint.
+  if (!time_history_.empty()) {
+    time_ = time_history_.back();
+    cycle_ = static_cast<int>(time_history_.size()) - 1;
+  }
 }
 
 std::vector<std::string> DifferentiablePhysics::stateNames() const { return state_names_; }
@@ -251,11 +264,24 @@ void DifferentiablePhysics::advanceTimestep(double dt)
   cycle_++;
   time_ += dt;
   milestones_.push_back(make_milestone(field_states_, reaction_states_).step());
+
+  // Record end-of-step time for the new cycle.
+  if (time_history_.empty()) {
+    time_history_.push_back(time_prev_);
+  }
+  time_history_.push_back(time_);
 }
 
 void DifferentiablePhysics::reverseAdjointTimestep()
 {
   --cycle_;
+
+  // Restore time consistent with the new cycle.
+  SLIC_ERROR_IF(time_history_.empty() || (static_cast<size_t>(cycle_) >= time_history_.size()),
+                std::format("DifferentiablePhysics time history invalid: cycle {} history size {}", cycle_,
+                            time_history_.size()));
+  time_ = time_history_[static_cast<size_t>(cycle_)];
+
   const gretl::Int milestone = milestones_[static_cast<size_t>(cycle_)];
 
   field_shape_displacement_->clear_dual();
