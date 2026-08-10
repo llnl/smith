@@ -75,10 +75,8 @@ stages:
   rules:
     - if: $SMITH_CI_WORKFLOW_TYPE == "comparison"
   dependencies:
-    # TODO re-enable with CZMatrix
-    # - blueos-clang_14_0_5-benchmarks
-    - toss4-gcc_13_3_1-benchmarks
-    - toss4-llvm_19_1_3-benchmarks
+    - dane-gcc_13_3_1-benchmarks
+    - dane-llvm_19_1_3-benchmarks
 
 ####
 # Templates
@@ -165,9 +163,8 @@ stages:
 
 # This is where jobs are included for each system
 include:
-  # TODO re-enable with CZMatrix
-  # - local: .gitlab/build_blueos.yml
-  - local: .gitlab/build_toss4.yml
-  - local: .gitlab/build_toss4_cray.yml
+  - local: .gitlab/build_dane.yml
+  - local: .gitlab/build_matrix.yml
+  - local: .gitlab/build_tuolumne.yml
   - project: 'lc-templates/id_tokens'
     file: 'id_tokens.yml'
