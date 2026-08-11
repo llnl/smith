@@ -113,7 +113,7 @@ class ContactConstraint : public Constraint {
     if (update_fields) {
       // note: Tribol does not use cycle.
       int cycle = 0;
-      contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
+      contact_.updateGeometry(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP]);
       auto gaps_hpv = contact_.mergedGaps(false);
       // Note: this copy is needed to prevent the HypreParVector pointer from going out of scope.  see
       // https://github.com/mfem/mfem/issues/5029
@@ -145,9 +145,9 @@ class ContactConstraint : public Constraint {
     if (update_fields || fresh_derivative) {
       int cycle = 0;
       if (update_fields) {
-        contact_.updateGaps(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], true);
+        contact_.updateGeometry(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], true);
       } else {
-        contact_.updateGaps(cycle, time, dt, std::nullopt, std::nullopt, true);
+        contact_.updateGeometry(cycle, time, dt, std::nullopt, std::nullopt, true);
       }
       J_contact_ = contact_.mergedJacobian();
     }
@@ -177,9 +177,10 @@ class ContactConstraint : public Constraint {
     int cycle = 0;
     if (update_fields || fresh_derivative) {
       if (update_fields) {
-        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+        contact_.updateForcesAndJacobian(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP],
+                                         multipliers);
       } else {
-        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
+        contact_.updateForcesAndJacobian(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
       }
     }
     return contact_.forces();
@@ -208,9 +209,10 @@ class ContactConstraint : public Constraint {
     int cycle = 0;
     if (update_fields || fresh_derivative) {
       if (update_fields) {
-        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], multipliers);
+        contact_.updateForcesAndJacobian(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP],
+                                         multipliers);
       } else {
-        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
+        contact_.updateForcesAndJacobian(cycle, time, dt, std::nullopt, std::nullopt, multipliers);
       }
       J_contact_ = contact_.mergedJacobian();
     }
@@ -239,9 +241,10 @@ class ContactConstraint : public Constraint {
     if (update_fields || fresh_derivative) {
       mfem::Vector p = contact_.mergedPressures();
       if (update_fields) {
-        contact_.update(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP], p);
+        contact_.updateForcesAndJacobian(cycle, time, dt, *fields[ContactFields::SHAPE], *fields[ContactFields::DISP],
+                                         p);
       } else {
-        contact_.update(cycle, time, dt, std::nullopt, std::nullopt, p);
+        contact_.updateForcesAndJacobian(cycle, time, dt, std::nullopt, std::nullopt, p);
       }
       J_contact_ = contact_.mergedJacobian();
     }

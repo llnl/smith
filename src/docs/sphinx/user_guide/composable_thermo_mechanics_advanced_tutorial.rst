@@ -7,9 +7,9 @@
 Composable Thermo-Mechanics Advanced Example
 #############################################
 
-This example extends the basic thermo-mechanics tutorial with a staged solver,
-a parameter field, a differentiable quantity of interest, finite-difference
-verification, and ParaView output.
+This demo extends the minimal thermo-mechanics setup. It adds a parameter field,
+a staged solver, a differentiable quantity of interest, a finite-difference
+check, and ParaView output.
 
 The full source code lives in ``examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp``.
 
@@ -34,16 +34,23 @@ Mesh and Field Setup
    :end-before: _mesh_end
    :language: C++
 
+Solver Config and Field Registration
+------------------------------------
+
+Registration declares solid, thermal, and parameter fields on one shared
+``FieldStore``. The thermal-expansion parameter is registered with
+``registerParameterFields(field_store, ...)`` before either system is built.
+
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _solver_start
    :end-before: _solver_end
    :language: C++
 
-Staged Solver and Coupled Build
--------------------------------
+System Build and Coupling
+-------------------------
 
-This example uses a custom staggered ``SystemSolver``. The solid subsystem uses
-trust-region iterations, while the thermal subsystem uses Newton line search.
+The build step creates solid and thermal systems from the registered field
+packs. ``combineSystems(...)`` attaches them to one staged solver.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _build_start
@@ -53,9 +60,8 @@ trust-region iterations, while the thermal subsystem uses Newton line search.
 Boundary Conditions and Loads
 -----------------------------
 
-The traction call uses ``DependsOn<>{}``, so the user callback receives only the
-state arguments it actually needs and none of the trailing coupling or parameter
-fields.
+Boundary conditions are applied on the left and right boundaries. Loads are
+added through the solid and thermal systems before timestepping.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics_advanced.cpp
    :start-after: _bc_start

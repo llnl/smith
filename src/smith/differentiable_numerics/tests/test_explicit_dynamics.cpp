@@ -162,7 +162,7 @@ struct MeshFixture : public testing::Test {
           return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(), pk_stress};
         });
 
-    solid_mechanics_residual->addBodySource(smith::DependsOn<>{}, mesh_->entireBodyName(), [](auto /*t_info*/, auto X) {
+    solid_mechanics_residual->addBodySource(mesh_->entireBodyName(), [](auto /*t_info*/, auto X, auto... /*args*/) {
       auto b = 0.0 * X;
       b[1] = gravity;
       return b;
@@ -188,18 +188,13 @@ struct MeshFixture : public testing::Test {
     physics_ = mechanics_;
 
     auto ke_objective = std::make_shared<smith::FunctionalObjective<dim, smith::Parameters<VectorSpace, DensitySpace>>>(
-        "integrated_squared_temperature", mesh_, smith::spaces({states[DISP], params_[DENSITY]}));
+        "integrated_kinetic_energy", mesh_, smith::spaces({velo, density0}));
 
-    ke_objective->addBodyIntegral(smith::DependsOn<0, 1>(), mesh_->entireBodyName(),
-                                  [](auto /*t*/, auto /*X*/, auto U, auto Rho) {
-                                    auto u = get<smith::VALUE>(U);
-                                    return 0.5 * get<smith::VALUE>(Rho) * smith::inner(u, u);
-                                  });
+    ke_objective->addBodyIntegral(mesh_->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto V, auto Rho) {
+      auto v = get<smith::VALUE>(V);
+      return 0.5 * get<smith::VALUE>(Rho) * smith::inner(v, v);
+    });
     objective_ = ke_objective;
-
-    // kinetic energy integrator for qoi
-    kinetic_energy_integrator_ = smith::createKineticEnergyIntegrator<VectorSpace, DensitySpace>(
-        mesh_->entireBody(), shape_disp_->get()->space(), params_[DENSITY].get()->space());
   }
 
   void resetAndApplyInitialConditions()
@@ -223,8 +218,10 @@ struct MeshFixture : public testing::Test {
     double base_physics_qoi = 0.0;
     for (size_t m = 0; m < num_steps; ++m) {
       physics_->advanceTimestep(dt);
-      base_physics_qoi += (*kinetic_energy_integrator_)(physics_->time(), physics_->shapeDisplacement(),
-                                                        physics_->state(velo_name), physics_->parameter(DENSITY));
+      std::vector<smith::ConstFieldPtr> qoi_fields{&physics_->state(velo_name), &physics_->parameter(DENSITY)};
+      base_physics_qoi +=
+          objective_->evaluate(smith::TimeInfo(physics_->time(), dt, static_cast<size_t>(physics_->cycle())),
+                               &physics_->shapeDisplacement(), qoi_fields);
     }
 
     return base_physics_qoi;
@@ -237,20 +234,15 @@ struct MeshFixture : public testing::Test {
                                                physics_->state(velo_name).name() + "_adjoint_load");
     physics_->resetAdjointStates();
     while (physics_->cycle() > 0) {
-      auto shape_sensitivity_op = smith::get<smith::DERIVATIVE>(
-          (*kinetic_energy_integrator_)(physics_->time(), differentiate_wrt(physics_->shapeDisplacement()),
-                                        physics_->state(velo_name), physics_->parameter(DENSITY)));
-      shape_sensitivity += *assemble(shape_sensitivity_op);
+      auto qoi_time_info = smith::TimeInfo(physics_->time(), dt, static_cast<size_t>(physics_->cycle()));
+      std::vector<smith::ConstFieldPtr> qoi_fields{&physics_->state(velo_name), &physics_->parameter(DENSITY)};
 
-      auto density_sensitivity_op = smith::get<smith::DERIVATIVE>(
-          (*kinetic_energy_integrator_)(physics_->time(), physics_->shapeDisplacement(), physics_->state(velo_name),
-                                        differentiate_wrt(physics_->parameter(DENSITY))));
-      parameter_sensitivities[DENSITY] += *assemble(density_sensitivity_op);
+      shape_sensitivity +=
+          objective_->mesh_coordinate_gradient(qoi_time_info, &physics_->shapeDisplacement(), qoi_fields);
+      parameter_sensitivities[DENSITY] +=
+          objective_->gradient(qoi_time_info, &physics_->shapeDisplacement(), qoi_fields, 1);
 
-      auto velo_sensivitity_op = smith::get<smith::DERIVATIVE>((*kinetic_energy_integrator_)(
-          physics_->time(), physics_->shapeDisplacement(), smith::differentiate_wrt(physics_->state(velo_name)),
-          physics_->parameter(DENSITY)));
-      velo_adjoint_load = *assemble(velo_sensivitity_op);
+      velo_adjoint_load = objective_->gradient(qoi_time_info, &physics_->shapeDisplacement(), qoi_fields, 0);
 
       physics_->setAdjointLoad({{velo_name, velo_adjoint_load}});
       physics_->reverseAdjointTimestep();
@@ -275,7 +267,6 @@ struct MeshFixture : public testing::Test {
   std::shared_ptr<smith::BasePhysics> physics_;
 
   std::shared_ptr<smith::ScalarObjective> objective_;
-  std::shared_ptr<smith::Functional<double(VectorSpace, VectorSpace, DensitySpace)>> kinetic_energy_integrator_;
 
   std::shared_ptr<smith::BoundaryConditionManager> bc_manager_;
 
@@ -328,7 +319,9 @@ TEST_F(MeshFixture, TransientDynamicsGretl)
   auto all_fields = mechanics_->getFieldStatesAndParamStates();
 
   gretl::State<double> gretl_qoi =
-      0.0 * smith::evaluateObjective(*objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
+      0.0 *
+      smith::evaluateObjective(*objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]},
+                               smith::TimeInfo(mechanics_->time(), 1.0, static_cast<size_t>(mechanics_->cycle())));
 
   std::string pv_dir = std::string("paraview_") + mechanics_->name();
   auto pv_writer = smith::createParaviewWriter(*mesh_, all_fields, pv_dir);
@@ -336,8 +329,9 @@ TEST_F(MeshFixture, TransientDynamicsGretl)
   for (size_t m = 0; m < num_steps; ++m) {
     mechanics_->advanceTimestep(dt);
     all_fields = mechanics_->getFieldStatesAndParamStates();
-    gretl_qoi =
-        gretl_qoi + smith::evaluateObjective(*objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]});
+    gretl_qoi = gretl_qoi + smith::evaluateObjective(
+                                *objective_, *shape_disp_, {all_fields[F_VELO], all_fields[F_DENSITY]},
+                                smith::TimeInfo(mechanics_->time(), dt, static_cast<size_t>(mechanics_->cycle())));
     pv_writer.write(mechanics_->cycle(), mechanics_->time(), all_fields);
   }
 
@@ -390,20 +384,19 @@ TEST_F(MeshFixture, TransientConstantGravity)
 
   smith::FunctionalObjective<dim, smith::Parameters<VectorSpace>> accel_error("accel_error", mesh_,
                                                                               smith::spaces({all_fields[ACCEL]}));
-  accel_error.addBodyIntegral(smith::DependsOn<0>{}, mesh_->entireBodyName(),
-                              [a_exact](auto /*t*/, auto /*X*/, auto A) {
-                                auto a = smith::get<smith::VALUE>(A);
-                                auto da0 = a[0];
-                                auto da1 = a[1] - a_exact;
-                                return da0 * da0 + da1 * da1;
-                              });
+  accel_error.addBodyIntegral(mesh_->entireBodyName(), [a_exact](auto /*t*/, auto /*X*/, auto A) {
+    auto a = smith::get<smith::VALUE>(A);
+    auto da0 = a[0];
+    auto da1 = a[1] - a_exact;
+    return da0 * da0 + da1 * da1;
+  });
   double a_err = accel_error.evaluate(smith::TimeInfo(0.0, 1.0, 0), shape_disp_->get().get(),
                                       smith::getConstFieldPointers({all_fields[ACCEL]}));
   EXPECT_NEAR(0.0, a_err, 1e-14);
 
   smith::FunctionalObjective<dim, smith::Parameters<VectorSpace>> velo_error("velo_error", mesh_,
                                                                              smith::spaces({all_fields[VELO]}));
-  velo_error.addBodyIntegral(smith::DependsOn<0>{}, mesh_->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
+  velo_error.addBodyIntegral(mesh_->entireBodyName(), [v_exact](auto /*t*/, auto /*X*/, auto V) {
     auto v = smith::get<smith::VALUE>(V);
     auto dv0 = v[0];
     auto dv1 = v[1] - v_exact;
@@ -415,7 +408,7 @@ TEST_F(MeshFixture, TransientConstantGravity)
 
   smith::FunctionalObjective<dim, smith::Parameters<VectorSpace>> disp_error("disp_error", mesh_,
                                                                              smith::spaces({all_fields[DISP]}));
-  disp_error.addBodyIntegral(smith::DependsOn<0>{}, mesh_->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
+  disp_error.addBodyIntegral(mesh_->entireBodyName(), [u_exact](auto /*t*/, auto /*X*/, auto U) {
     auto u = smith::get<smith::VALUE>(U);
     auto du0 = u[0];
     auto du1 = u[1] - u_exact;

@@ -19,10 +19,10 @@
  *   auto thermal_fields = registerThermalFields<dim, temp_order, TempRule>(field_store);
  *
  *   auto solid_system = buildSolidMechanicsSystem<dim, disp_order, DispRule>(
- *       solid_solver, solid_opts, solid_fields, params..., thermal_fields);
+ *       solid_solver, solid_opts, solid_fields, couplingFields(thermal_fields), param_fields);
  *
  *   auto thermal_system = buildThermalSystem<dim, temp_order, TempRule>(
- *       thermal_solver, thermal_opts, thermal_fields, solid_fields);
+ *       thermal_solver, thermal_opts, thermal_fields, couplingFields(solid_fields));
  *
  *   auto coupled = combineSystems(solid, thermal);
  *   coupled->setMaterial(thermo_mech_material, domain);   // tight coupling

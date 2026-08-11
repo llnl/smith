@@ -75,7 +75,7 @@ class SecondTimeDerivativeVectorCoefficient : public mfem::VectorCoefficient {
 
 DirichletBoundaryConditions::DirichletBoundaryConditions(const mfem::ParMesh& mfem_mesh,
                                                          mfem::ParFiniteElementSpace& space)
-    : bcs_(mfem_mesh), space_(space)
+    : mfem_mesh_(mfem_mesh), bcs_(mfem_mesh), space_(space)
 {
 }
 
@@ -84,17 +84,24 @@ DirichletBoundaryConditions::DirichletBoundaryConditions(const Mesh& mesh, mfem:
 {
 }
 
-void DirichletBoundaryConditions::setSecondTimeDerivativeBCsMatchingDofs(const BoundaryConditionManager& source)
+const BoundaryConditionManager& DirichletBoundaryConditions::getSecondDerivativeManager() const
 {
-  for (const auto& bc : source.essentials()) {
+  second_derivative_manager_.emplace(mfem_mesh_);
+  rebuildSecondDerivativeManager(*second_derivative_manager_);
+  return *second_derivative_manager_;
+}
+
+void DirichletBoundaryConditions::rebuildSecondDerivativeManager(BoundaryConditionManager& target) const
+{
+  for (const auto& bc : bcs_.essentials()) {
     if (is_vector_valued(bc.coefficient())) {
-      auto accel_coef = std::make_shared<SecondTimeDerivativeVectorCoefficient>(
+      auto deriv_coef = std::make_shared<SecondTimeDerivativeVectorCoefficient>(
           get<std::shared_ptr<mfem::VectorCoefficient>>(bc.coefficient()));
-      bcs_.addEssentialByTrueDofs(bc.getTrueDofList(), accel_coef, space_);
+      target.addEssentialByTrueDofs(bc.getTrueDofList(), deriv_coef, space_);
     } else {
-      auto accel_coef = std::make_shared<SecondTimeDerivativeScalarCoefficient>(
+      auto deriv_coef = std::make_shared<SecondTimeDerivativeScalarCoefficient>(
           get<std::shared_ptr<mfem::Coefficient>>(bc.coefficient()));
-      bcs_.addEssential(bc.getLocalDofList(), accel_coef, space_, bc.component());
+      target.addEssential(bc.getLocalDofList(), deriv_coef, space_, bc.component());
     }
   }
 }

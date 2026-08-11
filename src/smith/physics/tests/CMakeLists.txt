@@ -17,12 +17,14 @@ set(physics_test_depends smith_physics smith_differentiable_numerics smith_physi
 
 set(physics_serial_test_sources 
     beam_bending.cpp
+    test_adjoint_workflow.cpp
     fit_test.cpp
     test_mesh_wrapper.cpp
     thermal_finite_diff.cpp
     thermal_statics_patch.cpp
     thermal_dynamics_patch.cpp
     solid_finite_diff.cpp
+    test_solid_axisymmetric.cpp
     solid_statics_patch.cpp
     solid_dynamics_patch.cpp
     dynamic_solid_adjoint.cpp
@@ -32,6 +34,7 @@ set(physics_serial_test_sources
     test_functional_weak_form.cpp
     thermomech_statics_patch.cpp
     parameterized_thermomechanics_example.cpp
+    test_kinematic_objective.cpp
     )
 
 if (TRIBOL_FOUND)
@@ -82,6 +85,10 @@ set(physics_parallel_tribol_test_sources
     contact_patch_tied.cpp
     contact_beam.cpp
     )
+if (ENZYME_FOUND)
+    list(APPEND physics_parallel_tribol_test_sources
+                energy_mortar_patch.cpp)
+endif()
 blt_list_append(TO       physics_parallel_test_sources
                 ELEMENTS ${physics_parallel_tribol_test_sources}
                 IF       TRIBOL_FOUND)

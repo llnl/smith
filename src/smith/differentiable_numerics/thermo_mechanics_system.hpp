@@ -30,26 +30,24 @@ auto evaluateCoupledThermoMechanicsMaterial(const MaterialType& material, const 
   return material(t_info, state, grad_u, grad_v, theta, grad_theta, std::forward<ParamTypes>(params)...);
 }
 
-template <typename MaterialType, typename TemperatureRulePtr>
+template <typename MaterialType>
 /// @brief Adapts coupled thermo-mechanical material to solid-system material interface.
 struct CoupledSolidThermoMechanicsMaterialAdapter {
   /// Material state type forwarded to solid system.
   using State = typename MaterialType::State;
 
-  MaterialType material;                     ///< Wrapped thermo-mechanical material.
-  TemperatureRulePtr temperature_time_rule;  ///< Time rule used to recover current temperature value.
-  double density;                            ///< Material density exposed for solid residual.
+  MaterialType material;  ///< Wrapped thermo-mechanical material.
+  double density;         ///< Material density exposed for solid residual.
 
   template <typename StateType, typename GradUType, typename GradVType, typename TemperatureType,
-            typename TemperatureOldType, typename... ParamTypes>
+            typename TemperatureDotType, typename... ParamTypes>
   /// @brief Evaluate wrapped material and return solid PK1 contribution.
   auto operator()(const TimeInfo& t_info, StateType& state, GradUType grad_u, GradVType grad_v,
-                  TemperatureType temperature, TemperatureOldType temperature_old, ParamTypes&&... params) const
+                  TemperatureType temperature, TemperatureDotType /*temperature_dot*/, ParamTypes&&... params) const
   {
-    auto T = temperature_time_rule->value(t_info, temperature, temperature_old);
     auto [pk, C_v, s0, q0] =
-        evaluateCoupledThermoMechanicsMaterial(material, t_info, state, grad_u, grad_v, get<VALUE>(T),
-                                               get<DERIVATIVE>(T), std::forward<ParamTypes>(params)...);
+        evaluateCoupledThermoMechanicsMaterial(material, t_info, state, grad_u, grad_v, get<VALUE>(temperature),
+                                               get<DERIVATIVE>(temperature), std::forward<ParamTypes>(params)...);
     return pk;
   }
 };
@@ -89,18 +87,12 @@ void setCoupledThermoMechanicsMaterial(
     std::shared_ptr<ThermalSystem<dim, temp_order_, TempRule, ThermalCoupling>> thermal, const MaterialType& material,
     const std::string& domain_name)
 {
-  auto captured_disp_rule = solid->disp_time_rule;
-  auto captured_temp_rule = thermal->temperature_time_rule;
-
-  auto solid_material = detail::CoupledSolidThermoMechanicsMaterialAdapter<MaterialType, decltype(captured_temp_rule)>{
-      material, captured_temp_rule, material.density};
+  auto solid_material = detail::CoupledSolidThermoMechanicsMaterialAdapter<MaterialType>{material, material.density};
 
   solid->setMaterial(solid_material, domain_name);
 
   thermal->setMaterialAndHeatSource(
-      [=](const TimeInfo& t_info, auto temperature, auto grad_temperature, auto disp, auto disp_old, auto v_old,
-          auto a_old, auto... params) {
-        auto [u, v, a] = captured_disp_rule->interpolate(t_info, disp, disp_old, v_old, a_old);
+      [=](const TimeInfo& t_info, auto temperature, auto grad_temperature, auto u, auto v, auto /*a*/, auto... params) {
         typename MaterialType::State state{};
         auto [pk, C_v, s0, q0] = detail::evaluateCoupledThermoMechanicsMaterial(
             material, t_info, state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), temperature, grad_temperature, params...);

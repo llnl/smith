@@ -7,9 +7,9 @@
 Composable Thermo-Mechanics Tutorial
 ####################################
 
-This tutorial shows a minimal thermo-mechanical setup built from the composable
-differentiable numerics systems. It uses separate solid and thermal systems,
-couples them with a thermoelastic material, and advances the combined system.
+This demo builds a minimal composable thermo-mechanics problem. It registers
+solid and thermal fields, builds two systems, couples them with a thermoelastic
+material, and advances the combined system.
 
 The full source code lives in ``examples/thermo_mechanics/composable_thermo_mechanics.cpp``.
 
@@ -37,8 +37,10 @@ Mesh Construction
 Field Registration
 ------------------
 
-Registration is phase 1. It declares the solid and thermal fields up front in a
-shared ``FieldStore``.
+Registration declares all fields on one shared ``FieldStore`` before any system
+is built. Register parameters in the same phase with
+``registerParameterFields(field_store, ...)`` and pass the returned bundle into
+the build step.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics.cpp
    :start-after: _solver_start
@@ -48,10 +50,9 @@ shared ``FieldStore``.
 System Build and Coupling
 -------------------------
 
-Build is phase 2. Each system consumes its own registered field pack first, then
-the other system's field pack for coupling. ``combineSystems(...)`` returns the
-final combined system directly, and ``makeDifferentiablePhysics(...)`` later uses
-the system-owned cycle-zero and post-solve systems automatically.
+The build step consumes each system's own field pack, then optional coupling and
+parameter bundles. ``combineSystems(...)`` returns the combined system used by
+``makeDifferentiablePhysics(...)``.
 
 .. literalinclude:: ../../../../examples/thermo_mechanics/composable_thermo_mechanics.cpp
    :start-after: _build_start
@@ -74,8 +75,8 @@ Advance the Coupled System
    :end-before: _run_end
    :language: C++
 
-This example intentionally stays small. Use it as a template for:
+This demo is intentionally small. Use it as a template for:
 
-- adding parameter fields,
-- enabling stress output on the solid system,
-- or extending the model to thermo-mechanics plus internal variables.
+- adding parameter fields
+- enabling stress output
+- adding internal variables

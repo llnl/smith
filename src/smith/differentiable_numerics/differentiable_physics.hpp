@@ -139,12 +139,21 @@ class DifferentiablePhysics : public BasePhysics {
   /// @return Copies of the tracked initial state fields.
   std::vector<FieldState> getInitialFieldStates() const { return initial_field_states_; }
 
+  /// @brief Get a tracked initial state field by name.
+  FieldState getInitialFieldState(const std::string& state_name) const;
+
   /// @brief Get the current primal state fields.
   /// @return Copies of the tracked state fields at the current cycle.
   std::vector<FieldState> getFieldStates() const { return field_states_; }
 
+  /// @brief Get a tracked current state field by name.
+  FieldState getFieldState(const std::string& state_name) const;
+
   /// @brief Get all the parameter FieldStates
   std::vector<FieldState> getFieldParams() const { return field_params_; }
+
+  /// @brief Get a tracked parameter field by name.
+  FieldState getFieldParam(const std::string& param_name) const;
 
   /// @brief Get the tracked state fields followed by the tracked parameter fields.
   /// @return A concatenated vector of state fields then parameter fields.
@@ -196,6 +205,10 @@ class DifferentiablePhysics : public BasePhysics {
       0.0;  ///< previous time increment, saved to reconstruct the start of step time used in computing reaction forces
   int cycle_prev_ =
       0;  ///< previous cycle, saved to reconstruct the start of step time used in computing reaction forces
+
+  /// @brief forward time history (indexed by cycle)
+  /// @details Required so that BasePhysics::time() remains consistent with cycle_ during reverse replay.
+  std::vector<double> time_history_;
 };
 
 template <typename SystemType>

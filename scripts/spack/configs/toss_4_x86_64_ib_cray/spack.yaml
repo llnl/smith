@@ -34,6 +34,10 @@ spack:
             c: /opt/rocm-6.4.2/llvm/bin/amdclang
             cxx: /opt/rocm-6.4.2/llvm/bin/amdclang++
             fortran: /opt/rocm-6.4.2/llvm/bin/amdflang
+          flags:
+            cflags: -fPIC
+            cxxflags: -fPIC
+            fflags: -fPIC --gcc-toolchain=/opt/rh/gcc-toolset-13/root/usr
 
     # Providers
     netlib-lapack:
@@ -306,8 +310,7 @@ spack:
       buildable: false
       externals:
       - spec: cmake@3.29.2
-        modules:
-        - cmake/3.29.2
+        prefix: /usr/tce/packages/cmake/cmake-3.29.2
     python:
       buildable: false
       externals:

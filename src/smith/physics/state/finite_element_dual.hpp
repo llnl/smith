@@ -14,6 +14,7 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 
 #include "mfem.hpp"
 
@@ -49,7 +50,7 @@ class FiniteElementDual : public FiniteElementVector {
    *
    * @param[in] rhs The input vector used for construction
    */
-  FiniteElementDual(FiniteElementDual&& rhs) : FiniteElementVector(rhs)
+  FiniteElementDual(FiniteElementDual&& rhs) : FiniteElementVector(std::move(rhs))
   {
     this->linear_form_ = std::move(rhs.linear_form_);
   }
@@ -57,15 +58,13 @@ class FiniteElementDual : public FiniteElementVector {
   /**
    * @brief Move assignment
    *
+   * @note Move assignment is deleted because replacing a registered dual's identity and FE space does not interact
+   * well with StateManager.
+   *
    * @param rhs The right hand side input Dual
    * @return The assigned FiniteElementDual
    */
-  FiniteElementDual& operator=(FiniteElementDual&& rhs)
-  {
-    FiniteElementVector::operator=(rhs);
-    this->linear_form_ = std::move(rhs.linear_form_);
-    return *this;
-  }
+  FiniteElementDual& operator=(FiniteElementDual&& rhs) = delete;
 
   /**
    * @brief Copy assignment

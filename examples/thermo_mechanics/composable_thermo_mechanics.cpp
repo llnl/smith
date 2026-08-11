@@ -21,7 +21,7 @@
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/thermal_system.hpp"
 #include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
-#include "smith/differentiable_numerics/time_info_thermo_mechanical_materials.hpp"
+#include "smith/differentiable_numerics/make_time_info_material.hpp"
 #include "smith/differentiable_numerics/combined_system.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
 #include "smith/physics/materials/green_saint_venant_thermoelastic.hpp"
@@ -39,6 +39,7 @@ int main(int argc, char* argv[])
   constexpr int dim = 3;
   constexpr int order = 1;
 
+  // Build a small beam mesh and name boundaries used by both physics systems.
   auto mesh = std::make_shared<smith::Mesh>(
       mfem::Mesh::MakeCartesian3D(8, 2, 2, mfem::Element::HEXAHEDRON, 1.0, 0.1, 0.1), "mesh", 0, 0);
   mesh->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
@@ -60,6 +61,7 @@ int main(int argc, char* argv[])
 
   auto field_store = std::make_shared<smith::FieldStore>(mesh, 100);
 
+  // Register displacement and temperature states in one shared field store.
   auto solid_fields =
       smith::registerSolidMechanicsFields<dim, order, smith::QuasiStaticSecondOrderTimeIntegrationRule>(field_store);
   auto thermal_fields =
@@ -72,19 +74,21 @@ int main(int argc, char* argv[])
   auto thermal_solver =
       std::make_shared<smith::SystemSolver>(smith::buildNonlinearBlockSolver(nonlinear_options, linear_options, *mesh));
 
-  auto solid_system = smith::buildSolidMechanicsSystem<dim, order>(solid_solver, smith::SolidMechanicsOptions{},
-                                                                   solid_fields, thermal_fields);
-  auto thermal_system =
-      smith::buildThermalSystem<dim, order>(thermal_solver, smith::ThermalOptions{}, thermal_fields, solid_fields);
+  auto solid_system = smith::buildSolidMechanicsSystem(solid_solver, smith::SolidMechanicsOptions{}, solid_fields,
+                                                       smith::couplingFields(thermal_fields));
+  auto thermal_system = smith::buildThermalSystem(thermal_solver, smith::ThermalOptions{}, thermal_fields,
+                                                  smith::couplingFields(solid_fields));
 
   auto coupled_system = smith::combineSystems(solid_system, thermal_system);
 
-  smith::thermomechanics::GreenSaintVenantThermoelasticMaterialWithTimeInfo material{1.0,    100.0, 0.25, 1.0,
-                                                                                     0.0025, 0.0,   0.05};
+  // Use one thermoelastic material model in both coupled residuals.
+  auto material = smith::makeTimeInfoMaterial(
+      smith::thermomechanics::GreenSaintVenantThermoelasticMaterial{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05});
   smith::setCoupledThermoMechanicsMaterial(solid_system, thermal_system, material, mesh->entireBodyName());
   // _build_end
 
   // _bc_start
+  // Clamp one end, impose a thermal gradient, then apply traction and heat source loads.
   solid_system->setDisplacementBC(mesh->domain("left"));
   thermal_system->setTemperatureBC(mesh->domain("left"), [](auto, auto) { return 1.0; });
   thermal_system->setTemperatureBC(mesh->domain("right"), [](auto, auto) { return 0.0; });
@@ -100,6 +104,7 @@ int main(int argc, char* argv[])
 
   // _run_start
   auto physics = smith::makeDifferentiablePhysics(coupled_system, "composable_thermo_mechanics");
+  // Advance the coupled system for two fixed time steps.
   for (int step = 0; step < 2; ++step) {
     physics->advanceTimestep(1.0);
   }

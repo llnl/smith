@@ -93,6 +93,13 @@ void DifferentiablePhysics::resetStates(int cycle, double time)
   initializeReactionStates();
   time_ = time;
   cycle_ = cycle;
+
+  // Maintain a time history so that time() can be made cycle-consistent during
+  // reverse replay. This implementation assumes cycle == 0 for resets.
+  time_history_.clear();
+  time_history_.push_back(time_);
+  SLIC_ERROR_IF(cycle_ != 0,
+                std::format("DifferentiablePhysics::resetStates called with cycle {} (expected 0)", cycle_));
 }
 
 void DifferentiablePhysics::resetAdjointStates()
@@ -100,6 +107,12 @@ void DifferentiablePhysics::resetAdjointStates()
   checkpointer_->finalize_graph();
   checkpointer_->reset_for_backprop();
   gretl_assert(checkpointer_->check_validity());
+
+  // Ensure that time reflects the end of the forward run when starting adjoint.
+  if (!time_history_.empty()) {
+    time_ = time_history_.back();
+    cycle_ = static_cast<int>(time_history_.size()) - 1;
+  }
 }
 
 std::vector<std::string> DifferentiablePhysics::stateNames() const { return state_names_; }
@@ -255,11 +268,24 @@ void DifferentiablePhysics::advanceTimestep(double dt)
   cycle_++;
   time_ += dt;
   milestones_.push_back(make_milestone(field_states_, reaction_states_).step());
+
+  // Record end-of-step time for the new cycle.
+  if (time_history_.empty()) {
+    time_history_.push_back(time_prev_);
+  }
+  time_history_.push_back(time_);
 }
 
 void DifferentiablePhysics::reverseAdjointTimestep()
 {
   --cycle_;
+
+  // Restore time consistent with the new cycle.
+  SLIC_ERROR_IF(time_history_.empty() || (static_cast<size_t>(cycle_) >= time_history_.size()),
+                std::format("DifferentiablePhysics time history invalid: cycle {} history size {}", cycle_,
+                            time_history_.size()));
+  time_ = time_history_[static_cast<size_t>(cycle_)];
+
   const gretl::Int milestone = milestones_[static_cast<size_t>(cycle_)];
 
   field_shape_displacement_->clear_dual();
@@ -318,6 +344,27 @@ std::vector<FieldState> DifferentiablePhysics::getFieldStatesAndParamStates() co
   fields.insert(fields.end(), field_states_.begin(), field_states_.end());
   fields.insert(fields.end(), field_params_.begin(), field_params_.end());
   return fields;
+}
+
+FieldState DifferentiablePhysics::getInitialFieldState(const std::string& state_name) const
+{
+  SLIC_ERROR_IF(state_name_to_field_index_.find(state_name) == state_name_to_field_index_.end(),
+                std::format("Could not find initial field named {0}", state_name));
+  return initial_field_states_[state_name_to_field_index_.at(state_name)];
+}
+
+FieldState DifferentiablePhysics::getFieldState(const std::string& state_name) const
+{
+  SLIC_ERROR_IF(state_name_to_field_index_.find(state_name) == state_name_to_field_index_.end(),
+                std::format("Could not find field named {0}", state_name));
+  return field_states_[state_name_to_field_index_.at(state_name)];
+}
+
+FieldState DifferentiablePhysics::getFieldParam(const std::string& param_name) const
+{
+  SLIC_ERROR_IF(param_name_to_field_index_.find(param_name) == param_name_to_field_index_.end(),
+                std::format("Could not find parameter named {0}", param_name));
+  return field_params_[param_name_to_field_index_.at(param_name)];
 }
 
 FieldState DifferentiablePhysics::getShapeDispFieldState() const { return *field_shape_displacement_; }

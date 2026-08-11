@@ -6,6 +6,7 @@
 
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/block_preconditioner.hpp"
+#include "smith/numerics/solver_with_preconditioner.hpp"
 
 #include <cstdlib>
 #include <iomanip>
@@ -56,28 +57,6 @@ class PreconditionerOnlySolver : public mfem::IterativeSolver {
   // Note: mfem::IterativeSolver already has a 'prec' member (mfem::Solver*)
 };
 
-class SolverWithPreconditioner : public mfem::Solver {
- public:
-  SolverWithPreconditioner(std::unique_ptr<mfem::Solver> linear_solver, std::unique_ptr<mfem::Solver> preconditioner)
-      : linear_solver_(std::move(linear_solver)), preconditioner_(std::move(preconditioner))
-  {
-    SLIC_ERROR_IF(!linear_solver_, "SolverWithPreconditioner requires a non-null linear solver");
-  }
-
-  void SetOperator(const mfem::Operator& op) override
-  {
-    height = op.Height();
-    width = op.Width();
-    linear_solver_->SetOperator(op);
-  }
-
-  void Mult(const mfem::Vector& x, mfem::Vector& y) const override { linear_solver_->Mult(x, y); }
-
- private:
-  std::unique_ptr<mfem::Solver> linear_solver_;
-  std::unique_ptr<mfem::Solver> preconditioner_;
-};
-
 bool preconditionerSupportsBlockOperator(Preconditioner preconditioner)
 {
   switch (preconditioner) {
@@ -104,7 +83,7 @@ bool linearSolverSupportsBlockOperator(LinearSolver linear_solver)
     case LinearSolver::PetscCG:
     case LinearSolver::PetscGMRES:
 #endif
-    case LinearSolver::None:
+    case LinearSolver::PrecondOnly:
       return true;
     default:
       return false;
@@ -1396,7 +1375,7 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
       exit(1);
       break;
 #endif
-    case LinearSolver::None:
+    case LinearSolver::PrecondOnly:
       iter_lin_solver = std::make_unique<PreconditionerOnlySolver>(comm);
       break;
     default:
@@ -1529,7 +1508,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
     for (const auto& opt : linear_opts.sub_block_linear_solver_options) {
       auto [lin, prec] = buildLinearSolverAndPreconditioner(opt, comm);
-      inner_solvers.push_back(std::make_unique<SolverWithPreconditioner>(std::move(lin), std::move(prec)));
+      inner_solvers.push_back(std::make_unique<smith::SolverWithPreconditioner>(std::move(lin), std::move(prec)));
     }
 
     if (preconditioner == Preconditioner::BlockDiagonal) {

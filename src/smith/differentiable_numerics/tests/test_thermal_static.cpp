@@ -7,18 +7,12 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include "smith/differentiable_numerics/thermal_system.hpp"
-#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/system_solver.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/common.hpp"
 #include "smith/physics/state/state_manager.hpp"
-#include "smith/numerics/functional/functional.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include "axom/slic.hpp"
-#include "axom/fmt.hpp"
-#include "axom/sidre.hpp"
 
 using namespace smith;
 
@@ -48,11 +42,8 @@ struct ThermalStaticFixture : public testing::Test {
     auto solver_options = NonlinearSolverOptions();
     solver_options.relative_tol = 1e-12;
     auto linear_options = LinearSolverOptions();
-    auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
 
-    using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
-    auto thermal_system =
-        buildThermalSystem<2, temp_order, TempRule>(solver_options, linear_options, ThermalOptions{}, field_store);
+    auto thermal_system = buildThermalSystem<2, temp_order>(solver_options, linear_options, ThermalOptions{}, mesh);
 
     double k = 1.0;
     // Material returns {heat_capacity, heat_flux} consistent with heat_transfer.hpp convention.
@@ -62,7 +53,7 @@ struct ThermalStaticFixture : public testing::Test {
                                     auto grad_temperature) { return smith::tuple{0.0, -k * grad_temperature}; },
                                 "entire_body");
 
-    thermal_system->addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
+    thermal_system->addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/, auto... /*args*/) {
       auto x = X[0];
       auto y = X[1];
       return 2.0 * k * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);
@@ -138,13 +129,8 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
   solver_options.relative_tol = 1e-12;
   auto linear_options = LinearSolverOptions();
 
-  FieldType<L2<0>> conductivity_param("conductivity");
-  auto field_store = std::make_shared<FieldStore>(mesh, 100, "");
-
-  using TempRule = QuasiStaticFirstOrderTimeIntegrationRule;
-  auto param_fields = registerParameterFields(conductivity_param);
-  auto thermal_system =
-      buildThermalSystem<2, 1, TempRule>(solver_options, linear_options, ThermalOptions{}, field_store, param_fields);
+  auto thermal_system = buildThermalSystem<2, 1>(solver_options, linear_options, ThermalOptions{}, mesh,
+                                                 FieldType<L2<0>>("conductivity"));
 
   // Set the conductivity parameter field to k=1.0
   thermal_system->field_store->getParameterFields()[0].get()->setFromFieldFunction(
@@ -159,7 +145,7 @@ TEST_F(ThermalStaticFixture, HeatSourceWithDependsOn)
       "entire_body");
 
   // DependsOn now indexes only trailing coupling/parameter args, so empty means "state-only".
-  thermal_system->addHeatSource(DependsOn<>{}, "entire_body", [=](auto /*t*/, auto X, auto /*T*/) {
+  thermal_system->addHeatSource("entire_body", [=](auto /*t*/, auto X, auto /*T*/, auto... /*args*/) {
     auto x = X[0];
     auto y = X[1];
     return 2.0 * M_PI * M_PI * sin(M_PI * x) * sin(M_PI * y);

@@ -17,20 +17,6 @@
 
 namespace smith {
 
-LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::SuperLU,
-                                         .preconditioner = Preconditioner::None,
-                                         .relative_tol = 1e-12,
-                                         .absolute_tol = 1e-12,
-                                         .max_iterations = 2000,
-                                         .print_level = 0};
-
-NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
-                                            .relative_tol = 1.0e-10,
-                                            .absolute_tol = 1.0e-10,
-                                            .max_iterations = 100,
-                                            .max_line_search_iterations = 50,
-                                            .print_level = 1};
-
 static constexpr int dim = 3;
 static constexpr int disp_order = 1;
 static constexpr int state_order = 0;
@@ -40,6 +26,20 @@ using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
 using InternalVariableRule = BackwardEulerFirstOrderTimeIntegrationRule;
 
 struct SolidStaticWithInternalVarsFixture : public testing::Test {
+  LinearSolverOptions solid_linear_options{.linear_solver = LinearSolver::SuperLU,
+                                           .preconditioner = Preconditioner::None,
+                                           .relative_tol = 1e-12,
+                                           .absolute_tol = 1e-12,
+                                           .max_iterations = 2000,
+                                           .print_level = 0};
+
+  NonlinearSolverOptions solid_nonlinear_opts{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
+                                              .relative_tol = 1.0e-10,
+                                              .absolute_tol = 1.0e-10,
+                                              .max_iterations = 100,
+                                              .max_line_search_iterations = 50,
+                                              .print_level = 1};
+
   void SetUp() override
   {
     StateManager::initialize(datastore, "solid_static_with_internal_vars");
@@ -103,15 +103,16 @@ struct StrainNormEvolution {
   }
 };
 
-std::shared_ptr<SystemSolver> makeSystemSolver(const Mesh& mesh)
+std::shared_ptr<SystemSolver> makeSystemSolver(const NonlinearSolverOptions& nonlinear_opts,
+                                               const LinearSolverOptions& linear_opts, const Mesh& mesh)
 {
-  return std::make_shared<SystemSolver>(buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, mesh));
+  return std::make_shared<SystemSolver>(buildNonlinearBlockSolver(nonlinear_opts, linear_opts, mesh));
 }
 
 auto registerFields(const std::shared_ptr<FieldStore>& field_store)
 {
   return std::tuple{registerSolidMechanicsFields<dim, disp_order, DispRule>(field_store),
-                    registerInternalVariableFields<StateSpace, InternalVariableRule>(field_store)};
+                    registerInternalVariableFields<dim, StateSpace, InternalVariableRule>(field_store)};
 }
 
 template <typename SolidSystemType, typename InternalVariableSystemType>
@@ -139,16 +140,16 @@ void setPullBoundaryConditions(const std::shared_ptr<SolidSystemType>& solid_sys
 
 TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 {
-  auto solid_solver = makeSystemSolver(*mesh);
-  auto internal_variable_solver = makeSystemSolver(*mesh);
+  auto solid_solver = makeSystemSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto internal_variable_solver = makeSystemSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_static_with_internal_vars_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
-  auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
-                                                                 internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                couplingFields(internal_variable_fields));
   auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
+      buildInternalVariableSystem(internal_variable_solver, internal_variable_fields, couplingFields(solid_fields));
 
   auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 
@@ -170,8 +171,8 @@ TEST_F(SolidStaticWithInternalVarsFixture, CoupledSolve)
 
 TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 {
-  auto solid_solver = makeSystemSolver(*mesh);
-  auto internal_variable_solver = makeSystemSolver(*mesh);
+  auto solid_solver = makeSystemSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto internal_variable_solver = makeSystemSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto disp_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto internal_variable_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
 
@@ -183,10 +184,10 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "solid_staggered_relaxation_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
-  auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
-                                                                 internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                couplingFields(internal_variable_fields));
   auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
+      buildInternalVariableSystem(internal_variable_solver, internal_variable_fields, couplingFields(solid_fields));
 
   auto system = combineSystems(staggered_solver, solid_system, internal_variable_system);
 
@@ -202,16 +203,16 @@ TEST_F(SolidStaticWithInternalVarsFixture, StaggeredSolveWithRelaxation)
 
 TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 {
-  auto solid_solver = makeSystemSolver(*mesh);
-  auto internal_variable_solver = makeSystemSolver(*mesh);
+  auto solid_solver = makeSystemSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
+  auto internal_variable_solver = makeSystemSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto nonlinear_block_solver = buildNonlinearBlockSolver(solid_nonlinear_opts, solid_linear_options, *mesh);
   auto coupled_solver = std::make_shared<SystemSolver>(nonlinear_block_solver);
   auto field_store = std::make_shared<FieldStore>(mesh, 100, "body_force_test_");
   auto [solid_fields, internal_variable_fields] = registerFields(field_store);
-  auto solid_system = buildSolidMechanicsSystem<dim, disp_order>(solid_solver, SolidMechanicsOptions{}, solid_fields,
-                                                                 internal_variable_fields);
+  auto solid_system = buildSolidMechanicsSystem(solid_solver, SolidMechanicsOptions{}, solid_fields,
+                                                couplingFields(internal_variable_fields));
   auto internal_variable_system =
-      buildInternalVariableSystem<dim, StateSpace>(internal_variable_solver, internal_variable_fields, solid_fields);
+      buildInternalVariableSystem(internal_variable_solver, internal_variable_fields, couplingFields(solid_fields));
 
   auto system = combineSystems(coupled_solver, solid_system, internal_variable_system);
 
@@ -222,7 +223,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a gravity-like body force in the -z direction
   double body_force_mag = -0.01;
-  solid_system->addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto) {
+  solid_system->addBodyForce(mesh->entireBodyName(), [=](double, auto, auto, auto, auto, auto, auto, auto... /*args*/) {
     tensor<double, dim> f{};
     f[2] = body_force_mag;
     return f;
@@ -230,7 +231,7 @@ TEST_F(SolidStaticWithInternalVarsFixture, BodyForceAndTraction)
 
   // Apply a traction on the top face in the +z direction
   double traction_mag = 0.005;
-  solid_system->addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto) {
+  solid_system->addTraction("top", [=](double, auto, auto /*n*/, auto, auto, auto, auto, auto, auto... /*args*/) {
     tensor<double, dim> t{};
     t[2] = traction_mag;
     return t;

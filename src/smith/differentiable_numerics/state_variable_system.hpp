@@ -13,18 +13,17 @@
  *       field_store, params...);
  *
  *   auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace, StateRule>(
- *       solver, opts, internal_variable_fields, params..., solid_fields);
+ *       solver, internal_variable_fields, couplingFields(solid_fields), param_fields);
  *
  * The returned PhysicsFields from registerInternalVariableFields carries field tokens
  * (state_solve_state, state) that can be injected into another physics system
  * (e.g. SolidMechanicsSystem) as coupling input.
  *
  * addEvolution registers an ODE residual of the form:
- *   evolution_law(t_info, alpha_val, alpha_dot, coupling_fields..., params...) == 0
+ *   evolution_law(t_info, alpha_val, alpha_dot, interpolated_coupling_fields..., params...) == 0
  *
- * With Coupling = CouplingParams<H1<order,dim>, H1<order,dim>, H1<order,dim>, H1<order,dim>>
- * (the solid displacement coupling fields), the user accesses the displacement gradient via
- * get<DERIVATIVE>(u_solve_state_arg) as the first coupling field argument.
+ * With solid displacement coupling, the callback receives `(u, v, a)` rather than raw
+ * `(u_solve_state, u_old, v_old, a_old)`.
  */
 
 #pragma once
@@ -53,10 +52,10 @@ namespace smith {
  * @tparam dim Spatial dimension (needed for the weak form and zero-flux tensor).
  * @tparam StateSpace FE space for the internal variable (e.g., L2<0>).
  * @tparam InternalVarTimeRule Time integration rule (must have num_states == 2).
- * @tparam Coupling CouplingParams listing fields borrowed from other physics (default: none).
+ * @tparam Coupling Tuple of coupling and parameter packs (default: none).
  */
 template <int dim, typename StateSpace, typename InternalVarTimeRule = BackwardEulerFirstOrderTimeIntegrationRule,
-          typename Coupling = CouplingParams<>>
+          typename Coupling = std::tuple<>>
 struct InternalVariableSystem : public SystemBase {
   using SystemBase::SystemBase;
 
@@ -70,6 +69,7 @@ struct InternalVariableSystem : public SystemBase {
   std::shared_ptr<InternalVariableWeakFormType> internal_variable_weak_form;  ///< Internal variable weak form.
   std::shared_ptr<DirichletBoundaryConditions> internal_variable_bc;          ///< Internal variable BCs.
   std::shared_ptr<InternalVarTimeRule> internal_variable_time_rule;           ///< Time integration rule.
+  std::shared_ptr<const Coupling> coupling;                                   ///< Coupling metadata.
 
   /**
    * @brief Register an ODE evolution law for the internal variable.
@@ -78,9 +78,6 @@ struct InternalVariableSystem : public SystemBase {
    *   evolution_law(t_info, alpha_val, alpha_dot, coupling_fields..., params...)
    * and must return a scalar residual (zero when the ODE is satisfied).
    *
-   * When Coupling carries solid displacement fields (u_ss, u, v, a), access the
-   * displacement gradient via get<DERIVATIVE>(u_ss_arg) on the first coupling field.
-   *
    * @param domain_name Domain to apply the evolution on.
    * @param evolution_law Callable returning the ODE residual.
    */
@@ -88,14 +85,18 @@ struct InternalVariableSystem : public SystemBase {
   void addEvolution(const std::string& domain_name, EvolutionType evolution_law)
   {
     auto captured_time_rule = internal_variable_time_rule;
-    internal_variable_weak_form->addBodyIntegral(
-        domain_name, [=](auto t_info, auto /*X*/, auto alpha, auto alpha_old, auto... coupling_and_params) {
-          auto [alpha_current, alpha_dot] = captured_time_rule->interpolate(t_info, alpha, alpha_old);
-          auto residual_val =
-              evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot), coupling_and_params...);
-          tensor<double, dim> flux{};
-          return smith::tuple{residual_val, flux};
-        });
+    auto captured_coupling = coupling;
+    internal_variable_weak_form->addBodyIntegral(domain_name, [=](auto t_info, auto /*X*/, auto... raw_args) {
+      return detail::applyTimeRuleAndCoupling(
+          *captured_time_rule, *captured_coupling, t_info,
+          [&](auto alpha_current, auto alpha_dot, auto... interpolated_params) {
+            auto residual_val =
+                evolution_law(t_info, get<VALUE>(alpha_current), get<VALUE>(alpha_dot), interpolated_params...);
+            tensor<double, dim> flux{};
+            return smith::tuple{residual_val, flux};
+          },
+          raw_args...);
+    });
   }
 };
 
@@ -111,7 +112,7 @@ struct InternalVariableSystem : public SystemBase {
  * @return PhysicsFields carrying (state_solve_state, state) field tokens
  *         suitable for injection into another physics system.
  */
-template <typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
+template <int dim, typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
 auto registerInternalVariableFields(std::shared_ptr<FieldStore> field_store,
                                     FieldType<parameter_space>... parameter_types)
 {
@@ -128,16 +129,16 @@ auto registerInternalVariableFields(std::shared_ptr<FieldStore> field_store,
     (prefix_param(parameter_types), ...);
   }
 
-  return PhysicsFields<InternalVarTimeRule, StateSpace, StateSpace>{
+  return PhysicsFields<dim, StateSpace::order, InternalVarTimeRule, StateSpace, StateSpace>{
       field_store, FieldType<StateSpace>(field_store->prefix("state_solve_state")),
       FieldType<StateSpace>(field_store->prefix("state"))};
 }
 
-template <typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
+template <int dim, typename StateSpace, typename InternalVarTimeRule, typename... parameter_space>
 /// @brief Backward-compatible alias for `registerInternalVariableFields`.
 auto registerStateVariableFields(std::shared_ptr<FieldStore> field_store, FieldType<parameter_space>... parameter_types)
 {
-  return registerInternalVariableFields<StateSpace, InternalVarTimeRule>(field_store, parameter_types...);
+  return registerInternalVariableFields<dim, StateSpace, InternalVarTimeRule>(field_store, parameter_types...);
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +154,7 @@ namespace detail {
  * @brief Internal builder for an internal-variable system after public registration and coupling collection.
  */
 template <int dim, typename StateSpace, typename InternalVarTimeRule, typename Coupling>
-  requires detail::is_coupling_params_v<Coupling>
+  requires detail::is_coupling_packs_v<Coupling>
 auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupling& coupling,
                                      std::shared_ptr<SystemSolver> solver)
 {
@@ -169,12 +170,14 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
   std::string internal_variable_residual_name = field_store->prefix("state_residual");
   auto internal_variable_weak_form =
       detail::buildWeakFormWithCoupling<typename SystemType::InternalVariableWeakFormType>(
-          field_store, internal_variable_residual_name, state_type.name, state_type, state_old_type, coupling.fields);
+          field_store, internal_variable_residual_name, state_type.name, state_type, state_old_type,
+          detail::flattenCouplingFields(coupling));
 
   auto sys = std::make_shared<SystemType>(field_store, solver,
                                           std::vector<std::shared_ptr<WeakForm>>{internal_variable_weak_form});
   sys->internal_variable_bc = internal_variable_bc;
   sys->internal_variable_time_rule = internal_variable_time_rule;
+  sys->coupling = std::make_shared<Coupling>(coupling);
   sys->internal_variable_weak_form = internal_variable_weak_form;
 
   return sys;
@@ -187,15 +190,63 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
  *
  * The time rule is deduced from SelfFields::time_rule_type.
  */
-template <int dim, typename StateSpace, typename SelfFields, typename... OtherPacks>
-  requires(detail::has_time_rule_v<SelfFields> && (detail::is_coupling_params_v<OtherPacks> && ...))
-auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
-                                 const OtherPacks&... other_packs)
+template <typename SelfFields>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields)
 {
+  constexpr int dim = SelfFields::dim;
+  using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
   using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
   auto field_store = self_fields.field_store;
-  (detail::registerParamsIfNeeded(field_store, other_packs), ...);
-  auto coupling = detail::collectCouplingFields<InternalVarTimeRule>(field_store, self_fields, other_packs...);
+  auto coupling = detail::collectCouplingFields();
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
+}
+
+/**
+ * @brief Build an InternalVariableSystem from registered self fields plus coupled physics fields.
+ */
+template <typename SelfFields, typename... PFs>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                                 const CouplingFields<PFs...>& coupled)
+{
+  constexpr int dim = SelfFields::dim;
+  using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled);
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
+}
+
+/**
+ * @brief Build an InternalVariableSystem from registered self fields plus registered parameter fields.
+ */
+template <typename SelfFields, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                                 const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(params);
+  return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
+}
+
+/**
+ * @brief Build an InternalVariableSystem from registered self fields, coupled physics fields, and parameter fields.
+ */
+template <typename SelfFields, typename... PFs, typename... ParamSpaces>
+  requires(detail::has_time_rule_v<SelfFields>)
+auto buildInternalVariableSystem(std::shared_ptr<SystemSolver> solver, const SelfFields& self_fields,
+                                 const CouplingFields<PFs...>& coupled, const ParamFields<ParamSpaces...>& params)
+{
+  constexpr int dim = SelfFields::dim;
+  using StateSpace = typename std::tuple_element_t<0, decltype(self_fields.fields)>::space_type;
+  using InternalVarTimeRule = typename std::decay_t<SelfFields>::time_rule_type;
+  auto field_store = self_fields.field_store;
+  auto coupling = detail::collectCouplingFields(coupled, params);
   return detail::buildInternalVariableSystemImpl<dim, StateSpace, InternalVarTimeRule>(field_store, coupling, solver);
 }
 

@@ -9,6 +9,7 @@ set(differentiable_numerics_test_depends smith_physics smith_differentiable_nume
 set(differentiable_numerics_test_source
     test_solver_convergence.cpp
     test_field_state.cpp
+    test_make_time_info_material.cpp
     test_solid_dynamics.cpp
     test_explicit_dynamics.cpp
     test_porous_heat_sink.cpp
@@ -19,6 +20,8 @@ set(differentiable_numerics_test_source
     test_thermo_mechanics_with_internal_vars.cpp
     test_bc_ramp.cpp
     shallow_arch_buckling.cpp
+    test_mixed_poisson.cpp
+    test_amg_vdim_block_preconditioner.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

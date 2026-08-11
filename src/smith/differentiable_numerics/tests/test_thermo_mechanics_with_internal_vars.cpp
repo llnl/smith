@@ -152,19 +152,20 @@ TEST_F(ThreeSystemMeshFixture, StronglyCoupledThreeSystems)
   // the displacement field tokens available for thermal coupling.
   auto solid_fields = registerSolidMechanicsFields<dim, disp_ord, DispRule>(field_store);
   auto thermal_fields = registerThermalFields<dim, temp_ord, TempRule>(field_store);
-  auto internal_variable_fields = registerInternalVariableFields<StateSpace, InternalVariableRule>(field_store);
+  auto internal_variable_fields = registerInternalVariableFields<dim, StateSpace, InternalVariableRule>(field_store);
 
   // Phase 2: build each system.
   // Solid receives thermal and alpha coupling.
-  auto solid_system = buildSolidMechanicsSystem<dim, disp_ord>(std::make_shared<SystemSolver>(solid_block_solver),
-                                                               SolidMechanicsOptions{}, solid_fields, thermal_fields,
-                                                               internal_variable_fields);
+  auto solid_system =
+      buildSolidMechanicsSystem(std::make_shared<SystemSolver>(solid_block_solver), SolidMechanicsOptions{},
+                                solid_fields, couplingFields(thermal_fields, internal_variable_fields));
 
-  auto thermal_system = buildThermalSystem<dim, temp_ord>(std::make_shared<SystemSolver>(thermal_block_solver),
-                                                          ThermalOptions{}, thermal_fields, solid_fields);
+  auto thermal_system = buildThermalSystem(std::make_shared<SystemSolver>(thermal_block_solver), ThermalOptions{},
+                                           thermal_fields, couplingFields(solid_fields));
 
-  auto internal_variable_system = buildInternalVariableSystem<dim, StateSpace>(
-      std::make_shared<SystemSolver>(internal_variable_block_solver), internal_variable_fields, solid_fields);
+  auto internal_variable_system =
+      buildInternalVariableSystem(std::make_shared<SystemSolver>(internal_variable_block_solver),
+                                  internal_variable_fields, couplingFields(solid_fields));
 
   // Phase 3: register material integrands.
   auto material = SimpleThermoelasticMaterial{};
@@ -177,12 +178,13 @@ TEST_F(ThreeSystemMeshFixture, StronglyCoupledThreeSystems)
 
   // Compressive traction on right face.
   // Lambda args from addTraction: (t, X, n, u, v, a, temp_ss, temp_old, alpha_ss, alpha_old)
-  solid_system->addTraction("right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/,
-                                        auto /*temp_ss*/, auto /*temp_old*/, auto /*alpha_ss*/, auto /*alpha_old*/) {
-    auto t = 0.0 * X;
-    t[0] = -0.005;
-    return t;
-  });
+  solid_system->addTraction(
+      "right", [](double, auto X, auto /*n*/, auto /*u*/, auto /*v*/, auto /*a*/, auto /*temp_ss*/, auto /*temp_old*/,
+                  auto /*alpha_ss*/, auto /*alpha_old*/, auto... /*args*/) {
+        auto t = 0.0 * X;
+        t[0] = -0.005;
+        return t;
+      });
 
   // Phase 5: combine and solve.
   auto coupled_system = combineSystems(solid_system, thermal_system, internal_variable_system);
