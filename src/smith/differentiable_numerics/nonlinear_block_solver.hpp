@@ -125,22 +125,29 @@ class NonlinearBlockSolverBase {
   /// @brief Read current BC ramp options.
   const BcRampOptions& bcRampOptions() const { return bc_ramp_options_; }
 
-  /// @brief Linearized warm-start step from last-converged state to target BCs.
-  ///
-  /// Solves the partitioned linear system K_ff du_f = -K_fc du_c (with du_c the
-  /// BC delta at constrained dofs) and returns u_prev + s*du with s ∈ (0, 1]
-  /// scaled down until @p residual_finite(u_prev + s*du, s) is true. Single-row
-  /// only. Default returns success=false; subclasses with a linear solver may
-  /// override.
+  /// @brief Result from linearized warm-start prediction.
   struct WarmStart {
-    bool success = false;
+    bool success = false;    ///< Whether predictor produced finite initial guess.
     double alpha = 1.0;      ///< accepted scale s; aligns with BC ramp alpha
     FieldPtr initial_guess;  ///< u_prev + s*du
   };
-  virtual WarmStart linearWarmStart(const FieldPtr& /*u_prev*/, const FieldPtr& /*target_bc*/,
-                                    mfem::HypreParMatrix& /*K_raw_at_u_prev*/,
-                                    const mfem::Array<int>& /*constrained_tdofs*/,
-                                    const std::function<bool(const FieldPtr&, double)>& /*residual_finite*/) const
+
+  /// @brief Compute linearized initial guess for updated boundary values.
+  ///
+  /// Solves the partitioned linear system K_ff du_f = -K_fc du_c, then scales
+  /// the update until @p residual_finite accepts it. Default implementation
+  /// returns an unsuccessful result.
+  /// @param u_prev Last converged field.
+  /// @param target_bc Field containing target constrained values.
+  /// @param K_raw_at_u_prev Unmodified Jacobian at previous field.
+  /// @param constrained_tdofs Essential true degrees of freedom.
+  /// @param residual_finite Checks predictor residual finiteness.
+  /// @return Predictor result and accepted load fraction.
+  virtual WarmStart linearWarmStart(
+      [[maybe_unused]] const FieldPtr& u_prev, [[maybe_unused]] const FieldPtr& target_bc,
+      [[maybe_unused]] mfem::HypreParMatrix& K_raw_at_u_prev,
+      [[maybe_unused]] const mfem::Array<int>& constrained_tdofs,
+      [[maybe_unused]] const std::function<bool(const FieldPtr&, double)>& residual_finite) const
   {
     return {};
   }

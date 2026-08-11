@@ -22,6 +22,7 @@
 #include "smith/differentiable_numerics/make_time_info_material.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/physics/mesh.hpp"
+#include "smith/physics/materials/solid_material.hpp"
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/differentiable_numerics/solid_mechanics_system.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
@@ -114,9 +115,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
                                                   .warm_start = warm_start};
 
   using TimeRule = QuasiStaticSecondOrderTimeIntegrationRule;
-  auto field_store = std::make_shared<FieldStore>(mesh, 100, "arch_");
-  auto solid_system = buildSolidMechanicsSystem<dim, p, TimeRule>(nonlinear_options, linear_options,
-                                                                  SolidMechanicsOptions{}, field_store);
+  auto solid_system =
+      buildSolidMechanicsSystem<dim, p, TimeRule>(nonlinear_options, linear_options, SolidMechanicsOptions{}, mesh);
 
   solid_system->setMaterial(makeTimeInfoMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = 100.0, .G = 10.0}),
                             mesh->entireBodyName());
