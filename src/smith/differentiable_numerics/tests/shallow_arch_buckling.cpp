@@ -118,9 +118,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   auto solid_system = buildSolidMechanicsSystem<dim, p, TimeRule>(nonlinear_options, linear_options,
                                                                   SolidMechanicsOptions{}, field_store);
 
-  solid_system->setMaterial(
-      makeTimeInfoMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = 100.0, .G = 10.0}),
-      mesh->entireBodyName());
+  solid_system->setMaterial(makeTimeInfoMaterial(solid_mechanics::NeoHookean{.density = 1.0, .K = 100.0, .G = 10.0}),
+                            mesh->entireBodyName());
 
   // Left end: fully clamped.
   solid_system->setDisplacementBC(mesh->domain("left_end"));
