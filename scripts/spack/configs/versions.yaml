@@ -24,7 +24,7 @@ packages:
     - spec: "@4.9.1.4"
   petsc:
     require:
-    - spec: "@3.25.4"
+    - spec: "@3.23.7"
   raja:
     require:
     - spec: "@2025.12.2"
