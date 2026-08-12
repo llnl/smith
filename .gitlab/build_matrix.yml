@@ -2,7 +2,7 @@
 # This is the shared configuration of jobs for matrix
 .on_matrix:
   variables:
-    SCHEDULER_PARAMETERS: "--partition=pci --exclusive=user --deadline=now+3hour -N1 -t ${ALLOC_TIME}"
+    SCHEDULER_PARAMETERS: "--partition=pci --exclusive=user --deadline=now+2hour -N1 -t ${ALLOC_TIME}"
   tags:
     - batch
     - matrix
@@ -30,6 +30,7 @@ matrix-gcc_13_3_1_cuda-src:
   variables:
     COMPILER: "gcc@13.3.1_cuda"
     HOST_CONFIG: "matrix-toss_4_x86_64_ib-${COMPILER}.cmake"
+    ALLOC_TIME: "30"
   extends: .src_build_on_matrix
 
 ####
@@ -38,4 +39,5 @@ matrix-gcc_13_3_1_cuda-tpl:
   variables:
     COMPILER: "gcc-13"
     SPEC: "+devtools+adiak+caliper+enzyme cuda_arch=90 %${COMPILER}"
+    ALLOC_TIME: "45"
   extends: .tpl_build_on_matrix
