@@ -103,6 +103,12 @@ else()
         string(FIND  "${mfem_tpl_lnk_flags}" "\n" mfem_tpl_lnl_flags_end_pos )
         string(SUBSTRING "${mfem_tpl_lnk_flags}" 0 ${mfem_tpl_lnl_flags_end_pos} mfem_tpl_lnk_flags)
         string(STRIP "${mfem_tpl_lnk_flags}" mfem_tpl_lnk_flags)
+
+        # filter out items containing "Xlinker"
+        set(_mfem_tpl_list ${mfem_tpl_lnk_flags})
+        separate_arguments(_mfem_tpl_list)
+        list(FILTER _mfem_tpl_list EXCLUDE REGEX Xlinker)
+        list(JOIN _mfem_tpl_list " " mfem_tpl_lnk_flags)
     else()
         message(WARNING "No third party library flags found in ${MFEM_CFG_DIR}/config.mk")
     endif()
