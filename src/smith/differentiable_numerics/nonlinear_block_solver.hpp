@@ -101,19 +101,6 @@ class NonlinearBlockSolverBase {
   /// @brief Set an inner-solve tolerance multiplier, e.g. for staggered solves.
   virtual void setInnerToleranceMultiplier(double multiplier) = 0;
 
-  /// @brief Apply or clear relaxed intermediate-solve policy.
-  virtual void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
-                                              int max_iterations) const
-  {
-    static_cast<void>(enabled);
-    static_cast<void>(abs_tol_factor);
-    static_cast<void>(rel_tol_floor);
-    static_cast<void>(max_iterations);
-  }
-
-  /// @brief Effective nonlinear solver print level for user-facing diagnostics.
-  virtual int printLevel() const { return 0; }
-
   /// @brief Returns true if the most recent @ref solve call satisfied its convergence criterion.
   /// Subclasses must write @c last_solve_converged_ at the end of their solve path.
   /// True before first call (optimistic default — ramp predicate sees only the NaN check then).
@@ -125,34 +112,23 @@ class NonlinearBlockSolverBase {
   /// @brief Read current BC ramp options.
   const BcRampOptions& bcRampOptions() const { return bc_ramp_options_; }
 
-  /// @brief Result from linearized warm-start prediction.
-  struct WarmStart {
-    bool success = false;    ///< Whether predictor produced finite initial guess.
-    double alpha = 1.0;      ///< accepted scale s; aligns with BC ramp alpha
-    FieldPtr initial_guess;  ///< u_prev + s*du
-  };
-
   /// @brief Compute linearized initial guess for updated boundary values.
   ///
-  /// Solves the partitioned linear system K_ff du_f = -K_fc du_c, then scales
-  /// the update until @p residual_finite accepts it. Default implementation
-  /// returns an unsuccessful result.
+  /// Solves the partitioned linear system K_ff du_f = -K_fc du_c. Default
+  /// implementation returns a null prediction.
   /// @param u_prev Last converged field.
   /// @param target_bc Field containing target constrained values.
   /// @param K_raw_at_u_prev Unmodified Jacobian at previous field.
   /// @param constrained_tdofs Essential true degrees of freedom.
-  /// @param residual_finite Checks predictor residual finiteness.
-  /// @return Predictor result and accepted load fraction.
-  virtual WarmStart linearWarmStart(
-      [[maybe_unused]] const FieldPtr& u_prev, [[maybe_unused]] const FieldPtr& target_bc,
-      [[maybe_unused]] mfem::HypreParMatrix& K_raw_at_u_prev,
-      [[maybe_unused]] const mfem::Array<int>& constrained_tdofs,
-      [[maybe_unused]] const std::function<bool(const FieldPtr&, double)>& residual_finite) const
+  /// @return Predicted field, or null when prediction fails.
+  virtual FieldPtr predictBcStep([[maybe_unused]] const FieldPtr& u_prev, [[maybe_unused]] const FieldPtr& target_bc,
+                                 [[maybe_unused]] mfem::HypreParMatrix& K_raw_at_u_prev,
+                                 [[maybe_unused]] const mfem::Array<int>& constrained_tdofs) const
   {
-    return {};
+    return nullptr;
   }
 
-  /// @brief Whether this solver should attempt linearWarmStart in block_solve.
+  /// @brief Whether this solver should attempt BC prediction in block_solve.
   virtual bool warmStartEnabled() const { return false; }
 
  protected:
@@ -199,21 +175,8 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// @brief Set the inner tolerance multiplier.
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
 
-  /// @overload
-  void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
-                                      int max_iterations) const override
-  {
-    use_intermediate_tolerances_ = enabled;
-    intermediate_abs_tol_factor_ = abs_tol_factor;
-    intermediate_rel_tol_floor_ = rel_tol_floor;
-    intermediate_max_iterations_ = max_iterations;
-  }
-
   /// @brief Build a fresh solver instance from retained config.
   std::shared_ptr<NonlinearBlockSolver> cloneFresh() const;
-
-  /// @overload
-  int printLevel() const override;
 
   /// @overload
   bool warmStartEnabled() const override
@@ -222,9 +185,8 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   }
 
   /// @overload
-  WarmStart linearWarmStart(const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
-                            const mfem::Array<int>& constrained_tdofs,
-                            const std::function<bool(const FieldPtr&, double)>& residual_finite) const override;
+  FieldPtr predictBcStep(const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
+                         const mfem::Array<int>& constrained_tdofs) const override;
 
   mutable std::unique_ptr<mfem::BlockOperator>
       block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
@@ -235,14 +197,10 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   mutable std::unique_ptr<EquationSolver>
       nonlinear_solver_;  ///< the nonlinear equation solver used for the forward pass
 
-  MPI_Comm comm_;                                     ///< MPI communicator for parallel norm computation
-  double abs_tol_;                                    ///< absolute residual tolerance for convergence check
-  double rel_tol_;                                    ///< relative residual tolerance for convergence check
-  double inner_tol_multiplier_ = 1.0;                 ///< multiplier for tolerances during inner solves
-  mutable bool use_intermediate_tolerances_ = false;  ///< whether to relax cutback solves
-  mutable double intermediate_abs_tol_factor_ = 1.0;  ///< abs_tol multiplier for cutback solves
-  mutable double intermediate_rel_tol_floor_ = 0.0;   ///< rel_tol floor for cutback solves
-  mutable int intermediate_max_iterations_ = 0;       ///< max nonlinear iterations for cutback solves
+  MPI_Comm comm_;                      ///< MPI communicator for parallel norm computation
+  double abs_tol_;                     ///< absolute residual tolerance for convergence check
+  double rel_tol_;                     ///< relative residual tolerance for convergence check
+  double inner_tol_multiplier_ = 1.0;  ///< multiplier for tolerances during inner solves
   std::optional<NonlinearSolverOptions> retained_nonlinear_options_ = std::nullopt;  ///< retained nonlinear config
   std::optional<LinearSolverOptions> retained_linear_options_ = std::nullopt;        ///< retained linear config
 };

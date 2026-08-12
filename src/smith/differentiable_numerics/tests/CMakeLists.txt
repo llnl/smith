@@ -19,7 +19,6 @@ set(differentiable_numerics_test_source
     test_multiphysics_time_integrator.cpp
     test_thermo_mechanics_with_internal_vars.cpp
     test_bc_ramp.cpp
-    shallow_arch_buckling.cpp
     test_mixed_poisson.cpp
     test_amg_vdim_block_preconditioner.cpp
     )

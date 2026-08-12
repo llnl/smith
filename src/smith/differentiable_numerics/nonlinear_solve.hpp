@@ -18,10 +18,6 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/physics/common.hpp"
 
-namespace mfem {
-class Vector;
-}
-
 namespace smith {
 
 class WeakForm;
@@ -29,21 +25,8 @@ class NonlinearBlockSolverBase;
 class BoundaryConditionManager;
 class DirichletBoundaryConditions;
 
-/// @brief Returns true if any component of @p v is NaN or Inf.
-bool anyNonFinite(const mfem::Vector& v);
-
-/// @brief Returns true if any component of any field in @p fields is NaN or Inf.
-bool anyNonFinite(const std::vector<FEFieldPtr>& fields);
-
 /// @brief magic number for representing a field which is not an argument of the weak form.
 static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max() - 1;
-
-/// @brief Apply boundary conditions to @p primal_field. When @p bc_field_ptr is
-/// non-null, its values at the BC manager's essential tdofs are written
-/// directly (override path used by SystemSolver BC ramp). Otherwise BC
-/// coefficients are evaluated at @p time.
-void applyBoundaryConditions(double time, const BoundaryConditionManager* bc_manager, FEFieldPtr& primal_field,
-                             const FEFieldPtr& bc_field_ptr = nullptr);
 
 /// @brief Solve a block nonlinear system of equations as defined by the vector of weak form
 /// @param residual_evals Vector of weak forms which define the equations to be solved

@@ -16,11 +16,8 @@ namespace smith {
 /// accepted alpha until the Newton solve converges, then restepped toward 1.
 /// Set @c max_cutbacks = 0 to disable cutback (a single attempt at alpha = 1).
 struct BcRampOptions {
-  double shrink_factor = 0.5;                  ///< Multiplier on (alpha - last_good_alpha) after a failed step.
-  int max_cutbacks = 20;                       ///< Hard cap on cutback iterations per outer solve. 0 disables cutback.
-  int intermediate_max_iterations = 10;        ///< Nonlinear iteration cap for accepted intermediate ramp solves.
-  double intermediate_relative_tol = 0.05;     ///< Relative tolerance for accepted intermediate ramp solves.
-  double intermediate_absolute_tol_fac = 1e3;  ///< Absolute tolerance multiplier for intermediate ramp solves.
+  double shrink_factor = 0.5;  ///< Multiplier on failed interval after each cutback.
+  int max_cutbacks = 0;        ///< Maximum reduced-load attempts. Zero disables cutbacks.
 };
 
 }  // namespace smith

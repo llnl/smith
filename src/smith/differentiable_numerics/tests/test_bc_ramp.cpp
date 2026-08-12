@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <exception>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -16,8 +17,11 @@
 #include "smith/physics/functional_weak_form.hpp"
 
 #include "smith/differentiable_numerics/field_store.hpp"
+#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/system_solver.hpp"
+
+class SlicErrorException : public std::exception {};
 
 namespace smith {
 
@@ -27,8 +31,12 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
  public:
   using NonlinearBlockSolverBase::convergenceStatus;
 
-  explicit RecordingRampSolver(std::vector<bool> converged_by_call, bool warm_start_enabled = false)
-      : converged_by_call_(std::move(converged_by_call)), warm_start_enabled_(warm_start_enabled)
+  RecordingRampSolver(std::vector<bool> converged_by_call, mfem::Array<int> constrained_tdofs,
+                      bool warm_start_enabled = false, bool prediction_succeeds = true)
+      : converged_by_call_(std::move(converged_by_call)),
+        constrained_tdofs_(std::move(constrained_tdofs)),
+        warm_start_enabled_(warm_start_enabled),
+        prediction_succeeds_(prediction_succeeds)
   {
   }
 
@@ -36,14 +44,13 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
       const std::vector<FieldPtr>& u_guesses, std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)>,
       std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)>) const override
   {
-    intermediate_flags_.push_back(intermediate_enabled_);
-    abs_tol_factors_.push_back(intermediate_abs_tol_factor_);
-    rel_tol_floors_.push_back(intermediate_rel_tol_floor_);
-    max_iterations_.push_back(intermediate_max_iterations_);
+    attempt_alphas_.push_back(constrainedValue(*u_guesses[0]));
+    const size_t call = attempt_alphas_.size() - 1;
+    last_solve_converged_ = call < converged_by_call_.size() ? converged_by_call_[call] : true;
 
-    const size_t idx = intermediate_flags_.size() - 1;
-    last_solve_converged_ = idx < converged_by_call_.size() ? converged_by_call_[idx] : true;
-    return u_guesses;
+    std::vector<FieldPtr> results;
+    for (const auto& guess : u_guesses) results.push_back(std::make_shared<FiniteElementState>(*guess));
+    return results;
   }
 
   std::vector<FieldPtr> solveAdjoint(const std::vector<DualPtr>&, std::vector<std::vector<MatrixPtr>>&) const override
@@ -63,41 +70,36 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
 
   void primeConvergenceContext(const std::vector<mfem::Vector>&, NonlinearConvergenceContext&) const override {}
 
-  void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
+  void setInnerToleranceMultiplier(double multiplier) override { static_cast<void>(multiplier); }
 
   bool warmStartEnabled() const override { return warm_start_enabled_; }
 
-  void setIntermediateTolerancePolicy(bool enabled, double abs_tol_factor, double rel_tol_floor,
-                                      int max_iterations) const override
+  FieldPtr predictBcStep(const FieldPtr& base_state, const FieldPtr& target_bc, mfem::HypreParMatrix&,
+                         const mfem::Array<int>&) const override
   {
-    intermediate_enabled_ = enabled;
-    intermediate_abs_tol_factor_ = abs_tol_factor;
-    intermediate_rel_tol_floor_ = rel_tol_floor;
-    intermediate_max_iterations_ = max_iterations;
+    prediction_base_alphas_.push_back(constrainedValue(*base_state));
+    predicted_alphas_.push_back(constrainedValue(*target_bc));
+    return prediction_succeeds_ ? std::make_shared<FiniteElementState>(*base_state) : nullptr;
   }
 
-  const std::vector<bool>& intermediateFlags() const { return intermediate_flags_; }
-
-  const std::vector<double>& absTolFactors() const { return abs_tol_factors_; }
-
-  const std::vector<double>& relTolFloors() const { return rel_tol_floors_; }
-
-  const std::vector<int>& maxIterations() const { return max_iterations_; }
-
-  double innerToleranceMultiplier() const { return inner_tol_multiplier_; }
+  const std::vector<double>& attemptAlphas() const { return attempt_alphas_; }
+  const std::vector<double>& predictionBaseAlphas() const { return prediction_base_alphas_; }
+  const std::vector<double>& predictedAlphas() const { return predicted_alphas_; }
 
  private:
+  double constrainedValue(const FiniteElementState& field) const
+  {
+    EXPECT_GT(constrained_tdofs_.Size(), 0);
+    return field[constrained_tdofs_[0]];
+  }
+
   std::vector<bool> converged_by_call_;
-  mutable std::vector<bool> intermediate_flags_;
-  mutable std::vector<double> abs_tol_factors_;
-  mutable std::vector<double> rel_tol_floors_;
-  mutable bool intermediate_enabled_ = false;
-  mutable double intermediate_abs_tol_factor_ = 1.0;
-  mutable double intermediate_rel_tol_floor_ = 0.0;
-  mutable int intermediate_max_iterations_ = 0;
-  mutable double inner_tol_multiplier_ = 1.0;
-  mutable std::vector<int> max_iterations_;
+  mfem::Array<int> constrained_tdofs_;
+  mutable std::vector<double> attempt_alphas_;
+  mutable std::vector<double> prediction_base_alphas_;
+  mutable std::vector<double> predicted_alphas_;
   bool warm_start_enabled_ = false;
+  bool prediction_succeeds_ = true;
 };
 
 template <typename FieldTypeT>
@@ -122,6 +124,7 @@ struct ScalarRampHarness {
   std::vector<std::vector<size_t>> block_indices;
   std::vector<std::vector<FieldState>> states;
   std::vector<std::vector<FieldState>> params;
+  std::unique_ptr<DirichletBoundaryConditions> boundary_conditions;
   std::vector<const BoundaryConditionManager*> bc_managers;
 
   ScalarRampHarness()
@@ -144,7 +147,19 @@ struct ScalarRampHarness {
     block_indices = field_store->indexMap(residual_names);
     states = {field_store->getStates("temperature_main")};
     params = std::vector<std::vector<FieldState>>(residuals.size());
-    bc_managers = field_store->getBoundaryConditionManagers(residual_names);
+    boundary_conditions =
+        std::make_unique<DirichletBoundaryConditions>(*mesh, field_store->getField("temperature").get()->space());
+    boundary_conditions->setScalarBCs<2>(mesh->entireBoundary(), [](double time, tensor<double, 2>) { return time; });
+    bc_managers = {&boundary_conditions->getBoundaryConditionManager()};
+  }
+
+  const mfem::Array<int>& constrainedDofs() const { return bc_managers[0]->allEssentialTrueDofs(); }
+
+  std::vector<FieldState> solve(const std::shared_ptr<RecordingRampSolver>& solver)
+  {
+    SystemSolver system_solver(solver);
+    return system_solver.solve(residuals, block_indices, field_store->getShapeDisp(), states, params,
+                               TimeInfo(0.0, 1.0, 1), bc_managers);
   }
 
   ~ScalarRampHarness() { StateManager::reset(); }
@@ -157,104 +172,110 @@ TEST(BcRampOptionsTest, Defaults)
   BcRampOptions opts{};
   EXPECT_GT(opts.shrink_factor, 0.0);
   EXPECT_LT(opts.shrink_factor, 1.0);
-  EXPECT_GT(opts.max_cutbacks, 0);
-  EXPECT_EQ(opts.intermediate_max_iterations, 10);
-  EXPECT_DOUBLE_EQ(opts.intermediate_relative_tol, 0.05);
-  EXPECT_DOUBLE_EQ(opts.intermediate_absolute_tol_fac, 1e3);
+  EXPECT_EQ(opts.max_cutbacks, 0);
 }
 
 TEST(BcRampOptionsTest, SetGetRoundTrip)
 {
-  RecordingRampSolver solver(std::vector<bool>{true});
-  BcRampOptions opts{.shrink_factor = 0.25,
-                     .max_cutbacks = 8,
-                     .intermediate_max_iterations = 7,
-                     .intermediate_relative_tol = 0.75,
-                     .intermediate_absolute_tol_fac = 42.0};
+  ScalarRampHarness harness;
+  RecordingRampSolver solver(std::vector<bool>{true}, harness.constrainedDofs());
+  BcRampOptions opts{.shrink_factor = 0.25, .max_cutbacks = 8};
   solver.setBcRampOptions(opts);
 
   const auto& got = solver.bcRampOptions();
   EXPECT_DOUBLE_EQ(got.shrink_factor, 0.25);
   EXPECT_EQ(got.max_cutbacks, 8);
-  EXPECT_EQ(got.intermediate_max_iterations, 7);
-  EXPECT_DOUBLE_EQ(got.intermediate_relative_tol, 0.75);
-  EXPECT_DOUBLE_EQ(got.intermediate_absolute_tol_fac, 42.0);
 }
 
-TEST(BcRamp, CutbackUsesIntermediateTolerancePolicy)
+TEST(BcRamp, DisabledPerformsSingleFailedAttempt)
 {
   ScalarRampHarness harness;
+  auto solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false}, harness.constrainedDofs());
 
-  auto recording_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true});
-  BcRampOptions opts;
-  opts.max_cutbacks = 4;
-  opts.intermediate_max_iterations = 10;
-  opts.intermediate_relative_tol = 0.9;
-  opts.intermediate_absolute_tol_fac = 1e3;
-  recording_solver->setBcRampOptions(opts);
-
-  auto system_solver = std::make_shared<SystemSolver>(recording_solver);
-
-  auto solved_states =
-      system_solver->solve(harness.residuals, harness.block_indices, harness.field_store->getShapeDisp(),
-                           harness.states, harness.params, TimeInfo(0.0, 1.0, 0), harness.bc_managers);
+  auto solved_states = harness.solve(solver);
 
   EXPECT_EQ(solved_states.size(), 1);
-  EXPECT_EQ(recording_solver->intermediateFlags().size(), 3);
-  EXPECT_EQ(recording_solver->intermediateFlags(), std::vector<bool>({false, true, true}));
-  EXPECT_EQ(recording_solver->maxIterations(), std::vector<int>({0, 10, 10}));
-  EXPECT_DOUBLE_EQ(recording_solver->absTolFactors()[1], 1e3);
-  EXPECT_DOUBLE_EQ(recording_solver->relTolFloors()[1], 0.9);
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0}));
+  EXPECT_TRUE(solver->predictedAlphas().empty());
 }
 
-TEST(BcRamp, WarmStartCutbackUsesFullTolerancePolicy)
+TEST(BcRamp, WarmStartAlonePreservesRequestedFraction)
 {
   ScalarRampHarness harness;
+  auto solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false}, harness.constrainedDofs(), true);
 
-  auto recording_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true}, true);
-  BcRampOptions opts;
-  opts.max_cutbacks = 4;
-  opts.intermediate_max_iterations = 10;
-  opts.intermediate_relative_tol = 0.9;
-  opts.intermediate_absolute_tol_fac = 1e3;
-  recording_solver->setBcRampOptions(opts);
-
-  auto system_solver = std::make_shared<SystemSolver>(recording_solver);
-
-  auto solved_states =
-      system_solver->solve(harness.residuals, harness.block_indices, harness.field_store->getShapeDisp(),
-                           harness.states, harness.params, TimeInfo(0.0, 1.0, 0), harness.bc_managers);
+  auto solved_states = harness.solve(solver);
 
   EXPECT_EQ(solved_states.size(), 1);
-  EXPECT_EQ(recording_solver->intermediateFlags().size(), 3);
-  EXPECT_EQ(recording_solver->intermediateFlags(), std::vector<bool>({false, false, false}));
-  EXPECT_EQ(recording_solver->maxIterations(), std::vector<int>({0, 0, 0}));
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0}));
+  EXPECT_EQ(solver->predictedAlphas(), std::vector<double>({1.0}));
 }
 
-TEST(BcRamp, FirstAttemptConvergesIsBitIdentical)
+TEST(BcRamp, CutbackRetriesReducedThenRequestedFraction)
 {
   ScalarRampHarness harness;
+  auto solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true}, harness.constrainedDofs());
+  solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 2});
 
-  auto base_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{true});
-  auto disabled_solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{true});
-  disabled_solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 0});
+  auto solved_states = harness.solve(solver);
 
-  SystemSolver base_system(base_solver);
-  SystemSolver explicit_disabled_system(disabled_solver);
+  ASSERT_EQ(solved_states.size(), 1);
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0, 0.5, 1.0}));
+  EXPECT_TRUE(solver->predictedAlphas().empty());
+  for (int dof : harness.constrainedDofs()) EXPECT_DOUBLE_EQ((*solved_states[0].get())[dof], 1.0);
+}
 
-  auto base_states = base_system.solve(harness.residuals, harness.block_indices, harness.field_store->getShapeDisp(),
-                                       harness.states, harness.params, TimeInfo(0.0, 1.0, 0), harness.bc_managers);
-  auto disabled_states =
-      explicit_disabled_system.solve(harness.residuals, harness.block_indices, harness.field_store->getShapeDisp(),
-                                     harness.states, harness.params, TimeInfo(0.0, 1.0, 0), harness.bc_managers);
+TEST(BcRamp, CombinedModePredictsEveryRequestedFraction)
+{
+  ScalarRampHarness harness;
+  auto solver =
+      std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true}, harness.constrainedDofs(), true);
+  solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 2});
 
-  ASSERT_EQ(base_states.size(), disabled_states.size());
-  for (size_t i = 0; i < base_states.size(); ++i) {
-    ASSERT_EQ(base_states[i].get()->Size(), disabled_states[i].get()->Size());
-    for (int j = 0; j < base_states[i].get()->Size(); ++j) {
-      EXPECT_DOUBLE_EQ((*base_states[i].get())[j], (*disabled_states[i].get())[j]);
-    }
-  }
+  auto solved_states = harness.solve(solver);
+
+  EXPECT_EQ(solved_states.size(), 1);
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0, 0.5, 1.0}));
+  EXPECT_EQ(solver->predictionBaseAlphas(), std::vector<double>({0.0, 0.0, 0.5}));
+  EXPECT_EQ(solver->predictedAlphas(), solver->attemptAlphas());
+}
+
+TEST(BcRamp, SuccessfulStepBecomesCutbackAnchor)
+{
+  ScalarRampHarness harness;
+  auto solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, false, true, true},
+                                                      harness.constrainedDofs());
+  solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 2});
+
+  auto solved_states = harness.solve(solver);
+
+  EXPECT_EQ(solved_states.size(), 1);
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0, 0.5, 1.0, 0.75, 1.0}));
+}
+
+TEST(BcRamp, FailedPredictionFallsBackWithoutChangingFraction)
+{
+  ScalarRampHarness harness;
+  auto solver = std::make_shared<RecordingRampSolver>(std::vector<bool>{false, true, true}, harness.constrainedDofs(),
+                                                      true, false);
+  solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 1});
+
+  auto solved_states = harness.solve(solver);
+
+  EXPECT_EQ(solved_states.size(), 1);
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0, 0.5, 1.0}));
+  EXPECT_EQ(solver->predictedAlphas(), solver->attemptAlphas());
+}
+
+TEST(BcRamp, ExhaustionReportsFailure)
+{
+  ScalarRampHarness harness;
+  auto solver =
+      std::make_shared<RecordingRampSolver>(std::vector<bool>{false, false, false}, harness.constrainedDofs());
+  solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 2});
+
+  EXPECT_THROW(harness.solve(solver), SlicErrorException);
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0, 0.5, 0.25}));
 }
 
 }  // namespace smith
@@ -263,5 +284,6 @@ int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   smith::ApplicationManager applicationManager(argc, argv);
+  axom::slic::setAbortFunction([]() { throw SlicErrorException{}; });
   return RUN_ALL_TESTS();
 }

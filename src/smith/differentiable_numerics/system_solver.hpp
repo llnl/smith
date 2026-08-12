@@ -9,7 +9,6 @@
 #include <vector>
 #include <memory>
 #include <mpi.h>
-#include "smith/differentiable_numerics/bc_ramp_options.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/common.hpp"
@@ -59,6 +58,14 @@ class SystemSolver {
                                     const std::vector<size_t>& global_block_indices);
 
   /// @brief Solves the multiphysics system using staggered iterations.
+  /// @param residual_evals Vector of WeakForm evaluations for each block.
+  /// @param block_indices Block indices for each residual evaluation.
+  /// @param shape_disp Current shape displacement.
+  /// @param states Nested vector of field states.
+  /// @param params Nested vector of parameters.
+  /// @param time_info Current time information.
+  /// @param bc_managers Managers for boundary conditions.
+  /// @return Updated field states.
   std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals,
                                 const std::vector<std::vector<size_t>>& block_indices, const FieldState& shape_disp,
                                 const std::vector<std::vector<FieldState>>& states,
@@ -74,10 +81,6 @@ class SystemSolver {
 
   /// @brief Whether solver always performs exactly `maxStaggeredIterations()` sweeps.
   bool exactStaggeredSteps() const { return exact_staggered_steps_; }
-
-  /// @brief Apply BC ramp options to every stage solver. Convenience wrapper around
-  /// @ref NonlinearBlockSolverBase::setBcRampOptions for single-stage common case.
-  void setBcRampOptions(const BcRampOptions& options);
 
  private:
   int max_staggered_iterations_;  ///< Maximum number of staggered iterations.

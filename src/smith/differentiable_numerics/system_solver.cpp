@@ -42,13 +42,6 @@ void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
   stages_.push_back(Stage{block_indices, std::move(solver), relaxation_factor});
 }
 
-void SystemSolver::setBcRampOptions(const BcRampOptions& options)
-{
-  for (auto& stage : stages_) {
-    if (stage.solver) stage.solver->setBcRampOptions(options);
-  }
-}
-
 void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_solver,
                                                 const std::vector<size_t>& global_block_indices)
 {
@@ -226,6 +219,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
     }
   }
 
+  // Return the diagonal (unknown) states as the final solution
   std::vector<FieldState> final_solutions;
   final_solutions.reserve(num_residuals);
   for (size_t r = 0; r < num_residuals; ++r) {

@@ -4,8 +4,9 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <cmath>
+
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
-#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/numerics/stdfunction_operator.hpp"
@@ -71,11 +72,6 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
                                                 nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
-int NonlinearBlockSolver::printLevel() const
-{
-  return retained_nonlinear_options_ ? retained_nonlinear_options_->print_level : 0;
-}
-
 void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 {
   if (us.empty() || !nonlinear_solver_) return;
@@ -127,13 +123,12 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 #endif
 }
 
-NonlinearBlockSolverBase::WarmStart NonlinearBlockSolver::linearWarmStart(
-    const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
-    const mfem::Array<int>& constrained_tdofs,
-    const std::function<bool(const FieldPtr&, double)>& residual_finite) const
+NonlinearBlockSolverBase::FieldPtr NonlinearBlockSolver::predictBcStep(const FieldPtr& u_prev,
+                                                                       const FieldPtr& target_bc,
+                                                                       mfem::HypreParMatrix& K_raw_at_u_prev,
+                                                                       const mfem::Array<int>& constrained_tdofs) const
 {
-  WarmStart result;
-  if (!nonlinear_solver_) return result;
+  if (!nonlinear_solver_) return nullptr;
 
   if (!is_setup_) {
     is_setup_ = true;
@@ -153,30 +148,24 @@ NonlinearBlockSolverBase::WarmStart NonlinearBlockSolver::linearWarmStart(
   mfem::Vector b(K_raw_at_u_prev.Height());
   b = 0.0;
   mfem::EliminateBC(K_raw_at_u_prev, *Ke, constrained_tdofs, delta, b);
-  if (anyNonFinite(b)) return result;
 
   mfem::Vector du(K_raw_at_u_prev.Height());
   du = 0.0;
   auto& lin = nonlinear_solver_->linearSolver();
   lin.SetOperator(K_raw_at_u_prev);
   lin.Mult(b, du);
-  if (anyNonFinite(du)) return result;
 
   auto trial = std::make_shared<FiniteElementState>(*u_prev);
-  double s = 1.0;
-  for (int attempt = 0; attempt < 8; ++attempt) {
-    *trial = *u_prev;
-    trial->Add(s, du);
-    if (residual_finite(trial, s)) {
-      result.success = true;
-      result.alpha = s;
-      result.initial_guess = std::make_shared<FiniteElementState>(*trial);
-      return result;
-    }
-    s *= 0.5;
-  }
+  trial->Add(1.0, du);
 
-  return result;
+  int locally_finite = 1;
+  for (int i = 0; i < trial->Size(); ++i) {
+    if (!std::isfinite((*trial)[i])) locally_finite = 0;
+  }
+  int globally_finite = 0;
+  MPI_Allreduce(&locally_finite, &globally_finite, 1, MPI_INT, MPI_MIN, comm_);
+
+  return globally_finite ? trial : nullptr;
 }
 
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
@@ -276,16 +265,9 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
       });
   double effective_abs_tol = inner_tol_multiplier_ * abs_tol_;
   double effective_rel_tol = inner_tol_multiplier_ * rel_tol_;
-  if (use_intermediate_tolerances_) {
-    effective_abs_tol = std::max(effective_abs_tol, intermediate_abs_tol_factor_ * abs_tol_);
-    effective_rel_tol = std::max(effective_rel_tol, intermediate_rel_tol_floor_);
-  }
   nonlinear_solver_->setConvergenceTolerances(effective_abs_tol, effective_rel_tol, comm_);
   if (retained_nonlinear_options_) {
-    const int max_iterations = use_intermediate_tolerances_
-                                   ? std::min(retained_nonlinear_options_->max_iterations, intermediate_max_iterations_)
-                                   : retained_nonlinear_options_->max_iterations;
-    nonlinear_solver_->nonlinearSolver().SetMaxIter(max_iterations);
+    nonlinear_solver_->nonlinearSolver().SetMaxIter(retained_nonlinear_options_->max_iterations);
   }
   nonlinear_solver_->setOperator(*residual_op_);
   last_solve_converged_ = false;
