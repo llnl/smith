@@ -15,14 +15,10 @@
 ####
 # Template
 .src_build_on_matrix:
-  variables:
   extends: [.src_build_script, .on_matrix, .src_workflow]
-  needs: []
 
 .tpl_build_on_matrix:
-  variables:
   extends: [.tpl_build_script, .on_matrix, .tpl_workflow]
-  needs: []
 
 ####
 # PR Build jobs
