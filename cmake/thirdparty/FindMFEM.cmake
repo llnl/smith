@@ -104,11 +104,14 @@ else()
         string(SUBSTRING "${mfem_tpl_lnk_flags}" 0 ${mfem_tpl_lnl_flags_end_pos} mfem_tpl_lnk_flags)
         string(STRIP "${mfem_tpl_lnk_flags}" mfem_tpl_lnk_flags)
 
-        # filter out items containing "Xlinker"
-        set(_mfem_tpl_list ${mfem_tpl_lnk_flags})
-        separate_arguments(_mfem_tpl_list)
-        list(FILTER _mfem_tpl_list EXCLUDE REGEX Xlinker)
-        list(JOIN _mfem_tpl_list " " mfem_tpl_lnk_flags)
+        # transform -Xlinker items to -Wl so its compatible with GNU-based compilers
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            set(_mfem_tpl_list ${mfem_tpl_lnk_flags})
+            separate_arguments(_mfem_tpl_list)
+            list(TRANSFORM _mfem_tpl_list
+                REPLACE "^-Xlinker=-rpath,(.*)$" "-Wl,-rpath,\\1")
+            list(JOIN _mfem_tpl_list " " mfem_tpl_lnk_flags)
+        endif()
     else()
         message(WARNING "No third party library flags found in ${MFEM_CFG_DIR}/config.mk")
     endif()
