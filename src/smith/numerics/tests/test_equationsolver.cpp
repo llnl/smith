@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -108,6 +109,34 @@ class ManagedHalvingSolver : public mfem::NewtonSolver, public smith::Convergenc
 
  private:
   std::shared_ptr<smith::EquationSolverConvergenceManager> convergence_manager_ = nullptr;
+};
+
+class ToggleNanResidualOperator : public mfem::Operator {
+ public:
+  ToggleNanResidualOperator() : mfem::Operator(1) {}
+
+  void setReturnNan(bool value) { return_nan_ = value; }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& r) const override
+  {
+    r.SetSize(1);
+    r(0) = return_nan_ ? std::numeric_limits<double>::quiet_NaN() : x(0);
+  }
+
+  mfem::Operator& GetGradient(const mfem::Vector&) const override
+  {
+    jacobian_diag_ = std::make_unique<mfem::SparseMatrix>(1);
+    jacobian_diag_->Add(0, 0, 1.0);
+    jacobian_diag_->Finalize();
+    jacobian_ = std::make_unique<mfem::HypreParMatrix>(MPI_COMM_WORLD, 1, 1, offsets_, offsets_, jacobian_diag_.get());
+    return *jacobian_;
+  }
+
+ private:
+  bool return_nan_ = false;
+  mutable std::unique_ptr<mfem::SparseMatrix> jacobian_diag_ = nullptr;
+  mutable std::unique_ptr<mfem::HypreParMatrix> jacobian_ = nullptr;
+  mutable HYPRE_BigInt offsets_[2] = {0, 1};
 };
 
 }  // namespace
@@ -230,6 +259,36 @@ TEST(EquationSolverManualConvergence, InjectedManagedSolverSupportsScalarConverg
 
   EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
   EXPECT_LE(residual.Norml2(), 1.0e-2 * eq_solver.nonlinearSolver().GetInitialNorm());
+}
+
+TEST(EquationSolverTrustRegion, NanInitialResidualClearsConvergedFlag)
+{
+  const LinearSolverOptions lin_opts{.linear_solver = LinearSolver::CG,
+                                     .preconditioner = Preconditioner::HypreJacobi,
+                                     .relative_tol = 1.0e-12,
+                                     .absolute_tol = 1.0e-14,
+                                     .max_iterations = 20,
+                                     .print_level = 0};
+
+  const NonlinearSolverOptions nonlin_opts{.nonlin_solver = NonlinearSolver::TrustRegion,
+                                           .relative_tol = 1.0e-12,
+                                           .absolute_tol = 1.0e-14,
+                                           .max_iterations = 5,
+                                           .print_level = 1};
+
+  EquationSolver eq_solver(nonlin_opts, lin_opts);
+  ToggleNanResidualOperator residual_opr;
+  eq_solver.setOperator(residual_opr);
+
+  mfem::Vector x(1);
+  x = 0.0;
+  eq_solver.solve(x);
+  EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
+
+  x = 1.0;
+  residual_opr.setReturnNan(true);
+  eq_solver.solve(x);
+  EXPECT_FALSE(eq_solver.nonlinearSolver().GetConverged());
 }
 
 /**

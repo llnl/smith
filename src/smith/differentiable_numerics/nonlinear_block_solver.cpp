@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <cmath>
+
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"
@@ -121,6 +123,51 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 #endif
 }
 
+NonlinearBlockSolverBase::FieldPtr NonlinearBlockSolver::predictBcStep(const FieldPtr& u_prev,
+                                                                       const FieldPtr& target_bc,
+                                                                       mfem::HypreParMatrix& K_raw_at_u_prev,
+                                                                       const mfem::Array<int>& constrained_tdofs) const
+{
+  if (!nonlinear_solver_) return nullptr;
+
+  if (!is_setup_) {
+    is_setup_ = true;
+    completeSetup({u_prev});
+  }
+
+  mfem::Vector delta(K_raw_at_u_prev.Height());
+  delta = 0.0;
+  for (int i = 0; i < constrained_tdofs.Size(); ++i) {
+    int j = constrained_tdofs[i];
+    delta[j] = (*target_bc)[j] - (*u_prev)[j];
+  }
+
+  // Use MFEM's BC elimination helpers so the lifted RHS matches the constrained operator layout.
+  std::unique_ptr<mfem::HypreParMatrix> Ke(K_raw_at_u_prev.EliminateRowsCols(constrained_tdofs));
+  K_raw_at_u_prev.EliminateBC(constrained_tdofs, mfem::Operator::DiagonalPolicy::DIAG_ONE);
+  mfem::Vector b(K_raw_at_u_prev.Height());
+  b = 0.0;
+  mfem::EliminateBC(K_raw_at_u_prev, *Ke, constrained_tdofs, delta, b);
+
+  mfem::Vector du(K_raw_at_u_prev.Height());
+  du = 0.0;
+  auto& lin = nonlinear_solver_->linearSolver();
+  lin.SetOperator(K_raw_at_u_prev);
+  lin.Mult(b, du);
+
+  auto trial = std::make_shared<FiniteElementState>(*u_prev);
+  trial->Add(1.0, du);
+
+  int locally_finite = 1;
+  for (int i = 0; i < trial->Size(); ++i) {
+    if (!std::isfinite((*trial)[i])) locally_finite = 0;
+  }
+  int globally_finite = 0;
+  MPI_Allreduce(&locally_finite, &globally_finite, 1, MPI_INT, MPI_MIN, comm_);
+
+  return globally_finite ? trial : nullptr;
+}
+
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
                                                           const std::vector<mfem::Vector>& residuals,
                                                           NonlinearConvergenceContext& context) const
@@ -216,10 +263,18 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
         }
         return *block_jac_;
       });
-  nonlinear_solver_->setConvergenceTolerances(inner_tol_multiplier_ * abs_tol_, inner_tol_multiplier_ * rel_tol_,
-                                              comm_);
+  double effective_abs_tol = inner_tol_multiplier_ * abs_tol_;
+  double effective_rel_tol = inner_tol_multiplier_ * rel_tol_;
+  nonlinear_solver_->setConvergenceTolerances(effective_abs_tol, effective_rel_tol, comm_);
+  if (retained_nonlinear_options_) {
+    nonlinear_solver_->nonlinearSolver().SetMaxIter(retained_nonlinear_options_->max_iterations);
+  }
   nonlinear_solver_->setOperator(*residual_op_);
+  last_solve_converged_ = false;
   nonlinear_solver_->solve(*block_u);
+
+  // Record convergence for SystemSolver cutback decisions.
+  last_solve_converged_ = (nonlinear_solver_->nonlinearSolver().GetConverged() == 1);
 
   for (int row_i = 0; row_i < num_rows; ++row_i) {
     *u_guesses[static_cast<size_t>(row_i)] = block_u->GetBlock(row_i);

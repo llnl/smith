@@ -1,0 +1,23 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and
+// other Smith Project Developers. See the top-level LICENSE file for
+// details.
+//
+// SPDX-License-Identifier: (BSD-3-Clause)
+
+#pragma once
+
+namespace smith {
+
+/// @brief Options controlling adaptive cutback of prescribed BC updates.
+///
+/// block_solve interpolates between previously-applied BC values and the
+/// target using a fraction alpha in [0, 1]. The driver attempts alpha = 1
+/// first; on solver non-convergence or NaN, alpha is shrunk toward the last
+/// accepted alpha until the Newton solve converges, then restepped toward 1.
+/// Set @c max_cutbacks = 0 to disable cutback (a single attempt at alpha = 1).
+struct BcRampOptions {
+  double shrink_factor = 0.5;  ///< Multiplier on failed interval after each cutback.
+  int max_cutbacks = 0;        ///< Maximum reduced-load attempts. Zero disables cutbacks.
+};
+
+}  // namespace smith

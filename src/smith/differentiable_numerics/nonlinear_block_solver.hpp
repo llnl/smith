@@ -20,12 +20,15 @@
 
 #include "smith/numerics/solver_config.hpp"
 #include "smith/numerics/nonlinear_convergence.hpp"
+#include "smith/differentiable_numerics/bc_ramp_options.hpp"
 
 namespace mfem {
 class Solver;
 class Vector;
 class HypreParMatrix;
 class BlockOperator;
+template <class T>
+class Array;
 }  // namespace mfem
 
 namespace smith {
@@ -98,9 +101,41 @@ class NonlinearBlockSolverBase {
   /// @brief Set an inner-solve tolerance multiplier, e.g. for staggered solves.
   virtual void setInnerToleranceMultiplier(double multiplier) = 0;
 
+  /// @brief Returns true if the most recent @ref solve call satisfied its convergence criterion.
+  /// Subclasses must write @c last_solve_converged_ at the end of their solve path.
+  /// True before first call (optimistic default — ramp predicate sees only the NaN check then).
+  bool lastSolveConverged() const { return last_solve_converged_; }
+
+  /// @brief Configure BC cutback behavior for block_solve when this solver is in use.
+  void setBcRampOptions(const BcRampOptions& options) { bc_ramp_options_ = options; }
+
+  /// @brief Read current BC ramp options.
+  const BcRampOptions& bcRampOptions() const { return bc_ramp_options_; }
+
+  /// @brief Compute linearized initial guess for updated boundary values.
+  ///
+  /// Solves the partitioned linear system K_ff du_f = -K_fc du_c. Default
+  /// implementation returns a null prediction.
+  /// @param u_prev Last converged field.
+  /// @param target_bc Field containing target constrained values.
+  /// @param K_raw_at_u_prev Unmodified Jacobian at previous field.
+  /// @param constrained_tdofs Essential true degrees of freedom.
+  /// @return Predicted field, or null when prediction fails.
+  virtual FieldPtr predictBcStep([[maybe_unused]] const FieldPtr& u_prev, [[maybe_unused]] const FieldPtr& target_bc,
+                                 [[maybe_unused]] mfem::HypreParMatrix& K_raw_at_u_prev,
+                                 [[maybe_unused]] const mfem::Array<int>& constrained_tdofs) const
+  {
+    return nullptr;
+  }
+
+  /// @brief Whether this solver should attempt BC prediction in block_solve.
+  virtual bool warmStartEnabled() const { return false; }
+
  protected:
-  mutable bool is_setup_ = false;  ///< Records if this block solver has its preconditioner initialized.
+  mutable bool is_setup_ = false;             ///< Records if this block solver has its preconditioner initialized.
+  mutable bool last_solve_converged_ = true;  ///< Set by subclasses after each solve.
   mutable NonlinearConvergenceContext convergence_context_ = {};  ///< Solver-owned convergence state for one solve.
+  BcRampOptions bc_ramp_options_{};                               ///< BC ramp configuration (default: disabled).
 };
 
 /// @brief Nonlinear block solver backed by an EquationSolver forward solve and linear adjoint solves.
@@ -142,6 +177,16 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
 
   /// @brief Build a fresh solver instance from retained config.
   std::shared_ptr<NonlinearBlockSolver> cloneFresh() const;
+
+  /// @overload
+  bool warmStartEnabled() const override
+  {
+    return retained_nonlinear_options_ && retained_nonlinear_options_->warm_start;
+  }
+
+  /// @overload
+  FieldPtr predictBcStep(const FieldPtr& u_prev, const FieldPtr& target_bc, mfem::HypreParMatrix& K_raw_at_u_prev,
+                         const mfem::Array<int>& constrained_tdofs) const override;
 
   mutable std::unique_ptr<mfem::BlockOperator>
       block_jac_;  ///< Need to hold an instance of a block operator to work with the mfem solver interface
