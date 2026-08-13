@@ -341,6 +341,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Tweaks needed after Spack converted to the HDF5 CMake build system
         # NOTE: we check if an hdf5 target is namespaced or not, since some versions
         #       of hdf5 do not namespace their targets and others do
+        find_package(HDF5 CONFIG QUIET COMPONENTS C HL
+                     PATHS "${HDF5_DIR}/cmake"
+                     NO_DEFAULT_PATH)
         set(HDF5_TARGET_NAMES "" CACHE STRING "")
         if(TARGET hdf5::hdf5-static)
             list(APPEND HDF5_TARGET_NAMES hdf5::hdf5-static)
