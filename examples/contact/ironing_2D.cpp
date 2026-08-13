@@ -101,7 +101,7 @@ std::string gapModeOutputName(tribol::EnergyMortarEnforcementOption gap_mode)
 
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
 {
-  constexpr auto mesh_factor = 8;
+  constexpr auto mesh_factor = 16;
 
   auto mesh = shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(8 * mesh_factor, 2 * mesh_factor)
                                               .updateBdrAttrib(1, 6)
@@ -280,7 +280,6 @@ int main(int argc, char* argv[])
 
   mfem::VisItDataCollection visit_dc(config.name + "_visit", &mesh->mfemParMesh());
   visit_dc.SetPrefixPath("visit_out");
-  visit_dc.Save();
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
@@ -291,6 +290,9 @@ int main(int argc, char* argv[])
   smith::SolidMechanicsContact<P, DIM, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       config.nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, config.name, mesh,
       {"bulk_mod", "shear_mod"}, 0, 0.0, false, false);
+
+  visit_dc.RegisterField("displacement", &solid_solver.displacement().gridFunction());
+  visit_dc.Save();
 
   smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
 
