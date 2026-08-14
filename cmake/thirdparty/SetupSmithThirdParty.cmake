@@ -338,29 +338,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Prefix the "check" targets
         set(MFEM_CUSTOM_TARGET_PREFIX "mfem_" CACHE STRING "")
 
-        # Tweaks needed after Spack converted to the HDF5 CMake build system
-        # NOTE: we check if an hdf5 target is namespaced or not, since some versions
-        #       of hdf5 do not namespace their targets and others do
-        set(HDF5_TARGET_NAMES "" CACHE STRING "")
-        if(TARGET hdf5::hdf5-static)
-            list(APPEND HDF5_TARGET_NAMES hdf5::hdf5-static)
-        else()
-            list(APPEND HDF5_TARGET_NAMES hdf5-static)
-        endif()
-        if(TARGET hdf5::hdf5-shared)
-            list(APPEND HDF5_TARGET_NAMES hdf5::hdf5-shared)
-        else()
-            list(APPEND HDF5_TARGET_NAMES hdf5-shared)
-        endif()
-
-        if(TARGET hdf5::hdf5_hl-static)
-            set(HDF5_C_LIBRARY_hdf5_hl hdf5::hdf5_hl-static CACHE STRING "")
-        else()
-            set(HDF5_C_LIBRARY_hdf5_hl hdf5_hl-static CACHE STRING "")
-        endif()
-
-        set(HDF5_IMPORT_CONFIG "RELEASE" CACHE STRING "")
-
         # Add missing include dir to var that MFEM uses
         if (CALIPER_FOUND)
             get_target_property(CALIPER_INCLUDE_DIRS caliper INTERFACE_INCLUDE_DIRECTORIES)
