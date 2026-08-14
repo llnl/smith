@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if (SMITH_ENABLE_CONTINUATION AND STRUMPACK_FOUND)
+if (SMITH_ENABLE_CONTINUATION AND STRUMPACK_DIR)
     smith_add_executable( NAME        inertia_relief_example
                           SOURCES     inertia_relief_example.cpp
                           OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
