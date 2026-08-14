@@ -502,10 +502,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             message(FATAL_ERROR "LUA_DIR is required to use the Axom submodule"
                                 "\nTry running CMake with '-DLUA_DIR=path/to/lua/install'\n ")
         endif()
-        set(AXOM_ENABLE_EXAMPLES OFF CACHE BOOL "")
-        set(AXOM_ENABLE_TESTS    OFF CACHE BOOL "")
-        set(AXOM_ENABLE_DOCS     OFF CACHE BOOL "")
-        set(AXOM_ENABLE_TOOLS    OFF CACHE BOOL "")
+        set(AXOM_ENABLE_EXAMPLES  OFF CACHE BOOL "")
+        set(AXOM_ENABLE_TESTS     OFF CACHE BOOL "")
+        set(AXOM_ENABLE_DOCS      OFF CACHE BOOL "")
+        set(AXOM_ENABLE_TOOLS     OFF CACHE BOOL "")
+        set(AXOM_ENABLE_TUTORIALS OFF CACHE BOOL "")
 
         # Used for the doxygen target
         set(AXOM_CUSTOM_TARGET_PREFIX "axom_" CACHE STRING "" FORCE)
