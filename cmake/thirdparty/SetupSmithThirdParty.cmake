@@ -603,7 +603,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endif()
 
         message(STATUS "Enabling source Tribol in '${TRIBOL_SOURCE_DIR}'" )
+
+        set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
         add_subdirectory("${TRIBOL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/tribol)
+        set(ENABLE_FORTRAN ON  CACHE BOOL "" FORCE)
+
         set(TRIBOL_FOUND TRUE)
     endif()
 
