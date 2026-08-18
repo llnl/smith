@@ -570,7 +570,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Tribol
     #---------------------------
     if(NOT SMITH_ENABLE_TRIBOL)
-        set(TRIBOL_FOUND FALSE))
+        set(TRIBOL_FOUND FALSE)
     elif(TRIBOL_DIR)
         message(STATUS "Enabling pre-built Tribol in '${TRIBOL_DIR}'" )
         smith_assert_is_directory(DIR_VARIABLE TRIBOL_DIR)
