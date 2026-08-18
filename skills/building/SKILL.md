@@ -37,13 +37,7 @@ ctest --test-dir build
 
 Use this only when you intend to modify/build Smith against the submodules.
 
-1) Initialize submodules (required):
-
-```bash
-git submodule update --init --recursive
-```
-
-2) Configure with co-develop enabled:
+1) Configure with co-develop enabled:
 
 ```bash
 ./config-build.py -bp build-codevelop -ip install-codevelop -hc "$(./skills/building/scripts/determine_host_config)" -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
