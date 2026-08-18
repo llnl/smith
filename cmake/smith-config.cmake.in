@@ -78,6 +78,9 @@ if(NOT SMITH_FOUND)
     set(_tribol_included       FALSE)
   endif()
 
+  if (NOT BLT_LOADED)
+    include("${CMAKE_CURRENT_LIST_DIR}/BLTInstallableMacros.cmake")
+  endif()
 
   # Codevelop TPLs are installed alongside Smith
   if(SMITH_ENABLE_CODEVELOP)
@@ -142,9 +145,10 @@ if(NOT SMITH_FOUND)
       # MFEM include directories are added as the variable but not always added to the target itself
       target_include_directories(mfem SYSTEM INTERFACE "${MFEM_INCLUDE_DIRS}")
     else()
-      add_library(mfem INTERFACE IMPORTED GLOBAL)
-      target_include_directories(mfem SYSTEM INTERFACE "@MFEM_INCLUDE_DIRS@")
-      target_link_libraries(mfem INTERFACE "@MFEM_LIBRARIES@")
+      blt_import_library(NAME mfem
+                         INCLUDES "@MFEM_INCLUDE_DIRS@"
+                         TREAT_INCLUDES_AS_SYSTEM ON
+                         DEPENDS_ON "@MFEM_LIBRARIES@")
     endif()
   endif()
 
