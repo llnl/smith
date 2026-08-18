@@ -569,7 +569,9 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #---------------------------
     # Tribol
     #---------------------------
-    if(TRIBOL_DIR)
+    if(NOT SMITH_ENABLE_TRIBOL)
+        set(TRIBOL_FOUND FALSE))
+    elif(TRIBOL_DIR)
         message(STATUS "Enabling pre-built Tribol in '${TRIBOL_DIR}'" )
         smith_assert_is_directory(DIR_VARIABLE TRIBOL_DIR)
 
@@ -602,7 +604,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         message(STATUS "Enabling source Tribol in '${TRIBOL_SOURCE_DIR}'" )
         add_subdirectory("${TRIBOL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/tribol)
-        set(TRIBOL_FOUND ON)
+        set(TRIBOL_FOUND TRUE)
     endif()
 
     message(STATUS "Tribol support is " ${TRIBOL_FOUND})
