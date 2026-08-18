@@ -20,7 +20,7 @@ if(NOT SMITH_FOUND)
   set(SMITH_VERSION_PATCH "@SMITH_VERSION_PATCH@")
   
   set(SMITH_INSTALL_PREFIX "@SMITH_INSTALL_PREFIX@")
-  set(SMITH_INCLUDE_DIRS "${SMITH_INSTALL_PREFIX}/include")
+  set(SMITH_INCLUDE_DIRS   "${SMITH_INSTALL_PREFIX}/include")
 
   #----------------------------------------------------------------------------
   # Set user configuration options and features
@@ -32,6 +32,7 @@ if(NOT SMITH_FOUND)
   set(SMITH_ENABLE_OPENMP      @SMITH_ENABLE_OPENMP@)
 
   set(SMITH_USE_ADIAK          @SMITH_USE_ADIAK@)
+  set(SMITH_USE_ARPACK         @SMITH_USE_ARPACK@)
   set(SMITH_USE_AXOM           @SMITH_USE_AXOM@)
   set(SMITH_USE_CAMP           @SMITH_USE_CAMP@)
   set(SMITH_USE_CALIPER        @SMITH_USE_CALIPER@)
@@ -51,6 +52,7 @@ if(NOT SMITH_FOUND)
   set(SMITH_USE_UMPIRE         @SMITH_USE_UMPIRE@)
   
   set(SMITH_ADIAK_DIR          "@ADIAK_DIR@")
+  set(SMITH_ARPACK_DIR         "@ARPACK_DIR@")
   set(SMITH_AXOM_DIR           "@AXOM_DIR@")
   set(SMITH_CAMP_DIR           "@CAMP_DIR@")
   set(SMITH_CALIPER_DIR        "@CALIPER_DIR@")
@@ -89,7 +91,7 @@ if(NOT SMITH_FOUND)
   endif()
 
   # Set to real variable unless user overrode it
-  foreach(dep ADIAK AXOM CAMP CALIPER CONDUIT CONTINUATION ENZYME GRETL HDF5 MFEM PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
+  foreach(dep @SMITH_TPL_DEPS@)
     if (NOT ${dep}_DIR)
       set(${dep}_DIR "${SMITH_${dep}_DIR}")
     endif()
@@ -108,6 +110,14 @@ if(NOT SMITH_FOUND)
   # Adiak
   if(SMITH_USE_ADIAK)
     find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}" "${ADIAK_DIR}/lib/cmake/adiak")
+  endif()
+
+  # Adiak
+  if(SMITH_USE_ARPACK)
+    blt_import_library(NAME       arpack
+                       INCLUDES   @ARPACK_INCLUDE_DIRS@
+                       DEPENDS_ON @ARPACK_LIBRARIES@
+                       TREAT_INCLUDES_AS_SYSTEM ON)
   endif()
 
   # Caliper
@@ -149,6 +159,11 @@ if(NOT SMITH_FOUND)
                          INCLUDES "@MFEM_INCLUDE_DIRS@"
                          TREAT_INCLUDES_AS_SYSTEM ON
                          DEPENDS_ON "@MFEM_LIBRARIES@")
+    endif()
+
+    # mfem brings in slepc but doesn't include required arpack, add it
+    if(SMITH_USE_ARPACK)
+      target_link_libraries(mfem INTERFACE arpack)
     endif()
   endif()
 

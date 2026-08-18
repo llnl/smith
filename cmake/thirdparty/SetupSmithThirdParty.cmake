@@ -394,6 +394,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(MFEM_BUILT_WITH_CMAKE TRUE)
     endif()
 
+    # mfem brings in slepc but doesn't include required arpack, add it
+    if(ARPACK_FOUND)
+        target_link_libraries(mfem INTERFACE arpack)
+    endif()
+
     #------------------------------------------------------------------------------
     # Axom
     #------------------------------------------------------------------------------
@@ -672,18 +677,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
     endif()
 
-    # Add missing ARPACK flags needed by SLEPc by injecting them into the MFEM targets.
-    # https://github.com/mfem/mfem/issues/4364
-    if (ARPACK_FOUND)
-        foreach(_target ${_mfem_targets})
-            if(TARGET ${_target})
-                message(STATUS "Adding arpack libraries and include dirs to target [${_target}]")
-                target_include_directories(${_target} INTERFACE ${ARPACK_INCLUDE_DIRS})
-                target_link_libraries(${_target} INTERFACE ${ARPACK_LIBRARIES})
-            endif()
-        endforeach()
-    endif()
-
     # Prevent unhelpful warnings by removing duplicate rpaths set in MFEM's config.mk MFEM_EXT_LIBS
     if(APPLE)
         foreach(_target ${_mfem_targets})
@@ -759,3 +752,27 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
 endif()
+
+# This is a full list of possible TPLs in Smith and is used in multiple locations
+set(SMITH_TPL_DEPS ADIAK
+                   ARPACK
+                   AXOM
+                   CALIPER
+                   CAMP
+                   CONDUIT
+                   CONTINUATION
+                   CUDA
+                   ENZYME
+                   GRETL
+                   HDF5
+                   HIP
+                   LUA
+                   MFEM
+                   MPI
+                   PETSC
+                   RAJA
+                   SLEPC
+                   STRUMPACK
+                   SUNDIALS
+                   TRIBOL
+                   UMPIRE)
