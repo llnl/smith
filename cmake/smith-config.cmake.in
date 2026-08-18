@@ -55,9 +55,7 @@ if(NOT SMITH_FOUND)
   set(SMITH_CAMP_DIR           "@CAMP_DIR@")
   set(SMITH_CALIPER_DIR        "@CALIPER_DIR@")
   set(SMITH_CONDUIT_DIR        "@CONDUIT_DIR@")
-  set(SMITH_CONTINUATION_DIR   "@CONTINUATION_DIR@")
   set(SMITH_ENZYME_DIR         "@ENZYME_DIR@")
-  set(SMITH_GRETL_DIR          "@SMITH_INSTALL_PREFIX@")
   set(SMITH_HDF5_DIR           "@HDF5_DIR@")
   set(SMITH_MFEM_DIR           "@MFEM_DIR@")
   set(SMITH_PETSC_DIR          "@PETSC_DIR@")
@@ -68,6 +66,19 @@ if(NOT SMITH_FOUND)
   set(SMITH_TRIBOL_DIR         "@TRIBOL_DIR@")
   set(SMITH_UMPIRE_DIR         "@UMPIRE_DIR@")
 
+  # TPLs that are be included in our build
+  set(SMITH_CONTINUATION_DIR   "@SMITH_INSTALL_PREFIX@")
+  set(SMITH_GRETL_DIR          "@SMITH_INSTALL_PREFIX@")
+
+  # Tribol may be included in our build
+  if(SMITH_USE_TRIBOL AND NOT SMITH_TRIBOL_DIR)
+    set(SMITH_TRIBOL_DIR       "@SMITH_INSTALL_PREFIX@")
+    set(_tribol_included       TRUE)
+  else()
+    set(_tribol_included       FALSE)
+  endif()
+
+
   # Codevelop TPLs are installed alongside Smith
   if(SMITH_ENABLE_CODEVELOP)
     set(SMITH_AXOM_DIR "${SMITH_INSTALL_PREFIX}")
@@ -75,7 +86,7 @@ if(NOT SMITH_FOUND)
   endif()
 
   # Set to real variable unless user overrode it
-  foreach(dep ADIAK AXOM CAMP CALIPER CONDUIT HDF5 MFEM PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
+  foreach(dep ADIAK AXOM CAMP CALIPER CONDUIT CONTINUATION ENZYME GRETL HDF5 MFEM PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
     if (NOT ${dep}_DIR)
       set(${dep}_DIR "${SMITH_${dep}_DIR}")
     endif()
@@ -142,27 +153,15 @@ if(NOT SMITH_FOUND)
   if(SMITH_USE_AXOM)
     find_dependency(Axom REQUIRED NO_DEFAULT_PATH PATHS "${AXOM_DIR}/lib/cmake")
   endif()
-  
-  # HDF5
-  if(SMITH_USE_HDF5)
-    set(SMITH_HDF5_DIR     "@HDF5_DIR@")
-    # Note: Targets not currently imported
-  endif()
-
-  # Tribol
-  if(SMITH_USE_TRIBOL)
-    find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
-  endif()
 
   # Enzyme
   if(SMITH_USE_ENZYME)
-    set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
-    find_dependency(Enzyme REQUIRED)
+    find_dependency(Enzyme REQUIRED REQUIRED NO_DEFAULT_PATH PATHS "${ENZYME_DIR}")
   endif()
 
   # Gretl
   if(SMITH_USE_GRETL)
-    find_dependency(gretl REQUIRED PATHS ${SMITH_GRETL_DIR}/lib/cmake)
+    find_dependency(gretl REQUIRED PATHS "${GRETL_DIR}/lib/cmake")
   endif()
 
   #----------------------------------------------------------------------------
@@ -170,6 +169,14 @@ if(NOT SMITH_FOUND)
   #----------------------------------------------------------------------------
   get_filename_component(SMITH_CMAKE_CONFIG_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
   include(${SMITH_CMAKE_CONFIG_DIR}/BLTSetupTargets.cmake)
+
+  # Tribol
+  if(NOT _tribol_included)
+    find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+  else()
+    include(${SMITH_CMAKE_CONFIG_DIR}/tribol-targets.cmake)
+  endif()
+
   include(${SMITH_CMAKE_CONFIG_DIR}/smith-targets.cmake)
 
   #----------------------------------------------------------------------------

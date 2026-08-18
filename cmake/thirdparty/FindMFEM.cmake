@@ -142,13 +142,7 @@ else()
         NAME          mfem
         INCLUDES      ${MFEM_INCLUDE_DIRS}
         LIBRARIES     ${MFEM_LIBRARIES}
-        TREAT_INCLUDES_AS_SYSTEM ON
-        EXPORTABLE    ON)
-
-    install(TARGETS          mfem
-        EXPORT               smith-targets
-        DESTINATION          lib
-        )
+        TREAT_INCLUDES_AS_SYSTEM ON)
 endif()
 
 if(_mfem_uses_mpi)

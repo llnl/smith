@@ -628,6 +628,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         conduit_relay_mpi_io
         conduit_blueprint
         conduit_blueprint_mpi
+        mfem
         tribol::mfem)
 
     foreach(_target ${_imported_targets})
