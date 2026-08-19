@@ -10,13 +10,19 @@ set(numerics_serial_test_sources
     test_equationsolver.cpp
     test_operator.cpp
     test_odes.cpp
+    test_steihaug_toint_cg.cpp
     test_block_preconditioner.cpp
     test_block_preconditioner_backend.cpp
     test_block_preconditioner_custom_operators.cpp
     test_linear_solver_precond_only.cpp
     )
 
-smith_add_tests(SOURCES       ${numerics_serial_test_sources}
+if(MFEM_USE_LAPACK)
+    list(APPEND numerics_serial_test_sources
+         test_trust_region_subspace_mfem.cpp)
+endif()
+
+smith_add_tests( SOURCES       ${numerics_serial_test_sources}
                  DEPENDS_ON    ${numerics_test_dependencies}
                  NUM_MPI_TASKS 1)
 
@@ -31,7 +37,6 @@ if(PETSC_FOUND)
     if(SLEPC_FOUND)
         set(slepc_solver_tests
             test_eigensolver.cpp
-            test_trust_region_solver.cpp
             )
         smith_add_tests(SOURCES       ${slepc_solver_tests}
                         DEPENDS_ON    ${numerics_test_dependencies}

@@ -37,6 +37,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ### Changed
 
+- Reworked the trust-region solver to use an MFEM/LAPACK subspace solve with cached reduced problems and simplified Steihaug-Toint CG internals.
+
 ### Fixed
 
 ## [Version 0.1.0] - Release date 2026-04-28
