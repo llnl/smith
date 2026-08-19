@@ -287,6 +287,38 @@ class OperatorDiagonalSolver : public mfem::Solver {
   mfem::Vector diag_;
 };
 
+class MockSchurActionSolver : public smith::SchurComplementActionSolver {
+ public:
+  MockSchurActionSolver(double scale, std::shared_ptr<int> context_calls, std::shared_ptr<int> update_calls)
+      : scale_(scale), context_calls_(std::move(context_calls)), update_calls_(std::move(update_calls))
+  {
+  }
+
+  void setBlockContext(const mfem::BlockOperator& jacobian, const mfem::Array<int>& block_offsets) override
+  {
+    smith::SchurComplementActionSolver::setBlockContext(jacobian, block_offsets);
+    ++(*context_calls_);
+  }
+
+  void updateForState([[maybe_unused]] const mfem::Vector& state,
+                      [[maybe_unused]] const mfem::Array<int>& block_offsets) override
+  {
+    ++(*update_calls_);
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    y.SetSize(x.Size());
+    y = x;
+    y *= scale_;
+  }
+
+ private:
+  double scale_;
+  std::shared_ptr<int> context_calls_;
+  std::shared_ptr<int> update_calls_;
+};
+
 }  // namespace
 /* ============================================================
    Tests
@@ -761,6 +793,50 @@ TEST(BlockSchurPreconditionerCustom, StateDependentProviderUpdatesSchurSolve)
   EXPECT_NEAR(x[1], b[1] / 2.0, 1e-12);
   EXPECT_NEAR(x[2], b[2] / 7.0, 1e-12);
   EXPECT_NEAR(x[3], b[3] / 7.0, 1e-12);
+}
+
+// Verifies custom Schur action solvers can replace explicit Schur operators.
+TEST(BlockSchurPreconditionerCustom, CustomActionUsesActionSolverWithoutSchurOperatorProvider)
+{
+  constexpr int n = 2;
+  Array<int> offsets({0, n, 2 * n});
+
+  auto A11o = makeHypreScaledIdentity(n, 2.0);
+  auto A12o = makeHypreScaledIdentity(n, 0.0);
+  auto A21o = makeHypreScaledIdentity(n, 0.0);
+  auto A22o = makeHypreScaledIdentity(n, 3.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0, 0, A11o.A.get());
+  A.SetBlock(0, 1, A12o.A.get());
+  A.SetBlock(1, 0, A21o.A.get());
+  A.SetBlock(1, 1, A22o.A.get());
+
+  auto context_calls = std::make_shared<int>(0);
+  auto update_calls = std::make_shared<int>(0);
+
+  std::vector<std::unique_ptr<Solver>> solvers;
+  solvers.push_back(std::make_unique<IdentitySolver>());
+  solvers.push_back(std::make_unique<MockSchurActionSolver>(0.25, context_calls, update_calls));
+
+  smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Diagonal,
+                                    smith::SchurApproxType::CustomAction);
+
+  Vector state(2 * n);
+  state = 0.0;
+  P.updateForState(state, offsets);
+  P.SetOperator(A);
+
+  Vector b(2 * n), x(2 * n);
+  b.Randomize();
+  P.Mult(b, x);
+
+  EXPECT_EQ(*update_calls, 1);
+  EXPECT_EQ(*context_calls, 1);
+  EXPECT_NEAR(x[0], b[0], 1e-12);
+  EXPECT_NEAR(x[1], b[1], 1e-12);
+  EXPECT_NEAR(x[2], 0.25 * b[2], 1e-12);
+  EXPECT_NEAR(x[3], 0.25 * b[3], 1e-12);
 }
 
 TEST(BlockDiagonalPreconditionerCustom, ThrowsOnOutOfRangeOverrideIndex)

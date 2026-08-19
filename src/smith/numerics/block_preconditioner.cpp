@@ -342,6 +342,27 @@ BlockSchurPreconditioner::BlockSchurPreconditioner(std::vector<std::unique_ptr<m
   }
 }
 
+void SchurComplementActionSolver::setBlockContext(const mfem::BlockOperator& jacobian,
+                                                  const mfem::Array<int>& block_offsets)
+{
+  MFEM_VERIFY(block_offsets.Size() == 3, "SchurComplementActionSolver requires 2x2 block offsets");
+  block_jacobian_ = &jacobian;
+  block_offsets_ = block_offsets;
+  height = block_offsets[2] - block_offsets[1];
+  width = height;
+}
+
+void SchurComplementActionSolver::SetOperator(const mfem::Operator& op)
+{
+  height = op.Height();
+  width = op.Width();
+}
+
+void SchurComplementActionSolver::updateForState([[maybe_unused]] const mfem::Vector& state,
+                                                 [[maybe_unused]] const mfem::Array<int>& block_offsets)
+{
+}
+
 void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& out) const
 {
   // Interpret in, out as block vectors: in = [b1; b2], out = [x1; x2]
@@ -540,12 +561,19 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
   } else if (approxType_ == SchurApproxType::Custom) {
     S_approx_owned_.reset();
     S_approx_view_ = &block_op_providers_[1]->currentOperator();
+  } else if (approxType_ == SchurApproxType::CustomAction) {
+    S_approx_owned_.reset();
+    auto* action_solver = dynamic_cast<SchurComplementActionSolver*>(mfem_solvers_[1].get());
+    MFEM_VERIFY(action_solver, "SchurApproxType::CustomAction requires a SchurComplementActionSolver for block 1");
+    action_solver->setBlockContext(*block_jacobian_, block_offsets_);
   }
 
-  MFEM_VERIFY(S_approx_view_, "Schur complement approximation operator must be set");
+  if (approxType_ != SchurApproxType::CustomAction) {
+    MFEM_VERIFY(S_approx_view_, "Schur complement approximation operator must be set");
 
-  // Set the Schur complement preconditioner for block (1,1)
-  mfem_solvers_[1]->SetOperator(*S_approx_view_);
+    // Set the Schur complement preconditioner for block (1,1)
+    mfem_solvers_[1]->SetOperator(*S_approx_view_);
+  }
   mfem_solvers_[1]->iterative_mode = false;
 
   // Set up block diagonal operator
