@@ -12,7 +12,6 @@
 
 #pragma once
 
-#include <cstddef>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -22,7 +21,6 @@
 #include "mfem.hpp"
 
 #include "smith/infrastructure/input.hpp"
-#include "smith/infrastructure/logger.hpp"
 #include "smith/numerics/nonlinear_convergence.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/numerics/petsc_solvers.hpp"

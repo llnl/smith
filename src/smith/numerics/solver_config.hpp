@@ -503,8 +503,9 @@ struct NonlinearSolverOptions {
   /// Number of previous accepted steps to include in trust-region subspace solves
   int num_previous_steps = 2;
 
-  /// Relative CG forcing term for TrustRegion model solves.
-  double cg_forcing_rel = 1.2981522e-05;
+  /// Relative residual tolerance for TrustRegion model solves.
+  /// cg_tol = max(0.5 * nonlinear_goal, cg_relative_residual_tolerance * current_nonlinear_residual)
+  double cg_relative_residual_tolerance = 1.2981522e-05;
 
   /// Reject non-energy-callback steps whose predicted residual grows too much.
   double residual_growth_cap = 8.1950747;

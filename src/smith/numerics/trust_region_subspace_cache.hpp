@@ -4,6 +4,12 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+/**
+ * @file trust_region_subspace_cache.hpp
+ *
+ * @brief Cached reduced trust-region subspace problem
+ */
+
 #pragma once
 
 #include <memory>

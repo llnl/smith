@@ -100,3 +100,36 @@ TEST(SteihaugTointCG, DetectsNegativeCurvature)
   EXPECT_NEAR(results.z.Norml2(), 2.0, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::NegativeCurvature);
 }
+
+TEST(SteihaugTointCG, LowInitialResidualHonorsMinimumIterations)
+{
+  mfem::Vector diagonal(1);
+  diagonal[0] = 1.0;
+  mfem::SparseMatrix hessian(diagonal);
+
+  smith::TrustRegionSettings settings;
+  settings.cg_tol = 1.0;
+  settings.max_cg_iterations = 10;
+
+  double trust_region_size = 1.0;
+  mfem::Vector current_residual(1);
+
+  mfem::Vector low_residual(1);
+  low_residual[0] = 1.0e-8;
+  smith::TrustRegionResults early_exit_results(1);
+  early_exit_results.z = 2.0;
+  smith::steihaugTointCG(low_residual, current_residual, hessian, nullptr, settings, trust_region_size,
+                         early_exit_results, low_residual * low_residual, localDotMany);
+
+  EXPECT_EQ(early_exit_results.cg_iterations_count, 0);
+  EXPECT_EQ(early_exit_results.interior_status, smith::TrustRegionResults::Status::Interior);
+  EXPECT_DOUBLE_EQ(early_exit_results.z[0], 0.0);
+
+  settings.min_cg_iterations = 1;
+  smith::TrustRegionResults forced_iteration_results(1);
+  smith::steihaugTointCG(low_residual, current_residual, hessian, nullptr, settings, trust_region_size,
+                         forced_iteration_results, low_residual * low_residual, localDotMany);
+
+  EXPECT_EQ(forced_iteration_results.cg_iterations_count, 1);
+  EXPECT_EQ(forced_iteration_results.interior_status, smith::TrustRegionResults::Status::Interior);
+}

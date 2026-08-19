@@ -4,10 +4,14 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <algorithm>
+#include <cmath>
 #include <format>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -32,10 +36,11 @@ constexpr double thickness = 0.025;
 constexpr double end_tol = 1.0e-8;
 constexpr double top_tol = 1.0e-8;
 std::string solver_name = "TrustRegion";
-int print_level = 2;
-int nonlinear_max_iterations = 300000;
-int trust_subspace_option = static_cast<int>(SubSpaceOptions::NEVER);
-int trust_num_leftmost = 1;
+int print_level = 0;
+int nonlinear_max_iterations = 150;
+int trust_subspace_option = static_cast<int>(SubSpaceOptions::WHEN_INDEFINITE_OR_BOUNDARY);
+int trust_num_leftmost = 2;
+int trust_num_previous_steps = 4;
 
 NonlinearSolver selectedNonlinearSolver()
 {
@@ -64,12 +69,45 @@ void parseCommandLine(int& argc, char** argv)
       trust_subspace_option = std::stoi(arg.substr(std::string("--trust-subspace-option=").size()));
     } else if (arg.rfind("--trust-num-leftmost=", 0) == 0) {
       trust_num_leftmost = std::stoi(arg.substr(std::string("--trust-num-leftmost=").size()));
+    } else if (arg.rfind("--trust-num-previous-steps=", 0) == 0) {
+      trust_num_previous_steps = std::stoi(arg.substr(std::string("--trust-num-previous-steps=").size()));
     } else {
       argv[write_arg] = argv[read_arg];
       ++write_arg;
     }
   }
   argc = write_arg;
+}
+
+bool globallyFinite(const FiniteElementVector& vector)
+{
+  int local_finite = 1;
+  for (int index = 0; index < vector.Size(); ++index) {
+    local_finite = local_finite && std::isfinite(vector[index]);
+  }
+
+  int global_finite = 0;
+  MPI_Allreduce(&local_finite, &global_finite, 1, MPI_INT, MPI_LAND, vector.comm());
+  return global_finite != 0;
+}
+
+std::pair<double, double> globalComponentExtrema(const FiniteElementState& state, int component)
+{
+  const auto& space = state.space();
+  const mfem::ParGridFunction& grid_function = state.gridFunction();
+  double local_minimum = std::numeric_limits<double>::max();
+  double local_maximum = std::numeric_limits<double>::lowest();
+  for (int degree_of_freedom = 0; degree_of_freedom < space.GetNDofs(); ++degree_of_freedom) {
+    const double value = grid_function[space.DofToVDof(degree_of_freedom, component)];
+    local_minimum = std::min(local_minimum, value);
+    local_maximum = std::max(local_maximum, value);
+  }
+
+  double global_minimum = 0.0;
+  double global_maximum = 0.0;
+  MPI_Allreduce(&local_minimum, &global_minimum, 1, MPI_DOUBLE, MPI_MIN, state.comm());
+  MPI_Allreduce(&local_maximum, &global_maximum, 1, MPI_DOUBLE, MPI_MAX, state.comm());
+  return {global_minimum, global_maximum};
 }
 
 }  // namespace
@@ -80,9 +118,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
 
   constexpr int p = 1;
   constexpr int dim = 2;
-  constexpr int nx = 120;
-  constexpr int ny = 5;
-
+  constexpr int nx = 40;
+  constexpr int ny = 2;
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, "shallow_arch_buckling");
 
@@ -119,7 +156,8 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
       .max_iterations = nonlinear_max_iterations,
       .print_level = print_level,
       .subspace_option = static_cast<SubSpaceOptions>(trust_subspace_option),
-      .num_leftmost = trust_num_leftmost};
+      .num_leftmost = trust_num_leftmost,
+      .num_previous_steps = trust_num_previous_steps};
 
   SolidMechanics<p, dim> solid(nonlinear_options, linear_options, solid_mechanics::default_quasistatic_options,
                                "compressed_beam", mesh);
@@ -145,7 +183,6 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
       mesh->domain("top_face"));
 
   solid.completeSetup();
-  solid.outputStateToDisk("shallow_arch_buckling");
 
   SLIC_INFO_ROOT(
       std::format("Compressed thin beam snap-through run: solver = {}, trust_subspace_option = {}, "
@@ -156,8 +193,25 @@ TEST(ShallowArchBuckling, CompressedThinBeamSnapThrough)
   for (int step = 0; step < num_steps; ++step) {
     solid.advanceTimestep(1.0 / num_steps);
     SLIC_INFO_ROOT(std::format("Load step {}/{}", step + 1, num_steps));
-    solid.outputStateToDisk("shallow_arch_buckling");
+
+    EXPECT_TRUE(globallyFinite(solid.displacement()));
+    EXPECT_TRUE(globallyFinite(solid.reactions()));
+    const auto [minimum_vertical_displacement, maximum_vertical_displacement] =
+        globalComponentExtrema(solid.displacement(), 1);
+    if (step == 1) {
+      EXPECT_LT(minimum_vertical_displacement, -0.5);
+      EXPECT_NEAR(maximum_vertical_displacement, 0.0, 1.0e-12);
+    } else if (step == 2) {
+      EXPECT_NEAR(minimum_vertical_displacement, 0.0, 1.0e-12);
+      EXPECT_GT(maximum_vertical_displacement, 1.3);
+    } else if (step == num_steps - 1) {
+      EXPECT_NEAR(minimum_vertical_displacement, 0.0, 1.0e-12);
+      EXPECT_NEAR(maximum_vertical_displacement, 2.52575315, 1.0e-6);
+    }
   }
+
+  const double reaction_norm = std::sqrt(innerProduct(solid.reactions(), solid.reactions()));
+  EXPECT_NEAR(reaction_norm, 0.98420158, 1.0e-6);
 }
 
 }  // namespace smith

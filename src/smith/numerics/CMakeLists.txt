@@ -23,6 +23,7 @@ set(numerics_sources
     equation_solver.cpp
     steihaug_toint_cg.cpp
     mfem_trust_region_subspace.cpp
+    trust_region_subspace_cache.cpp
     nonlinear_convergence.cpp
     odes.cpp
     petsc_solvers.cpp

@@ -19,7 +19,7 @@ set(numerics_serial_test_sources
 
 if(MFEM_USE_LAPACK)
     list(APPEND numerics_serial_test_sources
-         test_trust_region_solver_mfem.cpp)
+         test_trust_region_subspace_mfem.cpp)
 endif()
 
 smith_add_tests( SOURCES       ${numerics_serial_test_sources}

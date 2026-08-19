@@ -4,6 +4,12 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+/**
+ * @file steihaug_toint_cg.hpp
+ *
+ * @brief Trust-region model solver using Steihaug-Toint conjugate gradients
+ */
+
 #pragma once
 
 #include <array>

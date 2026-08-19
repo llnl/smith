@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file equation_solver.hpp
+ * @file trust_region_solver.hpp
  *
- * @brief This file contains the declaration of a trust region subspace solver
+ * @brief Trust-region subspace solver interface
  */
 
 #pragma once

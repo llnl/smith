@@ -35,17 +35,12 @@ namespace {
 
 size_t rootOnlyPrintLevel(const mfem::NewtonSolver& solver, size_t level)
 {
-#ifdef MFEM_USE_MPI
   const MPI_Comm comm = solver.GetComm();
-  if (level > 0 && comm != MPI_COMM_NULL) {
-    int rank = 0;
-    MPI_Comm_rank(comm, &rank);
-    if (rank != 0) {
-      return 0;
-    }
-  }
-#endif
-  return level;
+  if (level == 0 || comm == MPI_COMM_NULL) return level;
+
+  int rank = 0;
+  MPI_Comm_rank(comm, &rank);
+  return rank == 0 ? level : 0;
 }
 
 /**
@@ -194,13 +189,11 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
   {
   }
 
-#ifdef MFEM_USE_MPI
   /// parallel constructor
   NewtonSolver(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts)
       : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts), linear_options(linear_opts)
   {
   }
-#endif
 
   /// destructor
   virtual ~NewtonSolver()
@@ -446,14 +439,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   std::shared_ptr<EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 
  public:
-#ifdef MFEM_USE_MPI
   /// constructor
   TrustRegion(MPI_Comm comm_, const NonlinearSolverOptions& nonlinear_opts, const LinearSolverOptions& linear_opts,
               Solver& tPrec)
       : mfem::NewtonSolver(comm_), nonlinear_options(nonlinear_opts), linear_options(linear_opts), tr_precond(tPrec)
   {
   }
-#endif
 
   /// destructor
   virtual ~TrustRegion()
@@ -475,7 +466,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       products[i] = (*pairs[i].first) * (*pairs[i].second);
     }
 
-#ifdef MFEM_USE_MPI
     const MPI_Comm dot_comm = GetComm();
     if (dot_comm != MPI_COMM_NULL) {
       std::vector<mfem::real_t> global_products(pairs.size());
@@ -483,7 +473,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
                     dot_comm);
       products.assign(global_products.begin(), global_products.end());
     }
-#endif
 
     return products;
   }
@@ -769,6 +758,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     int num_leftmost = nonlinear_options.num_leftmost;
     previous_steps.clear();
 
+#ifndef MFEM_USE_LAPACK
+    if (print_level >= 1 && subspace_option != SubSpaceOptions::NEVER) {
+      mfem::out << "MFEM LAPACK support unavailable; trust-region subspace steps disabled.\n";
+    }
+#endif
+
     scratch = 1.0;
     double tr_size = nonlinear_options.trust_region_scaling * std::sqrt(Dot(scratch, scratch));
     size_t cumulative_cg_iters_from_last_precond_update = 0;
@@ -843,7 +838,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         trResults.cg_iterations_count = 1;
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
       } else {
-        settings.cg_tol = std::max(0.5 * norm_goal, nonlinear_options.cg_forcing_rel * norm);
+        settings.cg_tol = std::max(0.5 * norm_goal, nonlinear_options.cg_relative_residual_tolerance * norm);
         solveModelProblem(r, scratch, *grad, &this->tr_precond, settings, tr_size, trResults, norm * norm);
       }
       cumulative_cg_iters_from_last_precond_update += trResults.cg_iterations_count;

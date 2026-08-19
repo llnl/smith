@@ -34,6 +34,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   auto& Pr = results.Pr;
   auto& Hd = results.H_d;
 
+  z = 0.0;
   const double cg_tol_squared = settings.cg_tol * settings.cg_tol;
 
   if (r0_norm_squared <= cg_tol_squared && settings.min_cg_iterations == 0) {
@@ -51,7 +52,6 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   d = Pr;
   d *= -1.0;
 
-  z = 0.0;
   double zz = 0.;
 
   // rPr = dot(rCurrent, Pr)
