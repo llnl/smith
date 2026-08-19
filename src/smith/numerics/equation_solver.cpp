@@ -702,13 +702,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     grad->Mult(x_, v_);
   }
 
-  /// apply trust region specific preconditioner
-  void precond(const mfem::Vector& x_, mfem::Vector& v_) const
-  {
-    SMITH_MARK_FUNCTION;
-    tr_precond.Mult(x_, v_);
-  };
-
   /// @overload
   void Mult(const mfem::Vector&, mfem::Vector& X) const override
   {
