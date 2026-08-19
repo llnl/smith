@@ -212,12 +212,6 @@ install(TARGETS              smith
         )
 
 if (SMITH_ENABLE_CODEVELOP)
-    # This really shouldn't be needed but it keeps getting dropped from axom.
-    # It certainly shouldn't go here either.
-    target_include_directories(axom SYSTEM INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/axom/src>
-    )
-
     install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}
             EXPORT               smith-targets
             DESTINATION          lib
