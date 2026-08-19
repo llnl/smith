@@ -305,8 +305,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 
         std::vector<smith::BlockProviderOverride> overrides;
         overrides.push_back(smith::makeWeakFormBlockProviderOverride(1, T2_form, shape_disp, T2_arguments,
-                                                                     jacobian_weights, time_info,
-                                                                     T2_bc_manager.get()));
+                                                                     jacobian_weights, time_info, T2_bc_manager.get()));
 
         auto solvers =
             smith::buildBlockPreconditionerSubSolvers(linear_options.sub_block_linear_solver_options, mesh->getComm());

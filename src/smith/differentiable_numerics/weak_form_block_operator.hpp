@@ -60,18 +60,21 @@ std::unique_ptr<mfem::HypreParMatrix> buildWeakFormOperator(const WeakForm& weak
 /**
  * @brief Build a callable that updates bound weak-form fields from state and assembles the weak-form operator.
  */
-StateDependentWeakFormOperator makeStateDependentWeakFormOperator(
-    const WeakForm& weak_form, FieldState shape_disp, std::vector<FieldState> fields,
-    std::vector<double> jacobian_weights, TimeInfo time_info, mfem::Array<int> ess_tdofs,
-    std::vector<StateBlockBinding> state_block_bindings);
+StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm& weak_form, FieldState shape_disp,
+                                                                  std::vector<FieldState> fields,
+                                                                  std::vector<double> jacobian_weights,
+                                                                  TimeInfo time_info, mfem::Array<int> ess_tdofs,
+                                                                  std::vector<StateBlockBinding> state_block_bindings);
 
 /**
  * @brief Build a callable using essential dofs copied from a boundary-condition manager.
  */
-StateDependentWeakFormOperator makeStateDependentWeakFormOperator(
-    const WeakForm& weak_form, FieldState shape_disp, std::vector<FieldState> fields,
-    std::vector<double> jacobian_weights, TimeInfo time_info, const BoundaryConditionManager* bc_manager,
-    std::vector<StateBlockBinding> state_block_bindings);
+StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm& weak_form, FieldState shape_disp,
+                                                                  std::vector<FieldState> fields,
+                                                                  std::vector<double> jacobian_weights,
+                                                                  TimeInfo time_info,
+                                                                  const BoundaryConditionManager* bc_manager,
+                                                                  std::vector<StateBlockBinding> state_block_bindings);
 
 /**
  * @brief Build a fixed block override from a weak-form Jacobian operator.

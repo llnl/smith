@@ -27,8 +27,8 @@ mfem::Array<int> copyEssentialTrueDofs(const BoundaryConditionManager* bc_manage
 class WeakFormBlockOperatorBuilder {
  public:
   WeakFormBlockOperatorBuilder(const WeakForm& weak_form, FieldState shape_disp, std::vector<FieldState> fields,
-                               std::vector<double> jacobian_weights, TimeInfo time_info,
-                               mfem::Array<int> ess_tdofs, std::vector<StateBlockBinding> state_block_bindings)
+                               std::vector<double> jacobian_weights, TimeInfo time_info, mfem::Array<int> ess_tdofs,
+                               std::vector<StateBlockBinding> state_block_bindings)
       : weak_form_(weak_form),
         shape_disp_(std::move(shape_disp)),
         fields_(std::move(fields)),
@@ -51,8 +51,7 @@ class WeakFormBlockOperatorBuilder {
     return op;
   }
 
-  std::unique_ptr<mfem::HypreParMatrix> updateAndBuild(const mfem::Vector& state,
-                                                       const mfem::Array<int>& block_offsets)
+  std::unique_ptr<mfem::HypreParMatrix> updateAndBuild(const mfem::Vector& state, const mfem::Array<int>& block_offsets)
   {
     updateFieldsFromState(state, block_offsets);
     return build();
@@ -119,8 +118,8 @@ std::unique_ptr<mfem::HypreParMatrix> buildWeakFormOperator(const WeakForm& weak
                                                             std::vector<double> jacobian_weights, TimeInfo time_info,
                                                             mfem::Array<int> ess_tdofs)
 {
-  WeakFormBlockOperatorBuilder builder(weak_form, std::move(shape_disp), std::move(fields),
-                                       std::move(jacobian_weights), time_info, std::move(ess_tdofs), {});
+  WeakFormBlockOperatorBuilder builder(weak_form, std::move(shape_disp), std::move(fields), std::move(jacobian_weights),
+                                       time_info, std::move(ess_tdofs), {});
   return builder.build();
 }
 
@@ -133,27 +132,29 @@ std::unique_ptr<mfem::HypreParMatrix> buildWeakFormOperator(const WeakForm& weak
                                time_info, copyEssentialTrueDofs(bc_manager));
 }
 
-StateDependentWeakFormOperator makeStateDependentWeakFormOperator(
-    const WeakForm& weak_form, FieldState shape_disp, std::vector<FieldState> fields,
-    std::vector<double> jacobian_weights, TimeInfo time_info, mfem::Array<int> ess_tdofs,
-    std::vector<StateBlockBinding> state_block_bindings)
+StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm& weak_form, FieldState shape_disp,
+                                                                  std::vector<FieldState> fields,
+                                                                  std::vector<double> jacobian_weights,
+                                                                  TimeInfo time_info, mfem::Array<int> ess_tdofs,
+                                                                  std::vector<StateBlockBinding> state_block_bindings)
 {
-  WeakFormBlockOperatorBuilder builder(weak_form, std::move(shape_disp), std::move(fields),
-                                       std::move(jacobian_weights), time_info, std::move(ess_tdofs),
-                                       std::move(state_block_bindings));
+  WeakFormBlockOperatorBuilder builder(weak_form, std::move(shape_disp), std::move(fields), std::move(jacobian_weights),
+                                       time_info, std::move(ess_tdofs), std::move(state_block_bindings));
   return [builder = std::move(builder)](const mfem::Vector& state, const mfem::Array<int>& block_offsets) mutable {
     return builder.updateAndBuild(state, block_offsets);
   };
 }
 
-StateDependentWeakFormOperator makeStateDependentWeakFormOperator(
-    const WeakForm& weak_form, FieldState shape_disp, std::vector<FieldState> fields,
-    std::vector<double> jacobian_weights, TimeInfo time_info, const BoundaryConditionManager* bc_manager,
-    std::vector<StateBlockBinding> state_block_bindings)
+StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm& weak_form, FieldState shape_disp,
+                                                                  std::vector<FieldState> fields,
+                                                                  std::vector<double> jacobian_weights,
+                                                                  TimeInfo time_info,
+                                                                  const BoundaryConditionManager* bc_manager,
+                                                                  std::vector<StateBlockBinding> state_block_bindings)
 {
   return makeStateDependentWeakFormOperator(weak_form, std::move(shape_disp), std::move(fields),
-                                            std::move(jacobian_weights), time_info,
-                                            copyEssentialTrueDofs(bc_manager), std::move(state_block_bindings));
+                                            std::move(jacobian_weights), time_info, copyEssentialTrueDofs(bc_manager),
+                                            std::move(state_block_bindings));
 }
 
 BlockProviderOverride makeWeakFormBlockProviderOverride(int block_index, const WeakForm& weak_form,
@@ -161,10 +162,9 @@ BlockProviderOverride makeWeakFormBlockProviderOverride(int block_index, const W
                                                         std::vector<double> jacobian_weights, TimeInfo time_info,
                                                         mfem::Array<int> ess_tdofs)
 {
-  return makeFixedBlockProviderOverride(block_index,
-                                        buildWeakFormOperator(weak_form, std::move(shape_disp), std::move(fields),
-                                                              std::move(jacobian_weights), time_info,
-                                                              std::move(ess_tdofs)));
+  return makeFixedBlockProviderOverride(
+      block_index, buildWeakFormOperator(weak_form, std::move(shape_disp), std::move(fields),
+                                         std::move(jacobian_weights), time_info, std::move(ess_tdofs)));
 }
 
 BlockProviderOverride makeWeakFormBlockProviderOverride(int block_index, const WeakForm& weak_form,
@@ -173,8 +173,7 @@ BlockProviderOverride makeWeakFormBlockProviderOverride(int block_index, const W
                                                         const BoundaryConditionManager* bc_manager)
 {
   return makeWeakFormBlockProviderOverride(block_index, weak_form, std::move(shape_disp), std::move(fields),
-                                           std::move(jacobian_weights), time_info,
-                                           copyEssentialTrueDofs(bc_manager));
+                                           std::move(jacobian_weights), time_info, copyEssentialTrueDofs(bc_manager));
 }
 
 BlockProviderOverride makeStateDependentWeakFormBlockProviderOverride(
@@ -183,10 +182,9 @@ BlockProviderOverride makeStateDependentWeakFormBlockProviderOverride(
     std::vector<StateBlockBinding> state_block_bindings)
 {
   auto initial_operator = buildWeakFormOperator(weak_form, shape_disp, fields, jacobian_weights, time_info, ess_tdofs);
-  auto weak_form_operator_update =
-      makeStateDependentWeakFormOperator(weak_form, std::move(shape_disp), std::move(fields),
-                                         std::move(jacobian_weights), time_info, std::move(ess_tdofs),
-                                         std::move(state_block_bindings));
+  auto weak_form_operator_update = makeStateDependentWeakFormOperator(
+      weak_form, std::move(shape_disp), std::move(fields), std::move(jacobian_weights), time_info, std::move(ess_tdofs),
+      std::move(state_block_bindings));
   auto block_builder = [weak_form_operator_update = std::move(weak_form_operator_update)](
                            const mfem::Vector& state,
                            const mfem::Array<int>& block_offsets) mutable -> std::unique_ptr<mfem::Operator> {
