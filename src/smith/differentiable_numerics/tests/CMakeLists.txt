@@ -20,6 +20,7 @@ set(differentiable_numerics_test_source
     test_thermo_mechanics_with_internal_vars.cpp
     test_mixed_poisson.cpp
     test_amg_vdim_block_preconditioner.cpp
+    test_state_dependent_preconditioner.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}

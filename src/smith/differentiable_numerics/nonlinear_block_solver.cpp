@@ -58,7 +58,7 @@ NonlinearBlockSolver::NonlinearBlockSolver(std::unique_ptr<EquationSolver> s, MP
 
 std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
 {
-  if (!retained_nonlinear_options_ || !retained_linear_options_) {
+  if (state_dependent_solver_ || !retained_nonlinear_options_ || !retained_linear_options_) {
     return nullptr;
   }
 
@@ -199,6 +199,9 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
         for (int row_i = 0; row_i < num_rows; ++row_i) {
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
+        if (state_dependent_solver_) {
+          state_dependent_solver_->updateForState(*u, block_offsets);
+        }
         matrix_of_jacs_ = jacobian_funcs(u_guesses);
         if (num_rows == 1) {
           auto& J = matrix_of_jacs_[0][0];
@@ -294,6 +297,23 @@ std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverO
   auto solid_solver = std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, mesh.getComm());
   return std::make_shared<NonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), nonlinear_opts.absolute_tol,
                                                 nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
+}
+
+std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                LinearSolverOptions linear_opts,
+                                                                const smith::Mesh& mesh,
+                                                                std::unique_ptr<mfem::Solver> preconditioner)
+{
+  auto solid_solver =
+      std::make_unique<EquationSolver>(nonlinear_opts, linear_opts, std::move(preconditioner), mesh.getComm());
+  auto* state_dependent_preconditioner = dynamic_cast<StateDependentSolver*>(&solid_solver->preconditioner());
+  auto nonlinear_block_solver =
+      std::make_shared<NonlinearBlockSolver>(std::move(solid_solver), mesh.getComm(), nonlinear_opts.absolute_tol,
+                                             nonlinear_opts.relative_tol, std::nullopt, linear_opts);
+  if (state_dependent_preconditioner) {
+    nonlinear_block_solver->setStateDependentSolver(state_dependent_preconditioner);
+  }
+  return nonlinear_block_solver;
 }
 
 }  // namespace smith

@@ -16,6 +16,7 @@
 #include <optional>
 #include <variant>
 #include <utility>
+#include <vector>
 
 #include "mpi.h"
 #include "mfem.hpp"
@@ -70,6 +71,17 @@ class EquationSolver {
   // _build_equationsolver_end
 
   /**
+   * @brief Construct an equation solver object with a custom owned preconditioner.
+   *
+   * @param nonlinear_opts The options to configure the nonlinear solution scheme
+   * @param lin_opts The options to configure the underlying linear solution scheme
+   * @param preconditioner Custom preconditioner to attach to the linear solver
+   * @param comm The MPI communicator for the supplied nonlinear operators and HypreParVectors
+   */
+  EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions lin_opts,
+                 std::unique_ptr<mfem::Solver> preconditioner, MPI_Comm comm = MPI_COMM_WORLD);
+
+  /**
    * Updates the solver with the provided operator
    * @param[in] op The operator (nonlinear system of equations) to use, "F" in F(x) = 0
    * @note This operator is required to return an @a mfem::HypreParMatrix from its @a GetGradient method. This is
@@ -114,15 +126,22 @@ class EquationSolver {
 
   /**
    * Returns the underlying preconditioner
-   * @return A pointer to the underlying preconditioner
-   * @note This may be null if a preconditioner is not given
+   * @return A reference to the underlying preconditioner
    */
-  mfem::Solver& preconditioner() { return *preconditioner_; }
+  mfem::Solver& preconditioner()
+  {
+    MFEM_VERIFY(preconditioner_, "EquationSolver has no preconditioner");
+    return *preconditioner_;
+  }
 
   /**
    * @overload
    */
-  const mfem::Solver& preconditioner() const { return *preconditioner_; }
+  const mfem::Solver& preconditioner() const
+  {
+    MFEM_VERIFY(preconditioner_, "EquationSolver has no preconditioner");
+    return *preconditioner_;
+  }
 
   /**
    * Input file parameters specific to this class
@@ -304,6 +323,31 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions 
  */
 std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLinearSolverAndPreconditioner(
     LinearSolverOptions linear_opts = {}, MPI_Comm comm = MPI_COMM_WORLD);
+
+/**
+ * @brief Build the linear solver and attach a supplied preconditioner.
+ *
+ * @param linear_opts The options to configure the linear solver
+ * @param preconditioner Custom preconditioner to attach to the linear solver
+ * @param comm The MPI communicator for the supplied HypreParMatrix and HypreParVectors
+ * @return A pair containing the constructed linear solver and supplied preconditioner
+ */
+std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLinearSolverAndPreconditioner(
+    LinearSolverOptions linear_opts, std::unique_ptr<mfem::Solver> preconditioner, MPI_Comm comm = MPI_COMM_WORLD);
+
+/**
+ * @brief Build wrapped sub-solvers for block preconditioners.
+ *
+ * Each sub-block option creates a linear solver and its preconditioner, then
+ * wraps them in SolverWithPreconditioner so the preconditioner lifetime is tied
+ * to the sub-solver.
+ *
+ * @param sub_block_options One linear solver option set per block.
+ * @param comm The MPI communicator for the supplied HypreParMatrix and HypreParVectors.
+ * @return One owned solver per block, ready to pass to a block preconditioner.
+ */
+std::vector<std::unique_ptr<mfem::Solver>> buildBlockPreconditionerSubSolvers(
+    const std::vector<LinearSolverOptions>& sub_block_options, MPI_Comm comm = MPI_COMM_WORLD);
 
 /**
  * @brief Return true if the configured linear solve stack requires block operators to be merged.
