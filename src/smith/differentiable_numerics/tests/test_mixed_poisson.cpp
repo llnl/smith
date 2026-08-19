@@ -1,5 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
@@ -13,6 +20,7 @@
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
+#include "smith/differentiable_numerics/weak_form_block_operator.hpp"
 #include "smith/numerics/block_preconditioner.hpp"
 
 #include "gretl/data_store.hpp"
@@ -112,6 +120,8 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
       "constitutive_eqn", mesh, space(flux), spaces({flux, potential}));
   smith::FunctionalWeakForm<2, Space, smith::Parameters<VectorSpace, Space>> bal_form(
       "balance_eqn", mesh, space(potential), spaces({flux, potential}));
+  smith::FunctionalWeakForm<2, Space, smith::Parameters<Space>> potential_diffusion_form(
+      "potential_diffusion", mesh, space(potential), spaces({potential}));
 
   con_form.addBodyIntegral(DependsOn<0, 1>{}, mesh->entireBodyName(),
                            [](auto /* t */, auto /* x */, auto SIGMA, auto U) {
@@ -132,6 +142,11 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     auto f = 2.0 * pi * pi * sin(pi * x[0]) * sin(pi * x[1]);
     return smith::tuple{-f + div_sigma, smith::zero{}};
   });
+  potential_diffusion_form.addBodyIntegral(DependsOn<0>{}, mesh->entireBodyName(),
+                                           [](auto /* time_info */, auto /* x */, auto U) {
+                                             auto grad_u = get<DERIVATIVE>(U);
+                                             return smith::tuple{smith::zero{}, grad_u};
+                                           });
   // u_exact = sin(M_PI * x(0)) * sin(M_PI * x(1));
   // sigma_exact
   // pi * cos(pi * x(0)) * sin(pi * x(1))
@@ -177,6 +192,8 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   auto time = graph->create_state<double, double>(0.0);
   auto dt = graph->create_state<double, double>(0.025);
   size_t cycle = 0;
+  const auto time_info = smith::TimeInfo(time.get(), dt.get(), cycle);
+  std::unique_ptr<mfem::Solver> diff_precond;
   std::vector<smith::FieldState> params;
   auto& flux_params = params;
   auto& potential_params = params;
@@ -203,7 +220,19 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     case BlockPrecondType::SchurFullCustom:
       linear_options.preconditioner = smith::Preconditioner::BlockSchur;
       linear_options.block_schur_type = smith::BlockSchurType::Full;
-      /// linear_options.schur_approx_type = smith::BlockSchurType::Custom;
+      linear_options.schur_approx_type = smith::SchurApproxType::Custom;
+      {
+        std::vector<smith::BlockProviderOverride> overrides;
+        overrides.push_back(smith::makeWeakFormBlockProviderOverride(
+            1, potential_diffusion_form, shape_disp, {potential}, {1.0}, time_info, potential_bc_manager.get()));
+
+        auto solvers =
+            smith::buildBlockPreconditionerSubSolvers(linear_options.sub_block_linear_solver_options, mesh->getComm());
+
+        diff_precond =
+            std::make_unique<smith::BlockSchurPreconditioner>(std::move(solvers), linear_options.block_schur_type,
+                                                              linear_options.schur_approx_type, std::move(overrides));
+      }
       break;
   }
 
@@ -214,11 +243,13 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   nonlin_opts.max_iterations = 1;
   nonlin_opts.print_level = linear_options.print_level;
 
-  auto nonlinear_block_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
+  auto nonlinear_block_solver =
+      diff_precond ? smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh, std::move(diff_precond))
+                   : smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
 
   auto sols = block_solve({&con_form, &bal_form}, {{0, 1}, {0, 1}}, shape_disp, {con_arguments, bal_arguments},
-                          {flux_params, potential_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
-                          nonlinear_block_solver.get(), {flux_bc_manager.get(), potential_bc_manager.get()});
+                          {flux_params, potential_params}, time_info, nonlinear_block_solver.get(),
+                          {flux_bc_manager.get(), potential_bc_manager.get()});
 
   auto pv_writer = smith::createParaviewWriter(*mesh, sols, physics_name);
   pv_writer.write(0, 0.0, sols);

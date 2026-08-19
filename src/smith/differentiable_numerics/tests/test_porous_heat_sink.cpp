@@ -1,5 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/equation_solver.hpp"
 #include "smith/numerics/solver_config.hpp"
@@ -13,6 +19,7 @@
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
+#include "smith/differentiable_numerics/weak_form_block_operator.hpp"
 #include "smith/numerics/block_preconditioner.hpp"
 
 #include "gretl/data_store.hpp"
@@ -244,6 +251,8 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   auto time = graph->create_state<double, double>(0.0);
   auto dt = graph->create_state<double, double>(0.025);
   size_t cycle = 0;
+  const auto time_info = smith::TimeInfo(time.get(), dt.get(), cycle);
+  std::unique_ptr<mfem::Solver> diff_precond;
   std::vector<smith::FieldState> params;
   auto& T1_params = params;
   auto& T2_params = params;
@@ -290,7 +299,22 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
     case BlockPrecondType::SchurFullCustom:
       linear_options.preconditioner = smith::Preconditioner::BlockSchur;
       linear_options.block_schur_type = smith::BlockSchurType::Full;
-      /// linear_options.schur_approx_type = smith::BlockSchurType::Custom;
+      linear_options.schur_approx_type = smith::SchurApproxType::Custom;
+      {
+        std::vector<double> jacobian_weights{0.0, 1.0, 0.0};
+
+        std::vector<smith::BlockProviderOverride> overrides;
+        overrides.push_back(smith::makeWeakFormBlockProviderOverride(1, T2_form, shape_disp, T2_arguments,
+                                                                     jacobian_weights, time_info,
+                                                                     T2_bc_manager.get()));
+
+        auto solvers =
+            smith::buildBlockPreconditionerSubSolvers(linear_options.sub_block_linear_solver_options, mesh->getComm());
+
+        diff_precond =
+            std::make_unique<smith::BlockSchurPreconditioner>(std::move(solvers), linear_options.block_schur_type,
+                                                              linear_options.schur_approx_type, std::move(overrides));
+      }
       break;
   }
 
@@ -301,11 +325,13 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
   nonlin_opts.max_iterations = 1;
   nonlin_opts.print_level = linear_options.print_level;
 
-  auto nonlinear_block_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
+  auto nonlinear_block_solver =
+      diff_precond ? smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh, std::move(diff_precond))
+                   : smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
 
   auto sols = block_solve({&T1_form, &T2_form}, {{0, 1}, {0, 1}}, shape_disp, {T1_arguments, T2_arguments},
-                          {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
-                          nonlinear_block_solver.get(), {T1_bc_manager.get(), T2_bc_manager.get()});
+                          {T1_params, T2_params}, time_info, nonlinear_block_solver.get(),
+                          {T1_bc_manager.get(), T2_bc_manager.get()});
 
   auto pv_writer = smith::createParaviewWriter(*mesh, sols, physics_name);
   pv_writer.write(0, 0.0, sols);
