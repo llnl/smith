@@ -135,7 +135,7 @@ class BlockPreconditioner : public mfem::Solver, public StateDependentSolver {
   /// @brief Owned MFEM solver for each block.
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
-  // size num_blocks_, nullptr means "use Jacobian diagonal block"
+  /// @brief Per-block operator providers; null entries use the corresponding Jacobian diagonal block.
   std::vector<std::unique_ptr<BlockOperatorProvider>> block_op_providers_;
 };
 
