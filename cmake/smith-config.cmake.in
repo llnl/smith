@@ -189,11 +189,13 @@ if(NOT SMITH_FOUND)
   get_filename_component(SMITH_CMAKE_CONFIG_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
   include(${SMITH_CMAKE_CONFIG_DIR}/BLTSetupTargets.cmake)
 
-  # Tribol
-  if(NOT _tribol_included)
-    find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
-  else()
-    include(${SMITH_CMAKE_CONFIG_DIR}/tribol-targets.cmake)
+  # Tribol (uses BLTSetupTargets.cmake)
+  if(SMITH_USE_TRIBOL)
+    if(NOT _tribol_included)
+      find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+    else()
+      include(${SMITH_CMAKE_CONFIG_DIR}/tribol-targets.cmake)
+    endif()
   endif()
 
   include(${SMITH_CMAKE_CONFIG_DIR}/smith-targets.cmake)
