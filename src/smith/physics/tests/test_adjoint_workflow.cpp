@@ -17,6 +17,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <tribol/common/Parameters.hpp>
 #include <unordered_map>
 #include <vector>
 
@@ -100,7 +101,7 @@ struct EnergyMortarContactCaseConfig {
   ContactOptions options;
   int interaction_id;
 #ifdef SMITH_USE_ENZYME
-  tribol::EnergyMortarEnforcementOption gap_option = tribol::EnergyMortarEnforcementOption::NodalGap;
+  tribol::EnforcementLocation gap_option = tribol::EnforcementLocation::Nodal;
 #endif
 };
 #endif
@@ -242,7 +243,7 @@ std::unique_ptr<BasePhysics> createEnergyMortarContactSolver(std::shared_ptr<Mes
   solid->addContactInteraction(config.interaction_id, {3}, {5}, config.options);
 #ifdef SMITH_USE_ENZYME
   if (config.options.method == ContactMethod::EnergyMortar) {
-    tribol::setEnergyMortarEnforcementOption(config.interaction_id, config.gap_option);
+    tribol::setEnforcementLocation(config.interaction_id, config.gap_option);
   }
 #endif
 
@@ -261,16 +262,15 @@ std::vector<EnergyMortarContactCaseConfig> energyMortarContactCaseConfigs()
                                                                             .penalty = 1.0e-1,
                                                                             .jacobian = ContactJacobian::Exact},
                                                   .interaction_id = 1,
-                                                  .gap_option = tribol::EnergyMortarEnforcementOption::NodalGap});
-  configs.push_back(
-      EnergyMortarContactCaseConfig{.name = "solid_mechanics_contact_energy_mortar_quadrature_point_gaps",
-                                    .options = ContactOptions{.method = ContactMethod::EnergyMortar,
-                                                              .enforcement = ContactEnforcement::Penalty,
-                                                              .type = ContactType::Frictionless,
-                                                              .penalty = 1.0e-1,
-                                                              .jacobian = ContactJacobian::Exact},
-                                    .interaction_id = 2,
-                                    .gap_option = tribol::EnergyMortarEnforcementOption::QuadraturePointGap});
+                                                  .gap_option = tribol::EnforcementLocation::Nodal});
+  configs.push_back(EnergyMortarContactCaseConfig{.name = "solid_mechanics_contact_energy_mortar_quadrature_point_gaps",
+                                                  .options = ContactOptions{.method = ContactMethod::EnergyMortar,
+                                                                            .enforcement = ContactEnforcement::Penalty,
+                                                                            .type = ContactType::Frictionless,
+                                                                            .penalty = 1.0e-1,
+                                                                            .jacobian = ContactJacobian::Exact},
+                                                  .interaction_id = 2,
+                                                  .gap_option = tribol::EnforcementLocation::QuadraturePoint});
 #endif
   return configs;
 }

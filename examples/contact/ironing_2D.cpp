@@ -73,25 +73,25 @@ std::string caseName(IroningCase ironing_case)
   return "square";
 }
 
-tribol::EnergyMortarEnforcementOption parseEnergyMortarGapMode(const std::string& value)
+tribol::EnforcementLocation parseEnergyMortarGapMode(const std::string& value)
 {
   if (value == "nodal") {
-    return tribol::EnergyMortarEnforcementOption::NodalGap;
+    return tribol::EnforcementLocation::Nodal;
   }
   if (value == "quadrature-point") {
-    return tribol::EnergyMortarEnforcementOption::QuadraturePointGap;
+    return tribol::EnforcementLocation::QuadraturePoint;
   }
 
   SLIC_ERROR_ROOT("Unknown EnergyMortar gap mode '" << value << "'. Expected one of: nodal, quadrature-point.");
-  return tribol::EnergyMortarEnforcementOption::NodalGap;
+  return tribol::EnforcementLocation::Nodal;
 }
 
-std::string gapModeOutputName(tribol::EnergyMortarEnforcementOption gap_mode)
+std::string gapModeOutputName(tribol::EnforcementLocation gap_mode)
 {
   switch (gap_mode) {
-    case tribol::EnergyMortarEnforcementOption::NodalGap:
+    case tribol::EnforcementLocation::Nodal:
       return "nodal_gaps";
-    case tribol::EnergyMortarEnforcementOption::QuadraturePointGap:
+    case tribol::EnforcementLocation::QuadraturePoint:
       return "quadrature_point_gaps";
   }
 
@@ -318,11 +318,11 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
-  tribol::setEnergyMortarEnforcementOption(0, gap_mode);
+  tribol::setEnforcementLocation(0, gap_mode);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
-    tribol::setEnergyMortarEnforcementOption(1, gap_mode);
+    tribol::setEnforcementLocation(1, gap_mode);
   }
 
   const std::string paraview_name = config.name + "_paraview";

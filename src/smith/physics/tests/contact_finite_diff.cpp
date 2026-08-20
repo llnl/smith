@@ -36,7 +36,7 @@ class ContactFiniteDiff3D : public testing::TestWithParam<std::pair<ContactEnfor
 
 struct ContactFiniteDiff2DParam {
   ContactEnforcement enforcement;
-  tribol::EnergyMortarEnforcementOption gap_option;
+  tribol::EnforcementLocation gap_option;
   std::string name;
 };
 
@@ -340,7 +340,7 @@ TEST_P(ContactFiniteDiff2D, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
-  tribol::setEnergyMortarEnforcementOption(0, GetParam().gap_option);
+  tribol::setEnforcementLocation(0, GetParam().gap_option);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -415,13 +415,13 @@ INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff3D,
                          testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty"),
                                          std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
 
-INSTANTIATE_TEST_SUITE_P(
-    tribol, ContactFiniteDiff2D,
-    testing::Values(ContactFiniteDiff2DParam{.enforcement = ContactEnforcement::Penalty,
-                                             .gap_option = tribol::EnergyMortarEnforcementOption::NodalGap,
-                                             .name = "penalty_nodal_gap"},
-                    ContactFiniteDiff2DParam{.enforcement = ContactEnforcement::Penalty,
-                                             .gap_option = tribol::EnergyMortarEnforcementOption::QuadraturePointGap,
+INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff2D,
+                         testing::Values(ContactFiniteDiff2DParam{.enforcement = ContactEnforcement::Penalty,
+                                                                  .gap_option = tribol::EnforcementLocation::Nodal,
+                                                                  .name = "penalty_nodal_gap"},
+                                         ContactFiniteDiff2DParam{
+                                             .enforcement = ContactEnforcement::Penalty,
+                                             .gap_option = tribol::EnforcementLocation::QuadraturePoint,
                                              .name = "penalty_quadrature_point_gap"}));
 
 }  // namespace smith

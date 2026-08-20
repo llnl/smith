@@ -30,7 +30,7 @@
 namespace smith {
 
 struct EnergyMortarPatchParam {
-  tribol::EnergyMortarEnforcementOption gap_option;
+  tribol::EnforcementLocation gap_option;
   std::string name;
 };
 
@@ -95,7 +95,7 @@ TEST_P(EnergyMortarPatch, patch)
   solid_solver.setFixedBCs(mesh->domain("y0_faces"), Component::Y);
   solid_solver.setDisplacementBCs(applied_disp_function, mesh->domain("ymax_face"), Component::Y);
   solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
-  tribol::setEnergyMortarEnforcementOption(0, GetParam().gap_option);
+  tribol::setEnforcementLocation(0, GetParam().gap_option);
   solid_solver.completeSetup();
 
   solid_solver.advanceTimestep(1.0);
@@ -140,10 +140,9 @@ TEST_P(EnergyMortarPatch, patch)
 
 INSTANTIATE_TEST_SUITE_P(
     tribol, EnergyMortarPatch,
-    testing::Values(EnergyMortarPatchParam{.gap_option = tribol::EnergyMortarEnforcementOption::NodalGap,
-                                           .name = "nodal_gap"},
-                    EnergyMortarPatchParam{.gap_option = tribol::EnergyMortarEnforcementOption::QuadraturePointGap,
-                                           .name = "quadrature_point_gap"}));
+    testing::Values(EnergyMortarPatchParam{.gap_option = tribol::EnforcementLocation::Nodal, .name = "nodal"},
+                    EnergyMortarPatchParam{.gap_option = tribol::EnforcementLocation::QuadraturePoint,
+                                           .name = "quadrature_point"}));
 
 }  // namespace smith
 
