@@ -9,6 +9,8 @@
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/numerics/stdfunction_operator.hpp"
 #include "smith/numerics/equation_solver.hpp"
+#include "smith/numerics/block_preconditioner.hpp"
+#include "smith/numerics/solver_with_preconditioner.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/physics/mesh.hpp"
 #include "mfem.hpp"
@@ -68,6 +70,57 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
                                                 nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
+void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
+{
+  if (us.empty() || !nonlinear_solver_) return;
+  if (!retained_linear_options_ || retained_linear_options_->preconditioner == Preconditioner::None) return;
+
+  // Pick the field with the highest vdim (typically the displacement field for vector problems).
+  SLIC_ERROR_IF(!us[0], "NonlinearBlockSolver::completeSetup received a null field");
+  const FieldT* best = us[0].get();
+  for (const auto& u : us) {
+    SLIC_ERROR_IF(!u, "NonlinearBlockSolver::completeSetup received a null field");
+    if (u->space().GetVDim() > best->space().GetVDim()) best = u.get();
+  }
+
+  auto* mfem_solver = &nonlinear_solver_->preconditioner();
+
+  auto configure_amg = [](mfem::Solver* s, int vdim) {
+    if (!s) {
+      return;
+    }
+    if (auto* amg = dynamic_cast<mfem::HypreBoomerAMG*>(s)) {
+      amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+      return;
+    }
+    if (auto* wrapped = dynamic_cast<smith::SolverWithPreconditioner*>(s)) {
+      if (auto* amg = dynamic_cast<mfem::HypreBoomerAMG*>(wrapped->preconditioner())) {
+        amg->SetSystemsOptions(vdim, smith::ordering == mfem::Ordering::byNODES);
+      }
+    }
+  };
+
+  // Top-level AMG preconditioner
+  configure_amg(mfem_solver, best->space().GetVDim());
+
+  // Block preconditioners: configure per-block AMG with each block's vdim.
+  if (auto* block_preconditioner = dynamic_cast<smith::BlockPreconditioner*>(mfem_solver)) {
+    for (int i = 0; i < block_preconditioner->numSubSolvers() && static_cast<size_t>(i) < us.size(); ++i) {
+      configure_amg(block_preconditioner->subSolver(i), us[static_cast<size_t>(i)]->space().GetVDim());
+    }
+  }
+
+#ifdef SMITH_USE_PETSC
+  auto* space_dep_pc = dynamic_cast<smith::mfem_ext::PetscPreconditionerSpaceDependent*>(mfem_solver);
+  if (space_dep_pc) {
+    // This call sets the displacement ParFiniteElementSpace used to get the spatial coordinates and to
+    // generate the near null space for the PCGAMG preconditioner
+    auto* space = const_cast<mfem::ParFiniteElementSpace*>(&best->space());
+    space_dep_pc->SetFESpace(space);
+  }
+#endif
+}
+
 ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
                                                           const std::vector<mfem::Vector>& residuals,
                                                           NonlinearConvergenceContext& context) const
@@ -80,35 +133,6 @@ void NonlinearBlockSolver::primeConvergenceContext(const std::vector<mfem::Vecto
                                                    NonlinearConvergenceContext& context) const
 {
   static_cast<void>(convergenceStatus(1.0, residuals, context));
-}
-
-void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
-{
-  if (us.empty() || !nonlinear_solver_) return;
-  if (!retained_linear_options_ || retained_linear_options_->preconditioner == Preconditioner::None) return;
-
-  // Pick the field with the highest vdim (typically the displacement field for vector problems).
-  const FieldT* best = us[0].get();
-  for (const auto& u : us) {
-    if (u->space().GetVDim() > best->space().GetVDim()) best = u.get();
-  }
-
-  auto* mfem_solver = &nonlinear_solver_->preconditioner();
-
-  auto* amg_prec = dynamic_cast<mfem::HypreBoomerAMG*>(mfem_solver);
-  if (amg_prec) {
-    amg_prec->SetSystemsOptions(best->space().GetVDim(), smith::ordering == mfem::Ordering::byNODES);
-  }
-
-#ifdef SMITH_USE_PETSC
-  auto* space_dep_pc = dynamic_cast<smith::mfem_ext::PetscPreconditionerSpaceDependent*>(mfem_solver);
-  if (space_dep_pc) {
-    // This call sets the displacement ParFiniteElementSpace used to get the spatial coordinates and to
-    // generate the near null space for the PCGAMG preconditioner
-    auto* space = const_cast<mfem::ParFiniteElementSpace*>(&best->space());
-    space_dep_pc->SetFESpace(space);
-  }
-#endif
 }
 
 std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
@@ -246,7 +270,10 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solveAdjoi
   auto block_jac = std::make_unique<mfem::BlockOperator>(block_offsets);
   for (int i = 0; i < num_rows; ++i) {
     for (int j = 0; j < num_rows; ++j) {
-      block_jac->SetBlock(i, j, jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)].get());
+      auto& J = jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)];
+      if (J) {
+        block_jac->SetBlock(i, j, J.get());
+      }
     }
   }
 

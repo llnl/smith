@@ -23,6 +23,12 @@ install(
 # Add the conduction examples
 add_subdirectory(conduction)
 
+# Add the solid mechanics examples
+add_subdirectory(solid_mechanics)
+
+# Add the thermo-mechanics examples
+add_subdirectory(thermo_mechanics)
+
 # Add the contact examples
 add_subdirectory(contact)
 
@@ -40,3 +46,6 @@ add_subdirectory(uniaxial)
 
 # Add the inertia relief example
 add_subdirectory(inertia_relief)
+
+# Add the obstacle design example
+add_subdirectory(obstacle_design)
