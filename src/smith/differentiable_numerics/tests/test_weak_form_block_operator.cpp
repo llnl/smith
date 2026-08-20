@@ -95,13 +95,14 @@ TEST_F(WeakFormBlockOperatorTest, FixedOverrideProvidesWeakFormOperator)
   EXPECT_EQ(op.Width(), field.get()->Size());
 }
 
-// Verifies state-dependent provider overrides refresh the weak-form fields before assembly.
+// Verifies state-dependent provider overrides refresh scratch fields without mutating graph-owned fields.
 TEST_F(WeakFormBlockOperatorTest, StateDependentOverrideUpdatesFromStateBlock)
 {
   const std::string physics_name = "weak_form_block_operator_state_dependent";
   initialize(physics_name);
   auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
   auto field = createFieldState(*graph, ScalarSpace{}, physics_name + "_field", mesh->tag());
+  *field.get() = 2.0;
   ScalarWeakForm weak_form("quadratic_mass", mesh, space(field), spaces({field}));
   addQuadraticMassIntegral(weak_form, mesh);
 
@@ -129,6 +130,9 @@ TEST_F(WeakFormBlockOperatorTest, StateDependentOverrideUpdatesFromStateBlock)
 
   EXPECT_GT(first_norm, 0.0);
   EXPECT_GT(second_norm, first_norm);
+  for (int i = 0; i < field.get()->Size(); ++i) {
+    EXPECT_DOUBLE_EQ((*field.get())[i], 2.0);
+  }
 }
 
 }  // namespace

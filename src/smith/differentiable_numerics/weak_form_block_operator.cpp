@@ -8,8 +8,10 @@
 
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/weak_form.hpp"
 
 namespace smith {
@@ -22,6 +24,26 @@ mfem::Array<int> copyEssentialTrueDofs(const BoundaryConditionManager* bc_manage
     return mfem::Array<int>();
   }
   return bc_manager->allEssentialTrueDofs();
+}
+
+std::vector<FiniteElementState> copyFieldValues(const std::vector<FieldState>& fields)
+{
+  std::vector<FiniteElementState> field_values;
+  field_values.reserve(fields.size());
+  for (const auto& field : fields) {
+    field_values.emplace_back(*field.get());
+  }
+  return field_values;
+}
+
+std::vector<const FiniteElementState*> getConstOperatorFieldPointers(const std::vector<FiniteElementState>& fields)
+{
+  std::vector<const FiniteElementState*> pointers;
+  pointers.reserve(fields.size());
+  for (const auto& field : fields) {
+    pointers.push_back(&field);
+  }
+  return pointers;
 }
 
 class WeakFormBlockOperatorBuilder {
@@ -40,10 +62,20 @@ class WeakFormBlockOperatorBuilder {
     validate();
   }
 
-  std::unique_ptr<mfem::HypreParMatrix> build() const
+  std::unique_ptr<mfem::HypreParMatrix> build() const { return build(smith::getConstFieldPointers(fields_)); }
+
+  std::unique_ptr<mfem::HypreParMatrix> updateAndBuild(const mfem::Vector& state,
+                                                       const mfem::Array<int>& block_offsets) const
   {
-    auto op =
-        weak_form_.jacobian(time_info_, shape_disp_.get().get(), getConstFieldPointers(fields_), jacobian_weights_);
+    auto operator_fields = copyFieldValues(fields_);
+    updateFieldsFromState(operator_fields, state, block_offsets);
+    return build(getConstOperatorFieldPointers(operator_fields));
+  }
+
+ private:
+  std::unique_ptr<mfem::HypreParMatrix> build(const std::vector<const FiniteElementState*>& fields) const
+  {
+    auto op = weak_form_.jacobian(time_info_, shape_disp_.get().get(), fields, jacobian_weights_);
     if (!op) {
       throw std::invalid_argument("Weak-form operator builder received a null weak-form Jacobian");
     }
@@ -51,13 +83,6 @@ class WeakFormBlockOperatorBuilder {
     return op;
   }
 
-  std::unique_ptr<mfem::HypreParMatrix> updateAndBuild(const mfem::Vector& state, const mfem::Array<int>& block_offsets)
-  {
-    updateFieldsFromState(state, block_offsets);
-    return build();
-  }
-
- private:
   void validate() const
   {
     if (jacobian_weights_.size() != fields_.size()) {
@@ -73,7 +98,8 @@ class WeakFormBlockOperatorBuilder {
     }
   }
 
-  void updateFieldsFromState(const mfem::Vector& state, const mfem::Array<int>& block_offsets)
+  void updateFieldsFromState(std::vector<FiniteElementState>& fields, const mfem::Vector& state,
+                             const mfem::Array<int>& block_offsets) const
   {
     for (const auto& binding : state_block_bindings_) {
       MFEM_VERIFY(binding.block_index + 1 < block_offsets.Size(), "Weak-form operator state block is out of range");
@@ -83,13 +109,13 @@ class WeakFormBlockOperatorBuilder {
       MFEM_VERIFY(block_begin >= 0 && block_size >= 0 && block_begin + block_size <= state.Size(),
                   "Weak-form operator block offsets are inconsistent with the state size");
 
-      FieldState& field = fields_[static_cast<size_t>(binding.field_index)];
-      MFEM_VERIFY(field.get()->Size() == block_size,
+      FiniteElementState& field = fields[static_cast<size_t>(binding.field_index)];
+      MFEM_VERIFY(field.Size() == block_size,
                   "Weak-form operator cannot update a field from a block with incompatible size");
 
       mfem::Vector block_view;
       block_view.MakeRef(const_cast<mfem::Vector&>(state), block_begin, block_size);
-      *field.get() = block_view;
+      field = block_view;
     }
   }
 
@@ -140,7 +166,7 @@ StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm
 {
   WeakFormBlockOperatorBuilder builder(weak_form, std::move(shape_disp), std::move(fields), std::move(jacobian_weights),
                                        time_info, std::move(ess_tdofs), std::move(state_block_bindings));
-  return [builder = std::move(builder)](const mfem::Vector& state, const mfem::Array<int>& block_offsets) mutable {
+  return [builder = std::move(builder)](const mfem::Vector& state, const mfem::Array<int>& block_offsets) {
     return builder.updateAndBuild(state, block_offsets);
   };
 }
