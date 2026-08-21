@@ -72,51 +72,72 @@ const mfem::DenseMatrix C = []() {
   return C_mat;
 }();
 
-const std::function stiffness_linear = [](const mfem::Vector& /*x*/) -> mfem::DenseMatrix {
-  mfem::DenseMatrix K(3, 3);
-  K(0, 0) = 1.0;
-  K(0, 1) = -1.0;
-  K(0, 2) = 0.0;
+struct StiffnessLinear
+{
+  mfem::DenseMatrix operator()(const mfem::Vector& /*x*/) const
+  {
+    mfem::DenseMatrix K(3, 3);
+    K(0, 0) = 1.0;
+    K(0, 1) = -1.0;
+    K(0, 2) = 0.0;
 
-  K(1, 0) = -1.0;
-  K(1, 1) = 2.0;
-  K(1, 2) = -1.0;
+    K(1, 0) = -1.0;
+    K(1, 1) = 2.0;
+    K(1, 2) = -1.0;
 
-  K(2, 0) = 0.0;
-  K(2, 1) = -1.0;
-  K(2, 2) = 1.0;
-  return K;
+    K(2, 0) = 0.0;
+    K(2, 1) = -1.0;
+    K(2, 2) = 1.0;
+    return K;
+  }
 };
 
-const std::function internal_force_linear = [](const mfem::Vector& x) -> mfem::Vector {
-  mfem::Vector force(x.Size());
-  stiffness_linear(x).Mult(x, force);
-  return force;
+struct InternalForceLinear
+{
+  mfem::Vector operator()(const mfem::Vector& x) const
+  {
+    mfem::Vector force(x.Size());
+    StiffnessLinear{}(x).Mult(x, force);
+    return force;
+  }
 };
 
-const std::function stiffness_nonlinear = [](const mfem::Vector& x) -> mfem::DenseMatrix {
-  mfem::DenseMatrix K(3, 3);
-  K(0, 0) = 1.0;
-  K(0, 1) = -1.0;
-  K(0, 2) = 0.0;
+struct StiffnessNonlinear
+{
+  mfem::DenseMatrix operator()(const mfem::Vector& x) const
+  {
+    mfem::DenseMatrix K(3, 3);
+    K(0, 0) = 1.0;
+    K(0, 1) = -1.0;
+    K(0, 2) = 0.0;
 
-  K(1, 0) = -1.0;
-  K(1, 1) = 2.0 - 2 * x(1) + x(2);
-  K(1, 2) = -1.0 + x(1);
+    K(1, 0) = -1.0;
+    K(1, 1) = 2.0 - 2 * x(1) + x(2);
+    K(1, 2) = -1.0 + x(1);
 
-  K(2, 0) = 0.0;
-  K(2, 1) = -1.0 + x(2);
-  K(2, 2) = 1.0 + x(1) + x(2);
-  return K;
+    K(2, 0) = 0.0;
+    K(2, 1) = -1.0 + x(2);
+    K(2, 2) = 1.0 + x(1) + x(2);
+    return K;
+  }
 };
 
-const std::function internal_force_nonlinear = [](const mfem::Vector& x) -> mfem::Vector {
-  mfem::Vector f(3);
-  f(0) = x(0) - x(1);
-  f(1) = (2.0 - x(1)) * x(1) + (x(1) - 1.0) * x(2) - x(0);
-  f(2) = x(1) * (x(2) - 1.0) + (1.0 + 0.5 * x(2)) * x(2);
-  return f;
+struct InternalForceNonlinear
+{
+  mfem::Vector operator()(const mfem::Vector& x) const
+  {
+    mfem::Vector f(3);
+    f(0) = x(0) - x(1);
+    f(1) = (2.0 - x(1)) * x(1) + (x(1) - 1.0) * x(2) - x(0);
+    f(2) = x(1) * (x(2) - 1.0) + (1.0 + 0.5 * x(2)) * x(2);
+    return f;
+  }
 };
+
+const StiffnessLinear stiffness_linear{};
+const InternalForceLinear internal_force_linear{};
+const StiffnessNonlinear stiffness_nonlinear{};
+const InternalForceNonlinear internal_force_nonlinear{};
 
 const mfem::Vector f_ext = []() {
   mfem::Vector f(3);

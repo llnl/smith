@@ -94,6 +94,23 @@ class LumpedMassExplicitNewmark {
   std::shared_ptr<BoundaryConditionManager> bc_manager_;
 };
 
+/// Computes the lumped mass body integral contribution at a quadrature point.
+template <int MassDim, int SpatialDim>
+struct SolidMassBodyIntegral
+{
+  SMITH_HOST_DEVICE auto operator()(mfem::future::tensor<mfem::real_t, SpatialDim, SpatialDim> dX_dxi,
+                                    mfem::real_t weight, double rho) const
+  {
+    mfem::future::tensor<mfem::real_t, MassDim> ones{};
+    for (int i = 0; i < MassDim; ++i) {
+      ones[i] = 1.0;
+    }
+
+    auto J = mfem::future::det(dX_dxi) * weight;
+    return mfem::future::tuple{rho * ones * J};
+  }
+};
+
 template <int MassDim, int SpatialDim>
 auto create_solid_mass_weak_form(const std::string& physics_name, std::shared_ptr<smith::Mesh>& mesh,
                                  const FiniteElementState& lumped_field, const FiniteElementState& density,
@@ -116,13 +133,8 @@ auto create_solid_mass_weak_form(const std::string& physics_name, std::shared_pt
   mfem::future::tuple<mfem::future::Value<TEST>> mass_integral_outputs{};
 
   residual->addBodyIntegral(
-      mesh->mfemParMesh().attributes,
-      [](mfem::future::tensor<mfem::real_t, SpatialDim, SpatialDim> dX_dxi, mfem::real_t weight, double rho) {
-        auto ones = mfem::future::make_tensor<MassDim>([](int) { return 1.0; });
-        auto J = mfem::future::det(dX_dxi) * weight;
-        return mfem::future::tuple{rho * ones * J};
-      },
-      mass_integral_inputs, mass_integral_outputs, ir, std::index_sequence<>{});
+      mesh->mfemParMesh().attributes, SolidMassBodyIntegral<MassDim, SpatialDim>{}, mass_integral_inputs,
+      mass_integral_outputs, ir, std::index_sequence<>{});
   return residual;
 }
 
