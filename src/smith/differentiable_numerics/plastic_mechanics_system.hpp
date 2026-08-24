@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file electro_mechanics_system.hpp
- * @brief Defines the ElectroMechanicsystem struct and its factory function
+ * @file plastic_mechanics_system.hpp
+ * @brief Defines the PlasticMechanicsystem struct and its factory function
  */
 
 #pragma once
@@ -16,9 +16,8 @@
 #include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/multiphysics_time_integrator.hpp"
 #include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
 #include "smith/differentiable_numerics/differentiable_physics.hpp"
-#include "smith/physics/weak_form.hpp"
+#include "smith/physics/functional_weak_form.hpp"
 #include "smith/differentiable_numerics/system_base.hpp"
 
 namespace smith {
@@ -30,32 +29,33 @@ namespace smith {
  *
  * This system rely on a fixed-point iteration to solve plasticity equivalent to the traditional
  * inner-outer Newton method.
- * n \in [0, N] denotes the timestep and k \in [0, L] denotes the fixed-point iteration count.
+ * n in [0, N] denotes the timestep and k in [0, L] denotes the fixed-point iteration count.
  * At every new timestep n+1, first predict new displacement by [u^{n+1,k}, Fp^{n+1,k}, epsilon_p^{n+1,k}] --->
  * u^{n+1,k+1}. Then update internal state variables [u^{n+1,k+1}, Fp^n, epsilon_p^n] ---> [Fp^{n+1,k+1},
  * epsilon_p^{n+1,k+1}].
  */
 template <int dim, int disp_order, typename... parameter_space>
 struct PlasticMechanicsSystem : public SystemBase {
+  using SystemBase::SystemBase;
   // Primary weak forms to solve for displacement
   /// @brief using for SolidWeakFormType with inputs [u^{n+1, k+1}, Fp^{n+1, k}, epsilon_p^{n+1, k}]
-  using SolidWeakFormType = TimeDiscretizedWeakForm<
+  using SolidWeakFormType = FunctionalWeakForm<
       dim, H1<disp_order, dim>,
       Parameters<H1<disp_order, dim>, L2<disp_order, dim * dim>, L2<disp_order>, parameter_space...>>;
 
   /// @brief using for PlasticDeformWeakFormType with inputs [Fp^{n+1, k+1}, Fp^n, epsilon_p^{n+1, k+1}, epsilon_p^n,
   /// u^{n+1, k+1}]
   using PlasticDeformWeakFormType =
-      TimeDiscretizedWeakForm<dim, L2<disp_order, dim * dim>,
-                              Parameters<L2<disp_order, dim * dim>, L2<disp_order, dim * dim>, L2<disp_order>,
-                                         L2<disp_order>, H1<disp_order, dim>, parameter_space...>>;
+      FunctionalWeakForm<dim, L2<disp_order, dim * dim>,
+                         Parameters<L2<disp_order, dim * dim>, L2<disp_order, dim * dim>, L2<disp_order>,
+                                    L2<disp_order>, H1<disp_order, dim>, parameter_space...>>;
 
   /// @brief using for PlasticStrainWeakFormType with inputs [epsilon_p^{n+1, k+1}, epsilon_p^n, Fp^{n+1, k+1}, Fp^n,
   /// u^{n+1, k+1}]
   using PlasticStrainWeakFormType =
-      TimeDiscretizedWeakForm<dim, L2<disp_order>,
-                              Parameters<L2<disp_order>, L2<disp_order>, L2<disp_order, dim * dim>,
-                                         L2<disp_order, dim * dim>, H1<disp_order, dim>, parameter_space...>>;
+      FunctionalWeakForm<dim, L2<disp_order>,
+                         Parameters<L2<disp_order>, L2<disp_order>, L2<disp_order, dim * dim>,
+                                    L2<disp_order, dim * dim>, H1<disp_order, dim>, parameter_space...>>;
 
   // Primary weak forms
   std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
@@ -68,13 +68,16 @@ struct PlasticMechanicsSystem : public SystemBase {
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.
 
   // Internal variable bcs
-  std::shared_ptr<DirichletBoundaryConditions> plastic_deform_bc;
-  std::shared_ptr<DirichletBoundaryConditions> plastic_strain_bc;
+  std::shared_ptr<DirichletBoundaryConditions> plastic_deform_bc;  ///< Plastic deformation gradient conditions.
+  std::shared_ptr<DirichletBoundaryConditions> plastic_strain_bc;  ///< Plastic strain conditions
 
-  std::shared_ptr<QuasiStaticRule> qusistatic_time_rule;
-  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule> backward_euler_time_rule;
+  std::shared_ptr<QuasiStaticRule> quasistatic_time_rule;  ///< Quasistatic time integration rule
+  std::shared_ptr<BackwardEulerFirstOrderTimeIntegrationRule>
+      backward_euler_time_rule;  ///< Backward euler time integration rule
 
-  // Helper functions for plastic deformation gradient bookkeeping
+  /**
+   * @brief Transform tensor variable stored as [dim * dim, 1] to [dim, dim]
+   */
   template <typename T>
   SMITH_HOST_DEVICE tensor<T, dim, dim> recoverTensor(const tensor<T, dim * dim> F_state)
   {
@@ -89,6 +92,9 @@ struct PlasticMechanicsSystem : public SystemBase {
     return F_state_tensor;
   }
 
+  /**
+   * @brief Transform tensor variable stored as [dim, dim] to [dim * dim, 1]
+   */
   template <typename T>
   SMITH_HOST_DEVICE tensor<T, dim * dim> flattenTensor(const tensor<T, dim, dim> F_state)
   {
@@ -104,31 +110,14 @@ struct PlasticMechanicsSystem : public SystemBase {
   }
 
   /**
-   * @brief Get the list of all state fields.
-   * @return std::vector<FieldState> List of state fields.
-   */
-  std::vector<FieldState> getStateFields() const
-  {
-    std::vector<FieldState> states;
-    states.push_back(field_store->getField(prefix("displacement")));
-
-    // Internal states
-    states.push_back(field_store->getField(prefix("plastic_defgrad")));
-    states.push_back(field_store->getField(prefix("plastic_defgrad_old")));
-    states.push_back(field_store->getField(prefix("plastic_strain")));
-    states.push_back(field_store->getField(prefix("plastic_strain_old")));
-
-    return states;
-  }
-
-  /**
    * @brief Get the list of physical state fields for visualization.
    * @return std::vector<FieldState> List of physical fields suitable for output.
    */
   std::vector<FieldState> getOutputFieldStates() const
   {
-    return {field_store->getField(prefix("displacement")), field_store->getField(prefix("plastic_defgrad")),
-            field_store->getField(prefix("plastic_strain"))};
+    return {field_store->getField(field_store->prefix("displacement")),
+            field_store->getField(field_store->prefix("plastic_defgrad")),
+            field_store->getField(field_store->prefix("plastic_strain"))};
   }
 
   /**
@@ -137,26 +126,14 @@ struct PlasticMechanicsSystem : public SystemBase {
    */
   std::vector<ReactionInfo> getReactionInfos() const
   {
-    return {{prefix("solid_force"), &field_store->getField(prefix("displacement")).get()->space()}};
-  }
-
-  /**
-   * @brief Create a DifferentiablePhysics object for this system.
-   * @param physics_name The name of the physics.
-   * @return std::shared_ptr<DifferentiablePhysics> The differentiable physics object.
-   */
-  std::shared_ptr<DifferentiablePhysics> createDifferentiablePhysics(std::string physics_name)
-  {
-    return std::make_shared<DifferentiablePhysics>(field_store->getMesh(), field_store->graph(),
-                                                   field_store->getShapeDisp(), getStateFields(), getParameterFields(),
-                                                   advancer, physics_name, getReactionInfos());
+    return {{field_store->prefix("solid_force"), &field_store->getField(field_store->prefix("displacement")).get()->space()}};
   }
 
   /**
    * @brief Set the material model for a domain, defining integrals for weak form.
    * @tparam MaterialType The material model type.
-   * @param material The material model instance.
    * @param domain_name The name of the domain to apply the material to.
+   * @param mat The material model instance.
    */
   template <typename MaterialType>
   void setMaterial(const std::string& domain_name, const MaterialType& mat)
@@ -176,8 +153,8 @@ struct PlasticMechanicsSystem : public SystemBase {
   /**
    * @brief Set the plasticity update model for a domain, defining integrals for weak form.
    * @tparam MaterialType The material model type.
-   * @param material The material model instance.
    * @param domain_name The name of the domain to apply the material to.
+   * @param mat The material model instance.
    */
   template <typename MaterialType>
   void setPlasticity(const std::string& domain_name, const MaterialType& mat)
@@ -217,8 +194,8 @@ struct PlasticMechanicsSystem : public SystemBase {
  * @brief Factory function to build a chemomechanics system with L2 state variables.
  */
 template <int dim, int disp_order, typename... parameter_space>
-PlasticMechanicsSystem<dim, disp_order, parameter_space...> buildPlasticMechanicsSystem(
-    std::shared_ptr<Mesh> mesh, std::shared_ptr<CoupledSystemSolver> solver, std::string prepend_name = "",
+std::shared_ptr<PlasticMechanicsSystem<dim, disp_order, parameter_space...>> buildPlasticMechanicsSystem(
+    std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
   auto field_store = std::make_shared<FieldStore>(mesh, 100);
@@ -252,9 +229,14 @@ PlasticMechanicsSystem<dim, disp_order, parameter_space...> buildPlasticMechanic
       field_store->addDependent(plastic_strain_type, FieldStore::TimeDerivative::VAL, prefix("plastic_strain_old"));
 
   // Parameters
-  std::vector<FieldState> parameter_fields;
-  (field_store->addParameter(FieldType<parameter_space>(prefix("param_" + parameter_types.name))), ...);
-  (parameter_fields.push_back(field_store->getField(prefix("param_" + parameter_types.name))), ...);
+  auto register_parameter = [&](auto& parameter_type) {
+    parameter_type.name = prefix("param_" + parameter_type.name);
+    field_store->addParameter(parameter_type);
+  };
+
+  if constexpr (sizeof...(parameter_space) > 0) {
+    (register_parameter(parameter_types), ...);
+  }
 
   using SystemType = PlasticMechanicsSystem<dim, disp_order, parameter_space...>;
 
@@ -263,35 +245,38 @@ PlasticMechanicsSystem<dim, disp_order, parameter_space...> buildPlasticMechanic
   auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(solid_res_name, disp_type.name, disp_type, plastic_defgrad_type, plastic_strain_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+                                parameter_types...));
 
   std::string plastic_defgrad_res_name = prefix("plastic_defgrad_residual");
   auto plastic_defgrad_weak_form = std::make_shared<typename SystemType::PlasticDeformWeakFormType>(
       plastic_defgrad_res_name, field_store->getMesh(), field_store->getField(plastic_defgrad_type.name).get()->space(),
       field_store->createSpaces(plastic_defgrad_res_name, plastic_defgrad_type.name, plastic_defgrad_type,
                                 plastic_defgrad_old_type, plastic_strain_type, plastic_strain_old_type, disp_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+                                parameter_types...));
 
   std::string plastic_strain_res_name = prefix("plastic_strain_residual");
   auto plastic_strain_weak_form = std::make_shared<typename SystemType::PlasticStrainWeakFormType>(
       plastic_strain_res_name, field_store->getMesh(), field_store->getField(plastic_strain_type.name).get()->space(),
       field_store->createSpaces(plastic_strain_res_name, plastic_strain_type.name, plastic_strain_type,
                                 plastic_strain_old_type, plastic_defgrad_type, plastic_defgrad_old_type, disp_type,
-                                FieldType<parameter_space>(prefix("param_" + parameter_types.name))...));
+                                parameter_types...));
 
   // Build solver and advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, plastic_defgrad_weak_form,
                                                     plastic_strain_weak_form};
-  auto advancer = std::make_shared<MultiphysicsTimeIntegrator>(field_store, weak_forms, solver);
 
-  return SystemType{{field_store, solver, advancer, parameter_fields, prepend_name},
-                    solid_weak_form,
-                    plastic_defgrad_weak_form,
-                    plastic_strain_weak_form,
-                    disp_bc,
-                    plastic_defgrad_bc,
-                    plastic_strain_bc,
-                    quasistatic_time_rule,
-                    backward_euler_time_rule};
+  auto sys =
+      std::make_shared<SystemType>(field_store, solver, weak_forms);
+  
+  sys->solid_weak_form = solid_weak_form;
+  sys->plastic_deform_weak_form = plastic_defgrad_weak_form;
+  sys->plastic_strain_weak_form = plastic_strain_weak_form;
+  sys->disp_bc = disp_bc;
+  sys->plastic_deform_bc = plastic_defgrad_bc;
+  sys->plastic_strain_bc = plastic_strain_bc;
+  sys->quasistatic_time_rule = quasistatic_time_rule;
+  sys->backward_euler_time_rule = backward_euler_time_rule;
+
+  return sys;
 }
 }  // namespace smith

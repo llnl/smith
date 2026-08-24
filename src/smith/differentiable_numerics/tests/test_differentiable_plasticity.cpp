@@ -128,7 +128,7 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
   const std::string meshtag = "mesh";
   auto mesh = std::make_shared<Mesh>(buildMeshFromFile(filename), meshtag, serial_refinement, parallel_refinement);
 
-  auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(50);
+  auto staggered_coupled_solver = std::make_shared<SystemSolver>(50);
   auto primal_block_solver = buildNonlinearBlockSolver(primal_nonlin_opts, primal_lin_opts, *mesh);
   auto strain_block_solver = buildNonlinearBlockSolver(state_nonlin_opts, state_lin_opts, *mesh);
   auto defgrad_block_solver = buildNonlinearBlockSolver(state_nonlin_opts, state_lin_opts, *mesh);
@@ -143,12 +143,12 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
   Hardening hardening{.sigma_y = 40.0, .Hi = 50.0, .eta = 0.0};
   DifferentiableJ2SmallStrain<dim, Hardening> mat(hardening, 1e+4, 0.25, 5.0, 1.0);
 
-  plastic_mechanics_system.setMaterial(mesh->entireBodyName(), mat);
-  plastic_mechanics_system.setPlasticity(mesh->entireBodyName(), mat);
+  plastic_mechanics_system->setMaterial(mesh->entireBodyName(), mat);
+  plastic_mechanics_system->setPlasticity(mesh->entireBodyName(), mat);
 
   // prescribe zero displacement at the supported end of the beam,
   mesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
-  plastic_mechanics_system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("support"));
+  plastic_mechanics_system->disp_bc->setFixedVectorBCs<dim>(mesh->domain("support"));
 
   // apply a displacement along z to the the tip of the beam
   mesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
@@ -157,13 +157,15 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
     u[2] = t * (t - 1);
     return u;
   };
-  plastic_mechanics_system.disp_bc->setVectorBCs<dim>(mesh->domain("tip"), {2}, translated_in_z);
+  plastic_mechanics_system->disp_bc->setVectorBCs<dim>(mesh->domain("tip"), {2}, translated_in_z);
 
   double dt = 0.1;
   double time = 0.0;
-  auto shape_disp = plastic_mechanics_system.field_store->getShapeDisp();
-  auto states = plastic_mechanics_system.getStateFields();
-  auto params = plastic_mechanics_system.getParameterFields();
+  auto shape_disp = plastic_mechanics_system->field_store->getShapeDisp();
+  auto states = plastic_mechanics_system->field_store->getStateFields();
+  auto params = plastic_mechanics_system->field_store->getParameterFields();
+
+  auto advancer = makeAdvancer(plastic_mechanics_system);
 
   auto pv_writer = createParaviewWriter(*mesh, states, "J2_small_strain");
   pv_writer.write(0, 0.0, states);
@@ -171,12 +173,13 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
   std::vector<ReactionState> reactions;
   for (size_t step = 0; step < 10; ++step) {
     std::tie(states, reactions) =
-        plastic_mechanics_system.advancer->advanceState(TimeInfo(time, dt, step), shape_disp, states, params);
+        advancer->advanceState(TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
     pv_writer.write(step + 1, time, states);
   }
 
-  auto displacement = plastic_mechanics_system.field_store->getField(plastic_mechanics_system.prefix("displacement"));
+  auto displacement = plastic_mechanics_system->field_store->getField(
+      plastic_mechanics_system->field_store->prefix("displacement"));
   double final_disp_l2 = norm(*displacement.get(), 2.0);
   EXPECT_GT(final_disp_l2, 0.0);
 }
@@ -280,7 +283,7 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   const std::string meshtag = "mesh";
   auto mesh = std::make_shared<Mesh>(buildMeshFromFile(filename), meshtag, serial_refinement, parallel_refinement);
 
-  auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(100);
+  auto staggered_coupled_solver = std::make_shared<SystemSolver>(100);
   auto primal_block_solver = buildNonlinearBlockSolver(primal_nonlin_opts, primal_lin_opts, *mesh);
   auto strain_block_solver = buildNonlinearBlockSolver(state_nonlin_opts, state_lin_opts, *mesh);
   auto defgrad_block_solver = buildNonlinearBlockSolver(state_nonlin_opts, state_lin_opts, *mesh);
@@ -296,12 +299,12 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   Hardening hardening{.sigma_y = 25.0, .Hi = 50.0, .eta = 0.0};
   ParameterizedDifferentiableJ2SmallStrain<dim, Hardening> mat(hardening, 1.5e+4, 0.25, 500.0, 1.0);
 
-  plastic_mechanics_system.setMaterial(mesh->entireBodyName(), mat);
-  plastic_mechanics_system.setPlasticity(mesh->entireBodyName(), mat);
+  plastic_mechanics_system->setMaterial(mesh->entireBodyName(), mat);
+  plastic_mechanics_system->setPlasticity(mesh->entireBodyName(), mat);
 
   // prescribe zero displacement at the supported end of the beam,
   mesh->addDomainOfBoundaryElements("support", by_attr<dim>(1));
-  plastic_mechanics_system.disp_bc->setFixedVectorBCs<dim>(mesh->domain("support"));
+  plastic_mechanics_system->disp_bc->setFixedVectorBCs<dim>(mesh->domain("support"));
 
   // apply a displacement along z to the the tip of the beam
   mesh->addDomainOfBoundaryElements("tip", by_attr<dim>(2));
@@ -310,10 +313,11 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
     u[2] = t;
     return u;
   };
-  plastic_mechanics_system.disp_bc->setVectorBCs<dim>(mesh->domain("tip"), {2}, translated_in_z);
+  plastic_mechanics_system->disp_bc->setVectorBCs<dim>(mesh->domain("tip"), {2}, translated_in_z);
 
-  std::shared_ptr<DifferentiablePhysics> differentiable_plasticity =
-      plastic_mechanics_system.createDifferentiablePhysics(physics_name);
+  auto advancer = makeAdvancer(plastic_mechanics_system);
+  std::unique_ptr<DifferentiablePhysics> differentiable_plasticity =
+      makeDifferentiablePhysics(plastic_mechanics_system, advancer, physics_name);
 
   auto pv_writer = createParaviewWriter(*mesh, differentiable_plasticity->getFieldStatesAndParamStates(), physics_name,
                                         smith::ParaviewWriter::Options{.write_duals = false});
@@ -326,10 +330,11 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
                     differentiable_plasticity->getFieldStatesAndParamStates());
   }
 
-  auto shape_disp = plastic_mechanics_system.field_store->getShapeDisp();
-  auto params = plastic_mechanics_system.getParameterFields();
+  auto shape_disp = plastic_mechanics_system->field_store->getShapeDisp();
+  auto params = plastic_mechanics_system->field_store->getParameterFields();
 
-  auto displacement = plastic_mechanics_system.field_store->getField(plastic_mechanics_system.prefix("displacement"));
+  auto displacement = plastic_mechanics_system->field_store->getField(
+      plastic_mechanics_system->field_store->prefix("displacement"));
   auto disp_squared = 0.5 * innerProduct(displacement, displacement);
   gretl::set_as_objective(disp_squared);
 

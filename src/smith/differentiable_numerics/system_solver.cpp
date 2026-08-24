@@ -75,6 +75,8 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
 
   size_t num_residuals = residual_evals.size();
+  // const bool trace_plasticity =
+  //     num_residuals == 3 && residual_evals[1]->name().find("plastic_defgrad_residual") != std::string::npos;
   std::vector<Stage> active_stages = stages_;
   for (auto& stage : active_stages) {
     if (stage.block_indices.empty()) {
@@ -107,6 +109,14 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
 
   // Working copy of states, updated in-place as stages solve
   std::vector<std::vector<FieldState>> current_states = states;
+
+  // auto trace_row = [&](const char* location, size_t row) {
+  //   for (size_t slot = 0; slot < current_states[row].size(); ++slot) {
+  //     const auto& state = current_states[row][slot];
+  //     SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] {} row={} slot={} name={} norm={:.16e}", location, row,
+  //                                     slot, state.get()->name(), state.get()->Norml2()));
+  //   }
+  // };
 
   // Pre-compute name -> (row, slot) routing so the propagation loop avoids O(N*M) string compares
   // on every staggered iteration. Field-name identity within current_states is invariant across
@@ -182,6 +192,16 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         stage_block_indices.push_back(row_indices);
       }
 
+      // // The plastic mechanics system orders its blocks as displacement, plastic deformation
+      // // gradient, and plastic strain. Trace the deformation-gradient inputs after the strain
+      // // stage should have propagated its updated state.
+      // if (trace_plasticity && stage.block_indices.size() == 1 && stage.block_indices[0] == 1) {
+      //   trace_row("before Fp solve", 1);
+      //   auto residual = eval_residual_and_zero_bcs(1);
+      //   SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] Fp residual norm before solve={:.16e}",
+      //                                   residual.Norml2()));
+      // }
+
       std::vector<FieldState> stage_solutions =
           block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
                       stage.solver.get(), stage_bc_managers);
@@ -200,11 +220,29 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         }
 
         auto it = field_routing.find(new_state.get()->name());
+        // if (trace_plasticity && global_col == 2) {
+        //   SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] solved strain name={} norm={:.16e}",
+        //                                   new_state.get()->name(), new_state.get()->Norml2()));
+        //   if (it == field_routing.end()) {
+        //     SLIC_INFO_ROOT("[plastic-debug] no routing entry for solved strain");
+        //   } else {
+        //     for (const auto& [row, slot] : it->second) {
+        //       SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] strain routes to row={} slot={}", row, slot));
+        //     }
+        //   }
+        // }
         if (it != field_routing.end()) {
           for (const auto& [r, slot] : it->second) {
             current_states[r][slot] = new_state;
           }
         }
+        // if (trace_plasticity && global_col == 2) {
+        //   trace_row("after strain routing", 1);
+        // }
+        // if (trace_plasticity && global_col == 1) {
+        //   SLIC_INFO_ROOT(
+        //       axom::fmt::format("[plastic-debug] solved Fp norm={:.16e}", new_state.get()->Norml2()));
+        // }
       }
     }
 
