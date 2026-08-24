@@ -165,6 +165,9 @@ if(_mfem_uses_openmp)
     target_link_libraries(mfem INTERFACE blt::openmp)
 endif()
 
+unset(_mfem_uses_mpi)
+unset(_mfem_uses_openmp)
+
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set MFEM_FOUND to TRUE
 # if all listed variables are TRUE

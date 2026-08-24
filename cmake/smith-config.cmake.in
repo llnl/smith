@@ -112,11 +112,11 @@ if(NOT SMITH_FOUND)
     find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}" "${ADIAK_DIR}/lib/cmake/adiak")
   endif()
 
-  # Adiak
+  # ARPACK
   if(SMITH_USE_ARPACK)
     blt_import_library(NAME       arpack
                        INCLUDES   @ARPACK_INCLUDE_DIRS@
-                       DEPENDS_ON @ARPACK_LIBRARIES@
+                       LIBRARIES  @ARPACK_LIBRARIES@
                        TREAT_INCLUDES_AS_SYSTEM ON)
   endif()
 

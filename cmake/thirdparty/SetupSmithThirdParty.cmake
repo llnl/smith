@@ -4,6 +4,31 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+# This is a full list of possible TPLs in Smith and is used in multiple for loops
+# across our build system, for example, creating the `SMITH_USE_<TPL name>` variables.
+set(SMITH_TPL_DEPS ADIAK
+                   ARPACK
+                   AXOM
+                   CALIPER
+                   CAMP
+                   CONDUIT
+                   CONTINUATION
+                   CUDA
+                   ENZYME
+                   GRETL
+                   HDF5
+                   HIP
+                   LUA
+                   MFEM
+                   MPI
+                   PETSC
+                   RAJA
+                   SLEPC
+                   STRUMPACK
+                   SUNDIALS
+                   TRIBOL
+                   UMPIRE)
+
 if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Prevent this file from being called twice in the same scope
     set(SMITH_THIRD_PARTY_LIBRARIES_FOUND TRUE)
@@ -586,6 +611,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                                     TARGET       tribol
                                     DIR_VARIABLE TRIBOL_DIR)
         blt_convert_to_system_includes(TARGET tribol)
+        set(TRIBOL_FOUND TRUE)
     else()
         set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
         set(TRIBOL_USE_MPI     ON  CACHE BOOL "")
@@ -753,27 +779,3 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
 endif()
-
-# This is a full list of possible TPLs in Smith and is used in multiple locations
-set(SMITH_TPL_DEPS ADIAK
-                   ARPACK
-                   AXOM
-                   CALIPER
-                   CAMP
-                   CONDUIT
-                   CONTINUATION
-                   CUDA
-                   ENZYME
-                   GRETL
-                   HDF5
-                   HIP
-                   LUA
-                   MFEM
-                   MPI
-                   PETSC
-                   RAJA
-                   SLEPC
-                   STRUMPACK
-                   SUNDIALS
-                   TRIBOL
-                   UMPIRE)
