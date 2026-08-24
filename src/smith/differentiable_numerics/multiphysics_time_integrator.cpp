@@ -25,8 +25,8 @@ MultiphysicsTimeIntegrator::MultiphysicsTimeIntegrator(std::shared_ptr<SystemBas
 {
   for (size_t i = 0; i < system_->weak_forms.size(); ++i) {
     const std::string wf_name = system_->weak_forms[i]->name();
-    const std::string reaction_name = system_->field_store->getWeakFormReaction(wf_name);
-    main_unknown_name_to_local_idx_[reaction_name] = i;
+    const std::string unknown_name = system_->field_store->getWeakFormFieldNames(wf_name).unknown;
+    main_unknown_name_to_local_idx_[unknown_name] = i;
   }
 }
 
@@ -69,14 +69,14 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
 
       SLIC_ERROR_ROOT_IF(cycle_zero_unknowns.size() != cz_sys->weak_forms.size(),
                          "Cycle zero system result count does not match number of cycle-zero weak forms");
-      SLIC_ERROR_ROOT_IF(!cz_sys->solve_result_field_names.empty() &&
-                             cz_sys->solve_result_field_names.size() != cz_sys->weak_forms.size(),
-                         "Cycle zero solve_result_field_names size does not match number of weak forms");
+      SLIC_ERROR_ROOT_IF(
+          !cz_sys->solved_field_names.empty() && cz_sys->solved_field_names.size() != cz_sys->weak_forms.size(),
+          "Cycle zero solved_field_names size does not match number of weak forms");
       for (size_t i = 0; i < cz_sys->weak_forms.size(); ++i) {
         const std::string result_field_name =
-            cz_sys->solve_result_field_names.empty()
-                ? system_->field_store->getWeakFormReaction(cz_sys->weak_forms[i]->name())
-                : cz_sys->solve_result_field_names[i];
+            cz_sys->solved_field_names.empty()
+                ? system_->field_store->getWeakFormFieldNames(cz_sys->weak_forms[i]->name()).unknown
+                : cz_sys->solved_field_names[i];
         size_t result_field_state_idx = system_->field_store->getFieldIndex(result_field_name);
         current_states[result_field_state_idx] = cycle_zero_unknowns[i];
         system_->field_store->setField(result_field_state_idx, cycle_zero_unknowns[i]);
@@ -122,8 +122,8 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
   for (const auto& ps : post_solve_systems_) {
     auto ps_unknowns = ps->solve(time_info);
     for (size_t i = 0; i < ps->weak_forms.size(); ++i) {
-      const std::string reaction_name = ps->field_store->getWeakFormReaction(ps->weak_forms[i]->name());
-      size_t u_idx = ps->field_store->getFieldIndex(reaction_name);
+      const std::string unknown_name = ps->field_store->getWeakFormFieldNames(ps->weak_forms[i]->name()).unknown;
+      size_t u_idx = ps->field_store->getFieldIndex(unknown_name);
       ps->field_store->setField(u_idx, ps_unknowns[i]);
     }
   }

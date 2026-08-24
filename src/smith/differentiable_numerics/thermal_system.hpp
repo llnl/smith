@@ -194,7 +194,7 @@ auto registerThermalFields(std::shared_ptr<FieldStore> field_store,
   field_store->addDependent(temperature_type, FieldStore::TimeDerivative::VAL, "temperature");
 
   return PhysicsFields<dim, temp_order, TemperatureTimeRule, H1<temp_order>, H1<temp_order>>{
-      field_store, FieldType<H1<temp_order>>(field_store->prefix("temperature_solve_state")),
+      field_store, FieldType<H1<temp_order>>(field_store->prefix("temperature_solve_state"), true),
       FieldType<H1<temp_order>>(field_store->prefix("temperature"))};
 }
 

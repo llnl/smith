@@ -121,6 +121,24 @@ class ConstantNonlinearBlockSolver : public NonlinearBlockSolverBase {
   mutable int solve_calls_ = 0;
 };
 
+class ResidualRecordingNonlinearBlockSolver : public NoOpNonlinearBlockSolver {
+ public:
+  std::vector<FieldPtr> solve(
+      const std::vector<FieldPtr>& u_guesses,
+      std::function<std::vector<mfem::Vector>(const std::vector<FieldPtr>&)> residual,
+      std::function<std::vector<std::vector<MatrixPtr>>(const std::vector<FieldPtr>&)> jacobian) const override
+  {
+    auto residuals = residual(u_guesses);
+    residual_norm_ = residuals.front().Norml2();
+    return NoOpNonlinearBlockSolver::solve(u_guesses, std::move(residual), std::move(jacobian));
+  }
+
+  double residualNorm() const { return residual_norm_; }
+
+ private:
+  mutable double residual_norm_ = 0.0;
+};
+
 class NeedsInitialSolveRule : public QuasiStaticRule {
  public:
   bool requiresInitialAccelerationSolve() const override { return true; }
@@ -131,8 +149,9 @@ auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh>
                                   FieldTypeT field_type)
 {
   using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>>>;
-  auto weak_form = std::make_shared<WeakFormType>(name, mesh, fs->getField(field_type.name).get()->space(),
-                                                  fs->createSpaces(name, field_type.name, field_type));
+  auto weak_form = std::make_shared<WeakFormType>(
+      name, mesh, fs->getField(field_type.name).get()->space(),
+      fs->createSpaces(name, {.unknown = field_type.name, .test = field_type.name}, field_type));
   weak_form->addBodyIntegral(mesh->entireBodyName(),
                              [](auto, auto, auto u) { return smith::tuple{0.0 * get<VALUE>(u), get<DERIVATIVE>(u)}; });
   return weak_form;
@@ -144,10 +163,10 @@ auto buildSecondOrderMainWeakForm(const std::string& name, std::shared_ptr<Mesh>
                                   VelocityFieldType velocity_type, AccelerationFieldType acceleration_type)
 {
   using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
-  auto weak_form =
-      std::make_shared<WeakFormType>(name, mesh, fs->getField(displacement_type.name).get()->space(),
-                                     fs->createSpaces(name, displacement_type.name, displacement_type,
-                                                      displacement_old_type, velocity_type, acceleration_type));
+  auto weak_form = std::make_shared<WeakFormType>(
+      name, mesh, fs->getField(displacement_type.name).get()->space(),
+      fs->createSpaces(name, {.unknown = displacement_type.name, .test = displacement_type.name}, displacement_type,
+                       displacement_old_type, velocity_type, acceleration_type));
   weak_form->addBodySource(mesh->entireBodyName(), [](auto, auto, auto...) { return 0.0; });
   return weak_form;
 }
@@ -160,7 +179,8 @@ auto buildSecondOrderCycleZeroWeakForm(const std::string& name, std::shared_ptr<
   using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>>>;
   auto weak_form = std::make_shared<WeakFormType>(
       name, mesh, fs->getField(acceleration_type.name).get()->space(),
-      fs->createSpaces(name, acceleration_type.name, displacement_type, velocity_type, acceleration_type));
+      fs->createSpaces(name, {.unknown = acceleration_type.name, .test = acceleration_type.name}, displacement_type,
+                       velocity_type, acceleration_type));
   weak_form->addBodySource(mesh->entireBodyName(), [](auto, auto, auto...) { return 0.0; });
   return weak_form;
 }
@@ -173,7 +193,7 @@ bool allNodesOnBoundary(const std::vector<vec2>& nodes, double x_target)
 
 }  // namespace
 
-TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
+TEST(MultiphysicsTimeIntegrator, CycleZeroUsesOwnedFieldBoundaryConditions)
 {
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "multiphysics_time_integrator");
@@ -335,7 +355,7 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSolveResultUpdatesAccelerationField)
   cycle_zero_system->field_store = field_store;
   cycle_zero_system->weak_forms = {cycle_zero_wf};
   cycle_zero_system->solver = cycle_zero_solver;
-  cycle_zero_system->solve_result_field_names = {acceleration_type.name};
+  cycle_zero_system->solved_field_names = {acceleration_type.name};
   cycle_zero_system->solve_input_field_names = {
       {displacement_old_type.name, displacement_old_type.name, velocity_type.name, acceleration_type.name}};
 
@@ -510,6 +530,101 @@ TEST(SystemSolver, AppendsStagesWithBlockMappingForCombinedSubsystems)
   EXPECT_EQ(first_solver->lastNumUnknowns(), 1);
   EXPECT_EQ(second_solver->solveCalls(), 1);
   EXPECT_EQ(second_solver->lastNumUnknowns(), 2);
+
+  StateManager::reset();
+}
+
+TEST(SystemSolver, RoutesRepeatedDependenciesWithoutUpdatingHistory)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "system_solver_repeated_dependency_routing");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "system_solver_repeated_dependency_routing_mesh");
+  auto field_store = std::make_shared<FieldStore>(mesh, 20);
+  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  field_store->addShapeDisp(shape_disp_type);
+
+  auto static_rule = std::make_shared<StaticTimeIntegrationRule>();
+  auto backward_euler_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
+  FieldType<H1<1>> field_a_type("field_a");
+  FieldType<H1<1>> field_b_type("field_b");
+  field_store->addIndependent(field_a_type, backward_euler_rule);
+  auto field_a_old_type = field_store->addDependent(field_a_type, FieldStore::TimeDerivative::VAL, "field_a_old");
+  field_store->addIndependent(field_b_type, static_rule);
+
+  auto field_a_weak_form = buildScalarDiffusionWeakForm("field_a_residual", mesh, field_store, field_a_type);
+  using FieldBWeakForm = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
+  auto field_b_weak_form = std::make_shared<FieldBWeakForm>(
+      "field_b_residual", mesh, field_store->getField(field_b_type.name).get()->space(),
+      field_store->createSpaces("field_b_residual", {.unknown = field_b_type.name, .test = field_b_type.name},
+                                field_b_type, field_a_type, field_a_type, field_a_old_type));
+  field_b_weak_form->addBodySource(mesh->entireBodyName(),
+                                   [](auto, auto, auto, auto field_a_first, auto field_a_second, auto field_a_old) {
+                                     return field_a_first + field_a_second - 2.0 * field_a_old;
+                                   });
+
+  field_store->setField(field_store->getFieldIndex(field_a_old_type.name), field_store->getField(field_a_type.name));
+
+  const std::vector<std::string> residual_names{field_a_weak_form->name(), field_b_weak_form->name()};
+  const auto block_indices = field_store->indexMap(residual_names);
+  EXPECT_EQ(block_indices[0][0], BlockArgumentIndices({0}));
+  EXPECT_TRUE(block_indices[0][1].empty());
+  EXPECT_EQ(block_indices[1][0], BlockArgumentIndices({1, 2}));
+  EXPECT_EQ(block_indices[1][1], BlockArgumentIndices({0}));
+
+  auto field_a_solver = std::make_shared<ConstantNonlinearBlockSolver>(3.0);
+  auto field_b_solver = std::make_shared<ResidualRecordingNonlinearBlockSolver>();
+  SystemSolver solver(1, true);
+  solver.addSubsystemSolver({0}, field_a_solver, 0.5);
+  solver.addSubsystemSolver({1}, field_b_solver);
+
+  const std::vector<WeakForm*> residuals{field_a_weak_form.get(), field_b_weak_form.get()};
+  const std::vector<std::vector<FieldState>> states{field_store->getStates(field_a_weak_form->name()),
+                                                    field_store->getStates(field_b_weak_form->name())};
+  const std::vector<std::vector<FieldState>> params(residuals.size());
+  const auto bc_managers = field_store->getBoundaryConditionManagers(residual_names);
+  const TimeInfo time_info(0.0, 1.0, 0);
+  auto solutions =
+      solver.solve(residuals, block_indices, field_store->getShapeDisp(), states, params, time_info, bc_managers);
+
+  EXPECT_NEAR((*solutions[0].get())[0], 1.5, 1.0e-12);
+
+  auto expected_field_b_states = states[1];
+  expected_field_b_states[1] = solutions[0];
+  expected_field_b_states[2] = solutions[0];
+  auto expected_residual = field_b_weak_form->residual(time_info, field_store->getShapeDisp().get().get(),
+                                                       getConstFieldPointers(expected_field_b_states));
+
+  EXPECT_NEAR(field_b_solver->residualNorm(), expected_residual.Norml2(), 1.0e-12);
+  EXPECT_GT(expected_residual.Norml2(), 1.0e-8);
+
+  StateManager::reset();
+}
+
+TEST(FieldStore, UsesExplicitUnknownFieldInsteadOfTestField)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "field_store_explicit_unknown_field");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
+                                     "field_store_explicit_unknown_field_mesh");
+  auto field_store = std::make_shared<FieldStore>(mesh, 10);
+  FieldType<H1<1>> test_type("test_field");
+  FieldType<H1<1>> unknown_type("unknown_field");
+  auto static_rule = std::make_shared<StaticTimeIntegrationRule>();
+  field_store->addIndependent(test_type, static_rule);
+  auto unknown_bcs = field_store->addIndependent(unknown_type, static_rule);
+
+  field_store->createSpaces("residual", {.unknown = unknown_type.name, .test = test_type.name}, test_type,
+                            unknown_type);
+
+  const auto block_indices = field_store->indexMap({"residual"});
+  EXPECT_EQ(field_store->getWeakFormFieldNames("residual").test, test_type.name);
+  EXPECT_EQ(field_store->getWeakFormFieldNames("residual").unknown, unknown_type.name);
+  EXPECT_EQ(block_indices[0][0], BlockArgumentIndices({1}));
+  EXPECT_EQ(field_store->getBoundaryConditionManagers({"residual"})[0], &unknown_bcs->getBoundaryConditionManager());
+  EXPECT_EQ(field_store->getReactionInfos()[0].space, &field_store->getField(test_type.name).get()->space());
 
   StateManager::reset();
 }

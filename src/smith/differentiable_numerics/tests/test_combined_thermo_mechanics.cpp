@@ -514,7 +514,7 @@ TEST_F(ThermoMechanicsMeshFixture, CombinedSystemCarriesCycleZeroSystems)
 
   ASSERT_EQ(solid_system->cycle_zero_systems.size(), 1u);
   EXPECT_EQ(combined_system->cycle_zero_systems.size(), solid_system->cycle_zero_systems.size());
-  EXPECT_EQ(combined_system->cycle_zero_systems[0]->solve_result_field_names, std::vector<std::string>{"acceleration"});
+  EXPECT_EQ(combined_system->cycle_zero_systems[0]->solved_field_names, std::vector<std::string>{"acceleration"});
 }
 
 }  // namespace smith

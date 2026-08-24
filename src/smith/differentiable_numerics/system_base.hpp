@@ -61,7 +61,7 @@ struct SystemBase {
                            ///< independently; cycle-zero solves do not couple across subsystems.
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems;  ///< Optional systems solved after main state update.
   std::vector<std::string>
-      solve_result_field_names;  ///< Optional per-weak-form fields to solve/update instead of reaction fields.
+      solved_field_names;  ///< Optional per-weak-form fields overriding registered solver-owned fields.
   std::vector<std::vector<std::string>>
       solve_input_field_names;  ///< Optional per-weak-form input field ordering used during solve.
 
@@ -121,10 +121,10 @@ auto buildWeakFormWithCouplingImpl(const FieldStorePtr& field_store, const std::
   auto coupling_fields_tuple = std::get<sizeof...(Args) - 1>(args_tuple);
   return std::apply(
       [&](const auto&... coupling_fields) {
-        return std::make_shared<WeakFormT>(weak_form_name, field_store->getMesh(),
-                                           field_store->getField(unknown_field_name).get()->space(),
-                                           field_store->createSpaces(weak_form_name, unknown_field_name,
-                                                                     std::get<Is>(args_tuple)..., coupling_fields...));
+        return std::make_shared<WeakFormT>(
+            weak_form_name, field_store->getMesh(), field_store->getField(unknown_field_name).get()->space(),
+            field_store->createSpaces(weak_form_name, {.unknown = unknown_field_name, .test = unknown_field_name},
+                                      std::get<Is>(args_tuple)..., coupling_fields...));
       },
       coupling_fields_tuple);
 }

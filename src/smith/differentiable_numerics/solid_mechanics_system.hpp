@@ -246,7 +246,7 @@ auto registerSolidMechanicsFields(std::shared_ptr<FieldStore> field_store,
 
   auto physics_fields =
       PhysicsFields<dim, order, DisplacementTimeRule, H1<order, dim>, H1<order, dim>, H1<order, dim>, H1<order, dim>>{
-          field_store, FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state")),
+          field_store, FieldType<H1<order, dim>>(field_store->prefix("displacement_solve_state"), true),
           FieldType<H1<order, dim>>(field_store->prefix("displacement")),
           FieldType<H1<order, dim>>(field_store->prefix("velocity")),
           FieldType<H1<order, dim>>(field_store->prefix("acceleration"))};
@@ -335,7 +335,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
     auto cycle_zero_solver = detail::makeCycleZeroSolver(solver, *field_store->getMesh());
 
     auto cycle_zero_system = makeSystem(field_store, cycle_zero_solver, {sys->solid_weak_form});
-    cycle_zero_system->solve_result_field_names = {accel_old_type.name};
+    cycle_zero_system->solved_field_names = {accel_old_type.name};
     auto cycle_zero_inputs =
         std::vector<std::string>{disp_old_type.name, disp_old_type.name, velo_old_type.name, accel_old_type.name};
     auto append_if_state = [&](const auto& field) {

@@ -130,7 +130,7 @@ auto registerInternalVariableFields(std::shared_ptr<FieldStore> field_store,
   }
 
   return PhysicsFields<dim, StateSpace::order, InternalVarTimeRule, StateSpace, StateSpace>{
-      field_store, FieldType<StateSpace>(field_store->prefix("state_solve_state")),
+      field_store, FieldType<StateSpace>(field_store->prefix("state_solve_state"), true),
       FieldType<StateSpace>(field_store->prefix("state"))};
 }
 

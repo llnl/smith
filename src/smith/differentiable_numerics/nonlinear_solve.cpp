@@ -26,9 +26,8 @@ void applyBoundaryConditions(double time, const smith::BoundaryConditionManager*
   }
 }
 
-std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
-                                    const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
-                                    const std::vector<std::vector<FieldState>>& states,
+std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals, const BlockIndexMap block_indices,
+                                    const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
                                     const std::vector<const BoundaryConditionManager*>& bc_managers)
@@ -50,18 +49,20 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
   // Validate block_indices bounds against states sizes
   for (size_t row = 0; row < num_rows_; ++row) {
+    std::vector<size_t> slot_owners(states[row].size(), invalid_block_index);
     for (size_t col = 0; col < num_rows_; ++col) {
-      size_t idx = block_indices[row][col];
-      if (idx != invalid_block_index) {
+      for (size_t idx : block_indices[row][col]) {
         SLIC_ERROR_IF(idx >= states[row].size(),
-                      axom::fmt::format("block_indices[{}][{}] = {} is out of bounds (states[{}].size() = {})", row,
-                                        col, idx, row, states[row].size()));
+                      axom::fmt::format("block_indices[{}][{}] contains {} outside states[{}] size {}", row, col, idx,
+                                        row, states[row].size()));
+        SLIC_ERROR_IF(
+            slot_owners[idx] != invalid_block_index,
+            axom::fmt::format("State slot {} in row {} belongs to columns {} and {}", idx, row, slot_owners[idx], col));
+        slot_owners[idx] = col;
       }
     }
-    // Validate that diagonal entry is not invalid
-    SLIC_ERROR_IF(
-        block_indices[row][row] == invalid_block_index,
-        axom::fmt::format("block_indices[{}][{}] (diagonal entry) must not be invalid_block_index", row, row));
+    SLIC_ERROR_IF(block_indices[row][row].empty(),
+                  axom::fmt::format("block_indices[{}][{}] diagonal entry must not be empty", row, row));
   }
 
   std::vector<size_t> num_state_inputs;
@@ -115,9 +116,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     std::vector<FEFieldPtr> diagonal_fields(num_rows);
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      size_t prime_unknown_row_i = block_indices[row_i][row_i];
-      SLIC_ERROR_IF(prime_unknown_row_i == invalid_block_index,
-                    "The primary unknown field (field index for block_index[n][n], must not be invalid)");
+      size_t prime_unknown_row_i = block_indices[row_i][row_i].front();
       diagonal_fields[row_i] = std::make_shared<FiniteElementState>(*input_fields[row_i][prime_unknown_row_i]);
     }
 
@@ -128,9 +127,8 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-        size_t prime_unknown_ij = block_indices[row_i][col_j];
-        if (prime_unknown_ij != invalid_block_index) {
-          input_fields[row_i][block_indices[row_i][col_j]] = diagonal_fields[col_j];
+        for (size_t slot : block_indices[row_i][col_j]) {
+          input_fields[row_i][slot] = diagonal_fields[col_j];
         }
       }
     }
@@ -172,13 +170,17 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
         std::vector<FEFieldPtr> row_field_inputs = input_fields[row_i];
         std::vector<double> tangent_weights(row_field_inputs.size(), 0.0);
         for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-          size_t field_index_to_diff = block_indices[row_i][col_j];
-          if (field_index_to_diff != invalid_block_index) {
-            tangent_weights[field_index_to_diff] = 1.0;
+          const auto& field_indices_to_diff = block_indices[row_i][col_j];
+          if (!field_indices_to_diff.empty()) {
+            for (size_t slot : field_indices_to_diff) {
+              tangent_weights[slot] = 1.0;
+            }
             auto jac_ij = residual_evals[row_i]->jacobian(time_info, shape_disp_ptr.get(),
                                                           getConstFieldPointers(row_field_inputs), tangent_weights);
             jacobians[row_i].emplace_back(std::move(jac_ij));
-            tangent_weights[field_index_to_diff] = 0.0;
+            for (size_t slot : field_indices_to_diff) {
+              tangent_weights[slot] = 0.0;
+            }
           } else {
             jacobians[row_i].emplace_back(nullptr);
           }
@@ -244,14 +246,15 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     // make a copy so we don't accidentally override the original copy
     std::vector<FEFieldPtr> diagonal_fields(num_rows);
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      diagonal_fields[row_i] = std::make_shared<FiniteElementState>(*input_fields[row_i][block_indices[row_i][row_i]]);
+      diagonal_fields[row_i] =
+          std::make_shared<FiniteElementState>(*input_fields[row_i][block_indices[row_i][row_i].front()]);
       *diagonal_fields[row_i] = *s[row_i];
     }
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-        if (block_indices[row_i][col_j] != invalid_block_index) {
-          input_fields[row_i][block_indices[row_i][col_j]] = diagonal_fields[col_j];
+        for (size_t slot : block_indices[row_i][col_j]) {
+          input_fields[row_i][slot] = diagonal_fields[col_j];
         }
       }
     }
@@ -272,13 +275,17 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       std::vector<FEFieldPtr> row_field_inputs = input_fields[row_i];
       std::vector<double> tangent_weights(row_field_inputs.size(), 0.0);
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-        size_t field_index_to_diff = block_indices[row_i][col_j];
-        if (field_index_to_diff != invalid_block_index) {
-          tangent_weights[field_index_to_diff] = 1.0;
+        const auto& field_indices_to_diff = block_indices[row_i][col_j];
+        if (!field_indices_to_diff.empty()) {
+          for (size_t slot : field_indices_to_diff) {
+            tangent_weights[slot] = 1.0;
+          }
           auto jac_ij = residual_evals[row_i]->jacobian(time_info, shape_disp_ptr.get(),
                                                         getConstFieldPointers(row_field_inputs), tangent_weights);
           jacobians[row_i].emplace_back(std::move(jac_ij));
-          tangent_weights[field_index_to_diff] = 0.0;
+          for (size_t slot : field_indices_to_diff) {
+            tangent_weights[slot] = 0.0;
+          }
         } else {
           jacobians[row_i].emplace_back(nullptr);
         }
@@ -351,8 +358,8 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     // No sensitivity needed for primal fields
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       for (size_t col_j = 0; col_j < num_rows; ++col_j) {
-        if (block_indices[row_i][col_j] != invalid_block_index) {
-          field_sensitivities[row_i][block_indices[row_i][col_j]] = nullptr;
+        for (size_t slot : block_indices[row_i][col_j]) {
+          field_sensitivities[row_i][slot] = nullptr;
         }
       }
     }
