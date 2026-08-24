@@ -14,66 +14,9 @@
 
 #include "gretl/double_state.hpp"
 #include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/physics/scalar_objective.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 
 namespace smith {
-
-/// @brief Utility function to construct a smith::functional which evaluates the total kinetic energy
-template <typename DispSpace, typename DensitySpace>
-auto createKineticEnergyIntegrator(smith::Domain& domain, const mfem::ParFiniteElementSpace& velocity_space,
-                                   const mfem::ParFiniteElementSpace& density_space)
-{
-  static constexpr int dim = DispSpace::components;
-  auto ke_integrator = std::make_shared<smith::Functional<double(DispSpace, DispSpace, DensitySpace)>>(
-      std::array<const mfem::ParFiniteElementSpace*, 3>{&velocity_space, &velocity_space, &density_space});
-  ke_integrator->AddDomainIntegral(
-      Dimension<dim>{}, DependsOn<0, 1, 2>{},
-      [&](auto /*t*/, auto /*X*/, auto U, auto V, auto Rho) {
-        auto rho = get<VALUE>(Rho);
-        auto v = get<VALUE>(V);
-        auto ke = 0.5 * rho * inner(v, v);
-        auto dx_dX = get<DERIVATIVE>(U) + Identity<dim>();
-        auto J = det(dx_dX);
-        return ke * J;
-      },
-      domain);
-  return ke_integrator;
-}
-
-/// @brief Utility function which computes the kinetic energy and returns it as a gretl state (with its vjp defined)
-template <typename DispSpace, typename DensitySpace>
-gretl::State<double> computeKineticEnergy(
-    const std::shared_ptr<smith::Functional<double(DispSpace, DispSpace, DensitySpace)>>& energy_func,
-    smith::FieldState disp, smith::FieldState velo, smith::FieldState density, double scaling)
-{
-  return gretl::create_state<double, double>(
-      // specify how to zero the dual
-      [](double forwardVal) { return 0 * forwardVal; },
-      // define how to (re)evaluate the output
-      [=](const smith::FEFieldPtr& Disp, const smith::FEFieldPtr& Velo, const smith::FEFieldPtr& Density) -> double {
-        return (*energy_func)(0.0, *Disp, *Velo, *Density) * scaling;
-      },
-      // define how to backpropagate the vjp
-      [=](const smith::FEFieldPtr& Disp, const smith::FEFieldPtr& Velo, const smith::FEFieldPtr& Density,
-          const double& /*ke*/, smith::FEDualPtr& Disp_dual, smith::FEDualPtr& Velo_dual,
-          smith::FEDualPtr& Density_dual, const double& ke_dual) -> void {
-        auto ddisp = (*energy_func)(0.0, smith::differentiate_wrt(*Disp), *Velo, *Density);
-        auto de_ddisp = assemble(smith::get<smith::DERIVATIVE>(ddisp));
-
-        auto dvelo = (*energy_func)(0.0, *Disp, smith::differentiate_wrt(*Velo), *Density);
-        auto de_dvelo = assemble(smith::get<smith::DERIVATIVE>(dvelo));
-
-        auto ddens = (*energy_func)(0.0, *Disp, *Velo, smith::differentiate_wrt(*Density));
-        auto de_ddensity = assemble(smith::get<smith::DERIVATIVE>(ddens));
-
-        Disp_dual->Add(scaling * ke_dual, *de_ddisp);
-        Velo_dual->Add(scaling * ke_dual, *de_dvelo);
-        Density_dual->Add(scaling * ke_dual, *de_ddensity);
-      },
-      // give the input values
-      disp, velo, density);
-}
 
 /// @brief testing utility to confirm order of convergence of the finite differences relative to the backprop gradient
 inline auto checkGradients(const gretl::State<double>& objectiveState, FieldState& inputState,
