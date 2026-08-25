@@ -50,8 +50,7 @@ using BlockArgumentMap = std::vector<std::vector<BlockArgumentIndices>>;
 /// @param solver The nonlinear block solver used to solve the system of equations
 /// @param bc_managers Holds information about which degrees of freedom (DOFS)
 /// @return Vector of field solutions satisfying the weak forms
-std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
-                                    const BlockArgumentMap& block_indices,
+std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals, const BlockArgumentMap& block_indices,
                                     const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
