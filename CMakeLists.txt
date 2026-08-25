@@ -117,7 +117,13 @@ endforeach()
 set(BLT_REQUIRED_CLANGFORMAT_VERSION  "19" CACHE STRING "")
 
 set(ENABLE_ALL_WARNINGS ON CACHE BOOL "")
+
 set(ENABLE_WARNINGS_AS_ERRORS ON CACHE BOOL "")
+if(ENABLE_ASAN AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    # For more info: https://gcc.gnu.org/onlinedocs/gcc-14.1.0/gcc/Instrumentation-Options.html?utm_source=chatgpt.com#index-fsanitize_003dbuiltin
+    message(WARNING "GNU compiler produces false positive warnings when ASAN is enabled. Turning off Warnings as errors.")
+    set(ENABLE_WARNINGS_AS_ERRORS FALSE CACHE BOOL "" FORCE)
+endif()
 
 set(BLT_EXPORT_THIRDPARTY OFF CACHE BOOL "")
 if (BLT_EXPORT_THIRDPARTY)
