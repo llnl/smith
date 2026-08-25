@@ -149,9 +149,8 @@ auto buildScalarDiffusionWeakForm(const std::string& name, std::shared_ptr<Mesh>
                                   FieldTypeT field_type)
 {
   using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>>>;
-  auto weak_form = std::make_shared<WeakFormType>(
-      name, mesh, fs->getField(field_type.name).get()->space(),
-      fs->createSpaces(name, {.unknown = field_type.name, .test = field_type.name}, field_type));
+  auto weak_form = std::make_shared<WeakFormType>(name, mesh, fs->getField(field_type.name).get()->space(),
+                                                  fs->createSpaces(name, field_type.name, field_type));
   weak_form->addBodyIntegral(mesh->entireBodyName(),
                              [](auto, auto, auto u) { return smith::tuple{0.0 * get<VALUE>(u), get<DERIVATIVE>(u)}; });
   return weak_form;
@@ -163,10 +162,10 @@ auto buildSecondOrderMainWeakForm(const std::string& name, std::shared_ptr<Mesh>
                                   VelocityFieldType velocity_type, AccelerationFieldType acceleration_type)
 {
   using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
-  auto weak_form = std::make_shared<WeakFormType>(
-      name, mesh, fs->getField(displacement_type.name).get()->space(),
-      fs->createSpaces(name, {.unknown = displacement_type.name, .test = displacement_type.name}, displacement_type,
-                       displacement_old_type, velocity_type, acceleration_type));
+  auto weak_form =
+      std::make_shared<WeakFormType>(name, mesh, fs->getField(displacement_type.name).get()->space(),
+                                     fs->createSpaces(name, displacement_type.name, displacement_type,
+                                                      displacement_old_type, velocity_type, acceleration_type));
   weak_form->addBodySource(mesh->entireBodyName(), [](auto, auto, auto...) { return 0.0; });
   return weak_form;
 }
@@ -179,8 +178,7 @@ auto buildSecondOrderCycleZeroWeakForm(const std::string& name, std::shared_ptr<
   using WeakFormType = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>>>;
   auto weak_form = std::make_shared<WeakFormType>(
       name, mesh, fs->getField(acceleration_type.name).get()->space(),
-      fs->createSpaces(name, {.unknown = acceleration_type.name, .test = acceleration_type.name}, displacement_type,
-                       velocity_type, acceleration_type));
+      fs->createSpaces(name, acceleration_type.name, displacement_type, velocity_type, acceleration_type));
   weak_form->addBodySource(mesh->entireBodyName(), [](auto, auto, auto...) { return 0.0; });
   return weak_form;
 }
@@ -554,8 +552,8 @@ TEST(SystemSolver, RoutesRepeatedDependenciesWithoutUpdatingHistory)
   using FieldBWeakForm = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
   auto field_b_weak_form = std::make_shared<FieldBWeakForm>(
       "field_b_residual", mesh, field_store->getField(field_b_type.name).get()->space(),
-      field_store->createSpaces("field_b_residual", {.unknown = field_b_type.name, .test = field_b_type.name},
-                                field_b_type, field_a_type, field_a_type, field_a_old_type));
+      field_store->createSpaces("field_b_residual", field_b_type.name, field_b_type, field_a_type, field_a_type,
+                                field_a_old_type));
   field_b_weak_form->addBodySource(mesh->entireBodyName(),
                                    [](auto, auto, auto, auto field_a_first, auto field_a_second, auto field_a_old) {
                                      return field_a_first + field_a_second - 2.0 * field_a_old;

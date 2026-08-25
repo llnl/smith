@@ -238,24 +238,22 @@ std::shared_ptr<PlasticMechanicsSystem<dim, disp_order, parameter_space...>> bui
   std::string solid_res_name = field_store->prefix("solid_residual");
   auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
-      field_store->createSpaces(solid_res_name, {.unknown = disp_type.name, .test = disp_type.name}, disp_type,
-                                plastic_defgrad_type, plastic_strain_type, parameter_types...));
+      field_store->createSpaces(solid_res_name, disp_type.name, disp_type, plastic_defgrad_type, plastic_strain_type,
+                                parameter_types...));
 
   std::string plastic_defgrad_res_name = field_store->prefix("plastic_defgrad_residual");
   auto plastic_defgrad_weak_form = std::make_shared<typename SystemType::PlasticDeformWeakFormType>(
       plastic_defgrad_res_name, field_store->getMesh(), field_store->getField(plastic_defgrad_type.name).get()->space(),
-      field_store->createSpaces(plastic_defgrad_res_name,
-                                {.unknown = plastic_defgrad_type.name, .test = plastic_defgrad_type.name},
-                                plastic_defgrad_type, plastic_defgrad_old_type, plastic_strain_type,
-                                plastic_strain_old_type, disp_type, parameter_types...));
+      field_store->createSpaces(plastic_defgrad_res_name, plastic_defgrad_type.name, plastic_defgrad_type,
+                                plastic_defgrad_old_type, plastic_strain_type, plastic_strain_old_type, disp_type,
+                                parameter_types...));
 
   std::string plastic_strain_res_name = field_store->prefix("plastic_strain_residual");
   auto plastic_strain_weak_form = std::make_shared<typename SystemType::PlasticStrainWeakFormType>(
       plastic_strain_res_name, field_store->getMesh(), field_store->getField(plastic_strain_type.name).get()->space(),
-      field_store->createSpaces(plastic_strain_res_name,
-                                {.unknown = plastic_strain_type.name, .test = plastic_strain_type.name},
-                                plastic_strain_type, plastic_strain_old_type, plastic_defgrad_type,
-                                plastic_defgrad_old_type, disp_type, parameter_types...));
+      field_store->createSpaces(plastic_strain_res_name, plastic_strain_type.name, plastic_strain_type,
+                                plastic_strain_old_type, plastic_defgrad_type, plastic_defgrad_old_type, disp_type,
+                                parameter_types...));
 
   // Build solver and advancer
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, plastic_defgrad_weak_form,

@@ -121,10 +121,10 @@ auto buildWeakFormWithCouplingImpl(const FieldStorePtr& field_store, const std::
   auto coupling_fields_tuple = std::get<sizeof...(Args) - 1>(args_tuple);
   return std::apply(
       [&](const auto&... coupling_fields) {
-        return std::make_shared<WeakFormT>(
-            weak_form_name, field_store->getMesh(), field_store->getField(unknown_field_name).get()->space(),
-            field_store->createSpaces(weak_form_name, {.unknown = unknown_field_name, .test = unknown_field_name},
-                                      std::get<Is>(args_tuple)..., coupling_fields...));
+        return std::make_shared<WeakFormT>(weak_form_name, field_store->getMesh(),
+                                           field_store->getField(unknown_field_name).get()->space(),
+                                           field_store->createSpaces(weak_form_name, unknown_field_name,
+                                                                     std::get<Is>(args_tuple)..., coupling_fields...));
       },
       coupling_fields_tuple);
 }

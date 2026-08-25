@@ -263,6 +263,20 @@ struct FieldStore {
   }
 
   /**
+   * @brief Register input fields when test and unknown field names match.
+   * @param weak_form_name Name of the weak form being constructed.
+   * @param field_name Shared test-space and solver-owned field name.
+   * @param types Ordered list of @c FieldType descriptors for every input argument.
+   * @return std::vector<const mfem::ParFiniteElementSpace*> Ordered input FE spaces.
+   */
+  template <typename... FieldTypes>
+  std::vector<const mfem::ParFiniteElementSpace*> createSpaces(const std::string& weak_form_name,
+                                                               const std::string& field_name, FieldTypes... types)
+  {
+    return createSpaces(weak_form_name, {.unknown = field_name, .test = field_name}, types...);
+  }
+
+  /**
    * @brief Mapping between primary and history/derivative fields for time integration.
    */
   struct TimeIntegrationMapping {
