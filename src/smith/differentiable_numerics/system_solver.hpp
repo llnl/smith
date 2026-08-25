@@ -67,7 +67,7 @@ class SystemSolver {
   /// @param time_info Current time information.
   /// @param bc_managers Managers for boundary conditions.
   /// @return Updated field states.
-  std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals, const BlockIndexMap& block_indices,
+  std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals, const BlockArgumentMap& block_indices,
                                 const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
                                 const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                 const std::vector<const BoundaryConditionManager*>& bc_managers) const;

@@ -18,8 +18,8 @@ std::vector<FieldState> SystemBase::solve(const TimeInfo& time_info) const
   for (const auto& wf : weak_forms) {
     weak_form_names.push_back(wf->name());
   }
-  BlockIndexMap index_map;
-  if (solved_field_names.empty()) {
+  BlockArgumentMap index_map;
+  if (solve_result_field_names.empty()) {
     index_map = field_store->indexMap(weak_form_names);
   }
 
@@ -45,20 +45,21 @@ std::vector<FieldState> SystemBase::solve(const TimeInfo& time_info) const
   }
 
   std::vector<std::string> bc_field_names;
-  if (!solved_field_names.empty()) {
-    SLIC_ERROR_IF(solved_field_names.size() != weak_forms.size(), "solved_field_names size must match weak_forms size");
-    SLIC_ERROR_IF(solve_input_field_names.empty(), "solve_input_field_names must accompany solved_field_names");
-    bc_field_names = solved_field_names;
-    index_map = BlockIndexMap(weak_forms.size(), std::vector<BlockArgumentIndices>(weak_forms.size()));
+  if (!solve_result_field_names.empty()) {
+    SLIC_ERROR_IF(solve_result_field_names.size() != weak_forms.size(),
+                  "solve_result_field_names size must match weak_forms size");
+    SLIC_ERROR_IF(solve_input_field_names.empty(), "solve_input_field_names must accompany solve_result_field_names");
+    bc_field_names = solve_result_field_names;
+    index_map = BlockArgumentMap(weak_forms.size(), std::vector<BlockArgumentIndices>(weak_forms.size()));
     std::set<size_t> result_field_indices;
-    for (const auto& field_name : solved_field_names) {
+    for (const auto& field_name : solve_result_field_names) {
       size_t field_index = field_store->getFieldIndex(field_name);
       SLIC_ERROR_IF(!result_field_indices.insert(field_index).second,
                     "Each solve result field must have exactly one owning row");
     }
     for (size_t row = 0; row < weak_forms.size(); ++row) {
       for (size_t col = 0; col < weak_forms.size(); ++col) {
-        size_t result_field_index = field_store->getFieldIndex(solved_field_names[col]);
+        size_t result_field_index = field_store->getFieldIndex(solve_result_field_names[col]);
         for (size_t arg = 0; arg < input_field_indices[row].size(); ++arg) {
           if (input_field_indices[row][arg] == result_field_index) {
             index_map[row][col].push_back(arg);
@@ -66,8 +67,9 @@ std::vector<FieldState> SystemBase::solve(const TimeInfo& time_info) const
         }
       }
       SLIC_ERROR_IF(index_map[row][row].empty(), "Requested solve result field '"
-                                                     << solved_field_names[row] << "' is not an argument of weak form '"
-                                                     << weak_form_names[row] << "'");
+                                                     << solve_result_field_names[row]
+                                                     << "' is not an argument of weak form '" << weak_form_names[row]
+                                                     << "'");
     }
   }
 
@@ -78,8 +80,9 @@ std::vector<FieldState> SystemBase::solve(const TimeInfo& time_info) const
   for (auto& p : weak_forms) {
     weak_form_ptrs.push_back(p.get());
   }
-  auto bc_managers = solved_field_names.empty() ? field_store->getBoundaryConditionManagers(weak_form_names)
-                                                : field_store->getBoundaryConditionManagersForFields(bc_field_names);
+  auto bc_managers = solve_result_field_names.empty()
+                         ? field_store->getBoundaryConditionManagers(weak_form_names)
+                         : field_store->getBoundaryConditionManagersForFields(bc_field_names);
   return solver->solve(weak_form_ptrs, index_map, field_store->getShapeDisp(), inputs, wk_params, time_info,
                        bc_managers);
 }

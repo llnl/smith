@@ -61,7 +61,7 @@ struct SystemBase {
                            ///< independently; cycle-zero solves do not couple across subsystems.
   std::vector<std::shared_ptr<SystemBase>> post_solve_systems;  ///< Optional systems solved after main state update.
   std::vector<std::string>
-      solved_field_names;  ///< Optional per-weak-form fields overriding registered solver-owned fields.
+      solve_result_field_names;  ///< Optional per-weak-form fields overriding registered solver-owned fields.
   std::vector<std::vector<std::string>>
       solve_input_field_names;  ///< Optional per-weak-form input field ordering used during solve.
 

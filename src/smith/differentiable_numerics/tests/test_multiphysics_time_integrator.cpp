@@ -215,9 +215,6 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroUsesOwnedFieldBoundaryConditions)
   FieldType<H1<1>> displacement_type("displacement");
   auto displacement_bc = field_store->addIndependent(displacement_type, quasi_static);
 
-  ASSERT_TRUE(temperature_type.is_unknown);
-  ASSERT_TRUE(displacement_type.is_unknown);
-
   temperature_bc->setScalarBCs<2>(mesh->domain("left"), [](double, tensor<double, 2>) { return 0.0; });
   displacement_bc->setScalarBCs<2>(mesh->domain("right"), [](double, tensor<double, 2>) { return 1.0; });
 
@@ -355,7 +352,7 @@ TEST(MultiphysicsTimeIntegrator, CycleZeroSolveResultUpdatesAccelerationField)
   cycle_zero_system->field_store = field_store;
   cycle_zero_system->weak_forms = {cycle_zero_wf};
   cycle_zero_system->solver = cycle_zero_solver;
-  cycle_zero_system->solved_field_names = {acceleration_type.name};
+  cycle_zero_system->solve_result_field_names = {acceleration_type.name};
   cycle_zero_system->solve_input_field_names = {
       {displacement_old_type.name, displacement_old_type.name, velocity_type.name, acceleration_type.name}};
 

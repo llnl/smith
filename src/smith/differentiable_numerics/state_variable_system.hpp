@@ -130,7 +130,7 @@ auto registerInternalVariableFields(std::shared_ptr<FieldStore> field_store,
   }
 
   return PhysicsFields<dim, StateSpace::order, InternalVarTimeRule, StateSpace, StateSpace>{
-      field_store, FieldType<StateSpace>(field_store->prefix("state_solve_state"), true),
+      field_store, FieldType<StateSpace>(field_store->prefix("state_solve_state")),
       FieldType<StateSpace>(field_store->prefix("state"))};
 }
 
@@ -160,7 +160,7 @@ auto buildInternalVariableSystemImpl(std::shared_ptr<FieldStore> field_store, co
 {
   auto internal_variable_time_rule = std::make_shared<InternalVarTimeRule>();
 
-  FieldType<StateSpace> state_type(field_store->prefix("state_solve_state"), true);
+  FieldType<StateSpace> state_type(field_store->prefix("state_solve_state"));
   FieldType<StateSpace> state_old_type(field_store->prefix("state"));
 
   auto internal_variable_bc = field_store->getBoundaryConditions(state_type.name);

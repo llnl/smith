@@ -9,8 +9,6 @@
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "gretl/wang_checkpoint_strategy.hpp"
 
-#include <algorithm>
-
 namespace smith {
 
 FieldStore::FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size, std::string prepend_name)
@@ -33,16 +31,6 @@ std::shared_ptr<DirichletBoundaryConditions> FieldStore::addBoundaryConditions(F
   return std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), field->space());
 }
 
-void FieldStore::addWeakFormUnknownArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
-{
-  FieldLabel argument_name_and_index{.field_name = argument_name, .field_index_in_residual = argument_index};
-  if (weak_form_name_to_unknown_name_index_.count(weak_form_name)) {
-    weak_form_name_to_unknown_name_index_.at(weak_form_name).push_back(argument_name_and_index);
-  } else {
-    weak_form_name_to_unknown_name_index_[weak_form_name] = std::vector<FieldLabel>{argument_name_and_index};
-  }
-}
-
 void FieldStore::addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
 {
   // Store the field name instead of index to avoid confusion between states_ and params_ indices
@@ -57,16 +45,16 @@ void FieldStore::addWeakFormArg(std::string weak_form_name, std::string argument
 
 void FieldStore::printMap()
 {
-  for (auto& keyval : weak_form_name_to_unknown_name_index_) {
+  for (const auto& keyval : weak_form_name_to_field_names_) {
     std::cout << "for residual: " << keyval.first << " ";
-    for (auto& name_index : keyval.second) {
-      std::cout << "arg " << name_index.field_name << " at " << name_index.field_index_in_residual << ", ";
+    for (size_t argument_index = 0; argument_index < keyval.second.size(); ++argument_index) {
+      std::cout << "arg " << keyval.second[argument_index] << " at " << argument_index << ", ";
     }
     std::cout << std::endl;
   }
 }
 
-BlockIndexMap FieldStore::indexMap(const std::vector<std::string>& residual_names) const
+BlockArgumentMap FieldStore::indexMap(const std::vector<std::string>& residual_names) const
 {
   std::map<size_t, size_t> global_state_to_local_col;
   for (size_t res_i = 0; res_i < residual_names.size(); ++res_i) {
@@ -77,15 +65,13 @@ BlockIndexMap FieldStore::indexMap(const std::vector<std::string>& residual_name
                                                residual_names[owner->second], res_name, global_state_idx));
   }
 
-  BlockIndexMap block_indices(residual_names.size(),
-                              std::vector<BlockArgumentIndices>(residual_names.size(), BlockArgumentIndices{}));
+  BlockArgumentMap block_indices(residual_names.size(),
+                                 std::vector<BlockArgumentIndices>(residual_names.size(), BlockArgumentIndices{}));
   for (size_t res_i = 0; res_i < residual_names.size(); ++res_i) {
     const std::string& res_name = residual_names[res_i];
     const auto& field_names = weak_form_name_to_field_names_.at(res_name);
-    const auto& dependencies = weak_form_name_to_unknown_name_index_.at(res_name);
     size_t state_slot = 0;
-    for (size_t argument_index = 0; argument_index < field_names.size(); ++argument_index) {
-      const auto& field_name = field_names[argument_index];
+    for (const auto& field_name : field_names) {
       if (!to_states_index_.count(field_name)) {
         continue;
       }
@@ -93,13 +79,6 @@ BlockIndexMap FieldStore::indexMap(const std::vector<std::string>& residual_name
       size_t global_state_index = to_states_index_.at(field_name);
       auto column = global_state_to_local_col.find(global_state_index);
       if (column != global_state_to_local_col.end()) {
-        bool marked_dependency = std::any_of(dependencies.begin(), dependencies.end(), [&](const auto& dependency) {
-          return dependency.field_index_in_residual == argument_index && dependency.field_name == field_name;
-        });
-        SLIC_ERROR_IF(!marked_dependency,
-                      axom::fmt::format("Field '{}' in weak form '{}' belongs to solved column {} but is not marked "
-                                        "as an unknown dependency",
-                                        field_name, res_name, column->second));
         block_indices[res_i][column->second].push_back(state_slot);
       }
       ++state_slot;

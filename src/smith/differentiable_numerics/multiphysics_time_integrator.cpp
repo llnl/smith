@@ -69,14 +69,14 @@ std::pair<std::vector<FieldState>, std::vector<ReactionState>> MultiphysicsTimeI
 
       SLIC_ERROR_ROOT_IF(cycle_zero_unknowns.size() != cz_sys->weak_forms.size(),
                          "Cycle zero system result count does not match number of cycle-zero weak forms");
-      SLIC_ERROR_ROOT_IF(
-          !cz_sys->solved_field_names.empty() && cz_sys->solved_field_names.size() != cz_sys->weak_forms.size(),
-          "Cycle zero solved_field_names size does not match number of weak forms");
+      SLIC_ERROR_ROOT_IF(!cz_sys->solve_result_field_names.empty() &&
+                             cz_sys->solve_result_field_names.size() != cz_sys->weak_forms.size(),
+                         "Cycle zero solve_result_field_names size does not match number of weak forms");
       for (size_t i = 0; i < cz_sys->weak_forms.size(); ++i) {
         const std::string result_field_name =
-            cz_sys->solved_field_names.empty()
+            cz_sys->solve_result_field_names.empty()
                 ? system_->field_store->getWeakFormFieldNames(cz_sys->weak_forms[i]->name()).unknown
-                : cz_sys->solved_field_names[i];
+                : cz_sys->solve_result_field_names[i];
         size_t result_field_state_idx = system_->field_store->getFieldIndex(result_field_name);
         current_states[result_field_state_idx] = cycle_zero_unknowns[i];
         system_->field_store->setField(result_field_state_idx, cycle_zero_unknowns[i]);

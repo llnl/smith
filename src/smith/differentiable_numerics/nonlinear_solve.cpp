@@ -26,8 +26,9 @@ void applyBoundaryConditions(double time, const smith::BoundaryConditionManager*
   }
 }
 
-std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals, const BlockIndexMap block_indices,
-                                    const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
+std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
+                                    const BlockArgumentMap& block_indices, const FieldState& shape_disp,
+                                    const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
                                     const std::vector<const BoundaryConditionManager*>& bc_managers)

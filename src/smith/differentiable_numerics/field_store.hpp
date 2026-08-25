@@ -38,12 +38,7 @@ struct UnknownAndTestFieldNames {
 };
 
 /**
- * @brief Representation of a field type with a name and dependency flag.
- *
- * @c is_unknown is intentionally a per-instance flag. It marks every occurrence whose value
- * depends on a field solved within the same system. Solver stages determine which dependencies
- * are active during each block solve. History and external fields remain fixed.
- *
+ * @brief Representation of a named field type.
  * @tparam Space The finite element space type.
  * @tparam Time The time integration type (unused by default).
  */
@@ -51,14 +46,9 @@ template <typename Space, typename Time = void*>
 struct FieldType {
   using space_type = Space;  ///< The finite element space type.
 
-  /**
-   * @brief Construct a new FieldType object.
-   * @param n Name of the field.
-   * @param is_unknown_ Whether this field depends on a system-solved unknown.
-   */
-  FieldType(std::string n, bool is_unknown_ = false) : name(n), is_unknown(is_unknown_) {}
-  std::string name;         ///< Name of the field.
-  bool is_unknown = false;  ///< True when this argument depends on a system-solved unknown.
+  /// Construct a field type with the given name.
+  FieldType(std::string n) : name(n) {}
+  std::string name;  ///< Name of the field.
 };
 
 /**
@@ -131,13 +121,10 @@ struct FieldStore {
   /**
    * @brief Add an independent field (a solver unknown) to the store.
    *
-   * Registers the field as an unknown by setting @c type.is_unknown = true, so the same
-   * @c FieldType<Space> object can later be passed to @c createSpaces to mark this argument
-   * as a solved dependency. Also creates a boundary-condition slot keyed by field
-   * name that callers can populate after this call returns.
+   * Also creates a boundary-condition slot keyed by field name that callers can populate.
    *
    * @tparam Space The finite element space type.
-   * @param type The field type specification; @c type.is_unknown is set to @c true on return.
+   * @param type The field type specification.
    * @param time_rule The time integration rule governing how this unknown and its dependents
    *        are related across time steps.
    * @return std::shared_ptr<DirichletBoundaryConditions> The boundary conditions for this field.
@@ -147,7 +134,6 @@ struct FieldStore {
                                                               std::shared_ptr<TimeIntegrationRule> time_rule)
   {
     type.name = prefix(type.name);
-    type.is_unknown = true;
     to_states_index_[type.name] = states_.size();
     FieldState new_field = smith::createFieldState<Space>(*graph_, Space{}, type.name, mesh_->tag());
     states_.push_back(new_field);
@@ -174,12 +160,8 @@ struct FieldStore {
    * time integration rule can reconstruct the current rate from the pair
    * (predicted_value, stored_old_value).
    *
-   * **Return value:** a @c FieldType<Space> whose @c name is the name of the newly registered
-   * field and @c is_unknown is @c false.  This object is intentionally returned (rather than
-   * discarded) so that callers can pass it directly to @c createSpaces when assembling the
-   * weak-form argument list. To make it a solved dependency for a specific weak form (e.g.
-   * the cycle-zero acceleration solve), copy the returned object and set @c is_unknown = true
-   * before passing it to @c createSpaces.
+   * Returns a descriptor for the newly registered field so callers can pass it directly to
+   * @c createSpaces when assembling the weak-form argument list.
    *
    * @tparam Space The finite element space type (must match the independent field).
    * @param independent_field The @c FieldType of the independent (predicted) field.
@@ -225,14 +207,6 @@ struct FieldStore {
   }
 
   /**
-   * @brief Register an argument to a weak form as an unknown.
-   * @param weak_form_name Name of the weak form.
-   * @param argument_name Name of the argument field.
-   * @param argument_index Index of the argument in the weak form's argument list.
-   */
-  void addWeakFormUnknownArg(std::string weak_form_name, std::string argument_name, size_t argument_index);
-
-  /**
    * @brief Register an argument to a weak form.
    * @param weak_form_name Name of the weak form.
    * @param argument_name Name of the argument field.
@@ -259,14 +233,8 @@ struct FieldStore {
    *
    * This is the primary setup method for constructing a weak form.  It:
    *   1. Registers explicit test-space and solver-owned field names.
-   *   2. Iterates over every @c FieldType in @p types (in order), registering each as an input
-   *      argument. The solver-owned field and every argument with @c type.is_unknown are registered
-   *      as dependencies on system-solved unknowns.
+   *   2. Registers every @c FieldType in @p types as an ordered input argument.
    *   3. Returns the ordered vector of finite element spaces.
-   *
-   * Every occurrence of a field solved by another row in the same system must have
-   * @c is_unknown = true. Solver stages choose active Jacobian columns. Fixed history fields and
-   * fields owned by external systems remain false.
    *
    * @param weak_form_name  Name of the weak form being constructed.
    * @param field_names Names of the test-space and solver-owned fields.
@@ -285,9 +253,6 @@ struct FieldStore {
     auto register_field = [&](auto type) {
       spaces.push_back(&getField(type.name).get()->space());
       addWeakFormArg(weak_form_name, type.name, arg_num);
-      if (type.is_unknown || type.name == field_names.unknown) {
-        addWeakFormUnknownArg(weak_form_name, type.name, arg_num);
-      }
       unknown_found = unknown_found || type.name == field_names.unknown;
       ++arg_num;
     };
@@ -325,7 +290,7 @@ struct FieldStore {
    * @param residual_names Names of the residuals.
    * @return Slot-list matrix mapping residual rows and solved columns.
    */
-  BlockIndexMap indexMap(const std::vector<std::string>& residual_names) const;
+  BlockArgumentMap indexMap(const std::vector<std::string>& residual_names) const;
 
   /**
    * @brief Get the boundary condition managers for the given weak forms, one per residual row.
@@ -475,14 +440,7 @@ struct FieldStore {
   /// Boundary conditions keyed by primary unknown field name.
   std::map<std::string, std::shared_ptr<DirichletBoundaryConditions>> boundary_conditions_;
 
-  struct FieldLabel {
-    std::string field_name;
-    size_t field_index_in_residual;
-  };
-
   std::shared_ptr<DirichletBoundaryConditions> addBoundaryConditions(FEFieldPtr field);
-
-  std::map<std::string, std::vector<FieldLabel>> weak_form_name_to_unknown_name_index_;
 
   std::map<std::string, std::vector<std::string>> weak_form_name_to_field_names_;
 

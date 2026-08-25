@@ -32,7 +32,7 @@ static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max()
 using BlockArgumentIndices = std::vector<size_t>;
 
 /// Matrix mapping residual rows and solved columns to local argument slots.
-using BlockIndexMap = std::vector<std::vector<BlockArgumentIndices>>;
+using BlockArgumentMap = std::vector<std::vector<BlockArgumentIndices>>;
 
 /// @brief Solve a block nonlinear system of equations as defined by the vector of weak form
 /// @param residual_evals Vector of weak forms which define the equations to be solved
@@ -50,7 +50,8 @@ using BlockIndexMap = std::vector<std::vector<BlockArgumentIndices>>;
 /// @param solver The nonlinear block solver used to solve the system of equations
 /// @param bc_managers Holds information about which degrees of freedom (DOFS)
 /// @return Vector of field solutions satisfying the weak forms
-std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals, const BlockIndexMap block_indices,
+std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
+                                    const BlockArgumentMap& block_indices,
                                     const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
@@ -72,7 +73,7 @@ inline FieldState solve(const WeakForm& residual_eval, const FieldState& shape_d
                         const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0)
 {
   std::vector<const BoundaryConditionManager*> bc_managers{&bcs.getBoundaryConditionManager()};
-  BlockIndexMap block_indices{{BlockArgumentIndices{unknown_state_index}}};
+  BlockArgumentMap block_indices{{BlockArgumentIndices{unknown_state_index}}};
   auto solutions = block_solve({const_cast<WeakForm*>(&residual_eval)}, block_indices, shape_disp, {states}, {params},
                                time_info, &solver, bc_managers);
   return solutions[0];

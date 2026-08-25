@@ -180,13 +180,14 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
 
   std::vector<ReactionState> reactions;
   for (size_t step = 0; step < 10; ++step) {
-    std::tie(states, reactions) = advancer->advanceState(TimeInfo(time, dt, step), shape_disp, states, params);
+    std::tie(states, reactions) =
+        advancer->advanceState(TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
     pv_writer.write(step + 1, time, states);
   }
 
-  auto displacement =
-      plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("displacement"));
+  auto displacement = plastic_mechanics_system->field_store->getField(
+      plastic_mechanics_system->field_store->prefix("displacement"));
   auto plastic_defgrad =
       plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("plastic_defgrad"));
   auto plastic_strain =
@@ -346,8 +347,8 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   auto shape_disp = plastic_mechanics_system->field_store->getShapeDisp();
   auto params = plastic_mechanics_system->field_store->getParameterFields();
 
-  auto displacement =
-      plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("displacement"));
+  auto displacement = plastic_mechanics_system->field_store->getField(
+      plastic_mechanics_system->field_store->prefix("displacement"));
   auto disp_squared = 0.5 * innerProduct(displacement, displacement);
   gretl::set_as_objective(disp_squared);
 

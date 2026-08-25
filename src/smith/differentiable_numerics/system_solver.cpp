@@ -63,7 +63,7 @@ void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_so
 }
 
 std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
-                                            const BlockIndexMap& block_indices, const FieldState& shape_disp,
+                                            const BlockArgumentMap& block_indices, const FieldState& shape_disp,
                                             const std::vector<std::vector<FieldState>>& states,
                                             const std::vector<std::vector<FieldState>>& params,
                                             const TimeInfo& time_info,
@@ -164,7 +164,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
       size_t num_stage_blocks = stage.block_indices.size();
 
       std::vector<WeakForm*> stage_residuals;
-      BlockIndexMap stage_block_indices;
+      BlockArgumentMap stage_block_indices;
       std::vector<std::vector<FieldState>> stage_states;
       std::vector<std::vector<FieldState>> stage_params;
       std::vector<const BoundaryConditionManager*> stage_bc_managers;
