@@ -828,7 +828,7 @@ class Functional<test(trials...), exec> {
       }
     };
 
-    uint64_t max_buffer_size()
+    uint64_t max_buffer_size() const
     {
       uint64_t max_entries = 0;
       for (auto& integral : form_.integrals_) {
