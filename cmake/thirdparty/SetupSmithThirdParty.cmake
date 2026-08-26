@@ -44,7 +44,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # CUDAToolkit required to find cublasLt library
         # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
         find_package(CUDAToolkit REQUIRED)
-        set(smith_device_depends blt::cuda CUDA::cublasLt CUDA::nvptxcompiler_static CACHE STRING "" FORCE)
+        set(smith_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
     elseif(SMITH_ENABLE_HIP)
         set(smith_device_depends blt::hip CACHE STRING "" FORCE)
     else()
