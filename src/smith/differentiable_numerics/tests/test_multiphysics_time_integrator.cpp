@@ -531,25 +531,36 @@ TEST(SystemSolver, AppendsStagesWithBlockMappingForCombinedSubsystems)
 
 TEST(SystemSolver, RoutesRepeatedDependenciesWithoutUpdatingHistory)
 {
+  constexpr int dim = 2;
+  constexpr int order = 1;
+  using ShapeSpace = H1<order, dim>;
+  using FieldBTestSpace = H1<order>;
+  using FieldBUnknownSpace = H1<order>;
+  using FieldAFirstOccurrenceSpace = H1<order>;
+  using FieldASecondOccurrenceSpace = H1<order>;
+  using FieldAHistorySpace = H1<order>;
+  using FieldBParameters =
+      Parameters<FieldBUnknownSpace, FieldAFirstOccurrenceSpace, FieldASecondOccurrenceSpace, FieldAHistorySpace>;
+  using FieldBWeakForm = FunctionalWeakForm<dim, FieldBTestSpace, FieldBParameters>;
+
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "system_solver_repeated_dependency_routing");
 
   auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
                                      "system_solver_repeated_dependency_routing_mesh");
   auto field_store = std::make_shared<FieldStore>(mesh, 20);
-  FieldType<H1<1, 2>> shape_disp_type("shape_displacement");
+  FieldType<ShapeSpace> shape_disp_type("shape_displacement");
   field_store->addShapeDisp(shape_disp_type);
 
   auto static_rule = std::make_shared<StaticTimeIntegrationRule>();
   auto backward_euler_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
-  FieldType<H1<1>> field_a_type("field_a");
-  FieldType<H1<1>> field_b_type("field_b");
+  FieldType<FieldAFirstOccurrenceSpace> field_a_type("field_a");
+  FieldType<FieldBUnknownSpace> field_b_type("field_b");
   field_store->addIndependent(field_a_type, backward_euler_rule);
   auto field_a_old_type = field_store->addDependent(field_a_type, FieldStore::TimeDerivative::VAL, "field_a_old");
   field_store->addIndependent(field_b_type, static_rule);
 
   auto field_a_weak_form = buildScalarDiffusionWeakForm("field_a_residual", mesh, field_store, field_a_type);
-  using FieldBWeakForm = FunctionalWeakForm<2, H1<1>, Parameters<H1<1>, H1<1>, H1<1>, H1<1>>>;
   auto field_b_weak_form = std::make_shared<FieldBWeakForm>(
       "field_b_residual", mesh, field_store->getField(field_b_type.name).get()->space(),
       field_store->createSpaces("field_b_residual", field_b_type.name, field_b_type, field_a_type, field_a_type,
@@ -559,7 +570,7 @@ TEST(SystemSolver, RoutesRepeatedDependenciesWithoutUpdatingHistory)
                                      return field_a_first + field_a_second - 2.0 * field_a_old;
                                    });
 
-  field_store->setField(field_store->getFieldIndex(field_a_old_type.name), field_store->getField(field_a_type.name));
+  *field_store->getField(field_a_old_type.name).get() = *field_store->getField(field_a_type.name).get();
 
   const std::vector<std::string> residual_names{field_a_weak_form->name(), field_b_weak_form->name()};
   const auto block_indices = field_store->indexMap(residual_names);
@@ -568,10 +579,17 @@ TEST(SystemSolver, RoutesRepeatedDependenciesWithoutUpdatingHistory)
   EXPECT_EQ(block_indices[1][0], BlockArgumentIndices({1, 2}));
   EXPECT_EQ(block_indices[1][1], BlockArgumentIndices({0}));
 
-  auto field_a_solver = std::make_shared<ConstantNonlinearBlockSolver>(3.0);
+  // Force field_a to a known nonzero solution without testing nonlinear convergence. Relaxation produces a
+  // predictable update, isolating whether SystemSolver propagates every repeated current-field slot while leaving
+  // history unchanged.
+  constexpr double field_a_solved_value = 3.0;
+  constexpr double field_a_relaxation_factor = 0.5;
+  constexpr int max_staggered_iterations = 1;
+  constexpr bool exact_staggered_steps = true;
+  auto field_a_solver = std::make_shared<ConstantNonlinearBlockSolver>(field_a_solved_value);
   auto field_b_solver = std::make_shared<ResidualRecordingNonlinearBlockSolver>();
-  SystemSolver solver(1, true);
-  solver.addSubsystemSolver({0}, field_a_solver, 0.5);
+  SystemSolver solver(max_staggered_iterations, exact_staggered_steps);
+  solver.addSubsystemSolver({0}, field_a_solver, field_a_relaxation_factor);
   solver.addSubsystemSolver({1}, field_b_solver);
 
   const std::vector<WeakForm*> residuals{field_a_weak_form.get(), field_b_weak_form.get()};
@@ -583,8 +601,10 @@ TEST(SystemSolver, RoutesRepeatedDependenciesWithoutUpdatingHistory)
   auto solutions =
       solver.solve(residuals, block_indices, field_store->getShapeDisp(), states, params, time_info, bc_managers);
 
-  EXPECT_NEAR((*solutions[0].get())[0], 1.5, 1.0e-12);
+  // field_a starts at zero, ConstantNonlinearBlockSolver returns 3.0, and 0.5 relaxation produces 1.5.
+  EXPECT_NEAR((*solutions[0].get())[0], field_a_relaxation_factor * field_a_solved_value, 1.0e-12);
 
+  // Expected field_b inputs contain relaxed field_a in both current-value slots and unchanged field_a_old history.
   auto expected_field_b_states = states[1];
   expected_field_b_states[1] = solutions[0];
   expected_field_b_states[2] = solutions[0];
@@ -611,13 +631,17 @@ TEST(FieldStore, UsesExplicitUnknownFieldInsteadOfTestField)
   field_store->addIndependent(test_type, static_rule);
   auto unknown_bcs = field_store->addIndependent(unknown_type, static_rule);
 
+  // Most weak forms use one field for both solver-owned unknown and test space. This case separates those roles:
+  // unknown_field owns the solve and boundary conditions, while test_field defines residual and reaction spaces.
   field_store->createSpaces("residual", {.unknown = unknown_type.name, .test = test_type.name}, test_type,
                             unknown_type);
 
   const auto block_indices = field_store->indexMap({"residual"});
   EXPECT_EQ(field_store->getWeakFormFieldNames("residual").test, test_type.name);
   EXPECT_EQ(field_store->getWeakFormFieldNames("residual").unknown, unknown_type.name);
+  // Unlike the matching-name case, the diagonal unknown occupies argument slot 1 instead of test-field slot 0.
   EXPECT_EQ(block_indices[0][0], BlockArgumentIndices({1}));
+  // Boundary conditions follow the solver-owned unknown; reaction output follows the test space.
   EXPECT_EQ(field_store->getBoundaryConditionManagers({"residual"})[0], &unknown_bcs->getBoundaryConditionManager());
   EXPECT_EQ(field_store->getReactionInfos()[0].space, &field_store->getField(test_type.name).get()->space());
 
