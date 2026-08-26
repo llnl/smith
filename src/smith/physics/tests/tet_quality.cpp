@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <iostream>
+#include <format>
 #include <memory>
 #include <string>
 
@@ -13,6 +13,7 @@
 
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
+#include "smith/infrastructure/logger.hpp"
 #include "smith/mesh_utils/mesh_utils.hpp"
 #include "smith/numerics/functional/domain.hpp"
 #include "smith/numerics/functional/dual.hpp"
@@ -82,8 +83,10 @@ TEST(QoI, TetrahedronQuality)
 
   smith::FiniteElementState u(*fes, "displacement");
   u = 0.0;
-  std::cout << "(ShapeAwareFunctional) mu(J) for right tetrahedron: " << saf_qoi(t, u) << std::endl;
-  std::cout << "(          Functional) mu(J) for right tetrahedron: " << qoi(t, u) << std::endl;
+  const double shape_aware_right_tet_quality = saf_qoi(t, u);
+  const double functional_right_tet_quality = qoi(t, u);
+  SLIC_INFO_ROOT(std::format("(ShapeAwareFunctional) mu(J) for right tetrahedron: {}", shape_aware_right_tet_quality));
+  SLIC_INFO_ROOT(std::format("(          Functional) mu(J) for right tetrahedron: {}", functional_right_tet_quality));
 
   // apply a displacement to make the domain into a regular tetrahedron
   u.setFromFieldFunction([](tensor<double, dim> X) {
@@ -94,8 +97,12 @@ TEST(QoI, TetrahedronQuality)
     return displacement;
   });
 
-  std::cout << "(ShapeAwareFunctional) mu(J) for regular tetrahedron: " << saf_qoi(t, u) << std::endl;
-  std::cout << "(          Functional) mu(J) for regular tetrahedron: " << qoi(t, u) << std::endl;
+  const double shape_aware_regular_tet_quality = saf_qoi(t, u);
+  const double functional_regular_tet_quality = qoi(t, u);
+  SLIC_INFO_ROOT(
+      std::format("(ShapeAwareFunctional) mu(J) for regular tetrahedron: {}", shape_aware_regular_tet_quality));
+  SLIC_INFO_ROOT(
+      std::format("(          Functional) mu(J) for regular tetrahedron: {}", functional_regular_tet_quality));
 }
 
 int main(int argc, char* argv[])
