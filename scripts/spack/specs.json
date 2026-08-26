@@ -22,11 +22,11 @@
 
     "rzvector":
     [ "+devtools+adiak+caliper~enzyme cuda_arch=90 %gcc_13",
-      "+devtools+adiak+caliper+enzyme cuda_arch=90 %clang_19" ],
+      "+devtools+adiak+caliper~enzyme cuda_arch=90 %clang_19" ],
 
     "matrix":
     [ "+devtools+adiak+caliper~enzyme cuda_arch=90 %gcc_13",
-      "+devtools+adiak+caliper+enzyme cuda_arch=90 %clang_19" ],
+      "+devtools+adiak+caliper~enzyme cuda_arch=90 %clang_19" ],
 
     "blueos_3_ppc64le_ib_p9":
     [ "+devtools+cuda+adiak+caliper~strumpack %clang_gfortran cuda_arch=70" ],
