@@ -18,7 +18,7 @@ If you haven't used Docker before, it is recommended that you check out the
    images are built for the AMD64 architecture. For example:
    
    .. code-block:: bash
-
+   
       docker pull --platform=linux/amd64 seracllnl/tpls:gcc-14_latest
       docker run --platform=linux/amd64 -it seracllnl/tpls:gcc-14_latest /bin/bash
 
