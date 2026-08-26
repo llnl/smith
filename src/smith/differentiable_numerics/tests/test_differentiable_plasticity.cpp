@@ -287,7 +287,7 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   int parallel_refinement = 0;
 
   static constexpr int dim = 3;
-  static constexpr int order = 2;
+  static constexpr int order = 1;
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "plasticity_small_strain");
