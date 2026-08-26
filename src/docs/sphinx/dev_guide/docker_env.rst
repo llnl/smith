@@ -12,6 +12,17 @@ Using a Docker Image for Development
 If you haven't used Docker before, it is recommended that you check out the 
 `Docker tutorial <https://docs.docker.com/get-started/>`_ before proceeding.
 
+.. note::
+   When using an Apple Silicon Mac, add ``--platform=linux/amd64`` to Docker commands because the Smith container
+   images are built for the AMD64 architecture. For example:
+
+   .. code-block:: bash
+      docker pull --platform=linux/amd64 seracllnl/tpls:gcc-14_latest
+      docker run --platform=linux/amd64 -it seracllnl/tpls:gcc-14_latest /bin/bash
+
+.. note::
+   Our docker images are uploaded to a grandfathered Docker Hub account named `seracllnl` as opposed to Smith.
+
 1. Clone a copy of the Smith repo to your computer: ``git clone --recursive https://github.com/LLNL/smith.git``
 
 #. Once you've installed ``docker``, navigate to our `Dockerhub page <https://hub.docker.com/r/seracllnl/tpls/tags?page=1&ordering=last_updated>`_
@@ -26,9 +37,9 @@ If you haven't used Docker before, it is recommended that you check out the
 
 .. image:: pull_complete.png
 
-5. You can now run the image.  Run ``docker run -it -u serac -v /your/serac/repo:/home/serac/serac seracllnl/tpls:clang-14_latest /bin/bash``,
+5. You can now run the image.  Run ``docker run -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash``,
    replacing the tag (the compiler name following the ``tpls:``) with the tag you used in the ``docker pull`` command and
-   replacing ``/your/serac/repo`` with the path to the Smith repo you cloned in the first step.  This will open a terminal into the image.
+   replacing ``/your/smith/repo`` with the path to the Smith repo you cloned in the first step.  This will open a terminal into the image.
 
 .. note::
    The ``-v`` option to ``docker run`` mounts a `Docker volume <https://docs.docker.com/storage/volumes/>`_ into the container.
@@ -40,7 +51,7 @@ If you haven't used Docker before, it is recommended that you check out the
 
    .. code-block:: bash
 
-      $ cd /home/serac/serac 
+      $ cd /home/smith/smith
       $ python ./config-build.py -hc host-configs/docker/<container-host-config>.cmake -bp ../build -ip ../install
       $ cd ../build
       $ make -j4
