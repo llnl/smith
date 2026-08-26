@@ -13,23 +13,22 @@ If you haven't used Docker before, it is recommended that you check out the
 `Docker tutorial <https://docs.docker.com/get-started/>`_ before proceeding.
 
 .. note::
-   
    When using an Apple Silicon Mac, add ``--platform=linux/amd64`` to Docker commands because the Smith container
-   images are built for the AMD64 architecture. For example:
-   
-   .. code-block:: bash
-   
-      docker pull --platform=linux/amd64 seracllnl/tpls:gcc-14_latest
-      docker run --platform=linux/amd64 -it seracllnl/tpls:gcc-14_latest /bin/bash
+   images are built for the AMD64 architecture. We give examples of both.
 
 .. note::
-   Our docker images are uploaded to a grandfathered Docker Hub account named `seracllnl` as opposed to Smith.
+   Our docker images are uploaded to a grandfathered Docker Hub account named ```seracllnl``` as opposed to ``smith``.
 
 1. Clone a copy of the Smith repo to your computer: ``git clone --recursive https://github.com/LLNL/smith.git``
+2. Once you've installed ``docker``, navigate to our `Dockerhub page <https://hub.docker.com/r/seracllnl/tpls/tags?page=1&ordering=last_updated>`_
+   and select the most recent image corresponding to the compiler you'd like to use.  `clang@19`` and `gcc@14`` images are currently offered.
+3. Copy the pull command corresponding to the image you've selected. For example:
 
-#. Once you've installed ``docker``, navigate to our `Dockerhub page <https://hub.docker.com/r/seracllnl/tpls/tags?page=1&ordering=last_updated>`_
-   and select the most recent image corresponding to the compiler you'd like to use.  Clang 14 and GCC 13 images are currently offered.
-#. Copy the pull command corresponding to the image you've selected (in this case, it's ``docker pull seracllnl/tpls:clang-14_latest``):
+.. code-block:: bash
+   # General pull command for clang@19
+   docker pull seracllnl/tpls:clang-19_latest
+   # MacOS Apple silicone pull command for clang@19
+   docker pull --platform=linux/amd64 seracllnl/tpls:clang-19_latest
 
 .. image:: copy_pull_cmd.png
    :scale: 50 %
@@ -39,9 +38,16 @@ If you haven't used Docker before, it is recommended that you check out the
 
 .. image:: pull_complete.png
 
-5. You can now run the image.  Run ``docker run -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash``,
-   replacing the tag (the compiler name following the ``tpls:``) with the tag you used in the ``docker pull`` command and
-   replacing ``/your/smith/repo`` with the path to the Smith repo you cloned in the first step.  This will open a terminal into the image.
+5. You can now run the image.  Run the Docker image by replacing the tag (the compiler name following the ``tpls:``) with the tag
+   you used in the ``docker pull`` command and replacing ``/your/smith/repo`` with the path to the Smith repo you cloned in the
+   first step.  This will open a terminal into the image. For example:
+
+.. code-block:: bash
+   # General run command for clang@19
+   docker run -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash
+   # MacOS Apple silicone run command for clang@19
+   docker run --platform=linux/amd64 -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash
+
 
 .. note::
    The ``-v`` option to ``docker run`` mounts a `Docker volume <https://docs.docker.com/storage/volumes/>`_ into the container.
@@ -59,5 +65,5 @@ If you haven't used Docker before, it is recommended that you check out the
       $ make -j4
       $ make test
 
-#. You can now make modifications to the code from your host machine (e.g., via a graphical text editor), and use the Docker container
+7. You can now make modifications to the code from your host machine (e.g., via a graphical text editor), and use the Docker container
    terminal to recompile/run/test your changes.
