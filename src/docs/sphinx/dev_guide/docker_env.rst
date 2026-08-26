@@ -13,10 +13,12 @@ If you haven't used Docker before, it is recommended that you check out the
 `Docker tutorial <https://docs.docker.com/get-started/>`_ before proceeding.
 
 .. note::
+   
    When using an Apple Silicon Mac, add ``--platform=linux/amd64`` to Docker commands because the Smith container
    images are built for the AMD64 architecture. For example:
    
    .. code-block:: bash
+
       docker pull --platform=linux/amd64 seracllnl/tpls:gcc-14_latest
       docker run --platform=linux/amd64 -it seracllnl/tpls:gcc-14_latest /bin/bash
 
