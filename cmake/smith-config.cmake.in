@@ -161,10 +161,6 @@ if(NOT SMITH_FOUND)
                          DEPENDS_ON "@MFEM_LIBRARIES@")
     endif()
 
-    # mfem brings in slepc but doesn't include required arpack, add it
-    if(SMITH_USE_ARPACK)
-      target_link_libraries(mfem INTERFACE arpack)
-    endif()
   endif()
 
   # Axom
@@ -196,6 +192,15 @@ if(NOT SMITH_FOUND)
     else()
       include(${SMITH_CMAKE_CONFIG_DIR}/tribol-targets.cmake)
     endif()
+  endif()
+
+  # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
+  if(SMITH_USE_ARPACK)
+    foreach(_target mfem axom::mfem tribol::mfem)
+      if(TARGET ${_target})
+        target_link_libraries(${_target} INTERFACE @ARPACK_LIBRARIES@)
+      endif()
+    endforeach()
   endif()
 
   include(${SMITH_CMAKE_CONFIG_DIR}/smith-targets.cmake)

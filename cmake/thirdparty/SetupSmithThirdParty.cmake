@@ -419,11 +419,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(MFEM_BUILT_WITH_CMAKE TRUE)
     endif()
 
-    # mfem brings in slepc but doesn't include required arpack, add it
-    if(ARPACK_FOUND)
-        target_link_libraries(mfem INTERFACE arpack)
-    endif()
-
     #------------------------------------------------------------------------------
     # Axom
     #------------------------------------------------------------------------------
@@ -701,6 +696,15 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                 if (ENABLE_FORTRAN AND DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
                     target_link_libraries(${_target} INTERFACE "-lmpifort")
                 endif()
+            endif()
+        endforeach()
+    endif()
+
+    # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
+    if(ARPACK_FOUND)
+        foreach(_target ${_mfem_targets})
+            if(TARGET ${_target})
+                target_link_libraries(${_target} INTERFACE ${ARPACK_LIBRARIES})
             endif()
         endforeach()
     endif()
