@@ -40,13 +40,13 @@ class DiagonalOperator : public mfem::Operator {
   const mfem::Vector& d_;
 };
 
-TEST(LinearSolverNone, Identity)
+TEST(LinearSolverPrecondOnly, Identity)
 {
   int size = 10;
   IdentityOperator op(size);
 
   LinearSolverOptions linear_opts;
-  linear_opts.linear_solver = LinearSolver::None;
+  linear_opts.linear_solver = LinearSolver::PrecondOnly;
   linear_opts.preconditioner = Preconditioner::None;
 
   NonlinearSolverOptions nonlinear_opts;
@@ -68,7 +68,7 @@ TEST(LinearSolverNone, Identity)
   }
 }
 
-TEST(LinearSolverNone, Jacobi)
+TEST(LinearSolverPrecondOnly, DiagonalWithNoPreconditioner)
 {
   int size = 10;
   mfem::Vector d(size);
@@ -76,10 +76,8 @@ TEST(LinearSolverNone, Jacobi)
   DiagonalOperator op(d);
 
   LinearSolverOptions linear_opts;
-  linear_opts.linear_solver = LinearSolver::None;
-  linear_opts.preconditioner = Preconditioner::None;  // We'll set this manually if needed, but wait.
-  // Actually, Preconditioner::None with LinearSolver::None should be Identity.
-  // Let's test that first.
+  linear_opts.linear_solver = LinearSolver::PrecondOnly;
+  linear_opts.preconditioner = Preconditioner::None;
 
   NonlinearSolverOptions nonlinear_opts;
   nonlinear_opts.nonlin_solver = NonlinearSolver::Newton;
@@ -91,7 +89,7 @@ TEST(LinearSolverNone, Jacobi)
   mfem::Vector x(size);
   x = 1.0;
   // f(x) = 2x. df/dx = 2I.
-  // If LinearSolver::None and Preconditioner::None, it uses identity:
+  // LinearSolver::PrecondOnly with Preconditioner::None uses identity:
   // x_new = x - I * (2x) = x - 2x = -x.
 
   solver.solve(x);

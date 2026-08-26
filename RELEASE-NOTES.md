@@ -20,6 +20,15 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ### Added
 
 - Added this release notes file to track changes in project
+- Added composable differentiable-numerics systems for solid mechanics, thermal mechanics, internal variables, and
+  thermo-mechanics coupling through shared field stores.
+- Added `combineSystems` and `SystemSolver` support for monolithic and staggered coupled solves, including coupled relaxation algorithms, and fixed-sweep modes.
+- Added typed coupling and parameter-field registration APIs that interpolate each coupled physics pack with its own
+  time-integration rule before invoking material, source, traction, and objective callbacks.
+- Added post-solve and cycle-zero auxiliary systems for stress projection, initial acceleration solves, and other
+  derived-field updates in differentiable multiphysics time integration.
+- Added composable solid-mechanics and thermo-mechanics examples, tutorials, and regression tests covering coupled
+  sensitivities, finite-difference checks, field parameters, and solves.
 - Added axisymmetric solid mechanics materials and loads for 2D `(r, z)` meshes.
 - Added host-configs and CI testing for CZMatrix and RZVector machines
 
@@ -28,6 +37,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ### Deprecated
 
 ### Changed
+
+- Reworked the trust-region solver to use an MFEM/LAPACK subspace solve with cached reduced problems and simplified Steihaug-Toint CG internals.
 
 ### Fixed
 

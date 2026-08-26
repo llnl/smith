@@ -338,29 +338,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Prefix the "check" targets
         set(MFEM_CUSTOM_TARGET_PREFIX "mfem_" CACHE STRING "")
 
-        # Tweaks needed after Spack converted to the HDF5 CMake build system
-        # NOTE: we check if an hdf5 target is namespaced or not, since some versions
-        #       of hdf5 do not namespace their targets and others do
-        set(HDF5_TARGET_NAMES "" CACHE STRING "")
-        if(TARGET hdf5::hdf5-static)
-            list(APPEND HDF5_TARGET_NAMES hdf5::hdf5-static)
-        else()
-            list(APPEND HDF5_TARGET_NAMES hdf5-static)
-        endif()
-        if(TARGET hdf5::hdf5-shared)
-            list(APPEND HDF5_TARGET_NAMES hdf5::hdf5-shared)
-        else()
-            list(APPEND HDF5_TARGET_NAMES hdf5-shared)
-        endif()
-
-        if(TARGET hdf5::hdf5_hl-static)
-            set(HDF5_C_LIBRARY_hdf5_hl hdf5::hdf5_hl-static CACHE STRING "")
-        else()
-            set(HDF5_C_LIBRARY_hdf5_hl hdf5_hl-static CACHE STRING "")
-        endif()
-
-        set(HDF5_IMPORT_CONFIG "RELEASE" CACHE STRING "")
-
         # Add missing include dir to var that MFEM uses
         if (CALIPER_FOUND)
             get_target_property(CALIPER_INCLUDE_DIRS caliper INTERFACE_INCLUDE_DIRECTORIES)
@@ -525,10 +502,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             message(FATAL_ERROR "LUA_DIR is required to use the Axom submodule"
                                 "\nTry running CMake with '-DLUA_DIR=path/to/lua/install'\n ")
         endif()
-        set(AXOM_ENABLE_EXAMPLES OFF CACHE BOOL "")
-        set(AXOM_ENABLE_TESTS    OFF CACHE BOOL "")
-        set(AXOM_ENABLE_DOCS     OFF CACHE BOOL "")
-        set(AXOM_ENABLE_TOOLS    OFF CACHE BOOL "")
+        set(AXOM_ENABLE_EXAMPLES  OFF CACHE BOOL "")
+        set(AXOM_ENABLE_TESTS     OFF CACHE BOOL "")
+        set(AXOM_ENABLE_DOCS      OFF CACHE BOOL "")
+        set(AXOM_ENABLE_TOOLS     OFF CACHE BOOL "")
+        set(AXOM_ENABLE_TUTORIALS OFF CACHE BOOL "")
 
         # Used for the doxygen target
         set(AXOM_CUSTOM_TARGET_PREFIX "axom_" CACHE STRING "" FORCE)
