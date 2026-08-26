@@ -87,7 +87,6 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /**
    * @brief Add a body integral contribution to the residual
    *
-   * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
    * @tparam BodyIntegralType The type of the body integral
    * @param body_name The name of the registered domain over which the body integrals are evaluated.
    * @param integrand A function describing the body force applied.  Our convention for the sign of the residual
@@ -99,50 +98,55 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *    1. `double t` the time
    *    2. `tuple{tensor<T,dim>, isoparametric derivative} X` the spatial coordinates for the quadrature point and the
    * coordinate's isoparametric derivative.
-   *    3. `tuple{value, derivative}`, a variadic list of tuples (each with a values and spatial derivative),
-   *            one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
+   *    3. `tuple{value, derivative}`, a variadic list of tuples, one for each input field.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename BodyIntegralType>
-  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
+  template <typename BodyIntegralType, int... all_params>
+  void addBodyIntegralImpl(std::string body_name, BodyIntegralType integrand, std::integer_sequence<int, all_params...>)
   {
-    weak_form_->AddDomainIntegral(Dimension<spatial_dim>{}, DependsOn<active_parameters...>{}, integrand,
-                                  mesh_->domain(body_name));
+    weak_form_->AddDomainIntegral(
+        Dimension<spatial_dim>{}, DependsOn<all_params...>{},
+        [this, integrand](double /*time*/, auto X, auto... inputs) { return integrand(timeInfo(), X, inputs...); },
+        mesh_->domain(body_name));
 
     v_dot_weak_form_residual_->AddDomainIntegral(
-        Dimension<spatial_dim>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double time, auto X, auto V, auto... inputs) {
-          auto orig_tuple = integrand(time, X, inputs...);
+        Dimension<spatial_dim>{}, DependsOn<0, 1 + all_params...>{},
+        [this, integrand](double /*time*/, auto X, auto V, auto... inputs) {
+          auto orig_tuple = integrand(timeInfo(), X, inputs...);
           return smith::inner(get<VALUE>(V), get<VALUE>(orig_tuple)) +
                  smith::inner(get<DERIVATIVE>(V), get<DERIVATIVE>(orig_tuple));
         },
         mesh_->domain(body_name));
   }
 
-  /// @overload
-  template <typename BodyForceType>
-  void addBodyIntegral(std::string body_name, BodyForceType body_integral)
+  /// @brief Add a body integral depending only on selected input fields.
+  template <int... active_parameters, typename BodyIntegralType>
+  void addBodyIntegral(DependsOn<active_parameters...>, std::string body_name, BodyIntegralType integrand)
   {
-    addBodyIntegral(DependsOn<>{}, body_name, body_integral);
+    addBodyIntegralImpl(body_name, integrand, std::integer_sequence<int, active_parameters...>{});
+  }
+
+  /// @brief Add a body integral depending on all input fields to the weak form.
+  template <typename BodyIntegralType>
+  void addBodyIntegral(std::string body_name, BodyIntegralType integrand)
+  {
+    addBodyIntegralImpl(body_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
    * @brief Add a body source (body load) to the weak form
    *
-   * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BodyLoadType The type of the body load function
    * @param body_name The name of the registered domain over which the body loads are applied.
-   * @param depends_on Indices into fields which the body integral may depend on
    * @param load_function A function describing the body force applied.
    * @pre load_function must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tensor<T,dim> X` the spatial coordinates for the quadrature point.
-   *    3. `value`, a variadic list of field values, one tuple for each of the trial spaces specified in the
-   * `DependsOn<...>` argument.
+   *    3. `value`, a variadic list of field values, one for each input field.
    *    The expected return is the value of the source at X.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
@@ -151,24 +155,26 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename BodyLoadType>
+  /// @param depends_on Indices of input fields passed to @p load_function.
   void addBodySource(DependsOn<active_parameters...> depends_on, std::string body_name, BodyLoadType load_function)
   {
-    addBodyIntegral(depends_on, body_name, [load_function](double t, auto X, auto... inputs) {
-      return smith::tuple{-load_function(t, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+    addBodyIntegral(depends_on, body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      return smith::tuple{-load_function(t_info, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
     });
   }
 
-  /// @overload
-  template <int... active_parameters, typename BodyLoadType>
+  /// @brief Add a body source depending on all input fields.
+  template <typename BodyLoadType>
   void addBodySource(std::string body_name, BodyLoadType load_function)
   {
-    return addBodySource(DependsOn<>{}, body_name, load_function);
+    addBodyIntegral(body_name, [load_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      return smith::tuple{-load_function(t_info, get<VALUE>(X), get<VALUE>(inputs)...), smith::zero{}};
+    });
   }
 
   /**
    * @brief Add a boundary integral term to the weak form
    *
-   * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
    * @tparam BoundaryIntegrandType The type of the boundary integral function.
    * @param boundary_name The name of the registered domain over which the boundary integral is applied.
    * @param integrand A function describing the boundary integral term to include in the weak form.
@@ -180,93 +186,108 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @pre integrand must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tuple{tensor<T,dim>, surface isoparametric derivative} X` the spatial coordinates for the quadrature point
-   *    3. `tuple{value, surface isoparametric derivative}`, a variadic list of tuples (each with a values and
-   * derivative), one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
+   *    3. `tuple{value, surface isoparametric derivative}`, a variadic list of tuples, one for each input field.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename BoundaryIntegrandType>
-  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, BoundaryIntegrandType integrand)
+  template <typename BoundaryIntegrandType, int... all_params>
+  void addBoundaryIntegralImpl(std::string boundary_name, BoundaryIntegrandType integrand,
+                               std::integer_sequence<int, all_params...>)
   {
-    weak_form_->AddBoundaryIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
-                                    mesh_->domain(boundary_name));
+    weak_form_->AddBoundaryIntegral(
+        Dimension<spatial_dim - 1>{}, DependsOn<all_params...>{},
+        [this, integrand](double /*time*/, auto X, auto... params) { return integrand(timeInfo(), X, params...); },
+        mesh_->domain(boundary_name));
 
     v_dot_weak_form_residual_->AddBoundaryIntegral(
-        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double t, auto X, auto V, auto... params) {
-          auto orig_surface_flux = integrand(t, X, params...);
+        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + all_params...>{},
+        [this, integrand](double /*time*/, auto X, auto V, auto... params) {
+          auto orig_surface_flux = integrand(timeInfo(), X, params...);
           return smith::inner(get<VALUE>(V), orig_surface_flux);
         },
         mesh_->domain(boundary_name));
   }
 
-  /// @overload
+  /// @brief Add a boundary integral depending only on selected input fields.
+  template <int... active_parameters, typename BoundaryIntegrandType>
+  void addBoundaryIntegral(DependsOn<active_parameters...>, std::string boundary_name, BoundaryIntegrandType integrand)
+  {
+    addBoundaryIntegralImpl(boundary_name, integrand, std::integer_sequence<int, active_parameters...>{});
+  }
+
+  /// @brief Add a boundary integral depending on all input fields to the weak form.
   template <typename BoundaryIntegrandType>
   void addBoundaryIntegral(std::string boundary_name, const BoundaryIntegrandType& integrand)
   {
-    addBoundaryIntegral(DependsOn<>{}, boundary_name, integrand);
+    addBoundaryIntegralImpl(boundary_name, integrand, std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
    * @brief Add a interior boundary integral term to the weak form
    *
-   * * // DependsOn<active_parameters...> can be indices into fields which the body integral may depend on
    * @tparam InteriorIntegrandType The type of the interior boundary integral function.
    * @param interior_name The name of the registered domain over which the interior boundary integral is applied.
    * @param integrand A function describing the interior boundary integral term to include in the weak form.
    * @pre integrand must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    2. `tuple{tensor<T,dim>, surface isoparametric derivative} X` the spatial coordinates for the quadrature point
-   *    3. `tuple{value, surface isoparametric derivative}`, a variadic list of tuples (each with a values and
-   * derivative), one tuple for each of the trial spaces specified in the `DependsOn<...>` argument.
+   *    3. `tuple{value, surface isoparametric derivative}`, a variadic list of tuples, one for each input field.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
    *    values will change to `dual` numbers rather than `double`. (e.g. `tensor<double,3>` becomes `tensor<dual<...>,
    * 3>`)
    *
    */
-  template <int... active_parameters, typename InteriorIntegrandType>
-  void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name,
-                                   InteriorIntegrandType integrand)
+  template <typename InteriorIntegrandType, int... all_params>
+  void addInteriorBoundaryIntegralImpl(std::string interior_name, InteriorIntegrandType integrand,
+                                       std::integer_sequence<int, all_params...>)
   {
-    weak_form_->AddInteriorFaceIntegral(Dimension<spatial_dim - 1>{}, DependsOn<active_parameters...>{}, integrand,
-                                        mesh_->domain(interior_name));
+    weak_form_->AddInteriorFaceIntegral(
+        Dimension<spatial_dim - 1>{}, DependsOn<all_params...>{},
+        [this, integrand](double /*time*/, auto X, auto... params) { return integrand(timeInfo(), X, params...); },
+        mesh_->domain(interior_name));
 
     v_dot_weak_form_residual_->AddInteriorFaceIntegral(
-        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + active_parameters...>{},
-        [integrand](double t, auto X, auto V, auto... params) {
+        Dimension<spatial_dim - 1>{}, DependsOn<0, 1 + all_params...>{},
+        [this, integrand](double /*time*/, auto X, auto V, auto... params) {
           auto [V1, V2] = V;
-          auto orig_surface_flux = integrand(t, X, params...);
+          auto orig_surface_flux = integrand(timeInfo(), X, params...);
           auto [flux_pos, flux_neg] = orig_surface_flux;
           return smith::inner(V1, flux_pos) + smith::inner(V2, flux_neg);
         },
         mesh_->domain(interior_name));
   }
 
-  /// @overload
+  /// @brief Add an interior boundary integral depending only on selected input fields.
+  template <int... active_parameters, typename InteriorIntegrandType>
+  void addInteriorBoundaryIntegral(DependsOn<active_parameters...>, std::string interior_name,
+                                   InteriorIntegrandType integrand)
+  {
+    addInteriorBoundaryIntegralImpl(interior_name, integrand, std::integer_sequence<int, active_parameters...>{});
+  }
+
+  /// @brief Add an interior boundary integral depending on all input fields to the weak form.
   template <typename InteriorIntegrandType>
   void addInteriorBoundaryIntegral(std::string interior_name, const InteriorIntegrandType& integrand)
   {
-    addInteriorBoundaryIntegral(DependsOn<>{}, interior_name, integrand);
+    addInteriorBoundaryIntegralImpl(interior_name, integrand,
+                                    std::make_integer_sequence<int, sizeof...(InputSpaces)>{});
   }
 
   /**
    * @brief Add a boundary flux term to the weak form
    *
-   * @tparam active_parameters Type for indices into fields which the body integral may depend on
    * @tparam BoundaryFluxType The type of the traction load
-   * @param depends_on Indices into fields which the body integral may depend on
    * @param boundary_name The name of the registered domain over which the boundary integral is applied.
    * @param flux_function A function describing the outward normal flux applied.
    * @pre flux_function must be a object that can be called with the following arguments:
    *    1. `double t` the time
    *    1. `tensor<T,dim> X` the spatial coordinates for the quadrature point
    *    3. `tensor<T,dim> n` the outward-facing unit normal for the quadrature point
-   *    4. `value`, a variadic list of tuples of field values at quadrature points,
-   *            one for each of the trial spaces specified in the `DependsOn<...>` argument.
+   *    4. `value`, a variadic list of field values at quadrature points, one for each input field.
    *   The expected return is the value of the boundary flux oriented in the sense of the outward normal.
    * @note The actual types of these arguments passed will be `double`, `tensor<double, ... >` or tuples thereof
    *    when doing direct evaluation. When differentiating with respect to one of the inputs, its stored
@@ -275,42 +296,44 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    *
    */
   template <int... active_parameters, typename BoundaryFluxType>
+  /// @param depends_on Indices of input fields passed to @p flux_function.
   void addBoundaryFlux(DependsOn<active_parameters...> depends_on, std::string boundary_name,
                        BoundaryFluxType flux_function)
   {
-    addBoundaryIntegral(depends_on, boundary_name, [flux_function](double t, auto X, auto... inputs) {
+    addBoundaryIntegral(depends_on, boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
       auto n = cross(get<DERIVATIVE>(X));
-      return -flux_function(t, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
+      return -flux_function(t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
+    });
+  }
+
+  /// @brief Add a boundary flux depending on all input fields.
+  template <typename BoundaryFluxType>
+  void addBoundaryFlux(std::string boundary_name, BoundaryFluxType flux_function)
+  {
+    addBoundaryIntegral(boundary_name, [flux_function](const TimeInfo& t_info, auto X, auto... inputs) {
+      auto n = cross(get<DERIVATIVE>(X));
+      return -flux_function(t_info, get<VALUE>(X), normalize(n), get<VALUE>(inputs)...);
     });
   }
 
   /// @overload
-  template <typename BoundaryFluxType>
-  void addBoundaryFlux(std::string boundary_name, const BoundaryFluxType& integrand)
-  {
-    addBoundaryFlux(DependsOn<>{}, boundary_name, integrand);
-  }
-
-  /// @overload
-  mfem::Vector residual(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  mfem::Vector residual(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                         [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "residual");
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
     auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
     return ret;
   }
 
   /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(
-      TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+      const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
       const std::vector<double>& jacobian_weights,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "jacobian");
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     std::unique_ptr<mfem::HypreParMatrix> J;
 
@@ -341,7 +364,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  void jvp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  void jvp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
            [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
@@ -351,8 +374,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     auto jacs = jacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{}, time_info.time(),
                                   shape_disp, fields);
@@ -368,7 +390,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   }
 
   /// @overload
-  void vjp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  void vjp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_field,
            DualFieldPtr vjp_shape_disp_sensitivity, const std::vector<DualFieldPtr>& vjp_sensitivities,
            [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
@@ -377,8 +399,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
-    dt_ = time_info.dt();
-    cycle_ = time_info.cycle();
+    SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     auto vecJacs = vectorJacobianFunctions(std::make_integer_sequence<int, sizeof...(input_indices)>{},
                                            time_info.time(), shape_disp, v_field, fields);
@@ -398,19 +419,49 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     }
   }
 
-  /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional in case more direct access is needed.
-  /// @return Reference to ShapeAwareFunctional instance.
-  ShapeAwareFunctional<ShapeDispSpace, OutputSpace(InputSpaces...)>& getShapeAwareResidual() { return *weak_form_; }
-
-  /// @brief Accessor to get a reference to the underlying ShapeAwareFunctional vector-residual in case more direct
-  /// access is needed.
-  /// @return Reference to ShapeAwareFunctional instance.
-  ShapeAwareFunctional<ShapeDispSpace, double(OutputSpace, InputSpaces...)>& getShapeAwareVectorTimesResidual()
+ protected:
+  template <typename BodyIntegralType, int... all_params>
+  /// @brief Forwards body integrand with dependency list covering all input parameters.
+  void addBodyIntegralWithAllParams(std::string body_name, BodyIntegralType integrand,
+                                    std::integer_sequence<int, all_params...>)
   {
-    return *v_dot_weak_form_residual_;
+    addBodyIntegralImpl(body_name, integrand, std::integer_sequence<int, all_params...>{});
   }
 
- protected:
+  template <typename BodyLoadType, int... all_params>
+  /// @brief Forwards body source with dependency list covering all input parameters.
+  void addBodySourceWithAllParams(std::string body_name, BodyLoadType load_function,
+                                  std::integer_sequence<int, all_params...>)
+  {
+    (void)std::integer_sequence<int, all_params...>{};
+    addBodySource(body_name, load_function);
+  }
+
+  template <typename BoundaryIntegrandType, int... all_params>
+  /// @brief Forwards boundary integrand with dependency list covering all input parameters.
+  void addBoundaryIntegralWithAllParams(std::string boundary_name, BoundaryIntegrandType integrand,
+                                        std::integer_sequence<int, all_params...>)
+  {
+    addBoundaryIntegralImpl(boundary_name, integrand, std::integer_sequence<int, all_params...>{});
+  }
+
+  template <typename BoundaryFluxType, int... all_params>
+  /// @brief Forwards boundary flux with dependency list covering all input parameters.
+  void addBoundaryFluxWithAllParams(std::string boundary_name, BoundaryFluxType flux_function,
+                                    std::integer_sequence<int, all_params...>)
+  {
+    (void)std::integer_sequence<int, all_params...>{};
+    addBoundaryFlux(boundary_name, flux_function);
+  }
+
+  template <typename InteriorIntegrandType, int... all_params>
+  /// @brief Forwards interior-boundary integrand with dependency list covering all input parameters.
+  void addInteriorBoundaryIntegralWithAllParams(std::string interior_name, InteriorIntegrandType integrand,
+                                                std::integer_sequence<int, all_params...>)
+  {
+    addInteriorBoundaryIntegralImpl(interior_name, integrand, std::integer_sequence<int, all_params...>{});
+  }
+
   /// @brief Helper to validate input spaces recursively (for constructor)
   template <size_t I>
   void validateInputSpaces(const SpacesT& input_mfem_spaces) const
@@ -509,11 +560,41 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         }...};
   }
 
-  /// @brief timestep, this needs to be held here and modified for rate dependent applications
-  mutable double dt_ = std::numeric_limits<double>::max();
+  /// @brief Return active TimeInfo for WeakForm interface evaluations.
+  const TimeInfo& timeInfo() const
+  {
+    SLIC_ERROR_IF(current_time_info_ == nullptr,
+                  "FunctionalWeakForm integrands require evaluation through the WeakForm interface.");
+    return *current_time_info_;
+  }
 
-  /// @brief cycle or step or iteration.  This counter is useful for certain time integrators.
-  mutable size_t cycle_ = 0;
+  /// @brief Scoped setter for active TimeInfo during WeakForm interface evaluations.
+  class SetCurrentTimeInfoRAII {
+   public:
+    /// @brief Set active TimeInfo pointer until this guard is destroyed.
+    /// @param[in,out] current_time_info Active TimeInfo pointer to update.
+    /// @param[in] time_info TimeInfo to expose through FunctionalWeakForm::timeInfo().
+    SetCurrentTimeInfoRAII(const TimeInfo*& current_time_info, const TimeInfo& time_info)
+        : current_time_info_(current_time_info)
+    {
+      current_time_info_ = &time_info;
+    }
+
+    /// @brief Clear active TimeInfo pointer.
+    ~SetCurrentTimeInfoRAII() { current_time_info_ = nullptr; }
+
+    /// @brief Disable copying.
+    SetCurrentTimeInfoRAII(const SetCurrentTimeInfoRAII&) = delete;
+
+    /// @brief Disable copy assignment.
+    SetCurrentTimeInfoRAII& operator=(const SetCurrentTimeInfoRAII&) = delete;
+
+   private:
+    const TimeInfo*& current_time_info_;
+  };
+
+  /// @brief Active time information forwarded to integrands.
+  mutable const TimeInfo* current_time_info_ = nullptr;
 
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;

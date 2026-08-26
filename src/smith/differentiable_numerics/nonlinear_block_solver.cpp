@@ -70,28 +70,16 @@ std::shared_ptr<NonlinearBlockSolver> NonlinearBlockSolver::cloneFresh() const
                                                 nonlinear_opts.relative_tol, nonlinear_opts, linear_opts);
 }
 
-ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
-                                                          const std::vector<mfem::Vector>& residuals,
-                                                          NonlinearConvergenceContext& context) const
-{
-  auto block_norms = computeResidualBlockNorms(residuals, comm_);
-  return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, block_norms, context);
-}
-
-void NonlinearBlockSolver::primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
-                                                   NonlinearConvergenceContext& context) const
-{
-  static_cast<void>(convergenceStatus(1.0, residuals, context));
-}
-
 void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
 {
   if (us.empty() || !nonlinear_solver_) return;
   if (!retained_linear_options_ || retained_linear_options_->preconditioner == Preconditioner::None) return;
 
   // Pick the field with the highest vdim (typically the displacement field for vector problems).
+  SLIC_ERROR_IF(!us[0], "NonlinearBlockSolver::completeSetup received a null field");
   const FieldT* best = us[0].get();
   for (const auto& u : us) {
+    SLIC_ERROR_IF(!u, "NonlinearBlockSolver::completeSetup received a null field");
     if (u->space().GetVDim() > best->space().GetVDim()) best = u.get();
   }
 
@@ -131,6 +119,20 @@ void NonlinearBlockSolver::completeSetup(const std::vector<FieldPtr>& us) const
     space_dep_pc->SetFESpace(space);
   }
 #endif
+}
+
+ConvergenceStatus NonlinearBlockSolver::convergenceStatus(double tolerance_multiplier,
+                                                          const std::vector<mfem::Vector>& residuals,
+                                                          NonlinearConvergenceContext& context) const
+{
+  auto block_norms = computeResidualBlockNorms(residuals, comm_);
+  return evaluateResidualConvergence(tolerance_multiplier, abs_tol_, rel_tol_, block_norms, context);
+}
+
+void NonlinearBlockSolver::primeConvergenceContext(const std::vector<mfem::Vector>& residuals,
+                                                   NonlinearConvergenceContext& context) const
+{
+  static_cast<void>(convergenceStatus(1.0, residuals, context));
 }
 
 std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
@@ -268,7 +270,10 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solveAdjoi
   auto block_jac = std::make_unique<mfem::BlockOperator>(block_offsets);
   for (int i = 0; i < num_rows; ++i) {
     for (int j = 0; j < num_rows; ++j) {
-      block_jac->SetBlock(i, j, jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)].get());
+      auto& J = jacobian_transposed[static_cast<size_t>(i)][static_cast<size_t>(j)];
+      if (J) {
+        block_jac->SetBlock(i, j, J.get());
+      }
     }
   }
 
