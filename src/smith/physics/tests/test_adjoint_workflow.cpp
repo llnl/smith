@@ -17,7 +17,6 @@
 #include <cmath>
 #include <memory>
 #include <string>
-#include <tribol/common/Parameters.hpp>
 #include <unordered_map>
 #include <vector>
 
