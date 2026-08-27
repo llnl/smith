@@ -24,11 +24,13 @@ If you haven't used Docker before, it is recommended that you check out the
    and select the most recent image corresponding to the compiler you'd like to use.  `clang@19`` and `gcc@14`` images are currently offered.
 3. Copy the pull command corresponding to the image you've selected. For example:
 
-.. code-block:: bash
-   # General pull command for clang@19
-   docker pull seracllnl/tpls:clang-19_latest
-   # MacOS Apple silicone pull command for clang@19
-   docker pull --platform=linux/amd64 seracllnl/tpls:clang-19_latest
+   .. code-block:: bash
+
+      # General pull command for clang@19
+      docker pull seracllnl/tpls:clang-19_latest
+      # MacOS Apple silicone pull command for clang@19
+      docker pull --platform=linux/amd64 seracllnl/tpls:clang-19_latest
+
 
 .. image:: copy_pull_cmd.png
    :scale: 50 %
@@ -42,16 +44,18 @@ If you haven't used Docker before, it is recommended that you check out the
    you used in the ``docker pull`` command and replacing ``/your/smith/repo`` with the path to the Smith repo you cloned in the
    first step.  This will open a terminal into the image. For example:
 
-.. code-block:: bash
-   # General run command for clang@19
-   docker run -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash
-   # MacOS Apple silicone run command for clang@19
-   docker run --platform=linux/amd64 -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash
+   .. code-block:: bash
+
+      # General run command for clang@19
+      docker run -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash
+      # MacOS Apple silicone run command for clang@19
+      docker run --platform=linux/amd64 -it -u smith -v /your/smith/repo:/home/smith/smith seracllnl/tpls:clang-19_latest /bin/bash
 
 
-.. note::
-   The ``-v`` option to ``docker run`` mounts a `Docker volume <https://docs.docker.com/storage/volumes/>`_ into the container.
-   This means that part of your filesystem (in this case, your copy of the Smith repo) will be accessible from the container.
+   .. note::
+      The ``-v`` option to ``docker run`` mounts a `Docker volume <https://docs.docker.com/storage/volumes/>`_ into the container.
+      This means that part of your filesystem (in this case, your copy of the Smith repo) will be accessible from the container.
+
 
 6. Follow the build instructions detailed in :ref:`build_smith-label`, using the host-config in ``host-configs/docker`` that
    corresponds to the compiler you've selected.  These commands should be run using the terminal you opened in the previous step. Due to issues
