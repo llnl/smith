@@ -46,6 +46,7 @@ set(functional_parallel_test_sources
     functional_comparisons.cpp
     functional_comparison_L2.cpp
     dg_ghost_face_index.cpp
+    dg_periodic_bc_index.cpp
     )
 
 smith_add_tests(SOURCES       ${functional_parallel_test_sources}
