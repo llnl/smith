@@ -240,7 +240,7 @@ SMITH_HOST_DEVICE auto batch_apply_chain_rule(derivative_type* qf_derivatives, c
  * inherently just a linear transformation
  *
  * @param[in] dU The full set of per-element DOF values (primary input)
- * @param[inout] dR The full set of per-element residuals (primary output)
+ * @param[in,out] dR The full set of per-element residuals (primary output)
  * @param[in] derivatives_ptr The address at which derivatives of the q-function with
  * respect to its arguments are stored
  * @param[in] J_ The Jacobians of the element transformations at all quadrature points
@@ -289,7 +289,7 @@ void action_of_gradient_kernel(const double* dU, double* dR, derivatives_type* q
  * @tparam derivatives_type Type representing the derivative of the q-function w.r.t. its input arguments
  *
  *
- * @param[inout] dk 3-dimensional array storing the element gradient matrices
+ * @param[in,out] dk 3-dimensional array storing the element gradient matrices
  * @param[in] derivatives_ptr pointer to data describing the derivatives of the q-function with respect to its arguments
  * @param[in] J_ The Jacobians of the element transformations at all quadrature points
  * @see mfem::GeometricFactors
