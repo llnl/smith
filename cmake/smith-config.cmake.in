@@ -91,16 +91,6 @@ if(NOT SMITH_FOUND)
   set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
   set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIBX32_PATHS TRUE)
 
-  # Adiak
-  if(SMITH_USE_ADIAK)
-    find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}" "${ADIAK_DIR}/lib/cmake/adiak")
-  endif()
-
-  # Caliper
-  if(SMITH_USE_CALIPER)
-    find_dependency(caliper REQUIRED PATHS "${CALIPER_DIR}" "${CALIPER_DIR}/share/cmake/caliper")
-  endif()
-
   # See comment in SetupSmithThirdParty.cmake
   if(SMITH_ENABLE_CUDA)
     if(CMAKE_VERSION VERSION_LESS 3.17)
@@ -163,6 +153,16 @@ if(NOT SMITH_FOUND)
   # Gretl
   if(SMITH_USE_GRETL)
     find_dependency(gretl REQUIRED PATHS ${SMITH_GRETL_DIR}/lib/cmake)
+  endif()
+
+  # Adiak
+  if(SMITH_USE_ADIAK)
+    find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}" "${ADIAK_DIR}/lib/cmake/adiak")
+  endif()
+
+  # Caliper
+  if(SMITH_USE_CALIPER)
+    find_dependency(caliper REQUIRED PATHS "${CALIPER_DIR}" "${CALIPER_DIR}/share/cmake/caliper")
   endif()
 
   #----------------------------------------------------------------------------
