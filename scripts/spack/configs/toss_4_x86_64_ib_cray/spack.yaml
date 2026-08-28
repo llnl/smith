@@ -146,6 +146,11 @@ spack:
       externals:
       - spec: rocprofiler-dev@6.4.2
         prefix: /opt/rocm-6.4.2
+    rocprofiler-sdk:
+      buildable: false
+      externals:
+      - spec: rocprofiler-sdk@6.4.2
+        prefix: /opt/rocm-6.4.2
     rocprofiler-sdk-roctx:
       buildable: false
       externals:
@@ -160,6 +165,26 @@ spack:
       buildable: false
       externals:
       - spec: rocm-smi-lib@6.4.2
+        prefix: /opt/rocm-6.4.2
+    rocprofiler-register:
+      buildable: false
+      externals:
+      - spec: rocprofiler-register@6.4.2
+        prefix: /opt/rocm-6.4.2
+    roctracer-dev:
+      buildable: false
+      externals:
+      - spec: roctracer-dev@6.4.2
+        prefix: /opt/rocm-6.4.2
+    rccl:
+      buildable: false
+      externals:
+      - spec: rccl@6.4.2
+        prefix: /opt/rocm-6.4.2
+    hipcub:
+      buildable: false
+      externals:
+      - spec: hipcub@6.4.2
         prefix: /opt/rocm-6.4.2
 
     # System level packages to not build
@@ -337,8 +362,3 @@ spack:
       externals:
       - spec: llvm@19.0.0
         prefix: /usr/tce/packages/rocmcc/rocmcc-6.4.2-magic/llvm
-
-    # Platform-specific defaults and versions
-    caliper:
-      require:
-      - spec: +shared
