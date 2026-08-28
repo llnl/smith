@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if(TRIBOL_FOUND AND STRUMPACK_FOUND)
+if(TRIBOL_FOUND AND STRUMPACK_DIR)
     set(CONTACT_EXAMPLES_SOURCES
         beam_bending.cpp
         ironing.cpp

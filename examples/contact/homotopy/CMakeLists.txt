@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if (TRIBOL_FOUND AND STRUMPACK_FOUND AND SMITH_ENABLE_CONTINUATION)
+if (TRIBOL_FOUND AND STRUMPACK_DIR AND SMITH_ENABLE_CONTINUATION)
     smith_add_executable(NAME       two_blocks_example
                          SOURCES    two_blocks.cpp
                          OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
