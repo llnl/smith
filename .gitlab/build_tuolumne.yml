@@ -52,7 +52,7 @@ tuolumne-llvm_amdgpu_6_4_2-src-codevelop:
 # NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
 tuolumne-llvm_amdgpu_6_4_2-tpl:
   variables:
-    SPEC: "--spec %~devtools~profiling~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %${COMPILER}"
+    SPEC: "~devtools~profiling~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %rocm_6_4_2"
     ALLOC_NODES: "1"
     ALLOC_TIME: "90"
   extends: .tpl_build_on_tuolumne

@@ -22,18 +22,31 @@
 
 ####
 # PR Build jobs
-matrix-gcc_13_3_1_cuda-src:
+matrix-llvm_19_1_3_cuda-src:
   variables:
-    COMPILER: "gcc@13.3.1_cuda"
+    COMPILER: "llvm@19.1.3_cuda"
     HOST_CONFIG: "matrix-toss_4_x86_64_ib-${COMPILER}.cmake"
     ALLOC_TIME: "30"
   extends: .src_build_on_matrix
 
+# NOTE: Reducing load put on Matrix, as it has limited resources
+# matrix-gcc_13_3_1_cuda-src:
+#   variables:
+#     COMPILER: "gcc@13.3.1_cuda"
+#     HOST_CONFIG: "matrix-toss_4_x86_64_ib-${COMPILER}.cmake"
+#     ALLOC_TIME: "30"
+# extends: .src_build_on_matrix
+
 ####
 # TPL Build jobs
-matrix-gcc_13_3_1_cuda-tpl:
+matrix-llvm_19_1_3_cuda-tpl:
   variables:
-    COMPILER: "gcc-13"
-    SPEC: "+devtools+adiak+caliper+enzyme cuda_arch=90 %${COMPILER}"
-    ALLOC_TIME: "45"
-  extends: .tpl_build_on_matrix
+    SPEC: "~devtools~profiling+adiak+caliper~enzyme cuda_arch=90 %clang_19"
+    ALLOC_TIME: "30"
+  extends: .src_build_on_matrix
+
+# matrix-gcc_13_3_1_cuda-tpl:
+#   variables:
+#     SPEC: "~devtools~profiling+adiak+caliper~enzyme cuda_arch=90 %gcc_13"
+#     ALLOC_TIME: "45"
+#   extends: .tpl_build_on_matrix

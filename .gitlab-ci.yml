@@ -107,7 +107,7 @@ stages:
     # Build TPLs, src, and run unit tests
     - echo -e "section_start:$(date +%s):tpl_build_and_unit_test\r\e[0K
       TPL Build and Unit Test ${CI_PROJECT_NAME}"
-    - ${ALLOC_COMMAND} python3 scripts/llnl/build_tpls.py -v ${SPEC} --directory=${FULL_BUILD_ROOT} --short-path
+    - ${ALLOC_COMMAND} python3 scripts/llnl/build_tpls.py -v --spec="${SPEC}" --directory=${FULL_BUILD_ROOT} --short-path
     - echo -e "section_end:$(date +%s):tpl_build_and_unit_test\r\e[0K"
   artifacts:
     expire_in: 2 weeks
