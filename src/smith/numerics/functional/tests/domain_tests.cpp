@@ -273,16 +273,14 @@ TEST(domain, of_elements)
     constexpr int dim = 2;
     auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofElements(*mesh, [](std::vector<vec2> vertices, int /* attr */) {
-      return average(vertices)[0] < 0.45;
-    });
+    Domain d0 = Domain::ofElements(
+        *mesh, [](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; });
     EXPECT_EQ(d0.tri_ids_.size(), 1);
     EXPECT_EQ(d0.quad_ids_.size(), 1);
     EXPECT_EQ(d0.dim_, 2);
 
-    Domain d1 = Domain::ofElements(*mesh, [](std::vector<vec2> vertices, int /* attr */) {
-      return average(vertices)[1] < 0.45;
-    });
+    Domain d1 = Domain::ofElements(
+        *mesh, [](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[1] < 0.45; });
     EXPECT_EQ(d1.tri_ids_.size(), 1);
     EXPECT_EQ(d1.quad_ids_.size(), 1);
     EXPECT_EQ(d1.dim_, 2);

@@ -42,9 +42,8 @@ TEST(geometric_factors, with_2D_domains)
   auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
 
   // `d` will consist of one tri and one quad
-  Domain d = Domain::ofElements(*mesh, [](std::vector<vec2> vertices, int /* attr */) {
-    return average(vertices)[0] < 0.45;
-  });
+  Domain d =
+      Domain::ofElements(*mesh, [](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; });
 
   int q = 2;
 

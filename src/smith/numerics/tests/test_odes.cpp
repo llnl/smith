@@ -72,8 +72,7 @@ const mfem::DenseMatrix C = []() {
   return C_mat;
 }();
 
-struct StiffnessLinear
-{
+struct StiffnessLinear {
   mfem::DenseMatrix operator()(const mfem::Vector& /*x*/) const
   {
     mfem::DenseMatrix K(3, 3);
@@ -92,8 +91,7 @@ struct StiffnessLinear
   }
 };
 
-struct InternalForceLinear
-{
+struct InternalForceLinear {
   mfem::Vector operator()(const mfem::Vector& x) const
   {
     mfem::Vector force(x.Size());
@@ -102,8 +100,7 @@ struct InternalForceLinear
   }
 };
 
-struct StiffnessNonlinear
-{
+struct StiffnessNonlinear {
   mfem::DenseMatrix operator()(const mfem::Vector& x) const
   {
     mfem::DenseMatrix K(3, 3);
@@ -122,8 +119,7 @@ struct StiffnessNonlinear
   }
 };
 
-struct InternalForceNonlinear
-{
+struct InternalForceNonlinear {
   mfem::Vector operator()(const mfem::Vector& x) const
   {
     mfem::Vector f(3);
