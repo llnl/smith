@@ -40,38 +40,6 @@ void finalizer();
 
 namespace smith {
 
-void finalizer()
-{
-  if (axom::slic::isInitialized()) {
-    smith::logger::flush();
-    smith::logger::finalize();
-  }
-
-#ifdef SMITH_USE_PETSC
-#ifdef SMITH_USE_SLEPC
-  mfem::MFEMFinalizeSlepc();
-#else
-  mfem::MFEMFinalizePetsc();
-#endif
-#endif
-
-#ifdef SMITH_USE_SUNDIALS
-  mfem::Sundials::Finalize();
-#endif
-
-  profiling::finalize();
-
-  int mpi_initialized = 0;
-  MPI_Initialized(&mpi_initialized);
-  int mpi_finalized = 0;
-  MPI_Finalized(&mpi_finalized);
-  if (mpi_initialized && !mpi_finalized) {
-    MPI_Finalize();
-  }
-
-  accelerator::terminateDevice();
-}
-
 ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo,
                                        ExecutionSpace exec_space)
     : comm_(comm)
@@ -119,6 +87,36 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bo
   accelerator::initializeDevice(exec_space);
 }
 
-ApplicationManager::~ApplicationManager() { smith::finalizer(); }
+ApplicationManager::~ApplicationManager()
+{
+  if (axom::slic::isInitialized()) {
+    smith::logger::flush();
+    smith::logger::finalize();
+  }
+
+#ifdef SMITH_USE_PETSC
+#ifdef SMITH_USE_SLEPC
+  mfem::MFEMFinalizeSlepc();
+#else
+  mfem::MFEMFinalizePetsc();
+#endif
+#endif
+
+#ifdef SMITH_USE_SUNDIALS
+  mfem::Sundials::Finalize();
+#endif
+
+  profiling::finalize();
+
+  int mpi_initialized = 0;
+  MPI_Initialized(&mpi_initialized);
+  int mpi_finalized = 0;
+  MPI_Finalized(&mpi_finalized);
+  if (mpi_initialized && !mpi_finalized) {
+    MPI_Finalize();
+  }
+
+  accelerator::terminateDevice();
+}
 
 }  // namespace smith
