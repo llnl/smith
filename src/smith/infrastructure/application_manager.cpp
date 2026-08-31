@@ -15,7 +15,6 @@
 #endif
 
 #include <string.h>
-#include <csignal>
 #include <cstdlib>
 
 #include "mfem.hpp"
@@ -33,20 +32,11 @@
 
 namespace smith {
 /**
- * @brief Destroy MPI, signal handling, logging, profiling, hypre, sundials, petsc, and slepc. Note this should not be
+ * @brief Destroy MPI, logging, profiling, hypre, sundials, petsc, and slepc. Note this should not be
  * called by or exposed to users.
  */
 void finalizer();
 }  // namespace smith
-
-namespace {
-void signalHandler(int signal)
-{
-  std::cerr << "[SIGNAL]: Received signal " << signal << " (" << strsignal(signal) << "), exiting" << std::endl;
-  smith::finalizer();
-  exit(1);
-}
-}  // namespace
 
 namespace smith {
 
@@ -127,12 +117,6 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bo
 
   // Initialize GPU (no-op if not enabled/available)
   accelerator::initializeDevice(exec_space);
-
-  // Register signal handlers
-  std::signal(SIGABRT, signalHandler);
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGSEGV, signalHandler);
-  std::signal(SIGTERM, signalHandler);
 }
 
 ApplicationManager::~ApplicationManager() { smith::finalizer(); }
