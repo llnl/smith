@@ -38,12 +38,12 @@ class PchipView {
     if (input_value < coordinates_[0]) {
       return control_points_[0][0] + 0.0 * input;
     }
-    if (input_value > coordinates_[num_points_ - 1]) {
-      return control_points_[num_points_ - 2][3] + 0.0 * input;
+    if (input_value > coordinates_[coordinates_.size() - 1]) {
+      return control_points_[control_points_.size() - 1][3] + 0.0 * input;
     }
 
     axom::IndexType lower = 0;
-    axom::IndexType upper = num_points_ - 1;
+    axom::IndexType upper = coordinates_.size() - 1;
     while (upper - lower > 1) {
       const axom::IndexType middle = lower + (upper - lower) / 2;
       if (input_value < coordinates_[middle]) {
@@ -66,14 +66,13 @@ class PchipView {
  private:
   friend class PchipData;
 
-  PchipView(const double* coordinates, const tensor<double, 4>* control_points, axom::IndexType num_points)
-      : coordinates_(coordinates), control_points_(control_points), num_points_(num_points)
+  PchipView(axom::ArrayView<const double> coordinates, axom::ArrayView<const tensor<double, 4>> control_points)
+      : coordinates_(coordinates), control_points_(control_points)
   {
   }
 
-  const double* coordinates_;
-  const tensor<double, 4>* control_points_;
-  axom::IndexType num_points_;
+  axom::ArrayView<const double> coordinates_;
+  axom::ArrayView<const tensor<double, 4>> control_points_;
 };
 
 /**
@@ -140,7 +139,7 @@ class PchipData {
   /**
    * @brief Return lightweight callable view.
    */
-  PchipView view() const { return {coordinates_.data(), control_points_.data(), coordinates_.size()}; }
+  PchipView view() const { return {coordinates_.view(), control_points_.view()}; }
 
  private:
   static axom::IndexType checkedSize(std::span<const double> coordinates, std::span<const double> values)
