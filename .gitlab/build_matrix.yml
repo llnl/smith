@@ -43,7 +43,7 @@ matrix-llvm_19_1_3_cuda-tpl:
   variables:
     SPEC: "~devtools~profiling+adiak+caliper~enzyme cuda_arch=90 %clang_19"
     ALLOC_TIME: "30"
-  extends: .src_build_on_matrix
+  extends: .tpl_build_on_matrix
 
 # matrix-gcc_13_3_1_cuda-tpl:
 #   variables:
