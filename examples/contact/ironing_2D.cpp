@@ -246,6 +246,10 @@ int main(int argc, char* argv[])
 
   std::string selected_case = "square";
   std::string energy_mortar_gap_mode = "quadrature-point";
+  double energy_mortar_smoothing_radius = 0.1;
+  double energy_mortar_normal_smoothing_start_angle_degrees = 45.0;
+  bool disable_output = false;
+  bool print_timestep_markers = false;
   int num_steps = -1;
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
@@ -253,6 +257,15 @@ int main(int argc, char* argv[])
   app.add_option("--energy-mortar-gap-mode", energy_mortar_gap_mode,
                  "EnergyMortar gap evaluation mode: nodal or quadrature-point")
       ->check(axom::CLI::IsMember({"nodal", "quadrature-point"}));
+  app.add_option("--energy-mortar-smoothing-radius", energy_mortar_smoothing_radius,
+                 "EnergyMortar integration-bound smoothing radius in local edge coordinates")
+      ->check(axom::CLI::Range(0.0, 0.5));
+  app.add_option("--energy-mortar-normal-smoothing-start-angle", energy_mortar_normal_smoothing_start_angle_degrees,
+                 "EnergyMortar normal smoothing start angle in degrees; 90 disables normal attenuation")
+      ->check(axom::CLI::Range(0.0, 90.0));
+  app.add_flag("--disable-output", disable_output, "Disable VisIt and ParaView output");
+  app.add_flag("--print-timestep-markers", print_timestep_markers,
+               "Print machine-readable begin/end markers around each nonlinear solve");
   app.add_option("--num-steps", num_steps, "Override the number of timesteps to run");
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
@@ -264,6 +277,8 @@ int main(int argc, char* argv[])
 
   const auto ironing_case = parseCase(selected_case);
   const auto gap_mode = parseEnergyMortarGapMode(energy_mortar_gap_mode);
+  const double energy_mortar_normal_smoothing_start_angle =
+      energy_mortar_normal_smoothing_start_angle_degrees * std::acos(-1.0) / 180.0;
   const std::string output_name = "contact_ironing_2D_" + caseName(ironing_case) + "_" + gapModeOutputName(gap_mode);
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, output_name + "_example_data");
@@ -278,8 +293,11 @@ int main(int argc, char* argv[])
   smith::LinearSolverOptions linear_options{
       .linear_solver = smith::LinearSolver::CG, .preconditioner = smith::Preconditioner::HypreAMG, .print_level = 0};
 
-  mfem::VisItDataCollection visit_dc(config.name + "_visit", &mesh->mfemParMesh());
-  visit_dc.SetPrefixPath("visit_out");
+  std::unique_ptr<mfem::VisItDataCollection> visit_dc;
+  if (!disable_output) {
+    visit_dc = std::make_unique<mfem::VisItDataCollection>(config.name + "_visit", &mesh->mfemParMesh());
+    visit_dc->SetPrefixPath("visit_out");
+  }
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
@@ -291,8 +309,10 @@ int main(int argc, char* argv[])
       config.nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, config.name, mesh,
       {"bulk_mod", "shear_mod"}, 0, 0.0, false, false);
 
-  visit_dc.RegisterField("displacement", &solid_solver.displacement().gridFunction());
-  visit_dc.Save();
+  if (visit_dc) {
+    visit_dc->RegisterField("displacement", &solid_solver.displacement().gridFunction());
+    visit_dc->Save();
+  }
 
   smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
 
@@ -319,25 +339,42 @@ int main(int argc, char* argv[])
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
   tribol::setEnforcementLocation(0, gap_mode);
+  tribol::setEnergyMortarSmoothingLength(0, energy_mortar_smoothing_radius);
+  tribol::setEnergyMortarNormalSmoothingStartAngle(0, energy_mortar_normal_smoothing_start_angle);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
     tribol::setEnforcementLocation(1, gap_mode);
+    tribol::setEnergyMortarSmoothingLength(1, energy_mortar_smoothing_radius);
+    tribol::setEnergyMortarNormalSmoothingStartAngle(1, energy_mortar_normal_smoothing_start_angle);
   }
 
   const std::string paraview_name = config.name + "_paraview";
-  solid_solver.outputStateToDisk(paraview_name);
+  if (!disable_output) {
+    solid_solver.outputStateToDisk(paraview_name);
+  }
 
   solid_solver.completeSetup();
 
   constexpr double dt = 1.0;
+  const bool is_root = mfem::Mpi::WorldRank() == 0;
   for (int i{0}; i < config.num_steps; ++i) {
+    if (print_timestep_markers && is_root) {
+      mfem::out << "IRONING_TIMESTEP_BEGIN " << (i + 1) << '\n';
+    }
     solid_solver.advanceTimestep(dt);
-    visit_dc.SetCycle(i);
-    visit_dc.SetTime((i + 1) * dt);
-    visit_dc.Save();
+    if (print_timestep_markers && is_root) {
+      mfem::out << "IRONING_TIMESTEP_END " << (i + 1) << '\n';
+    }
+    if (visit_dc) {
+      visit_dc->SetCycle(i);
+      visit_dc->SetTime((i + 1) * dt);
+      visit_dc->Save();
+    }
 
-    solid_solver.outputStateToDisk(paraview_name);
+    if (!disable_output) {
+      solid_solver.outputStateToDisk(paraview_name);
+    }
   }
 
   return 0;
