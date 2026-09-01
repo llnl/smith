@@ -375,6 +375,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         # Build MFEM shared if Smith is being built shared
         set(MFEM_SHARED_BUILD ${BUILD_SHARED_LIBS} CACHE BOOL "")
+        set(SMITH_MFEM_SHARED_BUILD ${BUILD_SHARED_LIBS})
 
         # Unset runtime output directory to prevent duplication issue that occurs when using Ninja
         # https://github.com/LLNL/blt/issues/695
@@ -417,11 +418,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
 
         set(MFEM_BUILT_WITH_CMAKE TRUE)
-    endif()
-
-    # mfem brings in slepc but doesn't include required arpack, add it
-    if(ARPACK_FOUND)
-        target_link_libraries(mfem INTERFACE arpack)
     endif()
 
     #------------------------------------------------------------------------------
@@ -637,7 +633,19 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         message(STATUS "Enabling source Tribol in '${TRIBOL_SOURCE_DIR}'" )
 
         set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
+        set(_smith_build_shared_libs ${BUILD_SHARED_LIBS})
+        if(DEFINED SMITH_MFEM_SHARED_BUILD)
+            # If static MFEM is linked into both shared Tribol and Smith targets,
+            # MFEM global state can be cleaned up more than once.
+            set(BUILD_SHARED_LIBS ${SMITH_MFEM_SHARED_BUILD})
+        else()
+            message(WARNING
+                "Could not determine whether MFEM was built shared; "
+                "using BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} for Tribol targets.")
+        endif()
         add_subdirectory("${TRIBOL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/tribol)
+        set(BUILD_SHARED_LIBS ${_smith_build_shared_libs})
+        unset(_smith_build_shared_libs)
         set(ENABLE_FORTRAN ON  CACHE BOOL "" FORCE)
 
         set(TRIBOL_FOUND TRUE)
@@ -701,6 +709,15 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                 if (ENABLE_FORTRAN AND DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
                     target_link_libraries(${_target} INTERFACE "-lmpifort")
                 endif()
+            endif()
+        endforeach()
+    endif()
+
+    # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
+    if(ARPACK_FOUND)
+        foreach(_target ${_mfem_targets})
+            if(TARGET ${_target})
+                target_link_libraries(${_target} INTERFACE arpack)
             endif()
         endforeach()
     endif()

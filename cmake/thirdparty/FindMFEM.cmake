@@ -31,6 +31,13 @@ if(MFEM_FOUND)
     # MFEM was built with CMake so use that config file
     message(STATUS "Using MFEM's CMake config file")
     set(MFEM_BUILT_WITH_CMAKE TRUE)
+    get_target_property(_mfem_target_type mfem TYPE)
+    if(_mfem_target_type STREQUAL "SHARED_LIBRARY")
+        set(SMITH_MFEM_SHARED_BUILD TRUE)
+    elseif(_mfem_target_type STREQUAL "STATIC_LIBRARY")
+        set(SMITH_MFEM_SHARED_BUILD FALSE)
+    endif()
+    unset(_mfem_target_type)
     # It looks like include directories are not always built into the target
     target_include_directories(mfem INTERFACE ${MFEM_INCLUDE_DIRS})
     if(MFEM_USE_MPI)
@@ -87,6 +94,11 @@ else()
     endif()
     if(mfem_cfg_file_txt MATCHES "MFEM_USE_(LEGACY_)?OPENMP[ \\t]*\\+?=[ \\t]*YES")
         set(_mfem_uses_openmp TRUE)
+    endif()
+    if(mfem_cfg_file_txt MATCHES "MFEM_SHARED[ \\t]*\\+?=[ \\t]*YES")
+        set(SMITH_MFEM_SHARED_BUILD TRUE)
+    else()
+        set(SMITH_MFEM_SHARED_BUILD FALSE)
     endif()
 
     # parse include flags
@@ -181,4 +193,3 @@ endif()
 
 message(STATUS "MFEM Includes: ${MFEM_INCLUDE_DIRS}")
 message(STATUS "MFEM Libraries: ${MFEM_LIBRARIES}")
-
