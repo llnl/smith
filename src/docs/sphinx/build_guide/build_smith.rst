@@ -185,15 +185,19 @@ Here are some examples on how to run CMake:
      - Enable Smith with OpenMP support. This option is only effective when
        ``ENABLE_OPENMP`` is ``ON``.
 
-   * - ``SMITH_ENABLE_GRETL``
-     - ``ON``
-     - Enable Smith with Gretl support.
-
    * - ``SMITH_ENABLE_CONTINUATION``
      - ``ON``
      - Enable the Continuation Solver. This option is automatically forced
        to ``OFF`` when either ``SMITH_ENABLE_CUDA`` or ``SMITH_ENABLE_HIP``
        is enabled, as GPU builds are currently unsupported.
+
+   * - ``SMITH_ENABLE_GRETL``
+     - ``ON``
+     - Enable Smith with Gretl support.
+
+   * - ``SMITH_ENABLE_TRIBOL``
+     - ``ON``
+     - Enable Smith with Tribol support.
 
    * - ``SMITH_ENABLE_PROFILING``
      - ``OFF``

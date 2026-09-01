@@ -4,6 +4,31 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
+# This is a full list of possible TPLs in Smith and is used in multiple for loops
+# across our build system, for example, creating the `SMITH_USE_<TPL name>` variables.
+set(SMITH_TPL_DEPS ADIAK
+                   ARPACK
+                   AXOM
+                   CALIPER
+                   CAMP
+                   CONDUIT
+                   CONTINUATION
+                   CUDA
+                   ENZYME
+                   GRETL
+                   HDF5
+                   HIP
+                   LUA
+                   MFEM
+                   MPI
+                   PETSC
+                   RAJA
+                   SLEPC
+                   STRUMPACK
+                   SUNDIALS
+                   TRIBOL
+                   UMPIRE)
+
 if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Prevent this file from being called twice in the same scope
     set(SMITH_THIRD_PARTY_LIBRARIES_FOUND TRUE)
@@ -350,6 +375,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         # Build MFEM shared if Smith is being built shared
         set(MFEM_SHARED_BUILD ${BUILD_SHARED_LIBS} CACHE BOOL "")
+        set(SMITH_MFEM_SHARED_BUILD ${BUILD_SHARED_LIBS})
 
         # Unset runtime output directory to prevent duplication issue that occurs when using Ninja
         # https://github.com/LLNL/blt/issues/695
@@ -392,42 +418,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
 
         set(MFEM_BUILT_WITH_CMAKE TRUE)
-    endif()
-
-    #------------------------------------------------------------------------------
-    # ContinuationSolvers
-    #------------------------------------------------------------------------------
-    message(STATUS "Smith Enable Continuation: ${SMITH_ENABLE_CONTINUATION}")
-    
-    if(SMITH_ENABLE_CONTINUATION)
-        # Allow homotopy solver as a non-submodule
-        if (DEFINED CONTINUATION_SOURCE_DIR)
-            if(NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
-                message(FATAL_ERROR "Given CONTINUATION_SOURCE_DIR does not contain CMakeLists.txt")
-            endif()
-        else()
-            if(EXISTS "${PROJECT_SOURCE_DIR}/smith/ContinuationSolvers")
-                set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/smith/ContinuationSolvers" CACHE PATH "")
-            else()
-                set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ContinuationSolvers" CACHE PATH "")
-            endif()
-
-            if (NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
-                message(FATAL_ERROR
-                    "The continuationsolver repo is not present. "
-                    "Either run the following command in your git repository: \n"
-                    "    git submodule update --init --recursive\n"
-                    "Or add -DCONTINUATION_SOURCE_DIR=/path/to/ContinuationSolvers to your CMake command." )
-            endif()
-        endif()
-
-        # Add MUMPS direct solver to MFEM codevelop (we have to do this before Smith's MFEM library is added)
-        if (SMITH_ENABLE_CODEVELOP AND MUMPS_DIR)
-            set(MFEM_USE_MUMPS ON CACHE BOOL "")
-        endif()
-
-        set(CONTINUATION_FOUND TRUE)
-        add_subdirectory("${CONTINUATION_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/ContinuationSolvers)
     endif()
 
     #------------------------------------------------------------------------------
@@ -533,11 +523,52 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
     endif()
 
+
     #------------------------------------------------------------------------------
-    # Gretl
+    # Submodule Third Party Libraries
+    #
+    # These are included in the regular build of Smith due to the close and
+    # tied development cycles.
     #------------------------------------------------------------------------------
-    message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
     
+
+    #---------------------------
+    # ContinuationSolvers
+    #---------------------------
+    message(STATUS "Smith Enable Continuation: ${SMITH_ENABLE_CONTINUATION}")
+
+    if(SMITH_ENABLE_CONTINUATION)
+        # Allow homotopy solver as a non-submodule
+        if (DEFINED CONTINUATION_SOURCE_DIR)
+            if(NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
+                message(FATAL_ERROR "Given CONTINUATION_SOURCE_DIR does not contain CMakeLists.txt")
+            endif()
+        else()
+            if(EXISTS "${PROJECT_SOURCE_DIR}/smith/ContinuationSolvers")
+                set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/smith/ContinuationSolvers" CACHE PATH "")
+            else()
+                set(CONTINUATION_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ContinuationSolvers" CACHE PATH "")
+            endif()
+
+            if (NOT EXISTS "${CONTINUATION_SOURCE_DIR}/CMakeLists.txt")
+                message(FATAL_ERROR
+                    "The continuationsolver repo is not present. "
+                    "Either run the following command in your git repository: \n"
+                    "    git submodule update --init --recursive\n"
+                    "Or add -DCONTINUATION_SOURCE_DIR=/path/to/ContinuationSolvers to your CMake command." )
+            endif()
+        endif()
+
+        add_subdirectory("${CONTINUATION_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/ContinuationSolvers)
+        set(CONTINUATION_FOUND TRUE)
+    endif()
+
+
+    #---------------------------
+    # Gretl
+    #---------------------------
+    message(STATUS "Smith Enable Gretl: ${SMITH_ENABLE_GRETL}")
+
     if(SMITH_ENABLE_GRETL)
         if (NOT DEFINED GRETL_SOURCE_DIR)
             set(GRETL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/gretl" CACHE PATH "")
@@ -561,72 +592,67 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
 
-    #------------------------------------------------------------------------------
+    #---------------------------
     # Tribol
-    #------------------------------------------------------------------------------
-    if (NOT SMITH_ENABLE_CODEVELOP)
-        if(TRIBOL_DIR)
-            smith_assert_is_directory(DIR_VARIABLE TRIBOL_DIR)
+    #---------------------------
+    if(NOT SMITH_ENABLE_TRIBOL)
+        set(TRIBOL_FOUND FALSE)
+    elseif(TRIBOL_DIR)
+        message(STATUS "Enabling pre-built Tribol in '${TRIBOL_DIR}'" )
+        smith_assert_is_directory(DIR_VARIABLE TRIBOL_DIR)
 
-            find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+        find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
 
-            smith_assert_find_succeeded(PROJECT_NAME Tribol
-                                        TARGET       tribol
-                                        DIR_VARIABLE TRIBOL_DIR)
-            blt_convert_to_system_includes(TARGET tribol)
-            set(TRIBOL_FOUND ON)
-        else()
-            set(TRIBOL_FOUND OFF)
-        endif()
-        
-        message(STATUS "Tribol support is " ${TRIBOL_FOUND})
-    else()
-        set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
-        # Otherwise we use the submodule
-        message(STATUS "Using Tribol submodule")
-        set(BUILD_REDECOMP ON CACHE BOOL "")
-        set(TRIBOL_USE_MPI ON CACHE BOOL "")
-        set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
-        set(TRIBOL_ENABLE_EXAMPLES OFF CACHE BOOL "")
-        set(TRIBOL_ENABLE_DOCS OFF CACHE BOOL "")
-
-        if(EXISTS "${PROJECT_SOURCE_DIR}/smith/tribol")
-            set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/smith/tribol")
-        else()
-            set(tribol_repo_dir "${PROJECT_SOURCE_DIR}/tribol")
-        endif()
-
-        # User enabled tribol profiling, briefly restore CALIPER_DIR
-        if(TRIBOL_ENABLE_PROFILING)
-            set(CALIPER_DIR ${_caliper_dir} CACHE STRING "" FORCE)
-        endif()
-
-        add_subdirectory(${tribol_repo_dir}  ${CMAKE_BINARY_DIR}/tribol)
-
-        # Suppresses Tribol compiler warnings during build
+        smith_assert_find_succeeded(PROJECT_NAME Tribol
+                                    TARGET       tribol
+                                    DIR_VARIABLE TRIBOL_DIR)
         blt_convert_to_system_includes(TARGET tribol)
-        
-        if(TRIBOL_ENABLE_PROFILING)
-            unset(CALIPER_DIR CACHE)
+        set(TRIBOL_FOUND TRUE)
+    else()
+        set(TRIBOL_ENABLE_DOCS  OFF CACHE BOOL "")
+        set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
+        set(TRIBOL_USE_MPI      ON  CACHE BOOL "")
+
+        if (NOT DEFINED TRIBOL_SOURCE_DIR)
+            set(TRIBOL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/tribol" CACHE PATH "")
         endif()
 
-        target_include_directories(redecomp PUBLIC
-            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
-        )
-        target_include_directories(tribol PUBLIC
-            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
-            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
-            $<INSTALL_INTERFACE:include>
-        )
-        target_include_directories(tribol_shared PUBLIC
-            $<BUILD_INTERFACE:${tribol_repo_dir}/src>
-            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/tribol/include>
-            $<INSTALL_INTERFACE:include>
-        )
-        
-        set(TRIBOL_FOUND TRUE CACHE BOOL "" FORCE)
-        set(ENABLE_FORTRAN ON CACHE BOOL "" FORCE)
+        # check if Tribol exists in the TRIBOL_SOURCE_DIR, if not, try looking through the smith submodule
+        if (NOT EXISTS "${TRIBOL_SOURCE_DIR}/CMakeLists.txt")
+            set(TRIBOL_SOURCE_DIR "${PROJECT_SOURCE_DIR}/smith/tribol" CACHE PATH "" FORCE)
+        endif()
+
+        if (NOT EXISTS "${TRIBOL_SOURCE_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR
+                "The Tribol repo is not present. "
+                "Either run the following command in your git repository: \n"
+                "    git submodule update --init --recursive\n"
+                "Or add -DTRIBOL_SOURCE_DIR=/path/to/tribol to your CMake command." )
+        endif()
+
+        message(STATUS "Enabling source Tribol in '${TRIBOL_SOURCE_DIR}'" )
+
+        set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
+        set(_smith_build_shared_libs ${BUILD_SHARED_LIBS})
+        if(DEFINED SMITH_MFEM_SHARED_BUILD)
+            # If static MFEM is linked into both shared Tribol and Smith targets,
+            # MFEM global state can be cleaned up more than once.
+            set(BUILD_SHARED_LIBS ${SMITH_MFEM_SHARED_BUILD})
+        else()
+            message(WARNING
+                "Could not determine whether MFEM was built shared; "
+                "using BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} for Tribol targets.")
+        endif()
+        add_subdirectory("${TRIBOL_SOURCE_DIR}" ${CMAKE_BINARY_DIR}/tribol)
+        set(BUILD_SHARED_LIBS ${_smith_build_shared_libs})
+        unset(_smith_build_shared_libs)
+        set(ENABLE_FORTRAN ON  CACHE BOOL "" FORCE)
+
+        set(TRIBOL_FOUND TRUE)
     endif()
+
+    message(STATUS "Tribol support is " ${TRIBOL_FOUND})
+
 
     #---------------------------------------------------------------------------
     # Remove non-existant INTERFACE_INCLUDE_DIRECTORIES from imported targets
@@ -642,20 +668,22 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         conduit_relay_mpi_io
         conduit_blueprint
         conduit_blueprint_mpi
+        mfem
         tribol::mfem)
 
     foreach(_target ${_imported_targets})
         if(TARGET ${_target})
-            message(STATUS "Removing non-existant include directories from target[${_target}]")
-
             get_target_property(_dirs ${_target} INTERFACE_INCLUDE_DIRECTORIES)
             set(_existing_dirs)
             foreach(_dir ${_dirs})
-                if (EXISTS "${_dir}")
+                if("${_dir}" MATCHES "^\\$<" OR IS_DIRECTORY "${_dir}")
                     list(APPEND _existing_dirs "${_dir}")
                 endif()
             endforeach()
-            if (_existing_dirs)
+            if(_existing_dirs)
+                if(NOT "${_existing_dirs}" STREQUAL "${_dirs}")
+                    message(STATUS "Removed non-existant include directories from target '${_target}'")
+                endif()
                 set_target_properties(${_target} PROPERTIES
                                       INTERFACE_INCLUDE_DIRECTORIES "${_existing_dirs}" )
             endif()
@@ -685,14 +713,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
     endif()
 
-    # Add missing ARPACK flags needed by SLEPc by injecting them into the MFEM targets.
-    # https://github.com/mfem/mfem/issues/4364
-    if (ARPACK_FOUND)
+    # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
+    if(ARPACK_FOUND)
         foreach(_target ${_mfem_targets})
             if(TARGET ${_target})
-                message(STATUS "Adding arpack libraries and include dirs to target [${_target}]")
-                target_include_directories(${_target} INTERFACE ${ARPACK_INCLUDE_DIRS})
-                target_link_libraries(${_target} INTERFACE ${ARPACK_LIBRARIES})
+                target_link_libraries(${_target} INTERFACE arpack)
             endif()
         endforeach()
     endif()
