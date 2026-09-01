@@ -15,7 +15,6 @@
 #endif
 
 #include <string.h>
-#include <csignal>
 #include <cstdlib>
 
 #include "mfem.hpp"
@@ -33,54 +32,13 @@
 
 namespace smith {
 /**
- * @brief Destroy MPI, signal handling, logging, profiling, hypre, sundials, petsc, and slepc. Note this should not be
+ * @brief Destroy MPI, logging, profiling, hypre, sundials, petsc, and slepc. Note this should not be
  * called by or exposed to users.
  */
 void finalizer();
 }  // namespace smith
 
-namespace {
-void signalHandler(int signal)
-{
-  std::cerr << "[SIGNAL]: Received signal " << signal << " (" << strsignal(signal) << "), exiting" << std::endl;
-  smith::finalizer();
-  exit(1);
-}
-}  // namespace
-
 namespace smith {
-
-void finalizer()
-{
-  if (axom::slic::isInitialized()) {
-    smith::logger::flush();
-    smith::logger::finalize();
-  }
-
-#ifdef SMITH_USE_PETSC
-#ifdef SMITH_USE_SLEPC
-  mfem::MFEMFinalizeSlepc();
-#else
-  mfem::MFEMFinalizePetsc();
-#endif
-#endif
-
-#ifdef SMITH_USE_SUNDIALS
-  mfem::Sundials::Finalize();
-#endif
-
-  profiling::finalize();
-
-  int mpi_initialized = 0;
-  MPI_Initialized(&mpi_initialized);
-  int mpi_finalized = 0;
-  MPI_Finalized(&mpi_finalized);
-  if (mpi_initialized && !mpi_finalized) {
-    MPI_Finalize();
-  }
-
-  accelerator::terminateDevice();
-}
 
 ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bool doesPrintRunInfo,
                                        ExecutionSpace exec_space)
@@ -127,14 +85,38 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bo
 
   // Initialize GPU (no-op if not enabled/available)
   accelerator::initializeDevice(exec_space);
-
-  // Register signal handlers
-  std::signal(SIGABRT, signalHandler);
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGSEGV, signalHandler);
-  std::signal(SIGTERM, signalHandler);
 }
 
-ApplicationManager::~ApplicationManager() { smith::finalizer(); }
+ApplicationManager::~ApplicationManager()
+{
+  if (axom::slic::isInitialized()) {
+    smith::logger::flush();
+    smith::logger::finalize();
+  }
+
+#ifdef SMITH_USE_PETSC
+#ifdef SMITH_USE_SLEPC
+  mfem::MFEMFinalizeSlepc();
+#else
+  mfem::MFEMFinalizePetsc();
+#endif
+#endif
+
+#ifdef SMITH_USE_SUNDIALS
+  mfem::Sundials::Finalize();
+#endif
+
+  profiling::finalize();
+
+  int mpi_initialized = 0;
+  MPI_Initialized(&mpi_initialized);
+  int mpi_finalized = 0;
+  MPI_Finalized(&mpi_finalized);
+  if (mpi_initialized && !mpi_finalized) {
+    MPI_Finalize();
+  }
+
+  accelerator::terminateDevice();
+}
 
 }  // namespace smith
