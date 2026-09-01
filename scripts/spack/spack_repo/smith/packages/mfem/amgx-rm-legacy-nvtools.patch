@@ -1,26 +1,37 @@
 diff --git a/config/cmake/modules/FindAMGX.cmake b/config/cmake/modules/FindAMGX.cmake
-index fb04995d3e..15c6bf677c 100644
+index fb04995d3e..1415065dc4 100644
 --- a/config/cmake/modules/FindAMGX.cmake
 +++ b/config/cmake/modules/FindAMGX.cmake
-@@ -15,7 +15,7 @@
+@@ -15,7 +15,10 @@
  #   - AMGX_INCLUDE_DIRS
  
  include(MfemCmakeUtilities)
 -set(AMGX_REQUIRED_LIBRARIES cusparse cusolver cublas cublasLt nvToolsExt)
 +set(AMGX_REQUIRED_LIBRARIES cusparse cusolver cublas cublasLt)
++if (NOT DEFINED CUDAToolkit_VERSION OR CUDAToolkit_VERSION VERSION_LESS 12.9)
++  list(APPEND AMGX_REQUIRED_LIBRARIES nvToolsExt)
++endif()
  mfem_find_package(AMGX AMGX AMGX_DIR "include" "amgx_c.h" "lib" "amgx"
    "Paths to headers required by AMGX." "Libraries required by AMGX.")
  # Make sure the library location is locked down
 diff --git a/config/defaults.mk b/config/defaults.mk
-index 9115a56834..be1ec9903f 100644
+index 9115a56834..26f6c3f3e1 100644
 --- a/config/defaults.mk
 +++ b/config/defaults.mk
-@@ -423,7 +423,7 @@ GINKGO_LIB = $(XLINKER)-rpath,$(GINKGO_LINK_LIB_DIR) -L$(GINKGO_LINK_LIB_DIR)\
+@@ -423,7 +423,15 @@ GINKGO_LIB = $(XLINKER)-rpath,$(GINKGO_LINK_LIB_DIR) -L$(GINKGO_LINK_LIB_DIR)\
  # AmgX library configuration
  AMGX_DIR = @MFEM_DIR@/../amgx
  AMGX_OPT = -I$(AMGX_DIR)/include
 -AMGX_LIB = -L$(AMGX_DIR)/lib -lamgx -lcusparse -lcusolver -lcublas -lnvToolsExt
-+AMGX_LIB = -L$(AMGX_DIR)/lib -lamgx -lcusparse -lcusolver -lcublas
++CUDA_VERSION_NUM := $(strip $(shell awk '$$2 == "CUDA_VERSION" { print $$3; exit }' "$(CUDA_DIR)/include/cuda.h" 2>/dev/null))
++AMGX_NVTOOLSEXT_LIB =
++ifeq ($(CUDA_VERSION_NUM),)
++  AMGX_NVTOOLSEXT_LIB = -lnvToolsExt
++else ifeq ($(shell test $(CUDA_VERSION_NUM) -lt 12090 && echo YES),YES)
++  AMGX_NVTOOLSEXT_LIB = -lnvToolsExt
++endif
++AMGX_LIB = -L$(AMGX_DIR)/lib -lamgx -lcusparse -lcusolver -lcublas \
++ $(AMGX_NVTOOLSEXT_LIB)
  
  # MAGMA library configuration
  MAGMA_DIR = @MFEM_DIR@/../magma
