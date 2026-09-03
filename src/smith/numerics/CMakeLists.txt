@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 add_subdirectory(functional)
-
 set(numerics_headers
     equation_solver.hpp
     nonlinear_convergence.hpp
@@ -15,15 +14,18 @@ set(numerics_headers
     solver_with_preconditioner.hpp
     stdfunction_operator.hpp
     petsc_solvers.hpp
+    steihaug_toint_cg.hpp
     trust_region_solver.hpp
-    dense_petsc.hpp
+    trust_region_subspace_cache.hpp
     block_preconditioner.hpp
     )
 
 set(numerics_sources
     equation_solver.cpp
+    steihaug_toint_cg.cpp
+    mfem_trust_region_subspace.cpp
+    trust_region_subspace_cache.cpp
     nonlinear_convergence.cpp
-    trust_region_solver.cpp
     odes.cpp
     petsc_solvers.cpp
     block_preconditioner.cpp

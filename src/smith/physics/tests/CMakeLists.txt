@@ -32,6 +32,7 @@ set(physics_serial_test_sources
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
     test_functional_weak_form.cpp
+    tet_quality.cpp
     thermomech_statics_patch.cpp
     parameterized_thermomechanics_example.cpp
     test_kinematic_objective.cpp
@@ -79,6 +80,7 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
+    shallow_arch_buckling.cpp
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
