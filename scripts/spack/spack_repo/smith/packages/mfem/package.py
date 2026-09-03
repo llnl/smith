@@ -11,16 +11,11 @@ class Mfem(BuiltinMfem):
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    # Note the x.x.1.x is to prevent a patch from being applied
-    version("4.9.1.4", commit="1c19aba72a2b91ee918a332e668cf00922848321")
+    version("4.9.1.1", commit="a57763ace9c9ff67a57cdb4457a6d7caf79eae93")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
     depends_on("fortran", type="build", when="+strumpack")
-
-    # This patch removes the -lnvTools library, because it no longer exists in newer versions of CUDA and
-    # is not used in newer versions of AMGX.
-    patch("amgx-rm-legacy-nvtools.patch")
 
     # AddressSanitizer (ASan) is only supported by GCC and (some) LLVM-derived
     # compilers. Denylist compilers not known to support ASan
