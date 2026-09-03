@@ -115,7 +115,7 @@ set(SUNDIALS_DIR "${TPL_ROOT}/sundials-7.7.0-zt4cttyfagvx6agispynsxtkcghepoti" C
 
 set(UMPIRE_DIR "${TPL_ROOT}/umpire-2025.12.0-4b57fjxuqfhnzf4aovxcyr7g4663ucl3" CACHE PATH "")
 
-# set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.28-oaawgqcwie3goef2uscu7oc2ewou7gpv" CACHE PATH "")
+# TRIBOL not built
 
 #------------------------------------------------------------------------------
 # Devtools
