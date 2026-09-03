@@ -134,5 +134,3 @@ set(SPHINX_EXECUTABLE "${DEVTOOLS_ROOT}/python-3.11.7/bin/sphinx-build" CACHE PA
 set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/cppcheck-2.9/bin/cppcheck" CACHE PATH "")
 
 set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/doxygen-1.9.8/bin/doxygen" CACHE PATH "")
-
-

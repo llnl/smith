@@ -130,5 +130,3 @@ set(SPHINX_EXECUTABLE "/Users/chapman39/dev/smith/venv/bin/sphinx-build" CACHE P
 set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/bin/cppcheck" CACHE PATH "")
 
 set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/bin/doxygen" CACHE PATH "")
-
-

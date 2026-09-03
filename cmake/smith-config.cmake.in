@@ -20,7 +20,7 @@ if(NOT SMITH_FOUND)
   set(SMITH_VERSION_PATCH "@SMITH_VERSION_PATCH@")
   
   set(SMITH_INSTALL_PREFIX "@SMITH_INSTALL_PREFIX@")
-  set(SMITH_INCLUDE_DIRS "${SMITH_INSTALL_PREFIX}/include")
+  set(SMITH_INCLUDE_DIRS   "${SMITH_INSTALL_PREFIX}/include")
 
   #----------------------------------------------------------------------------
   # Set user configuration options and features
@@ -32,6 +32,7 @@ if(NOT SMITH_FOUND)
   set(SMITH_ENABLE_OPENMP      @SMITH_ENABLE_OPENMP@)
 
   set(SMITH_USE_ADIAK          @SMITH_USE_ADIAK@)
+  set(SMITH_USE_ARPACK         @SMITH_USE_ARPACK@)
   set(SMITH_USE_AXOM           @SMITH_USE_AXOM@)
   set(SMITH_USE_CAMP           @SMITH_USE_CAMP@)
   set(SMITH_USE_CALIPER        @SMITH_USE_CALIPER@)
@@ -51,13 +52,12 @@ if(NOT SMITH_FOUND)
   set(SMITH_USE_UMPIRE         @SMITH_USE_UMPIRE@)
   
   set(SMITH_ADIAK_DIR          "@ADIAK_DIR@")
+  set(SMITH_ARPACK_DIR         "@ARPACK_DIR@")
   set(SMITH_AXOM_DIR           "@AXOM_DIR@")
   set(SMITH_CAMP_DIR           "@CAMP_DIR@")
   set(SMITH_CALIPER_DIR        "@CALIPER_DIR@")
   set(SMITH_CONDUIT_DIR        "@CONDUIT_DIR@")
-  set(SMITH_CONTINUATION_DIR   "@CONTINUATION_DIR@")
   set(SMITH_ENZYME_DIR         "@ENZYME_DIR@")
-  set(SMITH_GRETL_DIR          "@SMITH_INSTALL_PREFIX@")
   set(SMITH_HDF5_DIR           "@HDF5_DIR@")
   set(SMITH_MFEM_DIR           "@MFEM_DIR@")
   set(SMITH_PETSC_DIR          "@PETSC_DIR@")
@@ -68,6 +68,22 @@ if(NOT SMITH_FOUND)
   set(SMITH_TRIBOL_DIR         "@TRIBOL_DIR@")
   set(SMITH_UMPIRE_DIR         "@UMPIRE_DIR@")
 
+  # TPLs that are be included in our build
+  set(SMITH_CONTINUATION_DIR   "@SMITH_INSTALL_PREFIX@")
+  set(SMITH_GRETL_DIR          "@SMITH_INSTALL_PREFIX@")
+
+  # Tribol may be included in our build
+  if(SMITH_USE_TRIBOL AND NOT SMITH_TRIBOL_DIR)
+    set(SMITH_TRIBOL_DIR       "@SMITH_INSTALL_PREFIX@")
+    set(_tribol_included       TRUE)
+  else()
+    set(_tribol_included       FALSE)
+  endif()
+
+  if (NOT BLT_LOADED)
+    include("${CMAKE_CURRENT_LIST_DIR}/BLTInstallableMacros.cmake")
+  endif()
+
   # Codevelop TPLs are installed alongside Smith
   if(SMITH_ENABLE_CODEVELOP)
     set(SMITH_AXOM_DIR "${SMITH_INSTALL_PREFIX}")
@@ -75,7 +91,7 @@ if(NOT SMITH_FOUND)
   endif()
 
   # Set to real variable unless user overrode it
-  foreach(dep ADIAK AXOM CAMP CALIPER CONDUIT HDF5 MFEM PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
+  foreach(dep @SMITH_TPL_DEPS@)
     if (NOT ${dep}_DIR)
       set(${dep}_DIR "${SMITH_${dep}_DIR}")
     endif()
@@ -90,6 +106,24 @@ if(NOT SMITH_FOUND)
   set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB32_PATHS TRUE)
   set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
   set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIBX32_PATHS TRUE)
+
+  # Adiak
+  if(SMITH_USE_ADIAK)
+    find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}" "${ADIAK_DIR}/lib/cmake/adiak")
+  endif()
+
+  # ARPACK
+  if(SMITH_USE_ARPACK)
+    blt_import_library(NAME       arpack
+                       INCLUDES   @ARPACK_INCLUDE_DIRS@
+                       LIBRARIES  @ARPACK_LIBRARIES@
+                       TREAT_INCLUDES_AS_SYSTEM ON)
+  endif()
+
+  # Caliper
+  if(SMITH_USE_CALIPER)
+    find_dependency(caliper REQUIRED PATHS "${CALIPER_DIR}" "${CALIPER_DIR}/share/cmake/caliper")
+  endif()
 
   # See comment in SetupSmithThirdParty.cmake
   if(SMITH_ENABLE_CUDA)
@@ -121,10 +155,12 @@ if(NOT SMITH_FOUND)
       # MFEM include directories are added as the variable but not always added to the target itself
       target_include_directories(mfem SYSTEM INTERFACE "${MFEM_INCLUDE_DIRS}")
     else()
-      add_library(mfem INTERFACE IMPORTED GLOBAL)
-      target_include_directories(mfem SYSTEM INTERFACE "@MFEM_INCLUDE_DIRS@")
-      target_link_libraries(mfem INTERFACE "@MFEM_LIBRARIES@")
+      blt_import_library(NAME mfem
+                         INCLUDES "@MFEM_INCLUDE_DIRS@"
+                         TREAT_INCLUDES_AS_SYSTEM ON
+                         DEPENDS_ON "@MFEM_LIBRARIES@")
     endif()
+
   endif()
 
   # Axom
@@ -132,37 +168,15 @@ if(NOT SMITH_FOUND)
   if(SMITH_USE_AXOM)
     find_dependency(Axom REQUIRED NO_DEFAULT_PATH PATHS "${AXOM_DIR}/lib/cmake")
   endif()
-  
-  # HDF5
-  if(SMITH_USE_HDF5)
-    set(SMITH_HDF5_DIR     "@HDF5_DIR@")
-    # Note: Targets not currently imported
-  endif()
-
-  # Tribol
-  if(SMITH_USE_TRIBOL)
-    find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
-  endif()
 
   # Enzyme
   if(SMITH_USE_ENZYME)
-    set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
-    find_dependency(Enzyme REQUIRED)
+    find_dependency(Enzyme REQUIRED REQUIRED NO_DEFAULT_PATH PATHS "${ENZYME_DIR}")
   endif()
 
   # Gretl
   if(SMITH_USE_GRETL)
-    find_dependency(gretl REQUIRED PATHS ${SMITH_GRETL_DIR}/lib/cmake)
-  endif()
-
-  # Adiak
-  if(SMITH_USE_ADIAK)
-    find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}" "${ADIAK_DIR}/lib/cmake/adiak")
-  endif()
-
-  # Caliper
-  if(SMITH_USE_CALIPER)
-    find_dependency(caliper REQUIRED PATHS "${CALIPER_DIR}" "${CALIPER_DIR}/share/cmake/caliper")
+    find_dependency(gretl REQUIRED PATHS "${GRETL_DIR}/lib/cmake")
   endif()
 
   #----------------------------------------------------------------------------
@@ -170,6 +184,25 @@ if(NOT SMITH_FOUND)
   #----------------------------------------------------------------------------
   get_filename_component(SMITH_CMAKE_CONFIG_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
   include(${SMITH_CMAKE_CONFIG_DIR}/BLTSetupTargets.cmake)
+
+  # Tribol (uses BLTSetupTargets.cmake)
+  if(SMITH_USE_TRIBOL)
+    if(NOT _tribol_included)
+      find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+    else()
+      include(${SMITH_CMAKE_CONFIG_DIR}/tribol-targets.cmake)
+    endif()
+  endif()
+
+  # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
+  if(SMITH_USE_ARPACK)
+    foreach(_target mfem axom::mfem tribol::mfem)
+      if(TARGET ${_target})
+        target_link_libraries(${_target} INTERFACE arpack)
+      endif()
+    endforeach()
+  endif()
+
   include(${SMITH_CMAKE_CONFIG_DIR}/smith-targets.cmake)
 
   #----------------------------------------------------------------------------
