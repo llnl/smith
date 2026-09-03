@@ -230,7 +230,3 @@ spack:
       - spec: gawk@5.2.1
         prefix: /usr
       buildable: false
-
-    # https://github.com/llnl/smith/issues/1656
-    petsc:
-      required: "~shared"
