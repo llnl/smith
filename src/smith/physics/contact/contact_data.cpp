@@ -27,7 +27,7 @@ namespace smith {
 
 namespace {
 
-bool hasIndependentPressureState(const ContactOptions& options)
+bool hasIndependentPressureState([[maybe_unused]] const ContactOptions& options)
 {
 #ifdef SMITH_USE_ENZYME
   if (options.method == ContactMethod::EnergyMortar) {
