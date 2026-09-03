@@ -93,7 +93,10 @@ ContactInteraction::ContactInteraction(int interaction_id, const mfem::ParMesh& 
 #ifdef SMITH_USE_ENZYME
     tribol::enableEnzyme(interaction_id, true);
 #endif
-    tribol::registerMfemReferenceCoords(interaction_id, shaped_reference_coords);
+    const auto& reference_coords = isEnergyMortar(getContactOptions())
+                                       ? shaped_reference_coords
+                                       : static_cast<const mfem::ParGridFunction&>(*mesh.GetNodes());
+    tribol::registerMfemReferenceCoords(interaction_id, reference_coords);
   }
 }
 
