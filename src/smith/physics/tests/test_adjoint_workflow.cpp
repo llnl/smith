@@ -24,12 +24,13 @@
 #include "mfem.hpp"
 #include "mpi.h"
 
+#include "smith/smith_config.hpp"
+
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/functional/domain.hpp"
 #include "smith/numerics/functional/finite_element.hpp"
 #include "smith/numerics/functional/tensor.hpp"
 #include "smith/numerics/solver_config.hpp"
-#include "shared/mesh/MeshBuilder.hpp"
 #include "smith/mesh_utils/mesh_utils.hpp"
 #include "smith/physics/base_physics.hpp"
 #include "smith/physics/boundary_conditions/components.hpp"
@@ -39,9 +40,9 @@
 #include "smith/physics/state/finite_element_dual.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/state/state_manager.hpp"
-#include "smith/smith_config.hpp"
 
 #ifdef SMITH_USE_TRIBOL
+#include "shared/mesh/MeshBuilder.hpp"
 #include "smith/physics/contact/contact_config.hpp"
 #include "smith/physics/solid_mechanics_contact.hpp"
 #ifdef SMITH_USE_ENZYME
@@ -54,11 +55,12 @@ namespace {
 
 constexpr int p = 1;
 constexpr int dim = 2;
-constexpr int contact_2d_dim = 2;
-constexpr int contact_3d_dim = 3;
 
 using ParametricSolid = SolidMechanics<p, dim, Parameters<H1<1>, H1<1>>>;
 #ifdef SMITH_USE_TRIBOL
+constexpr int contact_2d_dim = 2;
+constexpr int contact_3d_dim = 3;
+
 using EnergyContactSolid = SolidMechanicsContact<p, contact_2d_dim>;
 using SingleMortarContactSolid = SolidMechanicsContact<p, contact_3d_dim>;
 #endif
