@@ -10,13 +10,15 @@
 
 #include "mfem.hpp"
 
+#include "smith/numerics/state_dependent_solver.hpp"
+
 namespace smith {
 
 /// @brief Simple wrapper that owns a linear solver and its preconditioner.
 ///
 /// This is used to keep a preconditioner alive when it is referenced by an
 /// iterative solver (e.g. GMRES) via SetPreconditioner().
-class SolverWithPreconditioner : public mfem::Solver {
+class SolverWithPreconditioner : public mfem::Solver, public StateDependentSolver {
  public:
   /// @brief Construct from an owned linear solver and (optional) preconditioner.
   /// @param linear_solver Owned linear solver (must be non-null).
@@ -43,6 +45,17 @@ class SolverWithPreconditioner : public mfem::Solver {
   {
     linear_solver_->iterative_mode = iterative_mode;
     linear_solver_->Mult(x, y);
+  }
+
+  /// @brief Refresh state-dependent owned solver data.
+  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  {
+    if (auto* state_dependent_solver = dynamic_cast<StateDependentSolver*>(linear_solver_.get())) {
+      state_dependent_solver->updateForState(state, block_offsets);
+    }
+    if (auto* state_dependent_solver = dynamic_cast<StateDependentSolver*>(preconditioner_.get())) {
+      state_dependent_solver->updateForState(state, block_offsets);
+    }
   }
 
   /// @brief Non-owning access to the underlying linear solver.

@@ -10,6 +10,7 @@ set(numerics_headers
     nonlinear_convergence.hpp
     odes.hpp
     solver_config.hpp
+    state_dependent_solver.hpp
     solver_with_preconditioner.hpp
     stdfunction_operator.hpp
     petsc_solvers.hpp
