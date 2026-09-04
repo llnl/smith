@@ -100,7 +100,7 @@ MeshPtr buildCircleMesh(const std::string& mesh_tag)
            .updateBdrAttrib(1, 6)
            .updateBdrAttrib(3, 9)
            .scale({1.0, 0.25}),
-       shared::MeshBuilder::SemiCircularShell(mesh_factor * 3 / 2, 10 * mesh_factor, 0.075, 0.125)
+       shared::MeshBuilder::HalfCylinder2D(mesh_factor * 3 / 2, 10 * mesh_factor, 0.075, 0.125)
            .translate({0.125, 0.375})
            .updateBdrAttrib(1, 5)
            .updateBdrAttrib(2, 8)

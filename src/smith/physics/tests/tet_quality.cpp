@@ -4,8 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <iostream>
-#include <complex>
+#include <format>
 #include <memory>
 #include <string>
 
@@ -13,16 +12,18 @@
 #include "mfem.hpp"
 
 #include "smith/smith_config.hpp"
-#include "smith/mesh_utils/mesh_utils.hpp"
-#include "smith/numerics/functional/functional.hpp"
-#include "smith/numerics/functional/shape_aware_functional.hpp"
-#include "smith/numerics/functional/tensor.hpp"
 #include "smith/infrastructure/application_manager.hpp"
+#include "smith/infrastructure/logger.hpp"
+#include "smith/mesh_utils/mesh_utils.hpp"
 #include "smith/numerics/functional/domain.hpp"
 #include "smith/numerics/functional/dual.hpp"
 #include "smith/numerics/functional/finite_element.hpp"
+#include "smith/numerics/functional/functional.hpp"
 #include "smith/numerics/functional/geometry.hpp"
+#include "smith/numerics/functional/shape_aware_functional.hpp"
+#include "smith/numerics/functional/tensor.hpp"
 #include "smith/numerics/functional/tuple.hpp"
+#include "smith/physics/state/finite_element_state.hpp"
 
 using namespace smith;
 
@@ -31,9 +32,6 @@ double t = 0.0;
 TEST(QoI, TetrahedronQuality)
 {
   static constexpr int dim{3};
-
-  double displacement_to_regular_tetrahedron[4][3] = {
-      {0., 0., 0.}, {0.122462, 0., 0.}, {0.561231, -0.0279194, 0.}, {0.561231, 0.324027, -0.0835136}};
 
   tensor<double, 3, 3> regular_tet_correction = {
       {{1.00000, -0.577350, -0.408248}, {0, 1.15470, -0.408248}, {0, 0, 1.22474}}};
@@ -83,20 +81,28 @@ TEST(QoI, TetrahedronQuality)
       },
       whole_domain);
 
-  std::unique_ptr<mfem::HypreParVector> u(fes->NewTrueDofVector());
-  *u = 0.0;
-  std::cout << "(ShapeAwareFunctional) mu(J) for right tetrahedron: " << saf_qoi(t, *u) << std::endl;
-  std::cout << "(          Functional) mu(J) for right tetrahedron: " << qoi(t, *u) << std::endl;
+  smith::FiniteElementState u(*fes, "displacement");
+  u = 0.0;
+  const double shape_aware_right_tet_quality = saf_qoi(t, u);
+  const double functional_right_tet_quality = qoi(t, u);
+  SLIC_INFO_ROOT(std::format("(ShapeAwareFunctional) mu(J) for right tetrahedron: {}", shape_aware_right_tet_quality));
+  SLIC_INFO_ROOT(std::format("(          Functional) mu(J) for right tetrahedron: {}", functional_right_tet_quality));
 
   // apply a displacement to make the domain into a regular tetrahedron
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 3; j++) {
-      (*u)[i + j * 4] = displacement_to_regular_tetrahedron[i][j];
-    }
-  }
+  u.setFromFieldFunction([](tensor<double, dim> X) {
+    const double ux = 0.122462 * X[0] + 0.561231 * X[1] + 0.561231 * X[2];
+    const double uy = -0.0279194 * X[1] + 0.324027 * X[2];
+    const double uz = -0.0835136 * X[2];
+    tensor<double, dim> displacement = {{ux, uy, uz}};
+    return displacement;
+  });
 
-  std::cout << "(ShapeAwareFunctional) mu(J) for regular tetrahedron: " << saf_qoi(t, *u) << std::endl;
-  std::cout << "(          Functional) mu(J) for regular tetrahedron: " << qoi(t, *u) << std::endl;
+  const double shape_aware_regular_tet_quality = saf_qoi(t, u);
+  const double functional_regular_tet_quality = qoi(t, u);
+  SLIC_INFO_ROOT(
+      std::format("(ShapeAwareFunctional) mu(J) for regular tetrahedron: {}", shape_aware_regular_tet_quality));
+  SLIC_INFO_ROOT(
+      std::format("(          Functional) mu(J) for regular tetrahedron: {}", functional_regular_tet_quality));
 }
 
 int main(int argc, char* argv[])
