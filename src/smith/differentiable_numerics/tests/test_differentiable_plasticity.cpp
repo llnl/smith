@@ -215,8 +215,9 @@ class ParameterizedDifferentiableJ2SmallStrain {
                                           const T5& /* deltaHk */) const
   {
     constexpr auto I = Identity<dim>();
-    auto K = (E0 + get<VALUE>(deltaE)) / (3.0 * (1.0 - 2.0 * nu));
-    auto G = 0.5 * (E0 + get<VALUE>(deltaE)) / (1.0 + nu);
+    auto E = E0 * (1.0 + get<VALUE>(deltaE));
+    auto K = E / (3.0 * (1.0 - 2.0 * nu));
+    auto G = 0.5 * E / (1.0 + nu);
 
     auto el_strain = sym(du_dX) - Fp;
     auto p = K * tr(el_strain);
@@ -231,8 +232,9 @@ class ParameterizedDifferentiableJ2SmallStrain {
                                            const tensor<T3, dim, dim>& du_dX, const T4& deltaE, const T5& deltaHk) const
   {
     using std::sqrt;
-    auto G = 0.5 * (E0 + get<VALUE>(deltaE)) / (1.0 + nu);
-    auto Hk = Hk0 + get<VALUE>(deltaHk);
+    auto E = E0 * (1.0 + get<VALUE>(deltaE));
+    auto Hk = Hk0 * (1.0 + get<VALUE>(deltaHk));
+    auto G = 0.5 * E / (1.0 + nu);
 
     auto el_strain = sym(du_dX) - Fp_old;
     auto s = 2.0 * G * dev(el_strain);
@@ -252,8 +254,9 @@ class ParameterizedDifferentiableJ2SmallStrain {
                                        const T5& deltaE, const T6& deltaHk) const
   {
     using std::sqrt;
-    auto G = 0.5 * (E0 + get<VALUE>(deltaE)) / (1.0 + nu);
-    auto Hk = Hk0 + get<VALUE>(deltaHk);
+    auto E = E0 * (1.0 + get<VALUE>(deltaE));
+    auto Hk = Hk0 * (1.0 + get<VALUE>(deltaHk));
+    auto G = 0.5 * E / (1.0 + nu);
 
     auto el_strain = sym(du_dX) - Fp_old;
     auto s = 2.0 * G * dev(el_strain);
@@ -309,7 +312,7 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
       mesh, staggered_coupled_solver, physics_name, FieldType<L2<0>>("deltaE"), FieldType<L2<0>>("deltaHk"));
 
   using Hardening = solid_mechanics::LinearHardening;
-  Hardening hardening{.sigma_y = 25.0, .Hi = 50.0, .eta = 0.0};
+  Hardening hardening{.sigma_y = 20.0, .Hi = 50.0, .eta = 0.0};
   ParameterizedDifferentiableJ2SmallStrain<dim, Hardening> mat(hardening, 1.5e+4, 0.25, 500.0, 1.0);
 
   plastic_mechanics_system->setMaterial(mesh->entireBodyName(), mat);
@@ -352,8 +355,8 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   gretl::set_as_objective(disp_squared);
 
   EXPECT_GT(checkGradWrt(disp_squared, shape_disp, 2e-4, 4, true), 0.95);
-  EXPECT_GT(checkGradWrt(disp_squared, params[0], 100.0, 4, true), 0.95);
-  EXPECT_GT(checkGradWrt(disp_squared, params[1], 100.0, 4, true), 0.95);
+  EXPECT_GT(checkGradWrt(disp_squared, params[0], 1e-2, 4, true), 0.95);
+  EXPECT_GT(checkGradWrt(disp_squared, params[1], 1e-1, 4, true), 0.95);
 
   std::vector<FieldState> sensitivity_fields{shape_disp, params[0], params[1]};
   auto sens_writer = createParaviewWriter(*mesh, sensitivity_fields, physics_name + "_final_sensitivities");
