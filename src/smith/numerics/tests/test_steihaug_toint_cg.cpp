@@ -11,6 +11,19 @@
 
 namespace {
 
+class NegativeIdentityPreconditioner : public mfem::Solver {
+ public:
+  explicit NegativeIdentityPreconditioner(int size) : mfem::Solver(size) {}
+
+  void SetOperator(const mfem::Operator& op) override { height = width = op.Height(); }
+
+  void Mult(const mfem::Vector& input, mfem::Vector& output) const override
+  {
+    output = input;
+    output *= -1.0;
+  }
+};
+
 std::vector<double> localDotMany(const std::vector<smith::DotPair>& pairs)
 {
   std::vector<double> products(pairs.size(), 0.0);
@@ -132,4 +145,47 @@ TEST(SteihaugTointCG, LowInitialResidualHonorsMinimumIterations)
 
   EXPECT_EQ(forced_iteration_results.cg_iterations_count, 1);
   EXPECT_EQ(forced_iteration_results.interior_status, smith::TrustRegionResults::Status::Interior);
+}
+
+TEST(SteihaugTointCG, FallsBackFromNonPositivePreconditioner)
+{
+  mfem::Vector diagonal(2);
+  diagonal[0] = 2.0;
+  diagonal[1] = 4.0;
+  mfem::SparseMatrix hessian(diagonal);
+  NegativeIdentityPreconditioner preconditioner(2);
+
+  mfem::Vector initial_residual(2);
+  initial_residual = 1.0;
+  mfem::Vector current_residual(2);
+
+  smith::TrustRegionSettings settings;
+  settings.cg_tol = 1.0e-10;
+  settings.max_cg_iterations = 10;
+
+  double trust_region_size = 100.0;
+  smith::TrustRegionResults results(2);
+  smith::steihaugTointCG(initial_residual, current_residual, hessian, &preconditioner, settings, trust_region_size,
+                         results, initial_residual * initial_residual, localDotMany);
+
+  EXPECT_NEAR(results.z[0], -0.5, 1.0e-9);
+  EXPECT_NEAR(results.z[1], -0.25, 1.0e-9);
+  EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::Interior);
+}
+
+TEST(TrustRegionDogleg, SelectsFeasibleNewtonPointWhenCauchyPointIsLonger)
+{
+  mfem::Vector cauchy_point(2);
+  cauchy_point[0] = 2.0;
+  cauchy_point[1] = 0.0;
+
+  mfem::Vector newton_point(2);
+  newton_point[0] = 0.5;
+  newton_point[1] = 0.25;
+
+  mfem::Vector step(2);
+  smith::doglegStep(cauchy_point, newton_point, 10.0, step, localDotMany);
+
+  EXPECT_DOUBLE_EQ(step[0], newton_point[0]);
+  EXPECT_DOUBLE_EQ(step[1], newton_point[1]);
 }
