@@ -547,45 +547,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
 #endif
   }
 
-  /// finds tau s.t. (z + tau*(y-z))^2 = trSize^2
-  void projectToBoundaryBetweenWithCoefs(mfem::Vector& z, const mfem::Vector& y, double trSize, double zz, double zy,
-                                         double yy) const
-  {
-    double dd = yy - 2 * zy + zz;
-    double zd = zy - zz;
-    double boundary_gap = std::max(trSize * trSize - zz, 0.0);
-    if (boundary_gap == 0.0) return;
-    double tau = (std::sqrt(boundary_gap * dd + zd * zd) - zd) / dd;
-    z.Add(-tau, z);
-    z.Add(tau, y);
-  }
-
-  /// take a dogleg step in direction s, solution norm must be within trSize
-  void doglegStep(const mfem::Vector& cp, const mfem::Vector& newtonP, double trSize, mfem::Vector& s) const
-  {
-    SMITH_MARK_FUNCTION;
-    const auto dots = globalDotMany({{&cp, &cp}, {&newtonP, &newtonP}});
-    const double cc = dots[0];
-    const double nn = dots[1];
-    double tt = trSize * trSize;
-
-    s = 0.0;
-    if (cc >= tt) {
-      add(s, std::sqrt(tt / cc), cp, s);
-    } else if (cc > nn) {
-      if (print_level >= 2) {
-        mfem::out << "cp outside newton, preconditioner likely inaccurate\n";
-      }
-      add(s, 1.0, cp, s);
-    } else if (nn > tt) {  // on the dogleg (we have nn >= cc, and tt >= cc)
-      add(s, 1.0, cp, s);
-      double cn = globalDotMany({{&cp, &newtonP}})[0];
-      projectToBoundaryBetweenWithCoefs(s, newtonP, trSize, cc, cn, nn);
-    } else {
-      s = newtonP;
-    }
-  }
-
   /// compute the energy of the linearized system for a given solution vector z
   template <typename HessVecFunc>
   double computeEnergy(const mfem::Vector& r_local, const HessVecFunc& H, const mfem::Vector& z) const
@@ -850,7 +811,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       while (lineSearchIter <= nonlinear_options.max_line_search_iterations) {
         ++lineSearchIter;
 
-        doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
+        auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return globalDotMany(pairs); };
+        smith::doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d, dot_many_lambda);
         const double d_norm = subspace_option >= 1 ? std::sqrt(Dot(trResults.d, trResults.d)) : 0.0;
         const bool use_subspace =
             can_use_subspace_solver &&
