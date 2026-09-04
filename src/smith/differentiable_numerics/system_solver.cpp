@@ -13,8 +13,6 @@
 
 #include <algorithm>
 #include <numeric>
-#include <unordered_map>
-#include <string>
 #include <axom/slic.hpp>
 #include <axom/fmt.hpp>
 
@@ -65,8 +63,7 @@ void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_so
 }
 
 std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residual_evals,
-                                            const std::vector<std::vector<size_t>>& block_indices,
-                                            const FieldState& shape_disp,
+                                            const BlockArgumentMap& block_indices, const FieldState& shape_disp,
                                             const std::vector<std::vector<FieldState>>& states,
                                             const std::vector<std::vector<FieldState>>& params,
                                             const TimeInfo& time_info,
@@ -75,8 +72,21 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   SLIC_ERROR_IF(stages_.empty(), "SystemSolver has no stages defined.");
 
   size_t num_residuals = residual_evals.size();
-  // const bool trace_plasticity =
-  //     num_residuals == 3 && residual_evals[1]->name().find("plastic_defgrad_residual") != std::string::npos;
+  SLIC_ERROR_IF(states.size() != num_residuals, "State rows must match residual count");
+  SLIC_ERROR_IF(block_indices.size() != num_residuals, "Block index rows must match residual count");
+  for (size_t row = 0; row < num_residuals; ++row) {
+    SLIC_ERROR_IF(block_indices[row].size() != num_residuals,
+                  axom::fmt::format("Block index columns for row {} must match residual count", row));
+    for (size_t col = 0; col < num_residuals; ++col) {
+      for (size_t slot : block_indices[row][col]) {
+        SLIC_ERROR_IF(slot >= states[row].size(),
+                      axom::fmt::format("Block slot {} for row {}, column {} exceeds state count {}", slot, row, col,
+                                        states[row].size()));
+      }
+    }
+    SLIC_ERROR_IF(block_indices[row][row].empty(),
+                  axom::fmt::format("Block index diagonal for row {} must not be empty", row));
+  }
   std::vector<Stage> active_stages = stages_;
   for (auto& stage : active_stages) {
     if (stage.block_indices.empty()) {
@@ -109,24 +119,6 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
 
   // Working copy of states, updated in-place as stages solve
   std::vector<std::vector<FieldState>> current_states = states;
-
-  // auto trace_row = [&](const char* location, size_t row) {
-  //   for (size_t slot = 0; slot < current_states[row].size(); ++slot) {
-  //     const auto& state = current_states[row][slot];
-  //     SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] {} row={} slot={} name={} norm={:.16e}", location, row,
-  //                                     slot, state.get()->name(), state.get()->Norml2()));
-  //   }
-  // };
-
-  // Pre-compute name -> (row, slot) routing so the propagation loop avoids O(N*M) string compares
-  // on every staggered iteration. Field-name identity within current_states is invariant across
-  // the iteration loop: only values are replaced, never the underlying name.
-  std::unordered_map<std::string, std::vector<std::pair<size_t, size_t>>> field_routing;
-  for (size_t r = 0; r < num_residuals; ++r) {
-    for (size_t slot = 0; slot < current_states[r].size(); ++slot) {
-      field_routing[current_states[r][slot].get()->name()].emplace_back(r, slot);
-    }
-  }
 
   // Helper lambda to assemble input pointers, evaluate residual, and zero essential BCs
   auto eval_residual_and_zero_bcs = [&](size_t global_row) {
@@ -172,7 +164,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
       size_t num_stage_blocks = stage.block_indices.size();
 
       std::vector<WeakForm*> stage_residuals;
-      std::vector<std::vector<size_t>> stage_block_indices;
+      BlockArgumentMap stage_block_indices;
       std::vector<std::vector<FieldState>> stage_states;
       std::vector<std::vector<FieldState>> stage_params;
       std::vector<const BoundaryConditionManager*> stage_bc_managers;
@@ -184,7 +176,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         stage_states.push_back(current_states[global_row]);
         stage_params.push_back(params[global_row]);
 
-        std::vector<size_t> row_indices(num_stage_blocks, invalid_block_index);
+        std::vector<BlockArgumentIndices> row_indices(num_stage_blocks);
         for (size_t col_idx = 0; col_idx < num_stage_blocks; ++col_idx) {
           size_t global_col = stage.block_indices[col_idx];
           row_indices[col_idx] = block_indices[global_row][global_col];
@@ -192,57 +184,26 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         stage_block_indices.push_back(row_indices);
       }
 
-      // // The plastic mechanics system orders its blocks as displacement, plastic deformation
-      // // gradient, and plastic strain. Trace the deformation-gradient inputs after the strain
-      // // stage should have propagated its updated state.
-      // if (trace_plasticity && stage.block_indices.size() == 1 && stage.block_indices[0] == 1) {
-      //   trace_row("before Fp solve", 1);
-      //   auto residual = eval_residual_and_zero_bcs(1);
-      //   SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] Fp residual norm before solve={:.16e}",
-      //                                   residual.Norml2()));
-      // }
-
       std::vector<FieldState> stage_solutions =
           block_solve(stage_residuals, stage_block_indices, shape_disp, stage_states, stage_params, time_info,
                       stage.solver.get(), stage_bc_managers);
 
-      // Propagate updated fields to every residual input that references the solved field.
-      // Match by field name (looked up via the pre-computed routing map): coupling fields appear
-      // as fixed inputs in other rows and therefore do not have a valid unknown-block entry there.
+      // Propagate updated fields to every residual input sharing the solved FieldStore index.
       // Apply relaxation: x_new = omega * x_solved + (1 - omega) * x_k.
       for (size_t i = 0; i < num_stage_blocks; ++i) {
         size_t global_col = stage.block_indices[i];
         FieldState new_state = stage_solutions[i];
 
         if (stage.relaxation_factor != 1.0) {
-          FieldState old_state = current_states[global_col][block_indices[global_col][global_col]];
+          FieldState old_state = current_states[global_col][block_indices[global_col][global_col].front()];
           new_state = weighted_average(new_state, old_state, stage.relaxation_factor);
         }
 
-        auto it = field_routing.find(new_state.get()->name());
-        // if (trace_plasticity && global_col == 2) {
-        //   SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] solved strain name={} norm={:.16e}",
-        //                                   new_state.get()->name(), new_state.get()->Norml2()));
-        //   if (it == field_routing.end()) {
-        //     SLIC_INFO_ROOT("[plastic-debug] no routing entry for solved strain");
-        //   } else {
-        //     for (const auto& [row, slot] : it->second) {
-        //       SLIC_INFO_ROOT(axom::fmt::format("[plastic-debug] strain routes to row={} slot={}", row, slot));
-        //     }
-        //   }
-        // }
-        if (it != field_routing.end()) {
-          for (const auto& [r, slot] : it->second) {
-            current_states[r][slot] = new_state;
+        for (size_t row = 0; row < num_residuals; ++row) {
+          for (size_t slot : block_indices[row][global_col]) {
+            current_states[row][slot] = new_state;
           }
         }
-        // if (trace_plasticity && global_col == 2) {
-        //   trace_row("after strain routing", 1);
-        // }
-        // if (trace_plasticity && global_col == 1) {
-        //   SLIC_INFO_ROOT(
-        //       axom::fmt::format("[plastic-debug] solved Fp norm={:.16e}", new_state.get()->Norml2()));
-        // }
       }
     }
 
@@ -275,7 +236,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   std::vector<FieldState> final_solutions;
   final_solutions.reserve(num_residuals);
   for (size_t r = 0; r < num_residuals; ++r) {
-    size_t s_idx = block_indices[r][r];
+    size_t s_idx = block_indices[r][r].front();
     final_solutions.push_back(current_states[r][s_idx]);
   }
 

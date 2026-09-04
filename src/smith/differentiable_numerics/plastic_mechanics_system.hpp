@@ -126,7 +126,8 @@ struct PlasticMechanicsSystem : public SystemBase {
    */
   std::vector<ReactionInfo> getReactionInfos() const
   {
-    return {{field_store->prefix("solid_force"), &field_store->getField(field_store->prefix("displacement")).get()->space()}};
+    return {{field_store->prefix("solid_force"),
+             &field_store->getField(field_store->prefix("displacement")).get()->space()}};
   }
 
   /**
@@ -198,39 +199,32 @@ std::shared_ptr<PlasticMechanicsSystem<dim, disp_order, parameter_space...>> bui
     std::shared_ptr<Mesh> mesh, std::shared_ptr<SystemSolver> solver, std::string prepend_name = "",
     FieldType<parameter_space>... parameter_types)
 {
-  auto field_store = std::make_shared<FieldStore>(mesh, 100);
+  auto field_store = std::make_shared<FieldStore>(mesh, 100, prepend_name);
 
-  auto prefix = [&](const std::string& name) {
-    if (prepend_name.empty()) {
-      return name;
-    }
-    return prepend_name + "_" + name;
-  };
-
-  FieldType<H1<1, dim>> shape_disp_type(prefix("shape_displacement"));
+  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
   field_store->addShapeDisp(shape_disp_type);
 
   auto quasistatic_time_rule = std::make_shared<QuasiStaticRule>();
   auto backward_euler_time_rule = std::make_shared<BackwardEulerFirstOrderTimeIntegrationRule>();
 
   // Displacement with quasi-static rule
-  FieldType<H1<disp_order, dim>> disp_type(prefix("displacement"));
+  FieldType<H1<disp_order, dim>> disp_type("displacement");
   auto disp_bc = field_store->addIndependent(disp_type, quasistatic_time_rule);
 
   // State variable fields
-  FieldType<L2<disp_order, dim * dim>> plastic_defgrad_type(prefix("plastic_defgrad"));
+  FieldType<L2<disp_order, dim * dim>> plastic_defgrad_type("plastic_defgrad");
   auto plastic_defgrad_bc = field_store->addIndependent(plastic_defgrad_type, backward_euler_time_rule);
   auto plastic_defgrad_old_type =
-      field_store->addDependent(plastic_defgrad_type, FieldStore::TimeDerivative::VAL, prefix("plastic_defgrad_old"));
+      field_store->addDependent(plastic_defgrad_type, FieldStore::TimeDerivative::VAL, "plastic_defgrad_old");
 
-  FieldType<L2<disp_order>> plastic_strain_type(prefix("plastic_strain"));
+  FieldType<L2<disp_order>> plastic_strain_type("plastic_strain");
   auto plastic_strain_bc = field_store->addIndependent(plastic_strain_type, backward_euler_time_rule);
   auto plastic_strain_old_type =
-      field_store->addDependent(plastic_strain_type, FieldStore::TimeDerivative::VAL, prefix("plastic_strain_old"));
+      field_store->addDependent(plastic_strain_type, FieldStore::TimeDerivative::VAL, "plastic_strain_old");
 
   // Parameters
   auto register_parameter = [&](auto& parameter_type) {
-    parameter_type.name = prefix("param_" + parameter_type.name);
+    parameter_type.name = "param_" + parameter_type.name;
     field_store->addParameter(parameter_type);
   };
 
@@ -241,20 +235,20 @@ std::shared_ptr<PlasticMechanicsSystem<dim, disp_order, parameter_space...>> bui
   using SystemType = PlasticMechanicsSystem<dim, disp_order, parameter_space...>;
 
   // Main weak forms for mechanics
-  std::string solid_res_name = prefix("solid_residual");
+  std::string solid_res_name = field_store->prefix("solid_residual");
   auto solid_weak_form = std::make_shared<typename SystemType::SolidWeakFormType>(
       solid_res_name, field_store->getMesh(), field_store->getField(disp_type.name).get()->space(),
       field_store->createSpaces(solid_res_name, disp_type.name, disp_type, plastic_defgrad_type, plastic_strain_type,
                                 parameter_types...));
 
-  std::string plastic_defgrad_res_name = prefix("plastic_defgrad_residual");
+  std::string plastic_defgrad_res_name = field_store->prefix("plastic_defgrad_residual");
   auto plastic_defgrad_weak_form = std::make_shared<typename SystemType::PlasticDeformWeakFormType>(
       plastic_defgrad_res_name, field_store->getMesh(), field_store->getField(plastic_defgrad_type.name).get()->space(),
       field_store->createSpaces(plastic_defgrad_res_name, plastic_defgrad_type.name, plastic_defgrad_type,
                                 plastic_defgrad_old_type, plastic_strain_type, plastic_strain_old_type, disp_type,
                                 parameter_types...));
 
-  std::string plastic_strain_res_name = prefix("plastic_strain_residual");
+  std::string plastic_strain_res_name = field_store->prefix("plastic_strain_residual");
   auto plastic_strain_weak_form = std::make_shared<typename SystemType::PlasticStrainWeakFormType>(
       plastic_strain_res_name, field_store->getMesh(), field_store->getField(plastic_strain_type.name).get()->space(),
       field_store->createSpaces(plastic_strain_res_name, plastic_strain_type.name, plastic_strain_type,
@@ -265,9 +259,8 @@ std::shared_ptr<PlasticMechanicsSystem<dim, disp_order, parameter_space...>> bui
   std::vector<std::shared_ptr<WeakForm>> weak_forms{solid_weak_form, plastic_defgrad_weak_form,
                                                     plastic_strain_weak_form};
 
-  auto sys =
-      std::make_shared<SystemType>(field_store, solver, weak_forms);
-  
+  auto sys = std::make_shared<SystemType>(field_store, solver, weak_forms);
+
   sys->solid_weak_form = solid_weak_form;
   sys->plastic_deform_weak_form = plastic_defgrad_weak_form;
   sys->plastic_strain_weak_form = plastic_strain_weak_form;

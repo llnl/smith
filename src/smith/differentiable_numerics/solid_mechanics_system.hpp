@@ -307,7 +307,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
   auto disp_time_rule_ptr = std::make_shared<DisplacementTimeRule>();
 
   FieldType<H1<1, dim>> shape_disp_type(field_store->prefix("shape_displacement"));
-  FieldType<H1<order, dim>> disp_type(field_store->prefix("displacement_solve_state"), true);
+  FieldType<H1<order, dim>> disp_type(field_store->prefix("displacement_solve_state"));
   FieldType<H1<order, dim>> disp_old_type(field_store->prefix("displacement"));
   FieldType<H1<order, dim>> velo_old_type(field_store->prefix("velocity"));
   FieldType<H1<order, dim>> accel_old_type(field_store->prefix("acceleration"));
@@ -351,7 +351,7 @@ auto buildSolidMechanicsSystemImpl(std::shared_ptr<FieldStore> field_store, cons
   }
 
   if (has_stress_output) {
-    FieldType<L2<0, dim * dim>> stress_type(field_store->prefix("stress"), true);
+    FieldType<L2<0, dim * dim>> stress_type(field_store->prefix("stress"));
     FieldType<H1<order, dim>> disp_as_input(disp_type.name);
     std::string stress_name = field_store->prefix("stress_projection");
     sys->stress_weak_form = detail::buildWeakFormWithCoupling<typename SystemType::StressOutputWeakFormType>(

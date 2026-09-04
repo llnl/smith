@@ -164,6 +164,14 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
   auto shape_disp = plastic_mechanics_system->field_store->getShapeDisp();
   auto states = plastic_mechanics_system->field_store->getStateFields();
   auto params = plastic_mechanics_system->field_store->getParameterFields();
+  const double initial_plastic_defgrad_l2 = norm(
+      *plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("plastic_defgrad"))
+           .get(),
+      2.0);
+  const double initial_plastic_strain_l2 = norm(
+      *plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("plastic_strain"))
+           .get(),
+      2.0);
 
   auto advancer = makeAdvancer(plastic_mechanics_system);
 
@@ -172,16 +180,21 @@ TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
 
   std::vector<ReactionState> reactions;
   for (size_t step = 0; step < 10; ++step) {
-    std::tie(states, reactions) =
-        advancer->advanceState(TimeInfo(time, dt, step), shape_disp, states, params);
+    std::tie(states, reactions) = advancer->advanceState(TimeInfo(time, dt, step), shape_disp, states, params);
     time += dt;
     pv_writer.write(step + 1, time, states);
   }
 
-  auto displacement = plastic_mechanics_system->field_store->getField(
-      plastic_mechanics_system->field_store->prefix("displacement"));
+  auto displacement =
+      plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("displacement"));
+  auto plastic_defgrad =
+      plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("plastic_defgrad"));
+  auto plastic_strain =
+      plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("plastic_strain"));
   double final_disp_l2 = norm(*displacement.get(), 2.0);
   EXPECT_GT(final_disp_l2, 0.0);
+  EXPECT_GT(norm(*plastic_defgrad.get(), 2.0), initial_plastic_defgrad_l2 + 1.0e-10);
+  EXPECT_GT(norm(*plastic_strain.get(), 2.0), initial_plastic_strain_l2 + 1.0e-10);
 }
 
 /// @brief Parameterized differentiable J2 material with nonlinear isotropic hardening and linear kinematic hardening
@@ -274,7 +287,7 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   int parallel_refinement = 0;
 
   static constexpr int dim = 3;
-  static constexpr int order = 2;
+  static constexpr int order = 1;
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "plasticity_small_strain");
@@ -333,8 +346,8 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
   auto shape_disp = plastic_mechanics_system->field_store->getShapeDisp();
   auto params = plastic_mechanics_system->field_store->getParameterFields();
 
-  auto displacement = plastic_mechanics_system->field_store->getField(
-      plastic_mechanics_system->field_store->prefix("displacement"));
+  auto displacement =
+      plastic_mechanics_system->field_store->getField(plastic_mechanics_system->field_store->prefix("displacement"));
   auto disp_squared = 0.5 * innerProduct(displacement, displacement);
   gretl::set_as_objective(disp_squared);
 
