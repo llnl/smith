@@ -216,7 +216,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 
   auto nonlinear_block_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
 
-  auto sols = block_solve({&con_form, &bal_form}, {{0, 1}, {0, 1}}, shape_disp, {con_arguments, bal_arguments},
+  auto sols = block_solve({&con_form, &bal_form}, {{{0}, {1}}, {{0}, {1}}}, shape_disp, {con_arguments, bal_arguments},
                           {flux_params, potential_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
                           nonlinear_block_solver.get(), {flux_bc_manager.get(), potential_bc_manager.get()});
 

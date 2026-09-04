@@ -47,6 +47,7 @@ set(differentiable_numerics_headers
     combined_system.hpp
     system_base.hpp
     differentiable_test_utils.hpp
+    plastic_mechanics_system.hpp
     )
 
 set(differentiable_numerics_depends

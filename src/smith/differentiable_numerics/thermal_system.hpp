@@ -214,7 +214,7 @@ auto buildThermalSystemImpl(std::shared_ptr<FieldStore> field_store, const Coupl
   auto temperature_time_rule_ptr = std::make_shared<TemperatureTimeRule>();
 
   FieldType<H1<1, dim>> shape_disp_type(field_store->prefix("shape_displacement"));
-  FieldType<H1<temp_order>> temperature_type(field_store->prefix("temperature_solve_state"), true);
+  FieldType<H1<temp_order>> temperature_type(field_store->prefix("temperature_solve_state"));
   FieldType<H1<temp_order>> temperature_old_type(field_store->prefix("temperature"));
 
   auto temperature_bc = field_store->getBoundaryConditions(temperature_type.name);
