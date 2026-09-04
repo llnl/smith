@@ -148,7 +148,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
     with when("+petsc"):
-        depends_on("petsc~mmg+metis")
+        depends_on("petsc~mmg+metis fflags=-ffree-line-length-none")
         depends_on("petsc+strumpack", when="+strumpack")
         depends_on("petsc~strumpack", when="~strumpack")
         depends_on("petsc+openmp", when="+openmp")
@@ -197,6 +197,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     with when("+caliper"):
         depends_on("caliper+mpi~papi")
         depends_on("caliper+adiak", when="+adiak")
+        # NOTE: Fixes undefined reference to symbol 'pthread_join@@GLIBC_2.2.5'
+        depends_on("caliper cxxflags='-pthread'", when="+cuda ^caliper~shared")
 
     depends_on("superlu-dist@8.1.2")
 

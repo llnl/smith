@@ -96,7 +96,7 @@ MFEM_HOST_DEVICE constexpr auto& tuple_get_extended(Tuple& values)
   if constexpr (i == 10) {
     return values.v10;
   }
-  MFEM_UNREACHABLE();
+  __builtin_unreachable();
 }
 
 /// @brief Return const element @p i from a 10- or 11-element tuple.
@@ -136,7 +136,7 @@ MFEM_HOST_DEVICE constexpr const auto& tuple_get_extended(const Tuple& values)
   if constexpr (i == 10) {
     return values.v10;
   }
-  MFEM_UNREACHABLE();
+  __builtin_unreachable();
 }
 
 }  // namespace detail

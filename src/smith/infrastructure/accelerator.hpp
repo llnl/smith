@@ -51,7 +51,7 @@
  * of warnings. This pragma directive suppresses the warning for a specific function.
  */
 
-#if defined(__CUDACC__)
+#if defined(__NVCC__)
 #if __CUDAVER__ >= 75000
 #define SMITH_SUPPRESS_NVCC_HOSTDEVICE_WARNING #pragma nv_exec_check_disable
 #else

@@ -53,15 +53,15 @@ TEST(domain, of_edges)
   {
     auto bmesh = import_mesh("onehex.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofEdges(*mesh, std::function([](std::vector<vec3> x) {
+    Domain d0 = Domain::ofEdges(*mesh, [](std::vector<vec3> x) {
       return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
-    }));
+    });
     EXPECT_EQ(d0.edge_ids_.size(), 4);
     EXPECT_EQ(d0.dim_, 1);
 
-    Domain d1 = Domain::ofEdges(*mesh, std::function([](std::vector<vec3> x) {
+    Domain d1 = Domain::ofEdges(*mesh, [](std::vector<vec3> x) {
       return (0.5 * (x[0][1] + x[1][1])) < 0.25;  // y coordinate of edge midpoint
-    }));
+    });
     EXPECT_EQ(d1.edge_ids_.size(), 4);
     EXPECT_EQ(d1.dim_, 1);
 
@@ -81,15 +81,15 @@ TEST(domain, of_edges)
   {
     auto bmesh = import_mesh("onetet.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofEdges(*mesh, std::function([](std::vector<vec3> x) {
+    Domain d0 = Domain::ofEdges(*mesh, [](std::vector<vec3> x) {
       return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
-    }));
+    });
     EXPECT_EQ(d0.edge_ids_.size(), 3);
     EXPECT_EQ(d0.dim_, 1);
 
-    Domain d1 = Domain::ofEdges(*mesh, std::function([](std::vector<vec3> x) {
+    Domain d1 = Domain::ofEdges(*mesh, [](std::vector<vec3> x) {
       return (0.5 * (x[0][1] + x[1][1])) < 0.25;  // y coordinate of edge midpoint
-    }));
+    });
     EXPECT_EQ(d1.edge_ids_.size(), 3);
     EXPECT_EQ(d1.dim_, 1);
 
@@ -110,15 +110,15 @@ TEST(domain, of_edges)
     constexpr int dim = 2;
     auto bmesh = import_mesh("beam-quad.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofEdges(*mesh, std::function([](std::vector<vec2> x, int /* bdr_attr */) {
+    Domain d0 = Domain::ofEdges(*mesh, [](std::vector<vec2> x, int /* bdr_attr */) {
       return (0.5 * (x[0][0] + x[1][0])) < 0.25;  // x coordinate of edge midpoint
-    }));
+    });
     EXPECT_EQ(d0.edge_ids_.size(), 1);
     EXPECT_EQ(d0.dim_, 1);
 
-    Domain d1 = Domain::ofEdges(*mesh, std::function([](std::vector<vec2> x, int /* bdr_attr */) {
+    Domain d1 = Domain::ofEdges(*mesh, [](std::vector<vec2> x, int /* bdr_attr */) {
       return (0.5 * (x[0][1] + x[1][1])) < 0.25;  // y coordinate of edge midpoint
-    }));
+    });
     EXPECT_EQ(d1.edge_ids_.size(), 8);
     EXPECT_EQ(d1.dim_, 1);
 
@@ -145,15 +145,15 @@ TEST(domain, of_faces)
     constexpr int dim = 3;
     auto bmesh = import_mesh("onehex.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofFaces(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    Domain d0 = Domain::ofFaces(*mesh, [](std::vector<vec3> vertices, int /*bdr_attr*/) {
       return average(vertices)[0] < 0.25;  // x coordinate of face center
-    }));
+    });
     EXPECT_EQ(d0.quad_ids_.size(), 1);
     EXPECT_EQ(d0.dim_, 2);
 
-    Domain d1 = Domain::ofFaces(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    Domain d1 = Domain::ofFaces(*mesh, [](std::vector<vec3> vertices, int /*bdr_attr*/) {
       return average(vertices)[1] < 0.25;  // y coordinate of face center
-    }));
+    });
     EXPECT_EQ(d1.quad_ids_.size(), 1);
     EXPECT_EQ(d1.dim_, 2);
 
@@ -176,18 +176,17 @@ TEST(domain, of_faces)
     constexpr int dim = 3;
     auto bmesh = import_mesh("onetet.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofFaces(*mesh, std::function([](std::vector<vec3> vertices, int /* bdr_attr */) {
+    Domain d0 = Domain::ofFaces(*mesh, [](std::vector<vec3> vertices, int /* bdr_attr */) {
       // accept face if it contains a vertex whose x coordinate is less than 0.1
       for (auto v : vertices) {
         if (v[0] < 0.1) return true;
       }
       return false;
-    }));
+    });
     EXPECT_EQ(d0.tri_ids_.size(), 4);
     EXPECT_EQ(d0.dim_, 2);
 
-    Domain d1 = Domain::ofFaces(
-        *mesh, std::function([](std::vector<vec3> x, int /* bdr_attr */) { return average(x)[1] < 0.1; }));
+    Domain d1 = Domain::ofFaces(*mesh, [](std::vector<vec3> x, int /* bdr_attr */) { return average(x)[1] < 0.1; });
     EXPECT_EQ(d1.tri_ids_.size(), 1);
     EXPECT_EQ(d1.dim_, 2);
 
@@ -210,15 +209,15 @@ TEST(domain, of_faces)
     constexpr int dim = 2;
     auto bmesh = import_mesh("beam-quad.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofFaces(*mesh, std::function([](std::vector<vec2> vertices, int /* attr */) {
+    Domain d0 = Domain::ofFaces(*mesh, [](std::vector<vec2> vertices, int /* attr */) {
       return average(vertices)[0] < 2.25;  // x coordinate of face center
-    }));
+    });
     EXPECT_EQ(d0.quad_ids_.size(), 2);
     EXPECT_EQ(d0.dim_, 2);
 
-    Domain d1 = Domain::ofFaces(*mesh, std::function([](std::vector<vec2> vertices, int /* attr */) {
+    Domain d1 = Domain::ofFaces(*mesh, [](std::vector<vec2> vertices, int /* attr */) {
       return average(vertices)[1] < 0.55;  // y coordinate of face center
-    }));
+    });
     EXPECT_EQ(d1.quad_ids_.size(), 8);
     EXPECT_EQ(d1.dim_, 2);
 
@@ -241,17 +240,17 @@ TEST(domain, of_elements)
     constexpr int dim = 3;
     auto bmesh = import_mesh("patch3D_tets_and_hexes.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
-    Domain d0 = Domain::ofElements(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    Domain d0 = Domain::ofElements(*mesh, [](std::vector<vec3> vertices, int /*bdr_attr*/) {
       return average(vertices)[0] < 0.7;  // x coordinate of face center
-    }));
+    });
 
     EXPECT_EQ(d0.tet_ids_.size(), 0);
     EXPECT_EQ(d0.hex_ids_.size(), 1);
     EXPECT_EQ(d0.dim_, 3);
 
-    Domain d1 = Domain::ofElements(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+    Domain d1 = Domain::ofElements(*mesh, [](std::vector<vec3> vertices, int /*bdr_attr*/) {
       return average(vertices)[1] < 0.75;  // y coordinate of face center
-    }));
+    });
     EXPECT_EQ(d1.tet_ids_.size(), 6);
     EXPECT_EQ(d1.hex_ids_.size(), 1);
     EXPECT_EQ(d1.dim_, 3);
@@ -275,13 +274,13 @@ TEST(domain, of_elements)
     auto bmesh = import_mesh("patch2D_tris_and_quads.mesh");
     auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
     Domain d0 = Domain::ofElements(
-        *mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
+        *mesh, [](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; });
     EXPECT_EQ(d0.tri_ids_.size(), 1);
     EXPECT_EQ(d0.quad_ids_.size(), 1);
     EXPECT_EQ(d0.dim_, 2);
 
     Domain d1 = Domain::ofElements(
-        *mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[1] < 0.45; }));
+        *mesh, [](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[1] < 0.45; });
     EXPECT_EQ(d1.tri_ids_.size(), 1);
     EXPECT_EQ(d1.quad_ids_.size(), 1);
     EXPECT_EQ(d1.dim_, 2);

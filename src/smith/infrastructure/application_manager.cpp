@@ -70,6 +70,9 @@ ApplicationManager::ApplicationManager(int argc, char* argv[], MPI_Comm comm, bo
 #endif
 
 #ifdef SMITH_USE_PETSC
+  // Ignore error regarding not using GPU-aware MPI
+  PetscOptionsSetValue(NULL, "-use_gpu_aware_mpi", "0");
+
   // PETSc tries to parse all command line options, but Smith applications
   // may have others intended for MPI or the application itself.
   // Silence the PETSc warning that there are leftover options it doesn't
