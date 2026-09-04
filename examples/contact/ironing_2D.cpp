@@ -25,6 +25,7 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/smith.hpp"
 #include "smith/smith_config.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace {
 
@@ -72,9 +73,35 @@ std::string caseName(IroningCase ironing_case)
   return "square";
 }
 
+tribol::EnforcementLocation parseEnergyMortarGapMode(const std::string& value)
+{
+  if (value == "nodal") {
+    return tribol::EnforcementLocation::Nodal;
+  }
+  if (value == "quadrature-point") {
+    return tribol::EnforcementLocation::QuadraturePoint;
+  }
+
+  SLIC_ERROR_ROOT("Unknown EnergyMortar gap mode '" << value << "'. Expected one of: nodal, quadrature-point.");
+  return tribol::EnforcementLocation::Nodal;
+}
+
+std::string gapModeOutputName(tribol::EnforcementLocation gap_mode)
+{
+  switch (gap_mode) {
+    case tribol::EnforcementLocation::Nodal:
+      return "nodal_gaps";
+    case tribol::EnforcementLocation::QuadraturePoint:
+      return "quadrature_point_gaps";
+  }
+
+  SLIC_ERROR_ROOT("Unsupported EnergyMortar gap mode.");
+  return "nodal_gaps";
+}
+
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
 {
-  constexpr auto mesh_factor = 8;
+  constexpr auto mesh_factor = 16;
 
   auto mesh = shared::MeshBuilder::Unify({shared::MeshBuilder::SquareMesh(8 * mesh_factor, 2 * mesh_factor)
                                               .updateBdrAttrib(1, 6)
@@ -218,10 +245,14 @@ int main(int argc, char* argv[])
   smith::ApplicationManager applicationManager(argc, argv);
 
   std::string selected_case = "square";
+  std::string energy_mortar_gap_mode = "quadrature-point";
   int num_steps = -1;
   axom::CLI::App app{"2D contact ironing example"};
   app.add_option("--case", selected_case, "Ironing case: square, circle, or twisted")
       ->check(axom::CLI::IsMember({"square", "circle", "twisted"}));
+  app.add_option("--energy-mortar-gap-mode", energy_mortar_gap_mode,
+                 "EnergyMortar gap evaluation mode: nodal or quadrature-point")
+      ->check(axom::CLI::IsMember({"nodal", "quadrature-point"}));
   app.add_option("--num-steps", num_steps, "Override the number of timesteps to run");
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
@@ -232,10 +263,13 @@ int main(int argc, char* argv[])
 #endif
 
   const auto ironing_case = parseCase(selected_case);
+  const auto gap_mode = parseEnergyMortarGapMode(energy_mortar_gap_mode);
+  const std::string output_name = "contact_ironing_2D_" + caseName(ironing_case) + "_" + gapModeOutputName(gap_mode);
   axom::sidre::DataStore datastore;
-  smith::StateManager::initialize(datastore, "contact_ironing_2D_" + caseName(ironing_case) + "_example_data");
+  smith::StateManager::initialize(datastore, output_name + "_example_data");
 
   CaseConfig config = makeCaseConfig(ironing_case);
+  config.name = output_name + "_example";
   if (num_steps > 0) {
     config.num_steps = num_steps;
   }
@@ -246,7 +280,6 @@ int main(int argc, char* argv[])
 
   mfem::VisItDataCollection visit_dc(config.name + "_visit", &mesh->mfemParMesh());
   visit_dc.SetPrefixPath("visit_out");
-  visit_dc.Save();
 
   smith::ContactOptions contact_options{.method = smith::ContactMethod::EnergyMortar,
                                         .enforcement = smith::ContactEnforcement::Penalty,
@@ -257,6 +290,9 @@ int main(int argc, char* argv[])
   smith::SolidMechanicsContact<P, DIM, smith::Parameters<smith::L2<0>, smith::L2<0>>> solid_solver(
       config.nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, config.name, mesh,
       {"bulk_mod", "shear_mod"}, 0, 0.0, false, false);
+
+  visit_dc.RegisterField("displacement", &solid_solver.displacement().gridFunction());
+  visit_dc.Save();
 
   smith::FiniteElementState K_field(smith::StateManager::newState(smith::L2<0>{}, "bulk_mod", mesh->tag()));
 
@@ -282,9 +318,11 @@ int main(int argc, char* argv[])
   solid_solver.setDisplacementBCs(config.displacement, mesh->domain("top_of_indenter"));
 
   solid_solver.addContactInteraction(0, config.substrate_contact_attrs, config.indenter_contact_attrs, contact_options);
+  tribol::setEnforcementLocation(0, gap_mode);
   if (config.add_secondary_contact) {
     solid_solver.addContactInteraction(1, config.substrate_contact_attrs, config.secondary_indenter_contact_attrs,
                                        contact_options);
+    tribol::setEnforcementLocation(1, gap_mode);
   }
 
   const std::string paraview_name = config.name + "_paraview";

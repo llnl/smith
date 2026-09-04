@@ -25,17 +25,25 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/solid_mechanics_contact.hpp"
 #include "smith/physics/state/state_manager.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace smith {
 
-TEST(EnergyMortarPatch, patch)
+struct EnergyMortarPatchParam {
+  tribol::EnforcementLocation gap_option;
+  std::string name;
+};
+
+class EnergyMortarPatch : public testing::TestWithParam<EnergyMortarPatchParam> {};
+
+TEST_P(EnergyMortarPatch, patch)
 {
   constexpr int p = 1;
   constexpr int dim = 2;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  const std::string name = "energy_mortar_patch";
+  const std::string name = "energy_mortar_patch_" + GetParam().name;
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -87,6 +95,7 @@ TEST(EnergyMortarPatch, patch)
   solid_solver.setFixedBCs(mesh->domain("y0_faces"), Component::Y);
   solid_solver.setDisplacementBCs(applied_disp_function, mesh->domain("ymax_face"), Component::Y);
   solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
+  tribol::setEnforcementLocation(0, GetParam().gap_option);
   solid_solver.completeSetup();
 
   solid_solver.advanceTimestep(1.0);
@@ -128,6 +137,12 @@ TEST(EnergyMortarPatch, patch)
   EXPECT_NEAR(0.0, mfem::ParNormlp(ux_err, 2, MPI_COMM_WORLD), 1.0e-2);
   EXPECT_NEAR(0.0, mfem::ParNormlp(uy_err, 2, MPI_COMM_WORLD), 1.0e-2);
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    tribol, EnergyMortarPatch,
+    testing::Values(EnergyMortarPatchParam{.gap_option = tribol::EnforcementLocation::Nodal, .name = "nodal"},
+                    EnergyMortarPatchParam{.gap_option = tribol::EnforcementLocation::QuadraturePoint,
+                                           .name = "quadrature_point"}));
 
 }  // namespace smith
 

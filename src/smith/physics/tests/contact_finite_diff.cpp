@@ -28,12 +28,19 @@
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/materials/solid_material.hpp"
 #include "smith/infrastructure/application_manager.hpp"
+#include "tribol/interface/tribol.hpp"
 
 namespace smith {
 
 class ContactFiniteDiff3D : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
 
-class ContactFiniteDiff2D : public testing::TestWithParam<std::pair<ContactEnforcement, std::string>> {};
+struct ContactFiniteDiff2DParam {
+  ContactEnforcement enforcement;
+  tribol::EnforcementLocation gap_option;
+  std::string name;
+};
+
+class ContactFiniteDiff2D : public testing::TestWithParam<ContactFiniteDiff2DParam> {};
 
 /**
  * @brief Checks Smith's SingleMortar contact integration by finite-differencing a small 3D patch problem.
@@ -247,7 +254,7 @@ TEST_P(ContactFiniteDiff2D, patch)
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Create DataStore
-  std::string name = "contact_fd_2D_" + GetParam().second;
+  std::string name = "contact_fd_2D_" + GetParam().name;
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, name + "_data");
 
@@ -286,7 +293,7 @@ TEST_P(ContactFiniteDiff2D, patch)
                                            .print_level = 1};
 
   ContactOptions contact_options{.method = ContactMethod::EnergyMortar,
-                                 .enforcement = GetParam().first,
+                                 .enforcement = GetParam().enforcement,
                                  .type = ContactType::Frictionless,
                                  .penalty = 0.1,
                                  .jacobian = ContactJacobian::Exact};
@@ -333,6 +340,7 @@ TEST_P(ContactFiniteDiff2D, patch)
 
   // Add the contact interaction
   solid_solver.addContactInteraction(0, {6}, {5}, contact_options);
+  tribol::setEnforcementLocation(0, GetParam().gap_option);
 
   // Finalize the data structures
   solid_solver.completeSetup();
@@ -408,7 +416,13 @@ INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff3D,
                                          std::make_pair(ContactEnforcement::LagrangeMultiplier, "lm")));
 
 INSTANTIATE_TEST_SUITE_P(tribol, ContactFiniteDiff2D,
-                         testing::Values(std::make_pair(ContactEnforcement::Penalty, "penalty")));
+                         testing::Values(ContactFiniteDiff2DParam{.enforcement = ContactEnforcement::Penalty,
+                                                                  .gap_option = tribol::EnforcementLocation::Nodal,
+                                                                  .name = "penalty_nodal_gap"},
+                                         ContactFiniteDiff2DParam{
+                                             .enforcement = ContactEnforcement::Penalty,
+                                             .gap_option = tribol::EnforcementLocation::QuadraturePoint,
+                                             .name = "penalty_quadrature_point_gap"}));
 
 }  // namespace smith
 
