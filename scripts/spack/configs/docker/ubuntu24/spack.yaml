@@ -222,4 +222,5 @@ spack:
 
     # https://github.com/llnl/smith/issues/1656
     petsc:
-      required: "~shared"
+      require:
+      - spec: "~shared"
