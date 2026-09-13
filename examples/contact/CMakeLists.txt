@@ -14,6 +14,7 @@ if(TRIBOL_FOUND AND STRUMPACK_FOUND)
 
     if(ENZYME_FOUND)
         list(APPEND CONTACT_EXAMPLES_SOURCES
+            c_shape.cpp
             ironing_2D.cpp
         )
     endif()
@@ -26,7 +27,34 @@ if(TRIBOL_FOUND AND STRUMPACK_FOUND)
                              OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
                              DEPENDS_ON  smith)
 
-        if(example_name STREQUAL "ironing_2D")
+        if(example_name STREQUAL "c_shape")
+            smith_add_example_test(NAME           contact_c_shape_three_interactions
+                                   COMMAND        contact_${example_name}
+                                                  --contact-interactions 3
+                                                  --num-x-elements 4
+                                                  --num-y-elements 4
+                                                  --arm-thickness-elements 1
+                                                  --residual-gap 0.05
+                                                  --num-steps 5
+                                                  --penalty 100
+                                                  --traction 0.05
+                                                  --binning-proximity-scale 10
+                                                  --normal-smoothing-start-angle 90
+                                   NUM_MPI_TASKS  4)
+            smith_add_example_test(NAME           contact_c_shape_one_interaction
+                                   COMMAND        contact_${example_name}
+                                                  --contact-interactions 1
+                                                  --num-x-elements 4
+                                                  --num-y-elements 4
+                                                  --arm-thickness-elements 1
+                                                  --residual-gap 0.05
+                                                  --num-steps 5
+                                                  --penalty 100
+                                                  --traction 0.05
+                                                  --binning-proximity-scale 10
+                                                  --normal-smoothing-start-angle 90
+                                   NUM_MPI_TASKS  4)
+        elseif(example_name STREQUAL "ironing_2D")
             smith_add_example_test(NAME           contact_ironing_2D_square
                                    COMMAND        contact_${example_name} --case square --num-steps 3
                                    NUM_MPI_TASKS  4)
