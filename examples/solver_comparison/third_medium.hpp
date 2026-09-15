@@ -63,7 +63,7 @@ void runThirdMediumCBracket()
 
   for (int step = 0; step < third_medium_steps; ++step) {
     solid.advanceTimestep(1.0 / third_medium_steps);
-    requireNonlinearConverged(true, std::format("third_medium_c_bracket nonlinear solve failed at step {}", step + 1));
+    requireSolveConverged(solid, std::format("third_medium_c_bracket nonlinear solve failed at step {}", step + 1));
     if (write_output) {
       solid.outputStateToDisk("third_medium_c_bracket");
     }

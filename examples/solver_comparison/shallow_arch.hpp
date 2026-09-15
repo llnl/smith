@@ -30,6 +30,7 @@ void runShallowArch()
 
   auto mesh = std::make_shared<Mesh>(buildShallowArchMesh(16, 3, span, thickness, rise), "mesh", 0,
                                      parallelRefinement() + extra_refinement);
+  checkElementCount("shallow arch", *mesh);
   SolidMechanics<order, dim> solid(nonlinearOptions(), linearOptions(), solid_mechanics::default_quasistatic_options,
                                    "paper_shallow_arch_fast", mesh, std::vector<std::string>{}, 0, 0.0, false,
                                    warmStartEnabled("02/shallow_arch", true));
@@ -57,16 +58,42 @@ void runShallowArch()
       mesh->domain("top_surface"));
   solid.completeSetup();
 
+  Functional<double(H1<order, dim>)> top_measure({&solid.displacement().space()});
+  top_measure.AddBoundaryIntegral(
+      Dimension<dim - 1>{}, DependsOn<0>{}, [](double, auto, auto) { return 1.0; }, mesh->domain("top_surface"));
+  FiniteElementState ones(solid.displacement());
+  ones = 1.0;
+  const double top_length = top_measure(solid.time(), ones);
+
+  const int rank = mesh->mfemParMesh().GetMyRank();
+  std::ofstream history;
+  if (rank == 0) {
+    history.open("paper_shallow_arch_fast_load_displacement.csv");
+    history << "# time displacement applied_force reaction_force\n";
+  }
+  auto write_history_snapshot = [&]() {
+    const double avg_crown_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);
+    const double support_reaction_y = sumReactionComponent(solid, mesh->domain("left_support"), 1) +
+                                      sumReactionComponent(solid, mesh->domain("right_support"), 1);
+    if (rank == 0) {
+      history << solid.time() << " " << avg_crown_uy << " " << load_magnitude * solid.time() * top_length << " "
+              << support_reaction_y << "\n";
+      history.flush();
+    }
+  };
+
   if (write_output) {
     solid.outputStateToDisk("paper_shallow_arch_fast");
   }
+  write_history_snapshot();
 
   for (int step = 0; step < num_time_steps; ++step) {
     solid.advanceTimestep(1.0 / num_time_steps);
-    requireNonlinearConverged(true, std::format("paper_shallow_arch_fast nonlinear solve failed at step {}", step + 1));
+    requireSolveConverged(solid, std::format("paper_shallow_arch_fast nonlinear solve failed at step {}", step + 1));
     if (write_output) {
       solid.outputStateToDisk("paper_shallow_arch_fast");
     }
+    write_history_snapshot();
   }
 
   const double avg_crown_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);

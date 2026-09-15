@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <limits>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -21,6 +22,32 @@ std::vector<double> localDotMany(const std::vector<smith::DotPair>& pairs)
 }
 
 }  // namespace
+
+TEST(TrustRegionModelCandidate, SelectsLowestValidFiniteObjective)
+{
+  const std::array<double, 4> model_objectives = {-2.0, -3.0, -4.0, -5.0};
+  const std::array<bool, 4> valid_candidates = {true, true, true, true};
+
+  EXPECT_EQ(smith::bestTrustRegionModelCandidate(model_objectives, valid_candidates),
+            smith::TrustRegionModelCandidate::Subspace);
+}
+
+TEST(TrustRegionModelCandidate, IgnoresUnavailableAndNonfiniteCandidates)
+{
+  const std::array<double, 4> model_objectives = {-2.0, -3.0, -4.0, std::numeric_limits<double>::quiet_NaN()};
+  const std::array<bool, 4> valid_candidates = {true, false, true, true};
+
+  EXPECT_EQ(smith::bestTrustRegionModelCandidate(model_objectives, valid_candidates),
+            smith::TrustRegionModelCandidate::Dogleg);
+}
+
+TEST(TrustRegionModelCandidate, ReturnsEmptyWhenNoCandidateIsValid)
+{
+  const std::array<double, 4> model_objectives = {-2.0, -3.0, -4.0, -5.0};
+  const std::array<bool, 4> valid_candidates = {false, false, false, false};
+
+  EXPECT_FALSE(smith::bestTrustRegionModelCandidate(model_objectives, valid_candidates).has_value());
+}
 
 TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
 {
@@ -49,6 +76,8 @@ TEST(SteihaugTointCG, SolvesSPDInsideBoundary)
   // x = -0.5, y = -0.25
   EXPECT_NEAR(results.z[0], -0.5, 1e-9);
   EXPECT_NEAR(results.z[1], -0.25, 1e-9);
+  EXPECT_NEAR(results.H_z[0], -1.0, 1e-9);
+  EXPECT_NEAR(results.H_z[1], -1.0, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::Interior);
 }
 
@@ -73,6 +102,7 @@ TEST(SteihaugTointCG, HitsBoundary)
   smith::steihaugTointCG(r0, rCurrent, H, nullptr, settings, trSize, results, r0.Norml2() * r0.Norml2(), localDotMany);
 
   EXPECT_NEAR(results.z.Norml2(), 0.5, 1e-9);
+  EXPECT_NEAR(results.H_z[0], -0.5, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::OnBoundary);
 }
 
@@ -98,5 +128,6 @@ TEST(SteihaugTointCG, DetectsNegativeCurvature)
 
   // For negative curvature, it should go to boundary
   EXPECT_NEAR(results.z.Norml2(), 2.0, 1e-9);
+  EXPECT_NEAR(results.H_z[0], 2.0, 1e-9);
   EXPECT_EQ(results.interior_status, smith::TrustRegionResults::Status::NegativeCurvature);
 }

@@ -1064,6 +1064,21 @@ void PetscNewtonSolver::Mult(const mfem::Vector& b, mfem::Vector& x) const
 
   // Solve the system.
   PetscCallAbort(GetComm(), SNESSolve(*this, *B, *X));
+
+  PetscInt iteration_count = 0;
+  PetscReal solve_final_norm = 0.0;
+  SNESConvergedReason reason = SNES_CONVERGED_ITERATING;
+  PetscCallAbort(GetComm(), SNESGetIterationNumber(*this, &iteration_count));
+  PetscCallAbort(GetComm(), SNESGetFunctionNorm(*this, &solve_final_norm));
+  PetscCallAbort(GetComm(), SNESGetConvergedReason(*this, &reason));
+  mfem::NewtonSolver::final_iter = static_cast<int>(iteration_count);
+  mfem::NewtonSolver::final_norm = static_cast<double>(solve_final_norm);
+  mfem::NewtonSolver::converged = reason > 0;
+  SLIC_INFO_ROOT(std::format(
+      "PETSc SNES summary: iterations={}, residual_norm={:.16e}, converged={}, reason={}",
+      static_cast<int>(iteration_count), static_cast<double>(solve_final_norm), reason > 0 ? 1 : 0,
+      static_cast<int>(reason)));
+
   X->ResetMemory();
   if (b_nonempty) {
     B->ResetMemory();

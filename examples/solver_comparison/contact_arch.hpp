@@ -16,19 +16,11 @@ void runContactArch()
   const int num_time_steps = 50;
   const double total_time = 0.16;
   const double load_schedule_time = 1.0;
-  const double solve_abs_tol = 5.0e-6;
-  const int max_linear_iterations = 30000;
-  const int max_nonlinear_iterations = 5000;
   const double plane_clearance = 1.0e-4;
   const double total_support_inset = 0.05;
-  const double total_plane_travel = 0.8;
+  const double total_plane_travel = 0.2;
   const double contact_penalty = 20.0;
   const double contact_regularization = 0.001;
-
-  nonlinear_max_iterations = max_nonlinear_iterations;
-  linear_max_iterations = max_linear_iterations;
-  nonlinear_tol = solve_abs_tol;
-  linear_tol = solve_abs_tol;
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "paper_contact_arch_fast");
@@ -103,16 +95,35 @@ void runContactArch()
       mesh->domain("contact_surface"));
   solid.completeSetup();
 
+  const int rank = mesh->mfemParMesh().GetMyRank();
+  std::ofstream history;
+  if (rank == 0) {
+    history.open("paper_contact_arch_fast_load_displacement.csv");
+    history << "# time contact_displacement support_inset plane_travel support_reaction\n";
+  }
+  auto write_history_snapshot = [&]() {
+    const double avg_contact_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("contact_surface"), 1);
+    const double support_reaction = sumReactionComponent(solid, mesh->domain("left_support"), 0) -
+                                    sumReactionComponent(solid, mesh->domain("right_support"), 0);
+    if (rank == 0) {
+      history << solid.time() << " " << avg_contact_uy << " " << total_support_inset * load_scale(solid.time()) << " "
+              << total_plane_travel * load_scale(solid.time()) << " " << support_reaction << "\n";
+      history.flush();
+    }
+  };
+
   if (write_output) {
     solid.outputStateToDisk("paper_contact_arch_fast");
   }
+  write_history_snapshot();
 
   for (int step = 0; step < num_time_steps; ++step) {
     solid.advanceTimestep(total_time / num_time_steps);
-    requireNonlinearConverged(true, std::format("paper_contact_arch_fast nonlinear solve failed at step {}", step + 1));
+    requireSolveConverged(solid, std::format("paper_contact_arch_fast nonlinear solve failed at step {}", step + 1));
     if (write_output) {
       solid.outputStateToDisk("paper_contact_arch_fast");
     }
+    write_history_snapshot();
   }
 
   const double avg_contact_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("contact_surface"), 1);

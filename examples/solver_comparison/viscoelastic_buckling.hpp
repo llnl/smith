@@ -15,7 +15,7 @@ void runViscoelasticBuckling()
 {
   constexpr int order = 2;
   constexpr int dim = 3;
-  constexpr double load = 0.6;
+  constexpr double load = 0.17;
   constexpr double max_time = 24.0;
   constexpr int num_time_steps = 60;
 
@@ -80,16 +80,16 @@ void runViscoelasticBuckling()
   std::ofstream history;
   if (rank == 0) {
     history.open("paper_viscoelastic_buckling_fast_force_displacement.csv");
-    history << "# time displacement force\n";
+    history << "# time displacement applied_force reaction_force\n";
   }
 
   auto write_history_snapshot = [&]() {
-    double local_force_y = sumReactionComponent(solid, mesh->domain("bottom"), 1);
-    double force_y = 0.0;
-    MPI_Reduce(&local_force_y, &force_y, 1, MPI_DOUBLE, MPI_SUM, 0, mesh->getComm());
+    const double force_y = sumReactionComponent(solid, mesh->domain("bottom"), 1);
     const double top_displacement_y = averageBoundaryDisplacementComponent(solid, mesh->domain("top"), 1);
+    const double rise_time = 0.25 * max_time;
+    const double applied_force_y = solid.time() < rise_time ? solid.time() / rise_time * load : 0.0;
     if (rank == 0) {
-      history << solid.time() << " " << top_displacement_y << " " << force_y << "\n";
+      history << solid.time() << " " << top_displacement_y << " " << applied_force_y << " " << force_y << "\n";
     }
   };
 
@@ -103,8 +103,8 @@ void runViscoelasticBuckling()
     const double start_time = MPI_Wtime();
     solid.advanceTimestep(max_time / num_time_steps);
     MPI_Barrier(mesh->getComm());
-    requireNonlinearConverged(
-        true, std::format("paper_viscoelastic_buckling_fast nonlinear solve failed at step {}", step + 1));
+    requireSolveConverged(solid,
+                          std::format("paper_viscoelastic_buckling_fast nonlinear solve failed at step {}", step + 1));
     SLIC_INFO_ROOT(std::format("paper_viscoelastic_buckling_fast step {}/{} wall = {:.3f} s", step + 1, num_time_steps,
                                MPI_Wtime() - start_time));
     if (write_output) {
@@ -114,9 +114,7 @@ void runViscoelasticBuckling()
   }
 
   const double avg_top_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top"), 1);
-  double local_bottom_reaction_y = sumReactionComponent(solid, mesh->domain("bottom"), 1);
-  double bottom_reaction_y = 0.0;
-  MPI_Reduce(&local_bottom_reaction_y, &bottom_reaction_y, 1, MPI_DOUBLE, MPI_SUM, 0, mesh->getComm());
+  const double bottom_reaction_y = sumReactionComponent(solid, mesh->domain("bottom"), 1);
   SLIC_INFO_ROOT(std::format("paper_viscoelastic_buckling_fast avg top uy = {:.8e}", avg_top_uy));
   SLIC_INFO_ROOT(std::format("paper_viscoelastic_buckling_fast bottom reaction y = {:.8e}", bottom_reaction_y));
 }

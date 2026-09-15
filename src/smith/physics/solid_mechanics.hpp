@@ -341,6 +341,42 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
     }
   }
 
+  /// @brief Access underlying nonlinear solver used for last solve.
+  mfem::NewtonSolver& nonlinearSolver() { return nonlin_solver_->nonlinearSolver(); }
+
+  /// @brief Access underlying linear solver used for last solve.
+  mfem::Solver& linearSolver() { return nonlin_solver_->linearSolver(); }
+
+  /// @brief True when last nonlinear solve reported convergence.
+  bool nonlinearSolveConverged()
+  {
+    auto& solver = nonlinearSolver();
+#ifdef MFEM_USE_PETSC
+    if (auto* petsc_solver = dynamic_cast<mfem::PetscNonlinearSolver*>(&solver)) {
+      return petsc_solver->GetConverged();
+    }
+#endif
+    return solver.GetConverged();
+  }
+
+  /// @brief True when last linear-solver convergence flag is meaningful for this nonlinear solver.
+  bool reportsLinearSolveConvergence() const { return nonlin_solver_->reportsLinearSolveConvergence(); }
+
+  /// @brief True when last linear solve reported convergence, when available.
+  bool linearSolveConverged()
+  {
+    auto& solver = linearSolver();
+#ifdef MFEM_USE_PETSC
+    if (auto* petsc_solver = dynamic_cast<mfem::PetscLinearSolver*>(&solver)) {
+      return petsc_solver->GetConverged();
+    }
+#endif
+    if (auto* iterative_solver = dynamic_cast<mfem::IterativeSolver*>(&solver)) {
+      return iterative_solver->GetConverged();
+    }
+    return true;
+  }
+
   /**
    * @brief Create a shared ptr to a quadrature data buffer for the given material type
    *
@@ -1079,6 +1115,22 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
 
     return {*J_, *J_e_};
   }
+
+  /**
+   * @brief Rebuild and return the tangent stiffness matrix at the current accepted state
+   *
+   * @return The tangent stiffness matrix with essential rows and columns eliminated
+   */
+  const mfem::HypreParMatrix& rebuildAcceptedStateTangent()
+  {
+    SLIC_ERROR_ROOT_IF(!is_quasistatic_, "Accepted-state tangent rebuild is only available for quasistatic solids.");
+    SLIC_ERROR_ROOT_IF(!residual_with_bcs_, "completeSetup() must be called before rebuilding the tangent.");
+    residual_with_bcs_->GetGradient(displacement_);
+    return *J_;
+  }
+
+  /// @brief Return the local true degrees of freedom constrained by essential boundary conditions.
+  const mfem::Array<int>& essentialTrueDofs() const { return bcs_.allEssentialTrueDofs(); }
 
   /// @overload
   void completeSetup() override

@@ -15,6 +15,8 @@ void runCircInCirc()
   constexpr int dim = 2;
   const int circle_num_steps = 50;
 
+  SLIC_INFO_ROOT("paper_circ_in_circ_fast uses four quadrature points per coordinate direction");
+
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "paper_circ_in_circ_fast");
 
@@ -43,7 +45,8 @@ void runCircInCirc()
   solid.setMaterial(material3, mesh->domain("center"));
 
   double jelly_K = third_medium_scale * (3 * lambda + 2 * G) / 3;
-  solid_mechanics::NeoHookeanAdditiveSplit mat_jelly{.density = third_medium_scale * rho, .K = jelly_K, .G = 1.4 * jelly_K};
+  solid_mechanics::NeoHookeanAdditiveSplit mat_jelly{
+      .density = third_medium_scale * rho, .K = jelly_K, .G = 1.4 * jelly_K};
   mesh->addDomainOfBodyElements("jelly1", by_attr<dim>(2));
   mesh->addDomainOfBodyElements("jelly2", by_attr<dim>(4));
   solid.setMaterial(mat_jelly, mesh->domain("jelly1"));
@@ -61,20 +64,37 @@ void runCircInCirc()
       mesh->domain("top_surface"));
   solid.completeSetup();
 
+  const int rank = mesh->mfemParMesh().GetMyRank();
+  std::ofstream history;
+  if (rank == 0) {
+    history.open("paper_circ_in_circ_fast_load_displacement.csv");
+    history << "# time displacement applied_traction\n";
+  }
+  auto write_history_snapshot = [&]() {
+    const double avg_top_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);
+    if (rank == 0) {
+      history << solid.time() << " " << avg_top_uy << " " << 1.2 * solid.time() / circle_num_steps << "\n";
+      history.flush();
+    }
+  };
+
   if (write_output) {
     solid.outputStateToDisk("paper_circ_in_circ_fast");
   }
+  write_history_snapshot();
 
   for (int step = 0; step < circle_num_steps; ++step) {
     solid.advanceTimestep(1.0 / circle_num_steps);
-    requireNonlinearConverged(true, std::format("paper_circ_in_circ_fast nonlinear solve failed at step {}", step + 1));
+    requireSolveConverged(solid, std::format("paper_circ_in_circ_fast nonlinear solve failed at step {}", step + 1));
     if (write_output) {
       solid.outputStateToDisk("paper_circ_in_circ_fast");
     }
+    write_history_snapshot();
   }
 
   const double avg_top_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);
   SLIC_INFO_ROOT(std::format("paper_circ_in_circ_fast avg top uy = {:.8e}", avg_top_uy));
 }
+
 }  // namespace
 }  // namespace smith

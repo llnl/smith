@@ -15,15 +15,11 @@ void runSphereIntoCorner()
   constexpr int dim = 3;
   const int num_time_steps = 16;
   const double total_time = 1.0;
-  const double max_patch_traction = 0.5;
+  const double max_patch_traction = 0.19;
   const double contact_penalty = 8.0;
   const double nominal_element_size = 0.025;
   const double load_patch_projection_margin_fraction = 0.24;
   const double contact_smoothing_band = nominal_element_size / 1000.0;
-
-  nonlinear_tol = 3.0e-6;
-  linear_tol = 1.6e-6;
-  nonlinear_max_iterations *= 4;
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "paper_sphere_corner_fast");
@@ -80,16 +76,34 @@ void runSphereIntoCorner()
       mesh->domain("outer_surface"));
   solid.completeSetup();
 
+  const int rank = mesh->mfemParMesh().GetMyRank();
+  std::ofstream history;
+  if (rank == 0) {
+    history.open("paper_sphere_corner_fast_load_displacement.csv");
+    history << "# time drive_displacement load_resultant\n";
+  }
+  auto write_history_snapshot = [&]() {
+    const double drive_displacement =
+        -averageBoundaryDisplacementComponent(solid, mesh->domain("load_patch"), 0) * load_direction[0];
+    const double load_resultant = boundaryTractionResultant<order, dim>(solid, mesh->domain("load_patch"),
+                                                                        applied_patch_traction, load_direction);
+    if (rank == 0) {
+      history << solid.time() << " " << drive_displacement << " " << load_resultant << "\n";
+    }
+  };
+
   if (write_output) {
     solid.outputStateToDisk("paper_sphere_corner_fast");
   }
+  write_history_snapshot();
 
   for (int step = 0; step < num_time_steps; ++step) {
     solid.advanceTimestep(total_time / num_time_steps);
-    requireNonlinearConverged(true, std::format("paper_sphere_corner_fast nonlinear solve failed at step {}", step + 1));
+    requireSolveConverged(solid, std::format("paper_sphere_corner_fast nonlinear solve failed at step {}", step + 1));
     if (write_output) {
       solid.outputStateToDisk("paper_sphere_corner_fast");
     }
+    write_history_snapshot();
   }
 
   const double drive_displacement =

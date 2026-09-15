@@ -115,6 +115,11 @@ class EquationSolver {
   const mfem::Solver& linearSolver() const { return *lin_solver_; }
 
   /**
+   * @brief True when the nonlinear solver's associated linear-solver convergence flag is meaningful.
+   */
+  bool reportsLinearSolveConvergence() const;
+
+  /**
    * Returns the underlying preconditioner
    * @return A pointer to the underlying preconditioner
    * @note This may be null if a preconditioner is not given

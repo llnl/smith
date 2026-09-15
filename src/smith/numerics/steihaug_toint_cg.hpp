@@ -8,6 +8,7 @@
 
 #include <array>
 #include <functional>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -66,7 +67,9 @@ struct TrustRegionResults {
   void reset()
   {
     z = 0.0;
+    H_z = 0.0;
     cauchy_point = 0.0;
+    H_cauchy_point = 0.0;
   }
 
   /// enumerates the possible final status of the trust region steps
@@ -100,6 +103,19 @@ struct TrustRegionResults {
 
 using DotPair = std::pair<const mfem::Vector*, const mfem::Vector*>;                      ///< using
 using DotManyFunction = std::function<std::vector<double>(const std::vector<DotPair>&)>;  ///< using
+
+/// Candidate trust-region steps ordered consistently with their model-objective arrays.
+enum class TrustRegionModelCandidate
+{
+  CauchyPoint,
+  SteihaugToint,
+  Dogleg,
+  Subspace
+};
+
+/// Select the valid candidate with the lowest finite model objective.
+std::optional<TrustRegionModelCandidate> bestTrustRegionModelCandidate(const std::array<double, 4>& model_objectives,
+                                                                       const std::array<bool, 4>& valid_candidates);
 
 /**
  * @brief Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner

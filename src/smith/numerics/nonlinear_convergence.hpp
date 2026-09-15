@@ -80,6 +80,9 @@ class ConvergenceManagedNonlinearSolver {
 
   /// @brief Attach the shared convergence manager used to evaluate nonlinear stopping criteria.
   virtual void setConvergenceManager(std::shared_ptr<EquationSolverConvergenceManager> convergence_manager) = 0;
+
+  /// @brief True when the nonlinear solver's associated linear-solver convergence flag is meaningful.
+  virtual bool reportsLinearSolveConvergence() const { return true; }
 };
 
 }  // namespace smith

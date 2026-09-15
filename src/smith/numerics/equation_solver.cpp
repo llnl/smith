@@ -146,13 +146,6 @@ bool shouldUseSubspaceStep(int subspace_option, TrustRegionResults::Status statu
          (subspace_option >= 3);
 }
 
-enum class SubspaceStepStatus
-{
-  Unavailable,
-  Unchanged,
-  Replaced
-};
-
 }  // namespace
 
 /// @cond
@@ -260,13 +253,19 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
     print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
     print_level = rootOnlyPrintLevel(*this, print_level);
+    converged = false;
+    final_iter = 0;
 
     using real_t = mfem::real_t;
 
     ConvergenceStatus status = evaluateConvergence(x, r);
     real_t norm = status.global_norm;
     initial_norm = norm;
-    if (norm == 0.0) return;
+    final_norm = norm;
+    if (norm == 0.0) {
+      converged = true;
+      return;
+    }
 
     if (print_level == 1) {
       mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -455,6 +454,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     convergence_manager_ = std::move(convergence_manager);
   }
 
+  bool reportsLinearSolveConvergence() const override { return false; }
+
   /// compute several Euclidean vector inner products with a single MPI reduction when possible
   std::vector<double> globalDotMany(const std::vector<DotPair>& pairs) const
   {
@@ -497,7 +498,7 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       subspace_cache.prepare(directions, H_directions, b, num_leftmost, GetComm());
     } catch (const std::exception& e) {
       if (print_level >= 1) {
-        mfem::out << "subspace preparation failed with " << e.what() << "; using dogleg fallback." << std::endl;
+        mfem::out << "subspace preparation failed with " << e.what() << "; using another model candidate." << std::endl;
       }
       return false;
     }
@@ -508,94 +509,108 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   }
 
   /// solve cached exact trust-region subspace problem for current trust-region size
-  template <typename HessVecFunc>
-  SubspaceStepStatus trySubspaceStep([[maybe_unused]] mfem::Vector& z,
-                                     [[maybe_unused]] const HessVecFunc& hess_vec_func,
-                                     [[maybe_unused]] const TrustRegionSubspaceCache& subspace_cache,
-                                     [[maybe_unused]] const mfem::Vector& g, [[maybe_unused]] double delta) const
+  bool trySubspaceStep([[maybe_unused]] mfem::Vector& step, [[maybe_unused]] double& model_objective,
+                       [[maybe_unused]] const TrustRegionSubspaceCache& subspace_cache,
+                       [[maybe_unused]] double delta) const
   {
 #ifdef MFEM_USE_LAPACK
     SMITH_MARK_FUNCTION;
-    mfem::Vector sol;
-    double energy_change;
 
     try {
-      std::tie(sol, std::ignore, std::ignore, energy_change) = subspace_cache.solve(delta);
+      std::tie(step, std::ignore, std::ignore, model_objective) = subspace_cache.solve(delta);
     } catch (const std::exception& e) {
       if (print_level >= 1) {
-        mfem::out << "subspace solve failed with " << e.what() << "; using dogleg fallback." << std::endl;
+        mfem::out << "subspace solve failed with " << e.what() << "; using another model candidate." << std::endl;
       }
-      return SubspaceStepStatus::Unavailable;
+      return false;
     }
-
-    double base_energy = computeEnergy(g, hess_vec_func, z);
-    double subspace_energy = computeEnergy(g, hess_vec_func, sol);
 
     if (print_level >= 2) {
-      double leftval = subspace_cache.leftvals.empty() ? 1.0 : subspace_cache.leftvals[0];
-      mfem::out << "Energy using subspace solver from: " << base_energy << ", to: " << subspace_energy << " / "
-                << energy_change << ".  Min eig: " << leftval << std::endl;
+      const double leftval = subspace_cache.leftvals.empty() ? 1.0 : subspace_cache.leftvals[0];
+      mfem::out << "Subspace model energy: " << model_objective << ".  Min eig: " << leftval << std::endl;
     }
 
-    if (subspace_energy < base_energy) {
-      z = sol;
-      return SubspaceStepStatus::Replaced;
-    }
-    return SubspaceStepStatus::Unchanged;
+    return std::isfinite(model_objective);
 #else
-    return SubspaceStepStatus::Unavailable;
+    return false;
 #endif
   }
 
-  /// finds tau s.t. (z + tau*(y-z))^2 = trSize^2
-  void projectToBoundaryBetweenWithCoefs(mfem::Vector& z, const mfem::Vector& y, double trSize, double zz, double zy,
-                                         double yy) const
+  /// finds tau s.t. ||z + tau*(y-z)|| = tr_size
+  double boundaryInterpolationCoefficient(double tr_size, double zz, double zy, double yy) const
   {
-    double dd = yy - 2 * zy + zz;
-    double zd = zy - zz;
-    double boundary_gap = std::max(trSize * trSize - zz, 0.0);
-    if (boundary_gap == 0.0) return;
-    double tau = (std::sqrt(boundary_gap * dd + zd * zd) - zd) / dd;
-    z.Add(-tau, z);
-    z.Add(tau, y);
+    const double dd = yy - 2 * zy + zz;
+    const double zd = zy - zz;
+    const double boundary_gap = std::max(tr_size * tr_size - zz, 0.0);
+    if (boundary_gap == 0.0) return 0.0;
+    return (std::sqrt(boundary_gap * dd + zd * zd) - zd) / dd;
   }
 
-  /// take a dogleg step in direction s, solution norm must be within trSize
-  void doglegStep(const mfem::Vector& cp, const mfem::Vector& newtonP, double trSize, mfem::Vector& s) const
+  /// construct feasible Cauchy and dogleg candidates and their Hessian actions
+  std::pair<double, double> doglegStep(const mfem::Vector& cp, const mfem::Vector& H_cp,
+                                       const mfem::Vector& newton_step, const mfem::Vector& H_newton_step,
+                                       double tr_size, mfem::Vector& feasible_cp, mfem::Vector& H_feasible_cp,
+                                       mfem::Vector& dogleg, mfem::Vector& H_dogleg) const
   {
     SMITH_MARK_FUNCTION;
-    const auto dots = globalDotMany({{&cp, &cp}, {&newtonP, &newtonP}});
+    const auto dots = globalDotMany({{&cp, &cp}, {&newton_step, &newton_step}, {&cp, &newton_step}});
     const double cc = dots[0];
     const double nn = dots[1];
-    double tt = trSize * trSize;
+    const double cn = dots[2];
+    const double tt = tr_size * tr_size;
 
-    s = 0.0;
+    feasible_cp = cp;
+    H_feasible_cp = H_cp;
+    if (cc > tt) {
+      const double scale = std::sqrt(tt / cc);
+      feasible_cp *= scale;
+      H_feasible_cp *= scale;
+    }
+
+    double dogleg_norm_squared = 0.0;
     if (cc >= tt) {
-      add(s, std::sqrt(tt / cc), cp, s);
+      dogleg = feasible_cp;
+      H_dogleg = H_feasible_cp;
+      dogleg_norm_squared = tt;
     } else if (cc > nn) {
       if (print_level >= 2) {
         mfem::out << "cp outside newton, preconditioner likely inaccurate\n";
       }
-      add(s, 1.0, cp, s);
+      dogleg = cp;
+      H_dogleg = H_cp;
+      dogleg_norm_squared = cc;
     } else if (nn > tt) {  // on the dogleg (we have nn >= cc, and tt >= cc)
-      add(s, 1.0, cp, s);
-      double cn = globalDotMany({{&cp, &newtonP}})[0];
-      projectToBoundaryBetweenWithCoefs(s, newtonP, trSize, cc, cn, nn);
+      const double tau = boundaryInterpolationCoefficient(tr_size, cc, cn, nn);
+      dogleg = cp;
+      dogleg *= 1.0 - tau;
+      dogleg.Add(tau, newton_step);
+      H_dogleg = H_cp;
+      H_dogleg *= 1.0 - tau;
+      H_dogleg.Add(tau, H_newton_step);
+      dogleg_norm_squared = tt;
     } else {
-      s = newtonP;
+      dogleg = newton_step;
+      H_dogleg = H_newton_step;
+      dogleg_norm_squared = nn;
     }
+
+    return {nn, dogleg_norm_squared};
   }
 
-  /// compute the energy of the linearized system for a given solution vector z
-  template <typename HessVecFunc>
-  double computeEnergy(const mfem::Vector& r_local, const HessVecFunc& H, const mfem::Vector& z) const
+  /// compute candidate objectives with one global reduction
+  std::array<double, 3> computeModelObjectives(const mfem::Vector& residual, const mfem::Vector& cauchy,
+                                               const mfem::Vector& H_cauchy, const mfem::Vector& z,
+                                               const mfem::Vector& H_z, const mfem::Vector& dogleg,
+                                               const mfem::Vector& H_dogleg) const
   {
     SMITH_MARK_FUNCTION;
-    mfem::Vector tmp(r_local);
-    tmp = 0.0;
-    H(z, tmp);
-    const auto dots = globalDotMany({{&r_local, &z}, {&z, &tmp}});
-    return dots[0] + 0.5 * dots[1];
+    const auto dots = globalDotMany({{&residual, &cauchy},
+                                     {&cauchy, &H_cauchy},
+                                     {&residual, &z},
+                                     {&z, &H_z},
+                                     {&residual, &dogleg},
+                                     {&dogleg, &H_dogleg}});
+    return {dots[0] + 0.5 * dots[1], dots[2] + 0.5 * dots[3], dots[4] + 0.5 * dots[5]};
   }
 
   /// Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
@@ -605,14 +620,6 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
   {
     auto dot_many_lambda = [this](const std::vector<DotPair>& pairs) { return globalDotMany(pairs); };
     steihaugTointCG(r0, rCurrent, H, P, settings, trSize, results, r0_norm_squared, dot_many_lambda);
-  }
-
-  void fallbackToCauchyPoint(TrustRegionResults& results, const char* reason) const
-  {
-    if (print_level >= 2) {
-      mfem::out << reason << "; using cauchy point fallback." << std::endl;
-    }
-    results.d = results.cauchy_point;
   }
 
   void saveAcceptedStep(const mfem::Vector& step) const
@@ -718,6 +725,8 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     print_level = print_options.iterations ? std::max<size_t>(1, print_level) : print_level;
     print_level = print_options.summary ? std::max<size_t>(2, print_level) : print_level;
     print_level = rootOnlyPrintLevel(*this, print_level);
+    converged = false;
+    final_iter = 0;
 
     using real_t = mfem::real_t;
 
@@ -725,7 +734,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
     real_t norm = status.global_norm;
     real_t norm_goal = status.global_goal;
     initial_norm = norm;
-    if (norm == 0.0) return;
+    final_norm = norm;
+    if (norm == 0.0) {
+      converged = true;
+      return;
+    }
 
     if (print_level == 1) {
       mfem::out << "TrustRegion iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
@@ -810,10 +823,12 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
         if (gKg > 0) {
           const double alphaCp = -residual_norm_squared / gKg;
           add(trResults.cauchy_point, alphaCp, r, trResults.cauchy_point);
+          add(trResults.H_cauchy_point, alphaCp, trResults.H_d, trResults.H_cauchy_point);
           cauchyPointNormSquared = Dot(trResults.cauchy_point, trResults.cauchy_point);
         } else {
           const double alphaTr = -tr_size / norm;
           add(trResults.cauchy_point, alphaTr, r, trResults.cauchy_point);
+          add(trResults.H_cauchy_point, alphaTr, trResults.H_d, trResults.H_cauchy_point);
           if (print_level >= 2) {
             mfem::out << "Negative curvature un-preconditioned cauchy point direction found."
                       << "\n";
@@ -826,8 +841,11 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
           mfem::out << "Un-preconditioned gradient cauchy point outside trust region, step size = "
                     << std::sqrt(cauchyPointNormSquared) << "\n";
         }
-        trResults.cauchy_point *= (tr_size / std::sqrt(cauchyPointNormSquared));
+        const double cauchy_scale = tr_size / std::sqrt(cauchyPointNormSquared);
+        trResults.cauchy_point *= cauchy_scale;
+        trResults.H_cauchy_point *= cauchy_scale;
         trResults.z = trResults.cauchy_point;
+        trResults.H_z = trResults.H_cauchy_point;
 
         trResults.cg_iterations_count = 1;
         trResults.interior_status = TrustRegionResults::Status::OnBoundary;
@@ -851,18 +869,22 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
       while (lineSearchIter <= nonlinear_options.max_line_search_iterations) {
         ++lineSearchIter;
 
-        doglegStep(trResults.cauchy_point, trResults.z, tr_size, trResults.d);
-        const double d_norm = subspace_option >= 1 ? std::sqrt(Dot(trResults.d, trResults.d)) : 0.0;
+        const auto [z_norm_squared, dogleg_norm_squared] =
+            doglegStep(trResults.cauchy_point, trResults.H_cauchy_point, trResults.z, trResults.H_z, tr_size, scratch,
+                       trResults.Pr, trResults.d, trResults.H_d);
+        const double d_norm = subspace_option >= 1 ? std::sqrt(dogleg_norm_squared) : 0.0;
         const bool use_subspace =
             can_use_subspace_solver &&
             shouldUseSubspaceStep(subspace_option, trResults.interior_status, d_norm, tr_size, lineSearchIter);
 
-        bool subspace_unavailable = false;
+        mfem::Vector subspace_step;
+        double subspace_model_objective = std::numeric_limits<double>::max();
+        bool have_subspace_step = false;
         if (use_subspace) {
           if (!have_computed_Hvs) {
             have_computed_Hvs = true;
-            std::vector<const mfem::Vector*> subspace_hess_inputs{&trResults.z, &trResults.cauchy_point};
-            std::vector<mfem::Vector*> subspace_hess_outputs{&trResults.H_z, &trResults.H_cauchy_point};
+            std::vector<const mfem::Vector*> subspace_hess_inputs;
+            std::vector<mfem::Vector*> subspace_hess_outputs;
 
             H_previous_steps.resize(previous_steps.size());
             for (size_t i = 0; i < previous_steps.size(); ++i) {
@@ -892,29 +914,44 @@ class TrustRegion : public mfem::NewtonSolver, public ConvergenceManagedNonlinea
             }
 
             have_prepared_subspace = prepareSubspaceProblemCache(ds, H_ds, r, num_leftmost, subspace_cache);
-            subspace_unavailable = !have_prepared_subspace;
           }
 
           if (have_prepared_subspace) {
-            const SubspaceStepStatus subspace_status =
-                trySubspaceStep(trResults.d, hess_vec_func, subspace_cache, r, tr_size);
-            subspace_unavailable = subspace_status == SubspaceStepStatus::Unavailable;
+            have_subspace_step = trySubspaceStep(subspace_step, subspace_model_objective, subspace_cache, tr_size);
           }
         }
 
-        const bool is_descent_step = globalDotMany({{&trResults.d, &r}})[0] < 0.0;
-        if (subspace_unavailable || !is_descent_step) {
-          fallbackToCauchyPoint(
-              trResults, subspace_unavailable ? "Subspace step unavailable" : "Fallback step is not a descent step");
-        }
-
         static constexpr double roundOffTol = 0.0;  // 1e-14;
+        const auto model_objectives =
+            computeModelObjectives(r, scratch, trResults.Pr, trResults.z, trResults.H_z, trResults.d, trResults.H_d);
 
-        hess_vec_func(trResults.d, trResults.H_d);
-        const auto dots = globalDotMany({{&trResults.d, &trResults.H_d}, {&r, &trResults.d}});
-        const double dHd = dots[0];
-        const double rd = dots[1];
-        double modelObjective = rd + 0.5 * dHd - roundOffTol;
+        const double trust_region_size_squared = tr_size * tr_size;
+        constexpr double feasibility_tolerance = 1.0e-12;
+        const std::array<double, 4> candidate_objectives = {model_objectives[0], model_objectives[1],
+                                                            model_objectives[2], subspace_model_objective};
+        const std::array<bool, 4> valid_candidates = {
+            true, z_norm_squared <= (1.0 + feasibility_tolerance) * trust_region_size_squared, true,
+            have_subspace_step};
+        const auto best_candidate = bestTrustRegionModelCandidate(candidate_objectives, valid_candidates);
+        MFEM_VERIFY(best_candidate.has_value(), "No valid trust-region model candidate");
+        double modelObjective = candidate_objectives[static_cast<size_t>(*best_candidate)];
+
+        switch (*best_candidate) {
+          case TrustRegionModelCandidate::CauchyPoint:
+            trResults.d = scratch;
+            trResults.H_d = trResults.Pr;
+            break;
+          case TrustRegionModelCandidate::SteihaugToint:
+            trResults.d = trResults.z;
+            trResults.H_d = trResults.H_z;
+            break;
+          case TrustRegionModelCandidate::Dogleg:
+            break;
+          case TrustRegionModelCandidate::Subspace:
+            trResults.d = subspace_step;
+            break;
+        }
+        modelObjective -= roundOffTol;
 
         add(X, trResults.d, x_pred);
 
@@ -1039,6 +1076,14 @@ void EquationSolver::attachConvergenceManager() const
   if (auto* managed_solver = dynamic_cast<ConvergenceManagedNonlinearSolver*>(nonlin_solver_.get())) {
     managed_solver->setConvergenceManager(convergence_manager_);
   }
+}
+
+bool EquationSolver::reportsLinearSolveConvergence() const
+{
+  if (auto* managed_solver = dynamic_cast<const ConvergenceManagedNonlinearSolver*>(nonlin_solver_.get())) {
+    return managed_solver->reportsLinearSolveConvergence();
+  }
+  return true;
 }
 
 void EquationSolver::initializeConvergenceManager(double abs_tol, double rel_tol, MPI_Comm comm) const

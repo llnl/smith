@@ -6,19 +6,37 @@
 
 #include "smith/numerics/steihaug_toint_cg.hpp"
 
+#include <cmath>
+#include <limits>
+
 namespace smith {
 
 namespace {
 
-void projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd, double dd)
+double projectToBoundaryWithCoefs(mfem::Vector& z, const mfem::Vector& d, double delta, double zz, double zd, double dd)
 {
   const double deltadelta_m_zz = std::max(delta * delta - zz, 0.0);
-  if (deltadelta_m_zz == 0.0) return;
+  if (deltadelta_m_zz == 0.0) return 0.0;
   const double tau = (std::sqrt(deltadelta_m_zz * dd + zd * zd) - zd) / dd;
   z.Add(tau, d);
+  return tau;
 }
 
 }  // namespace
+
+std::optional<TrustRegionModelCandidate> bestTrustRegionModelCandidate(const std::array<double, 4>& model_objectives,
+                                                                       const std::array<bool, 4>& valid_candidates)
+{
+  std::optional<TrustRegionModelCandidate> best_candidate;
+  double best_objective = std::numeric_limits<double>::max();
+  for (size_t i = 0; i < model_objectives.size(); ++i) {
+    if (valid_candidates[i] && std::isfinite(model_objectives[i]) && model_objectives[i] < best_objective) {
+      best_candidate = static_cast<TrustRegionModelCandidate>(i);
+      best_objective = model_objectives[i];
+    }
+  }
+  return best_candidate;
+}
 
 void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem::Operator& H, const mfem::Solver* P,
                      const TrustRegionSettings& settings, double& trSize, TrustRegionResults& results,
@@ -33,8 +51,12 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   auto& d = results.d;
   auto& Pr = results.Pr;
   auto& Hd = results.H_d;
+  auto& Hz = results.H_z;
 
   const double cg_tol_squared = settings.cg_tol * settings.cg_tol;
+
+  z = 0.0;
+  Hz = 0.0;
 
   if (r0_norm_squared <= cg_tol_squared && settings.min_cg_iterations == 0) {
     return;
@@ -51,7 +73,6 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
   d = Pr;
   d *= -1.0;
 
-  z = 0.0;
   double zz = 0.;
 
   // rPr = dot(rCurrent, Pr)
@@ -76,7 +97,8 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
 
     const bool go_to_boundary = curvature <= 0 || zzNp1 >= trSize * trSize;
     if (go_to_boundary) {
-      projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
+      const double tau = projectToBoundaryWithCoefs(z, d, trSize, zz, zd, dd);
+      Hz.Add(tau, Hd);
       if (curvature <= 0) {
         results.interior_status = TrustRegionResults::Status::NegativeCurvature;
       } else {
@@ -90,6 +112,7 @@ void steihaugTointCG(const mfem::Vector& r0, mfem::Vector& rCurrent, const mfem:
     zPred = z;
     zPred.Add(alphaCg, d);
     z = zPred;
+    Hz.Add(alphaCg, Hd);
 
     if (results.interior_status == TrustRegionResults::Status::NonDescentDirection) {
       return;

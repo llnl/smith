@@ -14,7 +14,7 @@ void runCylinderCrushBenchmark()
   constexpr int order = 1;
   constexpr int dim = 3;
   const int num_time_steps = 16;
-  const double total_compression = 0.125;
+  const double total_compression = 0.07;
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "paper_cylinder_crush_fast");
@@ -46,23 +46,42 @@ void runCylinderCrushBenchmark()
   solid.setDisplacementBCs(vertical_compression, mesh->domain("top"), Component::Z);
   solid.completeSetup();
 
+  const int rank = mesh->mfemParMesh().GetMyRank();
+  std::ofstream history;
+  if (rank == 0) {
+    history.open("paper_cylinder_crush_fast_load_displacement.csv");
+    history << "# time displacement imposed_displacement reaction_force\n";
+  }
+  auto write_history_snapshot = [&]() {
+    const double avg_top_uz = averageBoundaryDisplacementComponent(solid, mesh->domain("top"), 2);
+    const double top_reaction_z = sumReactionComponent(solid, mesh->domain("top"), 2);
+    if (rank == 0) {
+      history << solid.time() << " " << avg_top_uz << " " << -total_compression * solid.time() << " " << top_reaction_z
+              << "\n";
+    }
+  };
+
   if (write_output) {
     solid.outputStateToDisk("paper_cylinder_crush_fast");
   }
+  write_history_snapshot();
 
   for (int step = 0; step < num_time_steps; ++step) {
     solid.advanceTimestep(1.0 / num_time_steps);
-    requireNonlinearConverged(true,
-                              std::format("paper_cylinder_crush_fast nonlinear solve failed at step {}", step + 1));
+    requireSolveConverged(solid, std::format("paper_cylinder_crush_fast nonlinear solve failed at step {}", step + 1));
     if (write_output) {
       solid.outputStateToDisk("paper_cylinder_crush_fast");
     }
+    write_history_snapshot();
   }
 
   const double avg_top_uz = averageBoundaryDisplacementComponent(solid, mesh->domain("top"), 2);
   const double top_reaction_z = sumReactionComponent(solid, mesh->domain("top"), 2);
   SLIC_INFO_ROOT(std::format("paper_cylinder_crush_fast avg top uz = {:.8e}", avg_top_uz));
   SLIC_INFO_ROOT(std::format("paper_cylinder_crush_fast top reaction z = {:.8e}", top_reaction_z));
+  if (compute_final_state_eigenpair) {
+    runFinalStateEigenpairDiagnostic(solid, "paper_cylinder_crush_fast");
+  }
 }
 }  // namespace
 }  // namespace smith
