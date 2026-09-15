@@ -4,6 +4,12 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+/**
+ * @file pchip.hpp
+ *
+ * @brief Shape-preserving piecewise cubic Hermite (PCHIP) interpolation for 1D tabulated data.
+ */
+
 #pragma once
 
 #include <cmath>
