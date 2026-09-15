@@ -108,6 +108,18 @@ using DotPair = std::pair<const mfem::Vector*, const mfem::Vector*>;            
 using DotManyFunction = std::function<std::vector<double>(const std::vector<DotPair>&)>;  ///< using
 
 /**
+ * @brief Select a dogleg step from the Cauchy and Newton/model-solve points
+ *
+ * @param[in] cauchy_point The Cauchy point
+ * @param[in] newton_point The Newton or trust-region model-solve point
+ * @param[in] trust_region_size The trust-region radius
+ * @param[out] step The selected dogleg step
+ * @param[in] dot_many Function for computing globally reduced inner products
+ */
+void doglegStep(const mfem::Vector& cauchy_point, const mfem::Vector& newton_point, double trust_region_size,
+                mfem::Vector& step, const DotManyFunction& dot_many);
+
+/**
  * @brief Minimize quadratic sub-problem given residual vector, the action of the stiffness and a preconditioner
  *
  * This is a standard implementation of 'The Conjugate Gradient Method and Trust Regions in Large Scale Optimization'

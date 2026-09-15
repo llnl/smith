@@ -282,6 +282,11 @@ class ContactData {
   mfem::ParGridFunction current_coords_;
 
   /**
+   * @brief Reference coordinates of the shape-displaced mesh
+   */
+  mfem::ParGridFunction shaped_reference_coords_;
+
+  /**
    * @brief The contact boundary condition information
    *
    * @note The order of this vector defines the ordering used for merged pressure/Jacobian offsets.
