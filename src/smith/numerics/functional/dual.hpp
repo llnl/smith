@@ -146,8 +146,8 @@ template <typename gradient_type_a, typename gradient_type_b>
 SMITH_HOST_DEVICE constexpr auto operator/(dual<gradient_type_a> a, dual<gradient_type_b> b)
 {
   using output_gradient_type = decltype((a.gradient / b.value) - (a.value * b.gradient) / (b.value * b.value));
-  return dual<output_gradient_type>{
-      a.value / b.value, (a.gradient / b.value) - (a.value * b.gradient) / (b.value * b.value)};
+  return dual<output_gradient_type>{a.value / b.value,
+                                    (a.gradient / b.value) - (a.value * b.gradient) / (b.value * b.value)};
 }
 
 /**
