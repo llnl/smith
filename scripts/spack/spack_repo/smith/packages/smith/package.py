@@ -265,6 +265,10 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     requires("%cxx=llvm-amdgpu", when="+enzyme+rocm")
     requires("%cxx=llvm", when="+enzyme~rocm")
 
+    # Force Clang as Cuda Compiler, due to build issues with NVCC
+    # https://github.com/llnl/smith/issues/1659
+    requires("%cxx=gcc", when="+cuda")
+
     conflicts("+openmp", when="+rocm")
     conflicts("~umpire", when="+raja", msg="Axom requires both raja and umpire in order to properly set CAMP_DIR.")
     conflicts("~petsc", when="+slepc", msg="PETSc must be built when building with SLEPc!")
@@ -338,10 +342,21 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             entries.append(cmake_cache_option("ENABLE_CUDA", True))
             entries.append(cmake_cache_option("CMAKE_CUDA_SEPARABLE_COMPILATION", True))
 
+            # Set Clang as CUDA compiler, if building with Clang
+            # TODO eventually we should allow usage of NVCC as CUDA compiler. Then,
+            # check if enzyme and llvm is enabled, only then set Clang as CUDA compiler.
+            using_clang_cuda = False
+            if spec.satisfies("%llvm"):
+                using_clang_cuda = True
+                entries.append(cmake_cache_option("CMAKE_CUDA_COMPILER", "${CMAKE_CXX_COMPILER}"))
+
             # CXX flags will be propagated to the host compiler
             cxxflags = " ".join(spec.compiler_flags["cxxflags"])
             cuda_flags = cxxflags
-            cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
+            if using_clang_cuda 
+                cuda_flags += " ${CMAKE_CUDA_FLAGS} -Wno-unknown-cuda-version "
+            else:
+                cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
             entries.append(cmake_cache_string("CMAKE_CUDA_FLAGS", cuda_flags, force=True))
 
             entries.append("# nvcc does not like gtest's 'pthreads' flag\n")

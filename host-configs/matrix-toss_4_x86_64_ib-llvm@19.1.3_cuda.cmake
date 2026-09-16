@@ -69,7 +69,7 @@ set(ENABLE_MPI ON CACHE BOOL "")
 
 set(CUDAToolkit_ROOT "/usr/tce/packages/cuda/cuda-12.9.1" CACHE PATH "")
 
-set(CMAKE_CUDA_COMPILER "${CUDAToolkit_ROOT}/bin/nvcc" CACHE PATH "")
+set(CMAKE_CUDA_COMPILER "${CMAKE_CXX_COMPILER}" CACHE PATH "")
 
 set(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}" CACHE PATH "")
 
@@ -85,7 +85,7 @@ set(ENABLE_CUDA ON CACHE BOOL "")
 
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON CACHE BOOL "")
 
-set(CMAKE_CUDA_FLAGS "-fPIC ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr " CACHE STRING "" FORCE)
+set(CMAKE_CUDA_FLAGS "-fPIC ${CMAKE_CUDA_FLAGS} -Wno-unknown-cuda-version" CACHE STRING "" FORCE)
 
 # nvcc does not like gtest's 'pthreads' flag
 
@@ -160,5 +160,3 @@ set(SPHINX_EXECUTABLE "${DEVTOOLS_ROOT}/python-3.11.7/bin/sphinx-build" CACHE PA
 set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/cppcheck-2.9/bin/cppcheck" CACHE PATH "")
 
 set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/doxygen-1.9.8/bin/doxygen" CACHE PATH "")
-
-

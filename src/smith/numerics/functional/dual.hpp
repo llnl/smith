@@ -58,91 +58,96 @@ dual(double, T) -> dual<T>;
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator+(dual<gradient_type> a, double b)
 {
-  return dual{a.value + b, a.gradient};
+  return dual<gradient_type>{a.value + b, a.gradient};
 }
 
 /** @brief addition of a dual number and a non-dual number */
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator+(double a, dual<gradient_type> b)
 {
-  return dual{a + b.value, b.gradient};
+  return dual<gradient_type>{a + b.value, b.gradient};
 }
 
 /** @brief addition of two dual numbers */
 template <typename gradient_type_a, typename gradient_type_b>
 SMITH_HOST_DEVICE constexpr auto operator+(dual<gradient_type_a> a, dual<gradient_type_b> b)
 {
-  return dual{a.value + b.value, a.gradient + b.gradient};
+  using output_gradient_type = decltype(a.gradient + b.gradient);
+  return dual<output_gradient_type>{a.value + b.value, a.gradient + b.gradient};
 }
 
 /** @brief unary negation of a dual number */
 template <typename gradient_type>
-constexpr auto operator-(dual<gradient_type> x)
+SMITH_HOST_DEVICE constexpr auto operator-(dual<gradient_type> x)
 {
-  return dual{-x.value, -x.gradient};
+  return dual<gradient_type>{-x.value, -x.gradient};
 }
 
 /** @brief subtraction of a non-dual number from a dual number */
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator-(dual<gradient_type> a, double b)
 {
-  return dual{a.value - b, a.gradient};
+  return dual<gradient_type>{a.value - b, a.gradient};
 }
 
 /** @brief subtraction of a dual number from a non-dual number */
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator-(double a, dual<gradient_type> b)
 {
-  return dual{a - b.value, -b.gradient};
+  return dual<gradient_type>{a - b.value, -b.gradient};
 }
 
 /** @brief subtraction of two dual numbers */
 template <typename gradient_type_a, typename gradient_type_b>
 SMITH_HOST_DEVICE constexpr auto operator-(dual<gradient_type_a> a, dual<gradient_type_b> b)
 {
-  return dual{a.value - b.value, a.gradient - b.gradient};
+  using output_gradient_type = decltype(a.gradient - b.gradient);
+  return dual<output_gradient_type>{a.value - b.value, a.gradient - b.gradient};
 }
 
 /** @brief multiplication of a dual number and a non-dual number */
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator*(const dual<gradient_type>& a, double b)
 {
-  return dual{a.value * b, a.gradient * b};
+  return dual<gradient_type>{a.value * b, a.gradient * b};
 }
 
 /** @brief multiplication of a dual number and a non-dual number */
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator*(double a, const dual<gradient_type>& b)
 {
-  return dual{a * b.value, a * b.gradient};
+  return dual<gradient_type>{a * b.value, a * b.gradient};
 }
 
 /** @brief multiplication of two dual numbers */
 template <typename gradient_type_a, typename gradient_type_b>
 SMITH_HOST_DEVICE constexpr auto operator*(dual<gradient_type_a> a, dual<gradient_type_b> b)
 {
-  return dual{a.value * b.value, b.value * a.gradient + a.value * b.gradient};
+  using output_gradient_type = decltype(b.value * a.gradient + a.value * b.gradient);
+  return dual<output_gradient_type>{a.value * b.value, b.value * a.gradient + a.value * b.gradient};
 }
 
 /** @brief division of a dual number by a non-dual number */
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator/(const dual<gradient_type>& a, double b)
 {
-  return dual{a.value / b, a.gradient / b};
+  return dual<gradient_type>{a.value / b, a.gradient / b};
 }
 
 /** @brief division of a non-dual number by a dual number */
 template <typename gradient_type>
 SMITH_HOST_DEVICE constexpr auto operator/(double a, const dual<gradient_type>& b)
 {
-  return dual{a / b.value, -(a / (b.value * b.value)) * b.gradient};
+  return dual<gradient_type>{a / b.value, -(a / (b.value * b.value)) * b.gradient};
 }
 
 /** @brief division of two dual numbers */
 template <typename gradient_type_a, typename gradient_type_b>
 SMITH_HOST_DEVICE constexpr auto operator/(dual<gradient_type_a> a, dual<gradient_type_b> b)
 {
-  return dual{a.value / b.value, (a.gradient / b.value) - (a.value * b.gradient) / (b.value * b.value)};
+  using output_gradient_type = decltype((a.gradient / b.value) - (a.value * b.gradient) / (b.value * b.value));
+  return dual<output_gradient_type>{
+      a.value / b.value, (a.gradient / b.value) - (a.value * b.gradient) / (b.value * b.value)};
 }
 
 /**
@@ -438,7 +443,7 @@ auto& operator<<(std::ostream& out, dual<T> A)
 }
 
 /** @brief promote a value to a dual number of the appropriate type */
-SMITH_HOST_DEVICE constexpr auto make_dual(double x) { return dual{x, 1.0}; }
+SMITH_HOST_DEVICE constexpr auto make_dual(double x) { return dual<double>{x, 1.0}; }
 
 /** @brief return the "value" part from a given type. For non-dual types, this is just the identity function */
 template <typename T>
