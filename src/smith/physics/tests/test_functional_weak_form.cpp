@@ -103,6 +103,8 @@ struct WeakFormFixture : public testing::Test {
                                  [](auto /*t_info*/, auto /*x*/, auto n, auto... /*args*/) { return 1.0 * n; });
     f_weak_form->addBodySource(mesh->entireBodyName(),
                                [](auto /*t_info*/, auto /*x*/, auto u, auto... /*args*/) { return u; });
+    f_weak_form->addBodySource(mesh->entireBodyName(), [](auto /*t_info*/, auto /*x*/, auto /*u*/, auto velocity,
+                                                          auto /*density*/) { return 0.25 * velocity; });
     f_weak_form->addBodySource(mesh->entireBodyName(),
                                [](auto /*t_info*/, auto x, auto... /*args*/) { return 0.5 * x; });
 
@@ -248,6 +250,30 @@ TEST_F(WeakFormFixture, JvpConsistency)
     weak_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr, field_tangents, {}, &jvp);
     EXPECT_NEAR(jvp_slow.Norml2(), jvp.Norml2(), 1e-12);
   }
+}
+
+TEST_F(WeakFormFixture, MultipleJacobianWeightsSumArgumentDerivatives)
+{
+  auto input_fields = getConstFieldPointers(states, params);
+  const std::vector<double> displacement_weights = {1.0, 0.0, 0.0};
+  const std::vector<double> velocity_weights = {0.0, 1.0, 0.0};
+  const std::vector<double> combined_weights = {1.0, 1.0, 0.0};
+
+  auto displacement_jacobian = weak_form->jacobian(time_info, shape_disp.get(), input_fields, displacement_weights);
+  auto velocity_jacobian = weak_form->jacobian(time_info, shape_disp.get(), input_fields, velocity_weights);
+  auto combined_jacobian = weak_form->jacobian(time_info, shape_disp.get(), input_fields, combined_weights);
+
+  smith::FiniteElementDual expected(states[DISP].space(), "expected");
+  smith::FiniteElementDual velocity_contribution(states[DISP].space(), "velocity_contribution");
+  smith::FiniteElementDual actual(states[DISP].space(), "actual");
+  displacement_jacobian->Mult(state_tangents[DISP], expected);
+  velocity_jacobian->Mult(state_tangents[DISP], velocity_contribution);
+  expected += velocity_contribution;
+  combined_jacobian->Mult(state_tangents[DISP], actual);
+
+  EXPECT_GT(velocity_contribution.Norml2(), 1.0e-12);
+  actual -= expected;
+  EXPECT_NEAR(actual.Norml2(), 0.0, 1.0e-12);
 }
 
 TEST_F(WeakFormFixture, ForwardsOriginalTimeInfoToIntegrands)
