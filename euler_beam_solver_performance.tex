@@ -1,0 +1,137 @@
+% Euler solver-response summary from the 2026-08-13 release rerun.
+% Authoritative source:
+% build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/
+% paper_euler_cylinder_response_20260813_110039/euler/
+
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{url}
+
+\begin{document}
+\sloppy
+
+\section*{Euler Beam Solver Performance}
+
+This report summarizes the matched Euler solver-response rerun performed on
+\texttt{rzwhippet7} on 2026-08-13.  The authoritative matrix is
+\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_euler_cylinder_response_20260813_110039}.
+The compact commands, logs, response histories, and shared status table are archived
+under
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/euler/solver_response_20260813_110039}.
+The separate one-level-refined analytic-verification run is
+\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_euler_refined_verification_20260817_141623},
+with its command, executable checksum, source state, response history, validation,
+plotting inputs, and regenerated figure archived under
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/euler/refined_verification_20260817_141623}.
+It completed all 35 increments in $1536.514\,\mathrm{s}$ and reproduced the
+reported lateral displacements $-0.00382636$ at force $0.00274$ and $-1.35237$
+at force $0.00275$.
+
+\section*{Configuration}
+
+The matrix uses the standard unrefined 1400-element quadratic beam mesh, four MPI
+ranks, 30 coarse load steps followed by five refined steps, and a weak lateral
+selector traction of $-10^{-10}$.  The applied compressive resultant reaches
+$2.75\times10^{-3}$.  This standard matrix remains distinct from the one-level-refined
+11200-element run used for the analytic Euler-load comparison.
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Quantity & Value \\
+\midrule
+Challenge case & \texttt{--case=01} \\
+Displacement order & 2 \\
+Global elements & 1400 hexahedra \\
+MPI ranks & 4 \\
+Load schedule & 30 coarse plus 5 refined steps \\
+Final applied force & $2.75\times10^{-3}$ \\
+Nonlinear tolerance & $10^{-11}$ \\
+Linear tolerance & $10^{-14}$ \\
+CG iteration cap & 600 (AMG), 60000 (Jacobi) \\
+Visualization & Enabled for every run \\
+Per-run timeout & 3600 s \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The four nonlinear configurations are Newton with residual-normal line search,
+PETSc Newton with critical-point globalization, trust region, and trust region with
+the safeguarded subspace option.  Each configuration was run with Hypre AMG and
+Hypre Jacobi.  Exact commands are stored in each matrix run directory.  The complete
+matrix is reproducible with \path{scripts/run_euler_cylinder_response_matrix.sh}.
+
+\section*{Completion and Timing}
+
+Completed entries report the challenge-suite max-rank wall time.  The two incomplete
+Newton-LS entries report elapsed time at the timeout.  These timings include writing
+all accepted visualization states and therefore should be compared with one another,
+not with the older no-output timing matrix.
+
+\begin{table}[h]
+  \centering
+  \small
+  \caption{Euler status and timing for the matched response matrix.}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Solver & Hypre AMG & Hypre Jacobi \\
+    \midrule
+    Newton-LS & $34/35$ steps (timeout, $3600\,\mathrm{s}$) & $34/35$ steps (timeout, $3600\,\mathrm{s}$) \\
+    Newton-CP & $35/35$ steps, $255.940\,\mathrm{s}$ & $35/35$ steps, $1057.035\,\mathrm{s}$ \\
+    Trust-region & $35/35$ steps, $267.332\,\mathrm{s}$ & $35/35$ steps, $997.547\,\mathrm{s}$ \\
+    Trust-region + subspace & $35/35$ steps, $259.967\,\mathrm{s}$ & $35/35$ steps, $989.372\,\mathrm{s}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Every response value is finite, and the visualization cycle count equals the response
+state count for all eight runs.  The Newton-LS histories contain the unloaded state
+and 34 accepted load states; all other histories contain the unloaded state and all
+35 accepted load states.
+
+\section*{Response Branches}
+
+All eight histories remain nearly coincident through applied force
+$2.74\times10^{-3}$, where the average lateral top displacement is approximately
+$-3.238\times10^{-3}$.  Newton-LS spends the remainder of its one-hour allocation on
+the final increment and does not accept a state at $2.75\times10^{-3}$.  Newton-CP and
+both trust-region variants accept that increment and select the same large-deflection
+branch: their final average lateral displacements range from $-0.522135$ to
+$-0.522400$.  Differences between AMG and Jacobi are negligible for Newton-CP and at
+most $2.6\times10^{-4}$ in average lateral displacement for the trust-region runs.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.72\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/euler_solver_response_HypreAMG.png}
+  \caption{Euler solver-response histories with Hypre AMG.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.72\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/euler_solver_response_HypreJacobi.png}
+  \caption{Euler solver-response histories with Hypre Jacobi.}
+\end{figure}
+
+\section*{Deformation Comparison}
+
+The deformation composites sample six accepted states from each run.  Their last
+column makes the completion difference visible: Newton-LS remains on the nearly
+straight pre-buckling state, whereas Newton-CP and both trust-region variants show the
+same bent post-buckling branch.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_euler_solver_comparison_HypreAMG.png}
+  \caption{Euler accepted-state comparison with Hypre AMG.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_euler_solver_comparison_HypreJacobi.png}
+  \caption{Euler accepted-state comparison with Hypre Jacobi.}
+\end{figure}
+
+\end{document}

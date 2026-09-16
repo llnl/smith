@@ -1,0 +1,182 @@
+% Thin-cylinder solver-response and accepted-state eigenpair summary.
+% Authoritative eigenpair source:
+% build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/
+% paper_cylinder_eigenpair_20260814_164100/
+
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{url}
+
+\begin{document}
+\sloppy
+
+\section*{Thin-Cylinder Crush Solver Performance}
+
+This report combines the corrected cylinder response rerun performed on
+\texttt{rzwhippet7} on 2026-08-13 with the accepted-state eigenpair matrix
+performed on \texttt{rzwhippet23} on 2026-08-14.  The authoritative response
+matrix is
+\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_euler_cylinder_response_20260813_110039}.
+Its compact commands, logs, response histories, and shared status table are archived under
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/cylinder_crush/solver_response_20260813_110039}.
+The authoritative eigenpair matrix is
+\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_cylinder_eigenpair_20260814_164100},
+with a compact archive under
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/cylinder_crush/lowest_eigenpair_20260814_164100}.
+
+\section*{Configuration}
+
+The matrix uses \path{thin_cylinder_crush.g}, first-order displacement elements,
+16 MPI ranks, and 16 prescribed-displacement increments to total top compression
+$0.07$.  The nonlinear tolerance is $10^{-11}$ and the linear tolerance is
+$10^{-14}$.  Hypre AMG uses a 600-iteration CG cap, and Hypre Jacobi uses a
+60000-iteration cap.  The eigenpair matrix used the same discretization, loading,
+tolerances, and 16-rank layout and wrote the lowest mode for every final state.
+
+\section*{Completion and Timing}
+
+All eight configurations completed all 16 increments with exit status zero.  Times
+below are challenge-suite max-rank wall times.
+
+\begin{table}[h]
+  \centering
+  \small
+  \caption{Cylinder status and timing for the corrected response matrix.}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Solver & Hypre AMG & Hypre Jacobi \\
+    \midrule
+    Newton-LS & $16/16$ steps, $15.374\,\mathrm{s}$ & $16/16$ steps, $16.691\,\mathrm{s}$ \\
+    Newton-CP & $16/16$ steps, $17.393\,\mathrm{s}$ & $16/16$ steps, $18.250\,\mathrm{s}$ \\
+    Trust-region & $16/16$ steps, $14.313\,\mathrm{s}$ & $16/16$ steps, $35.427\,\mathrm{s}$ \\
+    Trust-region + subspace & $16/16$ steps, $14.549\,\mathrm{s}$ & $16/16$ steps, $40.101\,\mathrm{s}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section*{Reaction Validation}
+
+The reaction helper now maps boundary local vector DOFs to owned local true DOFs,
+sums only owned entries, and performs one global reduction.  Every corrected history
+contains 17 finite states, starts with zero reaction at the unloaded state, has a
+nonconstant reaction column, and ends at average top displacement $-0.07$.  The eight
+files are not all identical.  These checks replace the invalid constant
+$8.74064\times10^{245}$ histories from the earlier rerun.
+
+\section*{Response Branches}
+
+The eight curves coincide through increment 15.  At average top displacement
+$-0.065625$, every run has reaction $-5.87722\times10^{-3}$.  The final increment
+separates three response branches:
+\begin{itemize}
+  \item both Newton methods with both preconditioners end at
+        $-6.252508\times10^{-3}$;
+  \item baseline trust region with both preconditioners and subspace trust region with
+        AMG end at $-2.651752\times10^{-3}$;
+  \item subspace trust region with Jacobi ends at
+        $-2.224820\times10^{-3}$.
+\end{itemize}
+The corrected reaction histories therefore agree with the existing deformation
+comparisons: the Newton methods remain on the same nearly axisymmetric branch, while
+the trust-region methods select buckled final configurations.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.72\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/cylinder_solver_response_HypreAMG.png}
+  \caption{Cylinder reaction-displacement histories with Hypre AMG.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.72\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/cylinder_solver_response_HypreJacobi.png}
+  \caption{Cylinder reaction-displacement histories with Hypre Jacobi.}
+\end{figure}
+
+\section*{Accepted-State Stability Evidence}
+
+The matched deformation composites show that Newton-LS and Newton-CP converge, but
+remain on nearly axisymmetric final states.  The trust-region variants converge to
+visibly buckled final states.  The reaction histories split at the final increment in
+the same way: both Newton methods end at the higher reaction branch, while the
+trust-region methods move to lower-reaction buckled branches.  This is the expected
+signature of Newton convergence to an unstable equilibrium branch in this unperturbed
+shell problem.
+
+The nonlinear-solve logs provide an additional curvature diagnostic.  The four Newton logs contain CG
+messages that the tangent operator is not positive definite.  The most negative
+reported $(Ad,d)$ values are $-5.13\times10^{-11}$ and $-3.61\times10^{-8}$ for
+Newton-LS with AMG and Jacobi, and $-2.48\times10^{-9}$ and $-1.80\times10^{-8}$ for
+Newton-CP with AMG and Jacobi.  No corresponding diagnostic appears in the four
+trust-region logs.
+
+The additional matrix directly tests the accepted equilibria.  After the final
+increment, the driver rebuilds the tangent in the accepted deformed configuration,
+eliminates the 1,536 prescribed true degrees of freedom, and verifies symmetry of the
+45,696-degree-of-freedom reduced tangent.  SLEPc then computes its algebraically
+smallest eigenpair using Jacobi--Davidson with a matrix-norm-scaled convergence test.
+The sign tolerance is $10^{-8}\max(1,\lVert K\rVert_\infty)$, approximately
+$1.4\times10^{-8}$ for these states.
+
+\begin{table}[h]
+  \centering
+  \small
+  \caption{Lowest eigenpair of the reduced tangent at each accepted final state.
+  The residual is $\lVert K v-\lambda v\rVert_2/\lVert K\rVert_\infty$.}
+  \begin{tabular}{@{}llrrl@{}}
+    \toprule
+    Solver & Preconditioner & $\lambda_{\min}$ & Scaled residual & Classification \\
+    \midrule
+    Newton-LS & AMG & $-4.659353678375\times10^{-7}$ & $9.741\times10^{-9}$ & Negative \\
+    Newton-LS & Jacobi & $-4.659353678414\times10^{-7}$ & $9.741\times10^{-9}$ & Negative \\
+    Newton-CP & AMG & $-4.659353678477\times10^{-7}$ & $9.741\times10^{-9}$ & Negative \\
+    Newton-CP & Jacobi & $-4.659353678483\times10^{-7}$ & $9.741\times10^{-9}$ & Negative \\
+    Trust-region & AMG & $1.024819664144\times10^{-15}$ & $1.023\times10^{-10}$ & Neutral \\
+    Trust-region & Jacobi & $4.347011350324\times10^{-15}$ & $3.927\times10^{-11}$ & Neutral \\
+    Subspace TR & AMG & $-2.749429403899\times10^{-16}$ & $2.436\times10^{-10}$ & Neutral \\
+    Subspace TR & Jacobi & $1.620171181485\times10^{-14}$ & $6.655\times10^{-11}$ & Neutral \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+All four Newton combinations independently recover the same resolved negative mode,
+regardless of Newton variant or preconditioner.  No negative mode is resolved for any
+trust-region final state at the stated tolerance.  Their smallest eigenvalues are
+numerically zero, as expected from the rotational degeneracy of an unperturbed
+cylinder: rotating a buckling pattern changes its phase without changing its energy.
+The result should therefore be stated as absence of a resolved negative mode, not as
+strict positive definiteness.
+
+Confidence in the branch interpretation was developed in layers.  First, the matched
+deformations separated nearly axisymmetric Newton states from buckled trust-region
+states.  Second, the corrected reaction histories separated those branches only at the
+final increment.  Third, the Newton nonlinear solves repeatedly detected negative
+curvature.  Finally, the accepted-state eigenanalysis directly resolves a negative
+Newton tangent mode and no negative trust-region mode.  The agreement of these
+independent observations supports the unstable-Newton-branch interpretation while
+retaining the symmetry and discretization qualifications of the benchmark.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.98\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/cylinder_lowest_eigenmodes.png}
+  \caption{Representative accepted final configurations perturbed by their normalized
+  lowest tangent mode and colored by normalized radial mode component.  The Newton
+  state has a resolved negative mode; the trust-region modes are neutral within the
+  matrix-scaled tolerance.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_cylinder_crush_solver_comparison_amg.png}
+  \caption{Matched cylinder deformation comparison with Hypre AMG.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_cylinder_crush_solver_comparison_jacobi.png}
+  \caption{Matched cylinder deformation comparison with Hypre Jacobi.}
+\end{figure}
+
+\end{document}

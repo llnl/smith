@@ -17,7 +17,8 @@ void runViscoelasticBuckling()
   constexpr int dim = 3;
   constexpr double load = 0.17;
   constexpr double max_time = 24.0;
-  constexpr int num_time_steps = 60;
+  constexpr double dt = 0.3;
+  constexpr int num_time_steps = static_cast<int>(max_time / dt);
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "paper_viscoelastic_buckling_fast");
@@ -48,7 +49,7 @@ void runViscoelasticBuckling()
 
   auto sawtooth_load = [=](auto, auto, double time) {
     const double rise_time = 0.25 * max_time;
-    const double force_y = time < rise_time ? time / rise_time * load : 0.0;
+    const double force_y = time <= rise_time ? time / rise_time * load : 0.0;
     return vec3{0.0, -force_y / area, 0.0};
   };
   solid.setTraction(sawtooth_load, mesh->domain("top"));
@@ -87,7 +88,7 @@ void runViscoelasticBuckling()
     const double force_y = sumReactionComponent(solid, mesh->domain("bottom"), 1);
     const double top_displacement_y = averageBoundaryDisplacementComponent(solid, mesh->domain("top"), 1);
     const double rise_time = 0.25 * max_time;
-    const double applied_force_y = solid.time() < rise_time ? solid.time() / rise_time * load : 0.0;
+    const double applied_force_y = solid.time() <= rise_time ? solid.time() / rise_time * load : 0.0;
     if (rank == 0) {
       history << solid.time() << " " << top_displacement_y << " " << applied_force_y << " " << force_y << "\n";
     }
@@ -101,7 +102,7 @@ void runViscoelasticBuckling()
   for (int step = 0; step < num_time_steps; ++step) {
     MPI_Barrier(mesh->getComm());
     const double start_time = MPI_Wtime();
-    solid.advanceTimestep(max_time / num_time_steps);
+    solid.advanceTimestep(dt);
     MPI_Barrier(mesh->getComm());
     requireSolveConverged(solid,
                           std::format("paper_viscoelastic_buckling_fast nonlinear solve failed at step {}", step + 1));

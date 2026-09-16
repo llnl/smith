@@ -1,0 +1,203 @@
+\documentclass[11pt]{article}
+\usepackage{booktabs}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{graphicx}
+\usepackage{url}
+
+\begin{document}
+\sloppy
+
+\section*{Problem 05: Concentric-Circle Solver Performance}
+
+This report summarizes the four-by-four-quadrature problem-05 response matrix run
+on \texttt{rzwhippet45} on 2026-08-24.  The paper's
+\texttt{05/circ\_in\_circ} problem is implemented as challenge-suite case
+\texttt{08/circ\_in\_circ}.  The authoritative full-output matrix is
+\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_circ_in_circ_q4x4_response_20260824_152437}.
+Commands, logs, response histories, representative renders, status, and validation
+tables are archived under
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/circ_in_circ/solver_response_20260824_152437}.
+
+\section*{Configuration}
+
+The two-dimensional mesh contains 3047 first-order quadrilateral elements in five
+material regions.  Three stiff circular or annular regions use Neo-Hookean density
+1000, bulk modulus 1.133333333, and shear modulus 0.2.  Two compliant regions use
+density $2.0\times10^{-4}$, bulk modulus $2.266666667\times10^{-7}$, and shear
+modulus $3.173333333\times10^{-7}$.  All material integrals use four quadrature
+points per coordinate direction, or 16 tensor-product points per quadrilateral.
+The bottom boundary is fixed, and a downward top traction is increased in 50 equal
+increments to nominal magnitude 0.024.
+
+The matrix uses eight MPI ranks, cold starts, visualization output for every
+accepted state, nonlinear tolerance $10^{-11}$, and linear tolerance $10^{-14}$.
+Both preconditioners use CG.  Hypre AMG has a 600-iteration cap, and Hypre Jacobi
+has a 60000-iteration cap.  The four nonlinear configurations are Newton line
+search, PETSc Newton critical-point line search, baseline trust region, and trust
+region with safeguarded subspace globalization.  Each run has a 1200-second
+allocation.  Both BSR paths are disabled.
+
+This run required a temporary global source change: line 285 of
+\path{src/smith/numerics/functional/functional.hpp} sets
+\texttt{Functional::Q = 4}.  The build therefore uses four points in each
+coordinate direction for every functional, not a case-local override.  Starting
+from commit \texttt{9d4024ad9a68b0e1276bfd0b8a4e07e608329f22}, apply the archived
+\path{source.patch}, change to
+\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release}, run
+\texttt{make -j40}, and then run
+\path{scripts/run_circ_in_circ_response_matrix.sh}.  The archived
+executable has SHA-256
+\texttt{4fc62781951e8441e35ae1ca4eccdc2e2e29d1165eeecbe0e401f555d88cef2e}.
+The archive retains the source state, patch, executable identity, exact commands,
+and postprocessing instructions.
+
+\section*{Completion and Timing}
+
+Three of eight configurations complete all 50 increments, for an overall success
+rate of 37.5\%.  Hypre AMG completes two of four configurations, while Hypre Jacobi
+completes one of four.  Across the four trust-region configurations the success
+rate is 75\%; neither Newton configuration completes with either preconditioner.
+Every run has one response state and one visualization cycle for the unloaded state
+and each accepted increment.
+
+\begin{table}[h]
+  \centering
+  \small
+  \caption{Problem-05 completion and reported solver time.  Timeout entries use launcher elapsed time.}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Solver & Hypre AMG & Hypre Jacobi \\
+    \midrule
+    Newton-LS & $23/50$ steps (timeout, $1201\,\mathrm{s}$) & $23/50$ steps (timeout, $1202\,\mathrm{s}$) \\
+    Newton-CP & $3/50$ steps (failure, $0.671\,\mathrm{s}$) & $3/50$ steps (failure, $1.158\,\mathrm{s}$) \\
+    Trust-region & $50/50$ steps, $18.005\,\mathrm{s}$ & $34/50$ steps (failure, $76.347\,\mathrm{s}$) \\
+    Trust-region + subspace & $50/50$ steps, $20.780\,\mathrm{s}$ & $50/50$ steps, $40.199\,\mathrm{s}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The baseline trust-region/AMG configuration is the fastest completed run.  The
+subspace safeguard adds $2.775\,\mathrm{s}$ with AMG.  With Jacobi, however,
+the safeguard changes the outcome from failure at increment 35 to full completion,
+at about twice the wall time of the completed AMG configurations.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.86\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/circ_in_circ_solver_timing.png}
+  \caption{Log-scale reported solver time and completion status for the eight problem-05 configurations; timeout entries use launcher elapsed time.}
+\end{figure}
+
+\section*{Response Branches}
+
+All partial histories coincide with the completed reference branch at the precision
+written to CSV.  Newton-CP accepts three increments and stops at applied traction
+0.00144 and average top displacement $-0.0159179$.  Newton-LS accepts 23 increments
+and reaches traction 0.01104 and displacement $-0.171289$ before spending the
+remainder of its allocation on increment 24.  Baseline trust region with Jacobi
+accepts 34 increments and reaches traction 0.01632 and displacement $-0.470531$
+before failing on increment 35.
+
+The completed solutions traverse the sharp buckling transition between increments
+34 and 35: average top displacement changes from $-0.470531$ at traction 0.01632 to
+$-0.595089$ at traction 0.0168.  All three completed histories reach traction 0.024
+and final displacement between $-0.615707$ and $-0.615708$.  Their largest
+pointwise displacement spread is $8.0\times10^{-6}$, so they are indistinguishable
+at plotting resolution.
+
+\begin{figure}[h]
+  \centering
+  \begin{minipage}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/circ_in_circ_solver_response_HypreAMG.png}
+  \end{minipage}
+  \begin{minipage}{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/circ_in_circ_solver_response_HypreJacobi.png}
+  \end{minipage}
+  \caption{Applied-traction versus average top-displacement histories.  Coincident curves overlay one another.}
+\end{figure}
+
+\section*{Solver Diagnostics}
+
+Both Newton-CP runs report PETSc convergence reason $-4$ on increment 4.  Baseline
+trust region with Jacobi reaches its 10000-iteration nonlinear limit on increment
+35.  This is a nonlinear stagnation rather than an inner-CG failure: the run
+records neither an indefinite-CG diagnostic nor a hit of the 60000-iteration
+linear cap.  Jacobi-preconditioned nonlinear work rises sharply approaching the
+branch transition, requiring 1638, 2630, and 5562 iterations on increments 32,
+33, and 34 before the failed increment reaches the cap with residual
+$6.05074\times10^{-5}$.  The safeguarded subspace configuration crosses increment
+35 in 4698 iterations by augmenting the baseline Steihaug--Toint/dogleg step with
+the Cauchy direction, recent accepted nonlinear steps, and recycled leftmost-
+curvature information.  Across accepted increments, baseline trust region/AMG uses 929 nonlinear
+iterations, safeguarded trust region/AMG uses 1059, and safeguarded trust
+region/Jacobi uses 8133.  The two Newton-LS logs contain 7911 and 82875
+indefinite-CG diagnostics for AMG and Jacobi, respectively, before timing out.
+In contrast, the safeguarded trust-region method completes the prescribed loading
+with both preconditioners.  This is the principal solver-robustness separation in
+the matrix.
+
+\section*{Deformation Comparison}
+
+Each row below samples up to six states evenly over that run's accepted history;
+columns therefore represent progress within a row rather than identical load
+levels across rows.  Newton-CP has only four available states, so intermediate
+panels are repeated to retain the common layout.  The AMG and Jacobi comparisons
+show the same accepted deformation path.  Only the completed trust-region rows
+reach the strongly collapsed final configuration.  Colors identify the five
+material regions, mesh edges remain visible, and the deformed geometry uses unit
+displacement warp.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_circ_in_circ_solver_comparison_HypreAMG.png}
+  \caption{Accepted-state deformation comparison with Hypre AMG.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_circ_in_circ_solver_comparison_HypreJacobi.png}
+  \caption{Accepted-state deformation comparison with Hypre Jacobi.}
+\end{figure}
+
+\section*{Third-Medium Deformation Localization}
+
+A 17-by-17 reference-coordinate sampling of each quadrilateral finds the first
+negative deformation Jacobian on cycle 14 for all three completed branches.  The
+material-attribute-resolved check shows that every such element belongs to one of
+the two highly compliant third-medium regions.  Attributes 1, 3, and 5 are the
+three stiff regions; attributes 2 and 4 are the compliant regions.
+
+\begin{table}[h]
+  \centering
+  \small
+  \caption{Material localization of nonpositive sampled deformation Jacobians.}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    Completed branch & First cycle & Cells at first cycle & Minimum attribute & Final counts by attribute \\
+    \midrule
+    Trust-region/AMG & 14 & 8 & 2 & $2{:}85,\ 4{:}3$ \\
+    Subspace trust-region/AMG & 14 & 8 & 2 & $2{:}85,\ 4{:}3$ \\
+    Subspace trust-region/Jacobi & 14 & 8 & 2 & $2{:}85,\ 4{:}3$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+For baseline trust region/AMG, the sampled minimum changes from
+$9.4414\times10^{-4}$ on cycle 13 to $-3.6749\times10^{-4}$ on cycle 14.  Its
+minimum over the run is $-1.1641912333$ on cycle 45 in attribute 2.  At cycle 50,
+85 inverted quadrilaterals are in attribute 2 and three are in attribute 4; none
+are in a stiff region.  The two safeguarded branches give the same localization
+and counts, with differences only at roundoff level.
+
+The third medium is intentionally sacrificial and six orders of magnitude softer
+than the stiff bodies.  The localized inversion is not visible in the unit-warp
+geometry and does not alter the coincident response histories of the three
+completed branches.  For the purpose of this paper, the calculation therefore
+supports the intended contact-like load-transfer and nonlinear-solver robustness
+comparison.  It is not used to claim an accurate stress or deformation field
+inside the third medium, formal contact convergence, or physical admissibility of
+that fictitious material.  The attribute-resolved tables are retained as
+\path{deformation_validity_by_attribute.tsv} with each completed branch.
+
+\end{document}
