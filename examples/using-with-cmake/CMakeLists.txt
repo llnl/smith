@@ -59,6 +59,10 @@ if (ENABLE_HIP)
     set_source_files_properties(smith_example.cpp PROPERTIES LANGUAGE HIP)
 endif()
 
+if (ENABLE_CUDA)
+    set_source_files_properties(smith_example.cpp PROPERTIES LANGUAGE CUDA)
+endif()
+
 enable_testing()
 add_test(NAME    smith_example
          COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ./smith_example)
