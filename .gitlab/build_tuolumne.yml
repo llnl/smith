@@ -38,7 +38,7 @@ tuolumne-llvm_amdgpu_6_4_2-src:
   variables:
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Release"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "90"
+    ALLOC_TIME: "120"
   extends: .src_build_on_tuolumne
  
 tuolumne-llvm_amdgpu_6_4_2-src-codevelop:
