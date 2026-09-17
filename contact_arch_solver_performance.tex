@@ -10,12 +10,13 @@
 \section*{Contact-Arch Solver Performance}
 
 This report summarizes the unified current-code, output-enabled contact-arch
-response matrix run on \texttt{rzwhippet53} on 2026-08-19.  The authoritative
+response matrix run on \texttt{rzwhippet47} on 2026-09-15.  The authoritative
 full-output matrix is
-\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_contact_arch_response_20260819_124814}.
-Commands, logs, response histories, executable and source identity, status,
-validation, plots, and selected field renders are archived under
-\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/contact_arch/solver_response_20260819_124814}.
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/contact_arch/full}.
+Its compact archive is
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/contact_arch/archive/solver_response_20260915_102102}.
+The executable SHA-256 is
+\texttt{a7da49a03055b5d0dc692a896869740fd4fccd18546dfb3cf2078f7b0e784767}.
 
 \section*{Configuration}
 
@@ -62,20 +63,20 @@ including the final unsuccessful increment.
     \toprule
     Solver & Preconditioner & Outcome & Iterations; time \\
     \midrule
-    Newton-LS & Hypre AMG & $4/50$ steps, step-5 failure & 10911; $661.169\,\mathrm{s}$ \\
-    Newton-LS & Hypre Jacobi & $11/50$ steps, step-12 failure & 15704; $1356.732\,\mathrm{s}$ \\
-    Newton-CP & Hypre AMG & $8/50$ steps, step-9 failure & 3459; $195.729\,\mathrm{s}$ \\
-    Newton-CP & Hypre Jacobi & $9/50$ steps, step-10 failure & 5197; $399.709\,\mathrm{s}$ \\
-    Trust-region & Hypre AMG & $50/50$ steps & 159575; $1473.789\,\mathrm{s}$ \\
-    Trust-region & Hypre Jacobi & $43/50$ steps, step-44 failure & 49115; $366.137\,\mathrm{s}$ \\
-    Trust-region + subspace & Hypre AMG & $50/50$ steps & 174441; $1658.890\,\mathrm{s}$ \\
-    Trust-region + subspace & Hypre Jacobi & $44/50$ steps, step-45 failure & 63468; $492.491\,\mathrm{s}$ \\
+    Newton-LS & Hypre AMG & $4/50$ steps, step-5 failure & 10911; $659.584\,\mathrm{s}$ \\
+    Newton-LS & Hypre Jacobi & $11/50$ steps, step-12 failure & 15704; $1357.132\,\mathrm{s}$ \\
+    Newton-CP & Hypre AMG & $8/50$ steps, step-9 failure & 3459; $195.804\,\mathrm{s}$ \\
+    Newton-CP & Hypre Jacobi & $9/50$ steps, step-10 failure & 5197; $399.870\,\mathrm{s}$ \\
+    Trust-region & Hypre AMG & $50/50$ steps & 165464; $1523.220\,\mathrm{s}$ \\
+    Trust-region & Hypre Jacobi & $43/50$ steps, step-44 failure & 48637; $358.692\,\mathrm{s}$ \\
+    Trust-region + subspace & Hypre AMG & $50/50$ steps & 173363; $1637.979\,\mathrm{s}$ \\
+    Trust-region + subspace & Hypre Jacobi & $44/50$ steps, step-45 failure & 71949; $556.541\,\mathrm{s}$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 For the two completed AMG entries, subspace refinement increases reported
-nonlinear work by 9.3\% and wall time by 12.6\% relative to baseline trust
+nonlinear work by 4.8\% and wall time by 7.5\% relative to baseline trust
 region.  With Jacobi it advances one additional increment but still reaches
 the nonlinear cap, so the additional work does not change the final outcome.
 These are single-run measurements and do not establish a general performance
@@ -113,7 +114,7 @@ the large arch inversion rather than defining a validated contact threshold.
     \centering
     \includegraphics[width=\linewidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/contact_arch_solver_response_HypreJacobi.png}
   \end{minipage}
-  \caption{Support reaction versus imposed support inset.  All methods overlay on their shared accepted states; only the two AMG trust-region entries traverse the post-peak segment to the end of the schedule.}
+  \caption{Common support-reaction branch with each solver's final accepted point marked.  Only the two AMG trust-region entries traverse the post-peak segment to the end of the schedule.}
 \end{figure}
 
 \section*{Solver Diagnostics}
@@ -126,25 +127,31 @@ indefinite-CG diagnostics, and one inner-CG cap hit.
 The other four failures reach the 10000-iteration nonlinear cap.  Newton-LS
 ends with residuals $1.36\times10^{-10}$ for AMG and
 $1.15\times10^{-5}$ for Jacobi.  Baseline and subspace trust region with
-Jacobi end with residuals $1.23\times10^{-10}$ and
-$2.27\times10^{-9}$, respectively.  Neither completed AMG trust-region entry
-reports an indefinite-CG diagnostic or an inner-CG cap hit, although their
-largest per-increment nonlinear counts are 7779 and 7851.
+Jacobi both reach the nonlinear cap on increments 44 and 45, respectively.
+Neither completed AMG trust-region entry reports an indefinite-CG diagnostic
+or an inner-CG cap hit; their largest per-increment nonlinear counts are 8401
+and 7948.
+
+A print-level-2 Jacobi diagnostic confirms that simply raising the nonlinear
+cap is not the appropriate remedy. Before completing even the first increment,
+baseline trust region required 38 trial steps, of which 20 were rejected, and
+14,738 total CG iterations. Positive-work trial solves used 200--1989 CG
+iterations while the trust radius contracted from about 2.99 to
+$1.30\times10^{-5}$. Jacobi is therefore struggling to precondition the coupled
+contact tangent; a larger nonlinear cap would only multiply that inner-solve
+cost. Stronger preconditioning or smaller increments near the failing contact
+state are the next appropriate tests.
 
 \section*{Field Comparison}
 
-The two completed configurations were rendered independently at cycles 0,
-10, 20, 30, 40, and 50 using ParaView 5.13.3,
-displacement-magnitude coloring, and displacement warp factor 12.  Their
-sequences are visually indistinguishable and have normalized image RMSE below
-$3.1\times10^{-5}$ at every selected cycle, consistent with their coincident
-stored response histories.  The figure shows the baseline trust-region/AMG
-sequence; the compact archive retains both matched sequences.
+The September matrix contains field output for both completed configurations.
+The compact figure retains only the initial and final states of baseline trust
+region with Hypre AMG.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.98\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_contact_arch_trust_region_amg.png}
-  \caption{Accepted-state sequence for baseline trust region with Hypre AMG at cycles 0, 10, 20, 30, 40, and 50.  Colors show displacement magnitude on the configuration warped by twelve times displacement.}
+  \includegraphics[width=0.92\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/contact_arch_initial_final.png}
+  \caption{Initial and final September contact-driven arch configurations for baseline trust region with Hypre AMG. Colors show displacement magnitude on the physical configuration without displacement amplification.}
 \end{figure}
 
 \clearpage

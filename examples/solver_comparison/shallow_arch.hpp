@@ -21,9 +21,10 @@ void runShallowArch()
   const double nu = 0.33;
   const double bulk_modulus = E / (3.0 * (1.0 - 2.0 * nu));
   const double shear_modulus = E / (2.0 * (1.0 + nu));
-  const double load_magnitude = 1.5e-2;
-  const int num_time_steps = 20;
   const int extra_refinement = 4;
+  const int num_time_steps = shallow_arch_precompression_steps + shallow_arch_load_steps;
+  const double precompression_end_time =
+      static_cast<double>(shallow_arch_precompression_steps) / static_cast<double>(num_time_steps);
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "paper_shallow_arch_fast");
@@ -44,6 +45,14 @@ void runShallowArch()
 
   solid.setFixedBCs(mesh->domain("left_support"));
   solid.setDisplacementBCs(
+      [=](const tensor<double, dim>&, double time) {
+        tensor<double, dim> displacement{};
+        const double precompression_scale = std::min(time / precompression_end_time, 1.0);
+        displacement[0] = -shallow_arch_precompression * precompression_scale;
+        return displacement;
+      },
+      mesh->domain("right_support"), Component::X);
+  solid.setDisplacementBCs(
       [](const tensor<double, dim>&, double) {
         tensor<double, dim> u{};
         return u;
@@ -52,7 +61,9 @@ void runShallowArch()
   solid.setTraction(
       [=](auto, auto, double time) {
         tensor<double, dim> traction{};
-        traction[1] = -load_magnitude * time;
+        const double load_scale = std::clamp((time - precompression_end_time) / (1.0 - precompression_end_time), 0.0,
+                                             1.0);
+        traction[1] = -shallow_arch_load_magnitude * load_scale;
         return traction;
       },
       mesh->domain("top_surface"));
@@ -72,12 +83,14 @@ void runShallowArch()
     history << "# time displacement applied_force reaction_force\n";
   }
   auto write_history_snapshot = [&]() {
-    const double avg_crown_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);
+    const double avg_top_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);
+    const double load_scale =
+        std::clamp((solid.time() - precompression_end_time) / (1.0 - precompression_end_time), 0.0, 1.0);
     const double support_reaction_y = sumReactionComponent(solid, mesh->domain("left_support"), 1) +
                                       sumReactionComponent(solid, mesh->domain("right_support"), 1);
     if (rank == 0) {
-      history << solid.time() << " " << avg_crown_uy << " " << load_magnitude * solid.time() * top_length << " "
-              << support_reaction_y << "\n";
+      history << solid.time() << " " << avg_top_uy << " " << shallow_arch_load_magnitude * load_scale * top_length
+              << " " << support_reaction_y << "\n";
       history.flush();
     }
   };
@@ -96,10 +109,10 @@ void runShallowArch()
     write_history_snapshot();
   }
 
-  const double avg_crown_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);
+  const double avg_top_uy = averageBoundaryDisplacementComponent(solid, mesh->domain("top_surface"), 1);
   const double support_reaction_y = sumReactionComponent(solid, mesh->domain("left_support"), 1) +
                                     sumReactionComponent(solid, mesh->domain("right_support"), 1);
-  SLIC_INFO_ROOT(std::format("paper_shallow_arch_fast avg crown uy = {:.8e}", avg_crown_uy));
+  SLIC_INFO_ROOT(std::format("paper_shallow_arch_fast avg top-boundary uy = {:.8e}", avg_top_uy));
   SLIC_INFO_ROOT(std::format("paper_shallow_arch_fast support reaction y = {:.8e}", support_reaction_y));
 }
 }  // namespace

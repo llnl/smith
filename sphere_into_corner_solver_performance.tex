@@ -10,12 +10,14 @@
 \section*{Sphere-into-Corner Solver Performance}
 
 This report summarizes the unified current-code, output-enabled
-sphere-into-corner response matrix run on \texttt{rzwhippet53} on 2026-08-17.
-The authoritative full-output matrix is
-\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_sphere_into_corner_response_20260817_105859}.
-Commands, logs, response histories, executable and source identity, status,
-validation, plots, and selected field renders are archived under
-\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/sphere_into_corner/solver_response_20260817_105859}.
+sphere-into-corner response matrix run on \texttt{rzwhippet47} on 2026-09-15.
+The authoritative matrix is
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/sphere_into_corner}.
+The targeted AMG trust-region completion runs are
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/sphere_into_corner_cap_40000}.
+Together they retain commands, logs, response histories, executable identity,
+status, and validation data.  The completion-run executable SHA-256 is
+\texttt{dcaaa6a54f0306affafd7911a0075110bb93d147132f490bfce635b66bceefe6}.
 
 \section*{Configuration}
 
@@ -36,19 +38,21 @@ shell, the quasistatic tangent is intentionally under-constrained; the case
 therefore stresses a singular-to-constrained transition.
 
 All eight entries use eight MPI ranks, explicit cold starts, CG, nonlinear
-tolerance $10^{-11}$, linear tolerance $10^{-14}$, and a 10000-iteration
-nonlinear cap.  Hypre AMG uses a 600-iteration CG cap, and Hypre Jacobi uses a
+tolerance $10^{-11}$ and linear tolerance $10^{-14}$. The initial matrix used a
+10000-iteration nonlinear cap; the targeted AMG trust-region reruns use 40000.
+Hypre AMG uses a 600-iteration CG cap, and Hypre Jacobi uses a
 60000-iteration cap.  Both BSR SpMV and assembled BSR are disabled.  Every
 entry writes the initial field state and each accepted increment.
 
 \section*{Completion and Timing}
 
-Only the baseline and safeguarded-subspace trust-region methods with Hypre
-Jacobi complete all 16 increments.  Both Newton line-search entries time out
+Both baseline and safeguarded-subspace trust-region methods now complete all 16
+increments with either preconditioner. Both Newton line-search entries time out
 without an accepted increment, and both PETSc Newton critical-point entries
-fail on the first increment.  Baseline trust region with AMG accepts seven
-increments and fails on increment 8; subspace trust region with AMG accepts 11
-and fails on increment 12.  Every stored response state has a corresponding
+fail on the first increment. At the old 10000 cap, baseline trust region with
+AMG accepted 12 increments and subspace trust region with AMG accepted 14. At
+40000, they complete with maximum per-increment nonlinear counts of 14716 and
+12012, respectively. Every stored response state has a corresponding
 visualization cycle.
 
 The table reports challenge-suite max-rank solver wall time when the executable
@@ -63,23 +67,22 @@ those entries do not return normally.
     \toprule
     Solver & Preconditioner & Outcome & Iterations; time \\
     \midrule
-    Newton-LS & Hypre AMG & $0/16$ steps, timeout & ---; $1800\,\mathrm{s}$ \\
-    Newton-LS & Hypre Jacobi & $0/16$ steps, timeout & ---; $1801\,\mathrm{s}$ \\
-    Newton-CP & Hypre AMG & step-1 failure & 1; $0.188\,\mathrm{s}$ \\
-    Newton-CP & Hypre Jacobi & step-1 failure & 0; $0.622\,\mathrm{s}$ \\
-    Trust-region & Hypre AMG & $7/16$ steps, step-8 failure & 68796; $331.639\,\mathrm{s}$ \\
-    Trust-region & Hypre Jacobi & $16/16$ steps & 2493; $6.728\,\mathrm{s}$ \\
-    Trust-region + subspace & Hypre AMG & $11/16$ steps, step-12 failure & 90723; $453.019\,\mathrm{s}$ \\
-    Trust-region + subspace & Hypre Jacobi & $16/16$ steps & 2023; $5.924\,\mathrm{s}$ \\
+    Newton-LS & Hypre AMG & $0/16$ steps, timeout & ---; $1801\,\mathrm{s}$ \\
+    Newton-LS & Hypre Jacobi & $0/16$ steps, timeout & ---; $1800\,\mathrm{s}$ \\
+    Newton-CP & Hypre AMG & step-1 failure & 1; $0.183\,\mathrm{s}$ \\
+    Newton-CP & Hypre Jacobi & step-1 failure & 0; $0.618\,\mathrm{s}$ \\
+    Trust-region & Hypre AMG & $16/16$ steps & 132699; $1456.674\,\mathrm{s}$ \\
+    Trust-region & Hypre Jacobi & $16/16$ steps & 2442; $6.468\,\mathrm{s}$ \\
+    Trust-region + subspace & Hypre AMG & $16/16$ steps & 100024; $564.050\,\mathrm{s}$ \\
+    Trust-region + subspace & Hypre Jacobi & $16/16$ steps & 2099; $5.899\,\mathrm{s}$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Among the completed entries, subspace refinement reduces the reported
-nonlinear work by 18.9\% and wall time by 12.0\% relative to baseline trust
-region.  With AMG it advances four increments farther but still reaches the
-nonlinear cap, so the added progress costs more time and does not change the
-final outcome.  These are single-run measurements on a strongly
+At the larger AMG cap, subspace refinement reduces reported nonlinear work by
+24.6\% and wall time by 61.3\% relative to baseline trust region. The Jacobi
+rows retain the original 10000-cap measurements. These are single-run
+measurements on a strongly
 preconditioner-sensitive problem and do not establish a general performance
 advantage.
 
@@ -92,12 +95,9 @@ advantage.
 \section*{Response Validation}
 
 All accepted trust-region histories coincide at the precision written to CSV.
-At the last state shared by all four trust-region entries, time is 0.4375, the
-signed load-patch drive displacement is $-0.0150369$, and the applied load
-resultant is 0.0115972.  The two completed Jacobi histories remain coincident
-through time one and finish at signed drive displacement $-0.0210414$ and load
-resultant 0.0265078.  Both completed entries contain 17 finite response states
-and 17 field cycles.
+All four now reach time one and finish at signed drive displacement
+$-0.0210414$ and load resultant 0.0265078, with 17 finite response states and
+17 field cycles each.
 
 The common partial path shows that the AMG failures do not precede a distinct
 accepted branch in the recorded response quantity.  The comparison instead
@@ -126,36 +126,32 @@ with Jacobi---then reports a nonfinite initial residual without producing an
 accepted state.  The outer jobs are retained as timeouts because they do not
 terminate before the imposed limit.
 
-The AMG trust-region failures have a different signature.  No indefinite-CG
-diagnostic or inner CG cap is reported, but the nonlinear solve reaches 10000
-iterations with residual $1.85\times10^{-11}$ on increment 8 for baseline
-trust region and $3.04\times10^{-11}$ on increment 12 for subspace trust
-region.  Both residuals remain above the requested $10^{-11}$ tolerance.  With
-Jacobi, the largest per-increment nonlinear counts are 308 and 286,
-respectively, and both schedules complete.
+The old AMG trust-region failures had a different signature. No indefinite-CG
+diagnostic or inner CG cap was reported; each stopped only because an increment
+reached the 10000 nonlinear limit. Raising that cap to 40000 lets both complete,
+confirming that the old failures were premature cap terminations rather than a
+different accepted branch. With Jacobi, the largest per-increment nonlinear
+counts remain 336 and 295.
 
 \section*{Field Comparison}
 
-The two completed configurations were rendered independently at cycles 0, 3,
-6, 10, 13, and 16 using ParaView 5.13.3, displacement-magnitude coloring, and
-displacement warp factor 10.  Their rendered sequences are visually
-indistinguishable, consistent with their coincident stored response histories.
-The figure shows the baseline trust-region/Jacobi sequence; the compact archive
-retains both sets of matched renders.
+The targeted September completion run contains all 17 field states.  The compact
+figure retains the initial and final states of subspace trust region with Hypre
+AMG.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.92\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_sphere_into_corner_trust_region_jacobi.png}
-  \caption{Accepted-state sequence for baseline trust region with Hypre Jacobi at cycles 0, 3, 6, 10, 13, and 16.  Colors show displacement magnitude on the configuration warped by ten times displacement.}
+  \includegraphics[width=0.92\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/sphere_into_corner_initial_final.png}
+  \caption{Initial and final September sphere configurations for subspace trust region with Hypre AMG. Colors show displacement magnitude on the physical configuration without displacement amplification.}
 \end{figure}
 
 \section*{Interpretation and Limitations}
 
-This matrix supports a narrow robustness conclusion: under the common solver
-contract, the two optimization-based trust-region configurations with Jacobi
-are the only entries that complete the singular-to-constrained loading path.
-It also shows that preconditioner choice can dominate the result; trust-region
-globalization does not make the AMG configurations complete.
+This matrix supports a narrow robustness conclusion: all four trust-region
+configurations complete the singular-to-constrained loading path when the AMG
+cases receive a sufficiently large nonlinear budget. Preconditioner choice
+still dominates cost: AMG requires roughly $10^5$ accumulated nonlinear
+iterations here, whereas the Jacobi runs need only a few thousand.
 
 The case does not certify stability of the accepted states, validate a contact
 formulation, or establish penetration accuracy.  It has no analytic reference,

@@ -15,7 +15,7 @@ void runCircInCirc()
   constexpr int dim = 2;
   const int circle_num_steps = 50;
 
-  SLIC_INFO_ROOT("paper_circ_in_circ_fast uses four quadrature points per coordinate direction");
+  SLIC_INFO_ROOT("paper_circ_in_circ_fast uses the compiled Functional quadrature rule");
 
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "paper_circ_in_circ_fast");

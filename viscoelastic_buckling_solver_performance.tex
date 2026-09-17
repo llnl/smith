@@ -7,16 +7,14 @@
 \begin{document}
 \sloppy
 
-\section*{Viscoelastic Buckling and Relaxation Solver Performance}
+\section*{Viscoelastic Buckling and Recovery Solver Performance}
 
 This report summarizes the unified current-code, output-enabled viscoelastic
-response matrix run on \texttt{rzwhippet65} on 2026-08-17.  All eight entries and
+response matrix run on \texttt{rzwhippet56} on 2026-09-17.  All eight entries and
 their field output are contained in
-\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_viscoelastic_response_20260817_162546}.
-Commands, logs, response histories, executable and source identity, status,
-validation, representative renders, plotting commands, and figures are retained
-under
-\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/viscoelastic_buckling/solver_response_20260817_162546}.
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/viscoelastic_buckling/peak_0p6_full}.
+The compact provenance archive is
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/viscoelastic_buckling/archive/solver_response_20260917_083605}.
 
 \section*{Configuration}
 
@@ -33,10 +31,10 @@ $G_g$ and $\nu_g$ is $K=38666.7$.  Thermal expansion is disabled;
 $\theta_r=\theta_{sf}=300$, $C_1=0$, and $C_2=50$.
 
 The top patch is loaded downward with a force-controlled sawtooth history.  The
-nominal force rises toward 0.17 for $0\leq t<6$ and is removed at $t=6$.
-Sixty time steps of size 0.4 advance the model to $t=24$, so the largest force at
-an accepted state is 0.158667 at $t=5.6$.  The loaded patch area reported by the
-run is 0.0764072134.  All runs use 16 MPI ranks, explicit cold starts, CG,
+nominal force rises to 0.6 over $0\leq t\leq6$ and is removed on the next
+increment.  Eighty time steps of size 0.3 advance the model to $t=24$, so an
+accepted state records the full force 0.6 at $t=6$.  The loaded patch area
+reported by the run is 0.0764072134.  All runs use 16 MPI ranks, explicit cold starts, CG,
 nonlinear relative and absolute tolerances $10^{-11}$, and linear relative and
 absolute tolerances $10^{-14}$.  Hypre AMG has a 600-iteration cap and Hypre
 Jacobi has a 60000-iteration cap.  Every command explicitly contains
@@ -48,15 +46,15 @@ The eight configurations combine Newton line search, PETSc Newton critical-point
 line search, baseline trust region, and safeguarded trust-region subspace
 globalization with both preconditioners.  All logs identify Smith version
 \texttt{v0.1.0-9d4024ad9}; the executable SHA-256 checksum is
-\texttt{dbc10f71d8cd7aa2a4263002924b3d8648a201bc9cda5f0b7c418ed59839e981}.
+\texttt{7cb85ea4e10dd2dd33924ddf6d7d260744c9df4344c3ac39d9ba438a5ddcbf13}.
 The compact archive also retains the dirty-worktree patch and the runner and
 validator used for this matrix.
 
 \section*{Completion and Timing}
 
-All eight configurations completed all 60 time steps with successful nonlinear
-termination.  Each run contains 61 finite response states, 61 visualization
-cycles, and six shared-scale renders.  Times below are challenge-suite max-rank
+All eight configurations completed all 80 time steps with successful nonlinear
+termination.  Each run contains 81 finite response states and 81 visualization
+cycles.  Times below are challenge-suite max-rank
 wall times and therefore include field output.  The iteration column is the sum
 of the terminal nonlinear iteration index over all time steps.
 
@@ -70,37 +68,36 @@ of the terminal nonlinear iteration index over all time steps.
     \cmidrule(lr){2-3}\cmidrule(l){4-5}
     Solver & Iterations & Time (s) & Iterations & Time (s) \\
     \midrule
-    Newton-LS & 202 & 19.950 & 202 & 31.821 \\
-    Newton-CP & 180 & 22.595 & 180 & 36.372 \\
-    Trust-region & 203 & 15.462 & 203 & 22.954 \\
-    Trust-region + subspace & 203 & 15.942 & 203 & 27.465 \\
+    Newton-LS & 3118 & 417.741 & 3020 & 762.974 \\
+    Newton-CP & 475 & 51.389 & 475 & 97.628 \\
+    Trust-region & 510 & 35.636 & 510 & 64.502 \\
+    Trust-region + subspace & 508 & 37.407 & 506 & 62.805 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Baseline trust region with Hypre AMG is the fastest configuration.  AMG is faster
-than Jacobi for all four nonlinear methods.  The subspace variant has the same
-nonlinear iteration total as baseline trust region but is $3.1\%$ slower with AMG
-and $19.7\%$ slower with Jacobi in this matrix.  Newton-CP uses the fewest
-nonlinear iterations but is not the fastest configuration.  These timings include
-all 61 field writes and therefore compare the full evidence-producing workflow.
+Baseline trust region with Hypre AMG is the fastest configuration.  AMG is
+faster than Jacobi for all four nonlinear methods. Newton-CP uses slightly fewer
+nonlinear iterations than the trust-region methods, while Newton-LS requires
+more than 3000 because the snap increment takes 2467 iterations with AMG and
+2369 with Jacobi. These timings include all 81 field writes and therefore
+compare the full evidence-producing workflow.
 
-\section*{Response and Relaxation Validation}
+\section*{Response and Recovery Validation}
 
-All eight response histories are indistinguishable at plotting resolution.  The
-largest pointwise spread is $1.0\times10^{-9}$ in average top displacement and
-$6.74\times10^{-12}$ in bottom reaction; the prescribed-force histories are
-identical.  At $t=5.6$, every run reaches average top displacement $-0.0198337$,
-applied force 0.158667, and balancing bottom reaction 0.158667.  When the force is
-removed at $t=6$, the cap rebounds to displacement $-0.0090858$ and the globally
-reduced vertical reaction returns to numerical zero.
+All eight response histories are identical in stored displacement and prescribed
+force, with a largest pointwise bottom-reaction spread of
+$6.20\times10^{-12}$. The average top displacement jumps from $-0.0192461$ at
+load 0.21 to $-0.158163$ at load 0.24. At $t=6$, every run reaches average top
+displacement $-0.569260$, applied force 0.6, and balancing bottom reaction 0.6.
+When the force is removed at $t=6.3$, the cap rebounds to displacement
+$-0.440359$ and the globally reduced vertical reaction returns to numerical
+zero.
 
-During the remaining 45 accepted states, the displacement relaxes monotonically
-toward zero.  Every run finishes at average top displacement
-$-1.16112\times10^{-4}$.  Final reactions range from
-$-2.15\times10^{-13}$ to $3.53\times10^{-12}$, consistent with zero at the
-reported precision; the largest reaction magnitude at any unloaded state is
-$6.74\times10^{-12}$.  The reaction is now computed by mapping boundary vector
+During the remaining accepted states, the displacement relaxes monotonically
+toward zero.  Every run finishes at average top displacement $-0.0307083$.
+The largest reaction magnitude at any unloaded state is $6.00\times10^{-12}$.
+The reaction is computed by mapping boundary vector
 degrees of freedom to locally owned true degrees of freedom, summing each owned
 entry once, and applying one global reduction.  The earlier implementation
 summed local vector degrees of freedom directly and reduced that result again at
@@ -110,40 +107,38 @@ valid global support reaction and is superseded by this matrix.
 \begin{figure}[h]
   \centering
   \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/viscoelastic_solver_response.png}
-  \caption{Current matched viscoelastic response.  The dotted line marks load removal at $t=6$; the right panel reports pointwise spread across all eight runs.}
+  \caption{Current matched viscoelastic buckling and recovery response. The
+  displacement jump occurs between loads 0.21 and 0.24; the dotted line marks
+  the force maximum at $t=6$, and unloading begins at $t=6.3$.}
 \end{figure}
 
 \section*{Solver Diagnostics and Interpretation}
 
-No configuration fails or selects a distinct response branch.  The nonlinear
-iteration totals are independent of preconditioner for each nonlinear solver, and
-the baseline and subspace trust-region variants both total 203 iterations.  The
-case therefore does not provide a robustness separation between Newton and
-trust-region methods.  Instead, it demonstrates that approximate energetic
-acceptance reproduces the same loading, unloading, and long-time relaxation path
-as both Newton variants for this path-dependent material, while retaining
-competitive wall time in the baseline trust-region configuration.
+No configuration fails or selects a distinct response branch. The displacement
+histories are identical at stored precision, and representative AMG field states
+agree to within $3\times10^{-13}$ in every displacement component. The case
+therefore demonstrates that approximate energetic acceptance reproduces the
+same buckling, unloading, and recovery path as both Newton variants for this
+path-dependent material. It also exposes a nonlinear-work separation:
+Newton-LS needs more than 3000 iterations, whereas Newton-CP and both
+trust-region methods need approximately 500.
 
-The subspace result is a measured overhead in this case: it leaves the nonlinear
-path and iteration count unchanged while increasing wall time by $3.1\%$ with
-AMG and $19.7\%$ with Jacobi.  It should be treated as a secondary
-case-specific performance result, not evidence of a general regression.
+The baseline and subspace trust-region results remain close in nonlinear work.
+Their small timing differences should be treated as case-specific measurements
+rather than evidence of a general advantage.
 
 \section*{Deformation Comparison}
 
-The compact archive contains shared-camera, shared-warp, and shared-color renders
-at cycles 0, 12, 24, 36, 48, and 60 for every configuration.  These cycles
-correspond to $t=0$, 4.8, 9.6, 14.4, 19.2, and 24.  The selected subspace
-trust-region/AMG and Newton-LS/AMG rows are pixel-identical at all six states.
-The remaining rendered configurations are visually indistinguishable; their small
-pixel differences are consistent with the $10^{-9}$ displacement-level spread.
-The deformation is shown with warp factor 20 and a common displacement-magnitude
-color scale.
+The September 17 full-output matrix contains all 81 field cycles. The comparison
+shows the adjacent pre- and post-snap states together with the initial, peak,
+first unloaded, and final recovered states.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_viscoelastic_solver_comparison.png}
-  \caption{Matched deformation and relaxation sequence for trust region with safeguarded subspace refinement and Newton-LS, both with Hypre AMG.}
+  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/viscoelastic_initial_peak_final.png}
+  \caption{Viscoelastic buckling and recovery for subspace trust region with
+  Hypre AMG, shown at physical deformation scale without displacement
+  amplification. The common color range spans all six states.}
 \end{figure}
 
 \end{document}

@@ -9,14 +9,23 @@
 
 \section*{Problem 05: Concentric-Circle Solver Performance}
 
-This report summarizes the four-by-four-quadrature problem-05 response matrix run
-on \texttt{rzwhippet45} on 2026-08-24.  The paper's
+This report combines the four-by-four-quadrature problem-05 rerun on
+\texttt{rzwhippet78} on 2026-09-16 with two intentionally reused Newton timeout
+rows from 2026-08-24. The paper's
 \texttt{05/circ\_in\_circ} problem is implemented as challenge-suite case
-\texttt{08/circ\_in\_circ}.  The authoritative full-output matrix is
-\path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_circ_in_circ_q4x4_response_20260824_152437}.
-Commands, logs, response histories, representative renders, status, and validation
-tables are archived under
+\texttt{08/circ\_in\_circ}. The six fresh entries are under
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/circ_in_circ}.
+The reused Newton rows remain under
 \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/circ_in_circ/solver_response_20260824_152437}.
+
+\paragraph{September 2026 status.}
+The September run used a dedicated global \texttt{Functional::Q = 4} build with
+executable SHA-256
+\texttt{a9c4a2a6410fb0bdc5973f42b5d2879e1281481c30ea0d058cdba22ef3ce0482}.
+Its six non-Newton outcomes and response endpoints agree with August. The new
+Newton/AMG run was stopped after it reproduced the same indefinite-PCG behavior;
+both August Newton timeout rows are therefore retained rather than spending two
+additional 1200-second allocations.
 
 \section*{Configuration}
 
@@ -40,16 +49,15 @@ allocation.  Both BSR paths are disabled.
 This run required a temporary global source change: line 285 of
 \path{src/smith/numerics/functional/functional.hpp} sets
 \texttt{Functional::Q = 4}.  The build therefore uses four points in each
-coordinate direction for every functional, not a case-local override.  Starting
-from commit \texttt{9d4024ad9a68b0e1276bfd0b8a4e07e608329f22}, apply the archived
+coordinate direction for every functional, not a case-local override. Starting
+from commit \texttt{01df22f064d72470b81e982f120edf2422a62223}, apply the recorded
 \path{source.patch}, change to
 \path{build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release}, run
 \texttt{make -j40}, and then run
-\path{scripts/run_circ_in_circ_response_matrix.sh}.  The archived
-executable has SHA-256
-\texttt{4fc62781951e8441e35ae1ca4eccdc2e2e29d1165eeecbe0e401f555d88cef2e}.
-The archive retains the source state, patch, executable identity, exact commands,
-and postprocessing instructions.
+\path{scripts/run_circ_in_circ_response_matrix.sh}. The dedicated executable
+checksum and complete source state are stored in the September run directory.
+Normal order-dependent quadrature was restored and rebuilt immediately after
+the run.
 
 \section*{Completion and Timing}
 
@@ -69,9 +77,9 @@ and each accepted increment.
     Solver & Hypre AMG & Hypre Jacobi \\
     \midrule
     Newton-LS & $23/50$ steps (timeout, $1201\,\mathrm{s}$) & $23/50$ steps (timeout, $1202\,\mathrm{s}$) \\
-    Newton-CP & $3/50$ steps (failure, $0.671\,\mathrm{s}$) & $3/50$ steps (failure, $1.158\,\mathrm{s}$) \\
-    Trust-region & $50/50$ steps, $18.005\,\mathrm{s}$ & $34/50$ steps (failure, $76.347\,\mathrm{s}$) \\
-    Trust-region + subspace & $50/50$ steps, $20.780\,\mathrm{s}$ & $50/50$ steps, $40.199\,\mathrm{s}$ \\
+    Newton-CP & $3/50$ steps (failure, $9\,\mathrm{s}$) & $3/50$ steps (failure, $9\,\mathrm{s}$) \\
+    Trust-region & $50/50$ steps, $20\,\mathrm{s}$ & $34/50$ steps (failure, $66\,\mathrm{s}$) \\
+    Trust-region + subspace & $50/50$ steps, $23\,\mathrm{s}$ & $50/50$ steps, $40\,\mathrm{s}$ \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -114,7 +122,7 @@ at plotting resolution.
     \centering
     \includegraphics[width=\linewidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/circ_in_circ_solver_response_HypreJacobi.png}
   \end{minipage}
-  \caption{Applied-traction versus average top-displacement histories.  Coincident curves overlay one another.}
+  \caption{Applied-traction versus downward top-displacement magnitude.  Coincident curves overlay one another.}
 \end{figure}
 
 \section*{Solver Diagnostics}
@@ -139,34 +147,25 @@ the matrix.
 
 \section*{Deformation Comparison}
 
-Each row below samples up to six states evenly over that run's accepted history;
-columns therefore represent progress within a row rather than identical load
-levels across rows.  Newton-CP has only four available states, so intermediate
-panels are repeated to retain the common layout.  The AMG and Jacobi comparisons
-show the same accepted deformation path.  Only the completed trust-region rows
-reach the strongly collapsed final configuration.  Colors identify the five
-material regions, mesh edges remain visible, and the deformed geometry uses unit
-displacement warp.
+The compact comparison shows the endpoints of the completed subspace
+trust-region/Jacobi branch.  Colors identify the five material regions and mesh
+edges remain visible. Coordinates use the physical displacement without
+amplification.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_circ_in_circ_solver_comparison_HypreAMG.png}
-  \caption{Accepted-state deformation comparison with Hypre AMG.}
-\end{figure}
-
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/challenge_snapshots/challenge_circ_in_circ_solver_comparison_HypreJacobi.png}
-  \caption{Accepted-state deformation comparison with Hypre Jacobi.}
+  \includegraphics[width=0.9\textwidth]{/usr/workspace/tupek2/dev/buckling_solver_paper/figures/circ_in_circ_initial_final.png}
+  \caption{Initial and final September configurations for subspace trust region with Hypre Jacobi at physical deformation scale.}
 \end{figure}
 
 \section*{Third-Medium Deformation Localization}
 
-A 17-by-17 reference-coordinate sampling of each quadrilateral finds the first
-negative deformation Jacobian on cycle 14 for all three completed branches.  The
-material-attribute-resolved check shows that every such element belongs to one of
-the two highly compliant third-medium regions.  Attributes 1, 3, and 5 are the
-three stiff regions; attributes 2 and 4 are the compliant regions.
+The August matrix was audited with a 17-by-17 reference-coordinate sampling of
+each quadrilateral.  It finds the first negative deformation Jacobian on cycle
+14 for all three completed branches, and every affected element belongs to one
+of the two highly compliant third-medium regions.  Attributes 1, 3, and 5 are
+the three stiff regions; attributes 2 and 4 are the compliant regions.  The
+September fields have not yet been re-audited.
 
 \begin{table}[h]
   \centering
@@ -199,5 +198,11 @@ comparison.  It is not used to claim an accurate stress or deformation field
 inside the third medium, formal contact convergence, or physical admissibility of
 that fictitious material.  The attribute-resolved tables are retained as
 \path{deformation_validity_by_attribute.tsv} with each completed branch.
+
+The manuscript composite uses unit displacement scale and therefore shows the
+physical element geometry.  This visualization is not evidence of quadrature
+convergence. Both the August and September matrices used four points per
+coordinate direction and produced matching response endpoints; no calculation
+above that order has been performed.
 
 \end{document}

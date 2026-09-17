@@ -7,7 +7,7 @@
 
 \title{Buckling Solver Paper Provenance Manifest}
 \author{}
-\date{Reconciled 2026-08-25}
+\date{Reconciled 2026-09-16}
 \newcommand{\sha}[2]{\texttt{#1}\allowbreak\texttt{#2}}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
@@ -18,11 +18,15 @@
 \section*{Purpose and Conventions}
 
 This document records the provenance of the completed evidence for paper cases
-01 through 05.  The machine-readable companion file
+01 through 07.  The machine-readable companion file
 \path{provenance_manifest.tsv} is the canonical manifest.  Each row in that file
 represents one evidence package, so a case may have multiple rows when distinct
 runs support performance, analytic verification, eigenpair analysis, or field
 figures.
+
+All deformation figures referenced below use unit displacement scale, so the
+displayed coordinates are the physical configurations
+$\mathbf{x}=\mathbf{X}+\mathbf{u}$ without visual amplification.
 
 Evidence is resolved in this order: the authoritative run directory, the compact
 archive, the reviewed standalone report, and the manuscript.  A disagreement
@@ -36,29 +40,58 @@ updated.
 Case & Evidence packages & Evidence state & Manuscript state \\
 \midrule
 \endhead
-01 Euler & response; analytic verification & verified & aligned \\
-02 Shallow arch & response and fields & verified & aligned \\
-03 Cylinder crush & response; eigenpairs; fields & qualified & response/eigenpairs aligned \\
-04 Viscoelastic & response and fields & verified & aligned \\
-05 Concentric circle & response, fields, and deformation check & verified with limitation & aligned \\
+01 Euler & September response; August analytic verification & qualified & report updated \\
+02 Shallow arch & September redesigned response & verified & manuscript updated \\
+03 Cylinder crush & September response, fields, and eigenpairs & qualified & manuscript updated \\
+04 Viscoelastic & September response and fields & verified & manuscript updated \\
+05 Concentric circle & Six September rows; two August Newton rows & qualified & report updated \\
+06 Contact arch & September response and fields & verified & manuscript updated \\
+07 Sphere into corner & September response and targeted completion & qualified & manuscript updated \\
 \bottomrule
 \end{longtable}
+
+\section*{September 2026 Evidence Refresh}
+
+The current result root is
+\path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548}.
+Its status log records completion of the normal-quadrature evidence set on
+2026-09-16.  The contact-arch, base sphere, Euler/cylinder response, and
+cylinder-eigenpair runs used executable SHA-256
+\sha{a7da49a03055b5d0dc692a896869740f}{d4fccd18546dfb3cf2078f7b0e784767}.
+The redesigned shallow arch and the targeted sphere completion used SHA-256
+\sha{dcaaa6a54f0306affafd7911a0075110}{bb93d147132f490bfce635b66bceefe6}.
+The final viscoelastic rerun used executable SHA-256
+\sha{7cb85ea4e10dd2dd33924ddf6d7d2607}{44c9df4344c3ac39d9ba438a5ddcbf13}
+with 80 steps of size 0.3 and peak force 0.6 at time 6. The first executable
+derives from source commit \texttt{937376a74e1da472da630fd417987a4a057dc6c8};
+the second and final viscoelastic executables derive from
+\texttt{01df22f064d72470b81e982f120edf2422a62223}. Every run records its
+working-tree changes.
+
+The principal result is robust across the refresh: every solver
+retains its prior completion or failure class.  The rounded trust-region
+settings make the strongest quantitative difference in the cylinder and sphere
+cases.  The cylinder trust-region variants select lower-reaction buckled final
+branches, and the two sphere AMG trust-region variants complete after their
+nonlinear cap is increased from 10000 to 40000.  The cylinder tangent classifications
+remain four resolved negative Newton/PETSc states and four tolerance-neutral
+trust-region states.
 
 \section*{Case 01: Euler Buckling}
 
 \paragraph{Matched response matrix.}
 \begin{description}
-  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_euler_cylinder_response_20260813_110039/euler}
-  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/euler/solver_response_20260813_110039}
-  \item[Executable identity] Smith \texttt{v0.1.0-9d4024ad9}; the compact archive does not retain an executable checksum.
-  \item[Evidence index] \path{status.tsv}; the compact archive does not contain \path{validation.tsv}.
+  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/euler_cylinder/euler}
+  \item[Executable identity] SHA-256 \sha{a7da49a03055b5d0dc692a896869740f}{d4fccd18546dfb3cf2078f7b0e784767}.
+  \item[Evidence index] The parent \path{euler_cylinder/status.tsv}, per-entry commands, logs, response histories, and field output.  There is no standalone validation table or self-contained compact archive.
   \item[Reviewed report] \path{euler_beam_solver_performance.tex}
-  \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:euler}, \texttt{tab:euler\_timing}, \texttt{fig:euler\_solver\_response\_amg}, and \texttt{fig:euler\_solver\_response\_jacobi}.
-  \item[Figures] \path{figures/euler_solver_response_HypreAMG.png}, \path{figures/euler_solver_response_HypreJacobi.png}, and the two matched solver-comparison composites under \path{figures/challenge_snapshots}.
+  \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:euler}, \texttt{tab:euler\_timing}, \texttt{fig:euler\_response}, and \texttt{fig:euler\_initial\_final}.
+  \item[Figures] \path{figures/euler_force_displacement.png} and \path{figures/euler_initial_final.png}.
 \end{description}
 
 \paragraph{Refined analytic verification.}
-The traced reproduction completed successfully on 2026-08-17:
+The September rerun was intentionally not repeated to completion.  The traced
+2026-08-17 reproduction remains authoritative:
 \begin{description}
   \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_euler_refined_verification_20260817_141623}
   \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/euler/refined_verification_20260817_141623}
@@ -126,35 +159,34 @@ a mesh-convergence criterion.
 \section*{Case 02: Shallow-Arch Snap-Through}
 
 \begin{description}
-  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_shallow_arch_response_20260817_171856}
-  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/shallow_arch/solver_response_20260817_171856}
-  \item[Executable identity] Smith \texttt{v0.1.0-9d4024ad9}; SHA-256 \sha{f60ef283d69d1979fc9a515bb981b80b7}{f82ec11661086aeeedccfc9dd4c151d}.
-  \item[Evidence indexes] \path{status.tsv}, \path{validation.tsv}, \path{parameters.tsv}, \path{source_state.txt}, and \path{source.patch} in the compact archive.
-  \item[Run contract] All eight entries use 16 ranks, explicit cold starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, the documented AMG or Jacobi iteration cap, both BSR paths disabled, and field output at all 21 states.
+  \item[Authoritative runs] Trust region: \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/shallow_arch/precompression_0p02_full}; Newton: \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/shallow_arch/newton_matrix_20260916_162548}.
+  \item[Compact archives] Trust region: \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/shallow_arch/precompression_0p02_archive/solver_response_20260916_130807}; Newton: \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/shallow_arch/newton_archives/solver_response_20260916_162548}.
+  \item[Executable identity] SHA-256 \sha{dcaaa6a54f0306affafd7911a0075110}{bb93d147132f490bfce635b66bceefe6}.
+  \item[Evidence indexes] Each compact archive contains \path{status.tsv}, \path{validation.tsv}, \path{parameters.tsv}, \path{source_state.txt}, and \path{source.patch}; the Newton archive also contains \path{SHA256SUMS}.
+  \item[Run contract] Eight entries use 16 ranks, warm starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, and 10 precompression plus 200 force increments.  Both matrices store response histories without field output.
   \item[Reviewed report] \path{shallow_arch_solver_performance.tex}
-  \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:shallow\_arch}, \texttt{tab:shallow\_arch\_timing}, \texttt{fig:shallow\_arch\_timing}, \texttt{fig:shallow\_arch\_response\_amg}, \texttt{fig:shallow\_arch\_response\_jacobi}, and the associated solver-comparison figures.
-  \item[Figures] Timing, AMG response, Jacobi response, and both solver-comparison composites listed in \path{provenance_manifest.tsv}.
-  \item[Validation] All eight entries completed all 20 increments with 21 finite response states, 21 matched field cycles, exact stored force balance, and identical response histories.  The first accepted increment already crosses arch inversion, so the matrix does not resolve the critical load.
+  \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:shallow\_arch}, \texttt{tab:shallow\_arch\_timing}, and \texttt{fig:shallow\_arch\_response}.
+  \item[Figures] \path{figures/shallow_arch_solver_response_HypreAMG.png} and the equivalent Jacobi plot.
+  \item[Validation] All four trust-region entries and Newton-LS/Jacobi completed all 210 increments with coincident displacement and force histories. Newton-LS/AMG and both Newton-CP entries failed cleanly at step 20 with finite partial histories ending at the common pre-jump state. The force-controlled jump is resolved between consecutive completed states at applied forces 0.00819464 and 0.00910515.
 \end{description}
 
 \section*{Case 03: Vertically Compressed Thin Cylinder}
 
 \paragraph{Matched response matrix.}
 \begin{description}
-  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_euler_cylinder_response_20260813_110039/cylinder}
-  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/cylinder_crush/solver_response_20260813_110039}
-  \item[Executable identity] Smith \texttt{v0.1.0-9d4024ad9}; the compact archive does not retain an executable checksum.
-  \item[Evidence index] \path{status.tsv}; the compact archive does not contain \path{validation.tsv}.
-  \item[Figures] \path{figures/cylinder_solver_response_HypreAMG.png} and \path{figures/cylinder_solver_response_HypreJacobi.png}.
+  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/euler_cylinder/cylinder}
+  \item[Executable identity] SHA-256 \sha{a7da49a03055b5d0dc692a896869740f}{d4fccd18546dfb3cf2078f7b0e784767}.
+  \item[Evidence index] The parent \path{euler_cylinder/status.tsv}, per-entry commands, logs, response histories, and field output.  There is no standalone validation table or self-contained compact archive.
+  \item[Figures] \path{figures/cylinder_solver_response_HypreAMG.png}, \path{figures/cylinder_solver_response_HypreJacobi.png}, and \path{figures/cylinder_initial_final.png}.
 \end{description}
 
 \paragraph{Accepted-state eigenpair matrix.}
 \begin{description}
-  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_cylinder_eigenpair_20260814_164100/cylinder}
-  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/cylinder_crush/lowest_eigenpair_20260814_164100}
-  \item[Executable identity] Smith \texttt{v0.1.0-9d4024ad9}; the compact archive does not retain an executable checksum.
-  \item[Evidence indexes] \path{status.tsv} and \path{summary.tsv} in the compact archive.
-  \item[Figure] \path{figures/cylinder_lowest_eigenmodes.png}
+  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/cylinder_eigenpair/cylinder}
+  \item[Result root] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/cylinder_eigenpair}
+  \item[Executable identity] SHA-256 \sha{a7da49a03055b5d0dc692a896869740f}{d4fccd18546dfb3cf2078f7b0e784767}.
+  \item[Evidence indexes] \path{status.tsv}, \path{summary.tsv}, per-entry commands, logs, eigenpair CSV files, and eigenvector field output.
+  \item[Figure] The manuscript summarizes the spectrum numerically and uses \path{figures/cylinder_initial_final.png} to show the branch distinction.
 \end{description}
 
 The reviewed source for both packages is
@@ -165,63 +197,79 @@ figures.  The stability wording must remain qualified: no negative mode was
 resolved for the trust-region states at the stated tolerance, while neutral
 modes prevent a strict positive-definiteness claim.
 
-The deformation composites remain unresolved.  They reuse older field output
-without preserved per-entry commands.  Their BSR-off provenance must be
-recovered, or the matched field-output matrix must be regenerated, before the
-composites are treated as fully traced evidence.
+The September response matrix contains matched field output and preserved
+per-entry commands.  The displayed initial and final configurations were rendered
+from that matrix.
 
-\section*{Case 04: Viscoelastic Buckling and Relaxation}
+\section*{Case 04: Viscoelastic Buckling and Recovery}
 
 \begin{description}
-  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_viscoelastic_response_20260817_162546}
-  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/viscoelastic_buckling/solver_response_20260817_162546}
-  \item[Executable identity] Smith \texttt{v0.1.0-9d4024ad9}; SHA-256 \sha{dbc10f71d8cd7aa2a4263002924b3d864}{8a201bc9cda5f0b7c418ed59839e981}.
+  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/viscoelastic_buckling/peak_0p6_full}
+  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/viscoelastic_buckling/archive/solver_response_20260917_083605}
+  \item[Executable identity] SHA-256 \sha{7cb85ea4e10dd2dd33924ddf6d7d2607}{44c9df4344c3ac39d9ba438a5ddcbf13}.
   \item[Evidence indexes] \path{status.tsv}, \path{validation.tsv}, \path{parameters.tsv}, \path{source_state.txt}, and \path{source.patch} in the compact archive.
-  \item[Run contract] All eight entries use 16 ranks, explicit cold starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, the documented AMG or Jacobi iteration cap, both BSR paths disabled, and field output at all 61 states.
+  \item[Run contract] All eight entries use 16 ranks, explicit cold starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, the documented AMG or Jacobi iteration cap, both BSR paths disabled, and field output at all 81 states. Eighty steps of size 0.3 include the full applied force of 0.6 at time 6 and the unloaded state at time 6.3.
   \item[Reviewed report] \path{viscoelastic_buckling_solver_performance.tex}
-  \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:viscoelastic}, \texttt{tab:viscoelastic\_timing}, \texttt{fig:viscoelastic\_response}, and \texttt{fig:viscoelastic\_solver\_comparison}.
-  \item[Figures] \path{figures/viscoelastic_solver_response.png} and \path{figures/challenge_snapshots/challenge_viscoelastic_solver_comparison.png}.
-  \item[Reaction audit] The current helper maps boundary vector degrees of freedom to locally owned true degrees of freedom, sums each owned entry once, and performs one global reduction.  This replaces the invalid earlier local-vector sum and second call-site reduction.  Loaded force balance is exact at stored precision, and the largest unloaded reaction magnitude is $6.74\times10^{-12}$.
+  \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:viscoelastic}, \texttt{tab:viscoelastic\_timing}, \texttt{fig:viscoelastic\_response}, and \texttt{fig:viscoelastic\_initial\_peak\_final}.
+  \item[Figures] \path{figures/viscoelastic_solver_response.png} and \path{figures/viscoelastic_initial_peak_final.png}.
+  \item[Reaction audit] The current helper maps boundary vector degrees of freedom to locally owned true degrees of freedom, sums each owned entry once, and performs one global reduction. This replaces the invalid earlier local-vector sum and second call-site reduction. Loaded force balance is exact at stored precision, and the largest unloaded reaction magnitude is $6.00\times10^{-12}$.
+  \item[Field figure] The response and six-state deformation figures use the September 17 peak-0.6 matrix.
 \end{description}
 
 \section*{Case 05: Concentric-Circle Material-Contrast Buckling}
 
 \begin{description}
   \item[Case mapping] Paper case \texttt{05/circ\_in\_circ} is challenge-suite case \texttt{08/circ\_in\_circ}.
-  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_circ_in_circ_q4x4_response_20260824_152437}
-  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/circ_in_circ/solver_response_20260824_152437}
-  \item[Executable identity] Smith \texttt{v0.1.0-9d4024ad9}; SHA-256 \sha{4fc62781951e8441e35ae1ca4eccdc2e}{2e29d1165eeecbe0e401f555d88cef2e}.
-  \item[Quadrature provenance] The executable globally hard-codes \texttt{Functional::Q = 4}, giving four points per coordinate direction and 16 points per quadrilateral.  The compact archive retains the source commit, complete tracked patch, dirty-tree status, build command, launch script, parameters, and executable checksum.  This executable is reserved for this case-05 matrix.
-  \item[Run contract] All eight entries use eight ranks, cold starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, the documented AMG or Jacobi iteration cap, both BSR paths disabled, and field output for the initial state and every accepted increment.
-  \item[Validated outcomes] Baseline trust region/AMG and both safeguarded-subspace trust-region entries complete 50 increments.  Both PETSc critical-point entries fail at increment 4, baseline trust region/Jacobi fails at increment 35, and both Newton line-search entries time out after 23 accepted increments.  Every entry has one field cycle per response state and all required fields.
-  \item[Evidence indexes] \path{status.tsv}, \path{validation.tsv}, \path{parameters.tsv}, \path{source_state.txt}, \path{source.patch}, per-entry \path{deformation_validity.tsv} and \path{deformation_validity_by_attribute.tsv}, and \path{archive_manifest.sha256} in the compact archive.
+  \item[September run] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/circ_in_circ}
+  \item[Reused Newton run] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/circ_in_circ/solver_response_20260824_152437}
+  \item[Executable identity] The six fresh rows use the dedicated four-by-four executable with SHA-256 \sha{a9c4a2a6410fb0bdc5973f42b5d2879}{e1281481c30ea0d058cdba22ef3ce0482}.  The two reused Newton rows use the August executable recorded in their compact archive.
+  \item[Quadrature provenance] The September executable globally sets \texttt{Functional::Q = 4}, giving four points per coordinate direction and 16 points per quadrilateral.  Its source state, patch, runner, parameters, and executable identity are stored with the run.  Normal order-dependent quadrature was restored and rebuilt afterward.
+  \item[Run contract] The six fresh non-Newton entries use eight ranks, cold starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, the documented AMG or Jacobi iteration cap, both BSR paths disabled, and field output for the initial state and every accepted increment.  The two Newton line-search rows retain the equivalent August contract and 1200-second allocation.
+  \item[Validated outcomes] Baseline trust region/AMG and both safeguarded-subspace trust-region entries complete 50 increments.  Both fresh PETSc critical-point entries fail at increment 4, and fresh baseline trust region/Jacobi fails at increment 35.  A new Newton/AMG trace was stopped after reproducing the known indefinite-PCG behavior; it is retained as non-evidence.  The authoritative August Newton/AMG and Newton/Jacobi rows both time out after 23 accepted increments.  Thus three of eight configurations complete, unchanged from August.
+  \item[Evidence indexes] The September \path{status.tsv} and \path{validation.tsv} contain the six fresh rows; \path{combined_status.tsv} adds the two explicitly attributed August Newton rows.  The September directory also stores \path{parameters.tsv}, \path{source_state.txt}, \path{source.patch}, per-entry commands and logs, and \path{summary.md}.  The August compact archive retains the Newton validation and deformation-validity evidence.
   \item[Reviewed report] \path{circ_in_circ_solver_performance.tex}
   \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:circ\_in\_circ}, \texttt{tab:circ\_in\_circ\_timing}, and \texttt{fig:circ\_in\_circ\_snapshots}.
-  \item[Figures] Current timing, AMG response, Jacobi response, AMG solver-comparison, and Jacobi solver-comparison PNGs are stored under \path{/usr/workspace/tupek2/dev/buckling_solver_paper/figures}.  Selected unit-warp, edge-visible cycles 13, 14, and 50 for each completed branch are retained in the compact archive.  The manuscript uses the current response and Jacobi comparison figures.
-  \item[Qualification] All completed branches first show negative sampled $\det(F)$ at cycle 14.  The attribute-resolved check localizes every affected element to compliant third-medium attributes 2 and 4: each completed branch ends with 85 inverted elements in attribute 2 and three in attribute 4, with none in stiff attributes 1, 3, and 5.  Preserve the run as contact-like load-transfer and solver-robustness evidence, but do not claim accurate third-medium fields, formal contact convergence, or physical admissibility of the fictitious material.
+  \item[Figures] Current timing and response PNGs plus \path{figures/circ_in_circ_initial_final.png} are stored under the paper figure directory.
+  \item[Qualification] The fresh September response endpoints agree with August.  The August attribute-resolved check localizes all nonpositive sampled $\det(F)$ values to compliant third-medium attributes 2 and 4.  The September calculation uses the same four-point-per-direction rule and reproduces the August response, but no higher-order quadrature-convergence study was performed. Preserve the case as contact-like load-transfer and solver-robustness evidence, but do not claim accurate third-medium fields, formal contact convergence, or physical admissibility of the fictitious material.
 \end{description}
 
 \section*{Case 06: Contact-Driven Arch Compression}
 
 \begin{description}
-  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/smith_cz/smith_fast_solver/build-rzwhippet-toss_4_x86_64_ib-llvm@19.1.3-release/paper_contact_arch_response_20260819_124814}
-  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/contact_arch/solver_response_20260819_124814}
-  \item[Executable identity] Smith \texttt{v0.1.0-9d4024ad9}; SHA-256 \sha{f60ef283d69d1979fc9a515bb981b80b}{7f82ec11661086aeeedccfc9dd4c151d}.
-  \item[Evidence indexes] \path{status.tsv}, \path{validation.tsv}, \path{parameters.tsv}, \path{source_state.txt}, and \path{archive_manifest.sha256} in the compact archive.
+  \item[Authoritative run] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/contact_arch/full}
+  \item[Compact archive] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/contact_arch/archive/solver_response_20260915_102102}
+  \item[Executable identity] SHA-256 \sha{a7da49a03055b5d0dc692a896869740f}{d4fccd18546dfb3cf2078f7b0e784767}.
+  \item[Evidence indexes] \path{status.tsv}, \path{validation.tsv}, \path{parameters.tsv}, \path{source_state.txt}, and \path{source.patch} in the compact archive.
   \item[Run contract] All eight entries use eight ranks, cold starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, the documented AMG or Jacobi iteration cap, both BSR paths disabled, and field output for the initial state and every accepted increment.
   \item[Validated outcomes] Baseline and safeguarded-subspace trust region with Hypre AMG complete 50 increments with 51 paired response states and field cycles.  The other six entries preserve finite partial histories and nonlinear-failure records.  Every stored cycle contains eight VTU pieces and all required displacement and reaction fields.
   \item[Reviewed report] \path{contact_arch_solver_performance.tex}
   \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:contact\_arch}, \texttt{tab:contact\_arch\_timing}, \texttt{fig:contact\_arch\_solver\_response}, and \texttt{fig:contact\_arch\_snapshots\_grid}.
-  \item[Figures] Timing, AMG response, Jacobi response, and completed baseline trust-region/AMG accepted states listed in \path{provenance_manifest.tsv}.
+  \item[Figures] Timing and response plots plus \path{figures/contact_arch_initial_final.png} use the September matrix.
   \item[Qualification] The case is robustness and conditioning evidence only.  It has no accepted-state stability analysis, contact-gap study, penalty sensitivity study, or independently validated contact-accuracy quantity.
+\end{description}
+
+\section*{Case 07: Sphere Into a Corner}
+
+\begin{description}
+  \item[Authoritative runs] \path{/usr/workspace/tupek2/dev/buckling_solver_paper/results/model_selection_rerun_20260915_095548/sphere_into_corner} with the AMG trust-region rows replaced by \path{sphere_into_corner_cap_40000}.
+  \item[Executable identity] SHA-256 \sha{a7da49a03055b5d0dc692a896869740f}{d4fccd18546dfb3cf2078f7b0e784767}.
+  \item[Evidence indexes] \path{status.tsv}, \path{validation.tsv}, \path{effective_settings.txt}, \path{executable.txt}, and per-entry commands, logs, response histories, and field output.  There is no separate compact archive.
+  \item[Run contract] All eight entries use eight ranks, explicit cold starts, CG, nonlinear tolerance $10^{-11}$, linear tolerance $10^{-14}$, the documented AMG or Jacobi iteration cap, both BSR paths disabled, and field output for every accepted state.
+  \item[Validated outcomes] All four trust-region entries complete 16 increments.  The two AMG rows use a 40000 nonlinear cap; the Jacobi rows use 10000.  Both Newton critical-point entries fail on the first increment, and both Newton line-search entries time out without an accepted increment.
+  \item[Reviewed report] \path{sphere_into_corner_solver_performance.tex}
+  \item[Manuscript] \path{sections/results.tex}, labels \texttt{sec:sphere\_corner}, \texttt{tab:sphere\_corner\_timing}, \texttt{fig:sphere\_corner\_response}, and \texttt{fig:sphere\_corner\_snapshots}.
+  \item[Figures] The timing and response figures combine the base and targeted completion runs.  \path{figures/sphere_into_corner_initial_final.png} uses the completed September subspace trust-region/AMG fields.
+  \item[Qualification] The case is robustness and conditioning evidence only.  It has no accepted-state eigenanalysis, contact-gap study, load-step study, penalty sensitivity study, or independently validated contact-accuracy quantity.
 \end{description}
 
 \section*{Open Provenance Work}
 
 \begin{enumerate}
-  \item Preserve the traced refined Euler run and use its archived CSV and regenerated figure for the analytic comparison; the older untraced source need not be recovered for the paper claim.
-  \item Add executable identity and validation summaries to the Euler and cylinder response archives where recoverable.
-  \item Recover the cylinder deformation-field commands or regenerate matched field output.
+  \item If stronger claims about the compliant third-medium fields are needed, perform a dedicated quadrature-convergence study above four points per coordinate direction.  The six fresh response rows and two explicitly reused August Newton rows are otherwise final for the present solver comparison.
+  \item Retain the August refined-Euler verification selected for reuse; no completed September replacement exists, but none is required for the current paper update.
+  \item Add standalone validation tables and self-contained compact source/executable archives for the September Euler and cylinder response matrix.
+  \item Package the September cylinder eigenpair and sphere matrices as compact provenance archives comparable to the older evidence packages.
+  \item Generate a current shallow-arch initial/final field figure if deformation output is added for the redesigned model; the accepted response matrix intentionally omitted fields.
 \end{enumerate}
 
 \end{document}

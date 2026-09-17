@@ -15,7 +15,7 @@ void runViscoelasticBuckling()
 {
   constexpr int order = 2;
   constexpr int dim = 3;
-  constexpr double load = 0.17;
+  constexpr double load = 0.6;
   constexpr double max_time = 24.0;
   constexpr double dt = 0.3;
   constexpr int num_time_steps = static_cast<int>(max_time / dt);

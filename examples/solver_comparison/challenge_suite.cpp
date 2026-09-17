@@ -102,6 +102,10 @@ double euler_selector_traction = -1.0e-10;
 double euler_refined_start_time = -1.0;
 double euler_refined_start_traction = 0.00225;
 double euler_refined_start_force = -1.0;
+double shallow_arch_precompression = 0.02;
+int shallow_arch_precompression_steps = 10;
+int shallow_arch_load_steps = 200;
+double shallow_arch_load_magnitude = 0.015;
 double cg_model_energy_stagnation_reltol = 0.0010638500842686796;
 double cg_forcing_rel = 1.3e-5;
 double cg_cap_gamma = 0.7638340304667752;
@@ -116,6 +120,7 @@ double nonlinear_tol = 1.0e-7;
 double linear_tol = 0.8e-7;
 double eigenvalue_tol = 1.0e-8;
 int eigenvalue_max_iterations = 1000;
+int eigenvalue_count = 1;
 // Performance testing convention: run challenge problems with --mesh-scale=0.5.
 double mesh_scale = 1.0;
 std::vector<std::string> command_line_warnings;
@@ -162,11 +167,18 @@ std::string reproduceCommand(const std::string& name)
      << boolOption(write_output, "--paraview", "--no-paraview") << " "
      << boolOption(compute_final_state_eigenpair, "--final-state-eigenpair", "--no-final-state-eigenpair") << " "
      << boolOption(write_final_state_eigenvector, "--write-eigenvector", "--no-write-eigenvector")
-     << " --eigenvalue-tol=" << eigenvalue_tol << " --eigenvalue-max-iterations=" << eigenvalue_max_iterations;
+     << " --eigenvalue-tol=" << eigenvalue_tol << " --eigenvalue-max-iterations=" << eigenvalue_max_iterations
+     << " --eigenvalue-count=" << eigenvalue_count;
   if (warm_start_option == WarmStartOption::Enabled) {
     os << " --use-warm-start";
   } else if (warm_start_option == WarmStartOption::Disabled) {
     os << " --no-warm-start";
+  }
+  if (name.starts_with("02")) {
+    os << " --shallow-arch-precompression=" << shallow_arch_precompression
+       << " --shallow-arch-precompression-steps=" << shallow_arch_precompression_steps
+       << " --shallow-arch-load-steps=" << shallow_arch_load_steps
+       << " --shallow-arch-load-magnitude=" << shallow_arch_load_magnitude;
   }
   return os.str();
 }
@@ -599,6 +611,15 @@ void parseCommandLine(int& argc, char** argv)
       euler_refined_start_traction = std::stod(arg.substr(std::string("--euler-refined-start-traction=").size()));
     } else if (arg.rfind("--euler-refined-start-force=", 0) == 0) {
       euler_refined_start_force = std::stod(arg.substr(std::string("--euler-refined-start-force=").size()));
+    } else if (arg.rfind("--shallow-arch-precompression=", 0) == 0) {
+      shallow_arch_precompression = std::stod(arg.substr(std::string("--shallow-arch-precompression=").size()));
+    } else if (arg.rfind("--shallow-arch-precompression-steps=", 0) == 0) {
+      shallow_arch_precompression_steps =
+          std::stoi(arg.substr(std::string("--shallow-arch-precompression-steps=").size()));
+    } else if (arg.rfind("--shallow-arch-load-steps=", 0) == 0) {
+      shallow_arch_load_steps = std::stoi(arg.substr(std::string("--shallow-arch-load-steps=").size()));
+    } else if (arg.rfind("--shallow-arch-load-magnitude=", 0) == 0) {
+      shallow_arch_load_magnitude = std::stod(arg.substr(std::string("--shallow-arch-load-magnitude=").size()));
     } else if (arg == "--use-bsr-spmv") {
       use_bsr_spmv_requested = true;
       use_bsr_spmv = true;
@@ -627,6 +648,8 @@ void parseCommandLine(int& argc, char** argv)
       eigenvalue_tol = std::stod(arg.substr(std::string("--eigenvalue-tol=").size()));
     } else if (arg.rfind("--eigenvalue-max-iterations=", 0) == 0) {
       eigenvalue_max_iterations = std::stoi(arg.substr(std::string("--eigenvalue-max-iterations=").size()));
+    } else if (arg.rfind("--eigenvalue-count=", 0) == 0) {
+      eigenvalue_count = std::stoi(arg.substr(std::string("--eigenvalue-count=").size()));
     } else if (arg == "--timings" || arg == "--timing-summary") {
       timing_summary = true;
       timing_summary_set = true;
@@ -644,6 +667,19 @@ void parseCommandLine(int& argc, char** argv)
     }
   }
   argc = write_arg;
+
+  if (shallow_arch_precompression < 0.0) {
+    throw std::runtime_error("--shallow-arch-precompression must be nonnegative");
+  }
+  if (shallow_arch_precompression_steps <= 0 || shallow_arch_load_steps <= 0) {
+    throw std::runtime_error("Shallow-arch step counts must be positive");
+  }
+  if (shallow_arch_load_magnitude <= 0.0) {
+    throw std::runtime_error("--shallow-arch-load-magnitude must be positive");
+  }
+  if (eigenvalue_count <= 0) {
+    throw std::runtime_error("--eigenvalue-count must be positive");
+  }
 
   if (selectedPreconditioner() == Preconditioner::HypreAMG) {
     if (assemble_bsr_requested && assemble_bsr) {
@@ -695,13 +731,16 @@ struct LowestEigenpairResult {
   int convergence_reason = 0;
   long long free_dofs = 0;
   long long constrained_dofs = 0;
-  double eigenvalue_real = std::numeric_limits<double>::quiet_NaN();
-  double eigenvalue_imaginary = std::numeric_limits<double>::quiet_NaN();
-  double absolute_residual = std::numeric_limits<double>::quiet_NaN();
-  double relative_residual = std::numeric_limits<double>::quiet_NaN();
-  double norm_scaled_residual = std::numeric_limits<double>::quiet_NaN();
   double tangent_norm = std::numeric_limits<double>::quiet_NaN();
   double spectral_shift = std::numeric_limits<double>::quiet_NaN();
+  struct Mode {
+    double eigenvalue_real = std::numeric_limits<double>::quiet_NaN();
+    double eigenvalue_imaginary = std::numeric_limits<double>::quiet_NaN();
+    double absolute_residual = std::numeric_limits<double>::quiet_NaN();
+    double relative_residual = std::numeric_limits<double>::quiet_NaN();
+    double norm_scaled_residual = std::numeric_limits<double>::quiet_NaN();
+  };
+  std::vector<Mode> modes;
   mfem::Vector eigenvector;
 };
 
@@ -799,7 +838,8 @@ LowestEigenpairResult computeLowestEigenpair(const mfem::HypreParMatrix& tangent
   checkPetscError(EPSSetProblemType(eigensolver, EPS_HEP), "EPSSetProblemType");
   checkPetscError(EPSSetType(eigensolver, EPSJD), "EPSSetType");
   checkPetscError(EPSSetWhichEigenpairs(eigensolver, EPS_SMALLEST_REAL), "EPSSetWhichEigenpairs");
-  checkPetscError(EPSSetDimensions(eigensolver, 1, PETSC_DETERMINE, PETSC_DETERMINE), "EPSSetDimensions");
+  checkPetscError(EPSSetDimensions(eigensolver, eigenvalue_count, PETSC_DETERMINE, PETSC_DETERMINE),
+                  "EPSSetDimensions");
   checkPetscError(EPSSetTolerances(eigensolver, eigenvalue_tol, eigenvalue_max_iterations), "EPSSetTolerances");
   checkPetscError(EPSSetConvergenceTest(eigensolver, EPS_CONV_NORM), "EPSSetConvergenceTest");
 
@@ -837,40 +877,48 @@ LowestEigenpairResult computeLowestEigenpair(const mfem::HypreParMatrix& tangent
   result.converged_modes = converged_modes;
   result.iterations = iterations;
   result.convergence_reason = static_cast<int>(convergence_reason);
-  result.converged = converged_modes > 0;
+  result.converged = converged_modes >= eigenvalue_count;
 
-  if (result.converged) {
+  const PetscInt modes_to_record = std::min(converged_modes, static_cast<PetscInt>(eigenvalue_count));
+  if (modes_to_record > 0) {
     Vec free_eigenvector = nullptr;
     checkPetscError(MatCreateVecs(free_tangent, &free_eigenvector, nullptr), "MatCreateVecs");
-    PetscScalar eigenvalue_real = 0.0;
-    PetscScalar eigenvalue_imaginary = 0.0;
-    checkPetscError(EPSGetEigenpair(eigensolver, 0, &eigenvalue_real, &eigenvalue_imaginary, free_eigenvector, nullptr),
-                    "EPSGetEigenpair");
-    result.eigenvalue_real = PetscRealPart(eigenvalue_real);
-    result.eigenvalue_imaginary = PetscRealPart(eigenvalue_imaginary);
-    checkPetscError(EPSComputeError(eigensolver, 0, EPS_ERROR_ABSOLUTE, &result.absolute_residual),
-                    "EPSComputeError absolute");
-    checkPetscError(EPSComputeError(eigensolver, 0, EPS_ERROR_RELATIVE, &result.relative_residual),
-                    "EPSComputeError relative");
-    result.norm_scaled_residual = result.absolute_residual / std::max(1.0, result.tangent_norm);
+    for (PetscInt mode_index = 0; mode_index < modes_to_record; ++mode_index) {
+      LowestEigenpairResult::Mode mode;
+      PetscScalar eigenvalue_real = 0.0;
+      PetscScalar eigenvalue_imaginary = 0.0;
+      checkPetscError(
+          EPSGetEigenpair(eigensolver, mode_index, &eigenvalue_real, &eigenvalue_imaginary, free_eigenvector, nullptr),
+          "EPSGetEigenpair");
+      mode.eigenvalue_real = PetscRealPart(eigenvalue_real);
+      mode.eigenvalue_imaginary = PetscRealPart(eigenvalue_imaginary);
+      checkPetscError(EPSComputeError(eigensolver, mode_index, EPS_ERROR_ABSOLUTE, &mode.absolute_residual),
+                      "EPSComputeError absolute");
+      checkPetscError(EPSComputeError(eigensolver, mode_index, EPS_ERROR_RELATIVE, &mode.relative_residual),
+                      "EPSComputeError relative");
+      mode.norm_scaled_residual = mode.absolute_residual / std::max(1.0, result.tangent_norm);
+      result.modes.push_back(mode);
 
-    PetscInt local_free_dofs = 0;
-    checkPetscError(VecGetLocalSize(free_eigenvector, &local_free_dofs), "VecGetLocalSize");
-    if (local_free_dofs != static_cast<PetscInt>(free_rows.size())) {
-      throw std::runtime_error("Reduced eigenvector ownership does not match the local free degree-of-freedom list.");
-    }
-    const PetscScalar* free_values = nullptr;
-    checkPetscError(VecGetArrayRead(free_eigenvector, &free_values), "VecGetArrayRead");
-    result.eigenvector.SetSize(local_rows);
-    result.eigenvector = 0.0;
-    PetscInt free_index = 0;
-    for (PetscInt local_row = 0; local_row < local_rows; ++local_row) {
-      if (!constrained[static_cast<std::size_t>(local_row)]) {
-        result.eigenvector[local_row] = PetscRealPart(free_values[free_index]);
-        ++free_index;
+      if (mode_index == 0) {
+        PetscInt local_free_dofs = 0;
+        checkPetscError(VecGetLocalSize(free_eigenvector, &local_free_dofs), "VecGetLocalSize");
+        if (local_free_dofs != static_cast<PetscInt>(free_rows.size())) {
+          throw std::runtime_error("Reduced eigenvector ownership does not match the local free degree-of-freedom list.");
+        }
+        const PetscScalar* free_values = nullptr;
+        checkPetscError(VecGetArrayRead(free_eigenvector, &free_values), "VecGetArrayRead");
+        result.eigenvector.SetSize(local_rows);
+        result.eigenvector = 0.0;
+        PetscInt free_index = 0;
+        for (PetscInt local_row = 0; local_row < local_rows; ++local_row) {
+          if (!constrained[static_cast<std::size_t>(local_row)]) {
+            result.eigenvector[local_row] = PetscRealPart(free_values[free_index]);
+            ++free_index;
+          }
+        }
+        checkPetscError(VecRestoreArrayRead(free_eigenvector, &free_values), "VecRestoreArrayRead");
       }
     }
-    checkPetscError(VecRestoreArrayRead(free_eigenvector, &free_values), "VecRestoreArrayRead");
     checkPetscError(VecDestroy(&free_eigenvector), "VecDestroy");
   }
 
@@ -887,10 +935,6 @@ void runFinalStateEigenpairDiagnostic(SolidMechanics<order, dim, Parameters...>&
   const auto& tangent = solid.rebuildAcceptedStateTangent();
   auto result = computeLowestEigenpair(tangent, solid.essentialTrueDofs());
   const double sign_tolerance = eigenvalue_tol * std::max(1.0, result.tangent_norm);
-  const std::string sign_classification = !result.converged                           ? "unavailable"
-                                          : result.eigenvalue_real < -sign_tolerance   ? "negative"
-                                          : result.eigenvalue_real > sign_tolerance    ? "positive"
-                                                                                       : "neutral_within_tolerance";
 
   const int rank = solid.mfemParMesh().GetMyRank();
   if (rank == 0) {
@@ -904,6 +948,7 @@ void runFinalStateEigenpairDiagnostic(SolidMechanics<order, dim, Parameters...>&
             << "# cycle " << solid.cycle() << "\n"
             << "# eigensolver SLEPc\n"
             << "# tolerance " << eigenvalue_tol << "\n"
+            << "# requested_modes " << eigenvalue_count << "\n"
             << "# convergence_test matrix_norm_scaled\n"
             << "# max_iterations " << eigenvalue_max_iterations << "\n"
             << "# eigensolver_method jacobi_davidson\n"
@@ -911,25 +956,39 @@ void runFinalStateEigenpairDiagnostic(SolidMechanics<order, dim, Parameters...>&
             << "# spectral_shift " << result.spectral_shift << "\n"
             << "# tangent_infinity_norm " << result.tangent_norm << "\n"
             << "# sign_tolerance " << sign_tolerance << "\n"
-            << "converged sign eigenvalue_real eigenvalue_imaginary magnitude absolute_residual "
+            << "mode converged sign eigenvalue_real eigenvalue_imaginary magnitude absolute_residual "
                "norm_scaled_residual relative_residual iterations converged_modes convergence_reason free_dofs "
-               "constrained_dofs tangent_is_symmetric\n"
-            << result.converged << " " << sign_classification << " " << result.eigenvalue_real << " "
-            << result.eigenvalue_imaginary << " " << std::hypot(result.eigenvalue_real, result.eigenvalue_imaginary)
-            << " " << result.absolute_residual << " " << result.norm_scaled_residual << " "
-            << result.relative_residual << " " << result.iterations << " " << result.converged_modes << " "
-            << result.convergence_reason << " " << result.free_dofs << " " << result.constrained_dofs << " "
-            << result.tangent_is_symmetric << "\n";
+               "constrained_dofs tangent_is_symmetric\n";
+    for (std::size_t mode_index = 0; mode_index < result.modes.size(); ++mode_index) {
+      const auto& mode = result.modes[mode_index];
+      const std::string sign_classification = mode.eigenvalue_real < -sign_tolerance   ? "negative"
+                                              : mode.eigenvalue_real > sign_tolerance ? "positive"
+                                                                                       : "neutral_within_tolerance";
+      summary << mode_index << " 1 " << sign_classification << " " << mode.eigenvalue_real << " "
+              << mode.eigenvalue_imaginary << " " << std::hypot(mode.eigenvalue_real, mode.eigenvalue_imaginary)
+              << " " << mode.absolute_residual << " " << mode.norm_scaled_residual << " " << mode.relative_residual
+              << " " << result.iterations << " " << result.converged_modes << " " << result.convergence_reason << " "
+              << result.free_dofs << " " << result.constrained_dofs << " " << result.tangent_is_symmetric << "\n";
+    }
   }
 
-  SLIC_INFO_ROOT(std::format(
-      "{} lowest accepted-state eigenvalue = {:.12e} {:+.12e}i ({}), norm-scaled residual = {:.3e}, iterations = "
-      "{}, converged modes = {}, symmetric tangent = {}",
-      output_name, result.eigenvalue_real, result.eigenvalue_imaginary, sign_classification,
-      result.norm_scaled_residual, result.iterations, result.converged_modes, result.tangent_is_symmetric));
+  for (std::size_t mode_index = 0; mode_index < result.modes.size(); ++mode_index) {
+    const auto& mode = result.modes[mode_index];
+    const std::string sign_classification = mode.eigenvalue_real < -sign_tolerance   ? "negative"
+                                            : mode.eigenvalue_real > sign_tolerance ? "positive"
+                                                                                     : "neutral_within_tolerance";
+    SLIC_INFO_ROOT(std::format(
+        "{} accepted-state eigenvalue {} = {:.12e} {:+.12e}i ({}), norm-scaled residual = {:.3e}", output_name,
+        mode_index, mode.eigenvalue_real, mode.eigenvalue_imaginary, sign_classification, mode.norm_scaled_residual));
+  }
+  SLIC_INFO_ROOT(std::format("{} eigensolve iterations = {}, converged modes = {}, requested modes = {}, symmetric "
+                             "tangent = {}",
+                             output_name, result.iterations, result.converged_modes, eigenvalue_count,
+                             result.tangent_is_symmetric));
 
   if (!result.converged) {
-    throw std::runtime_error(std::format("{} final-state lowest-eigenpair solve did not converge", output_name));
+    throw std::runtime_error(std::format("{} final-state eigensolve converged {} of {} requested modes", output_name,
+                                         result.converged_modes, eigenvalue_count));
   }
 
   if (write_final_state_eigenvector) {

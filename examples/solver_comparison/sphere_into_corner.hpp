@@ -13,9 +13,9 @@ void runSphereIntoCorner()
 {
   constexpr int order = 1;
   constexpr int dim = 3;
-  const int num_time_steps = 16;
-  const double total_time = 1.0;
-  const double max_patch_traction = 0.19;
+  const int num_time_steps = 32;
+  const double total_time = 2.0;
+  const double patch_traction_rate = 0.019;
   const double contact_penalty = 8.0;
   const double nominal_element_size = 0.025;
   const double load_patch_projection_margin_fraction = 0.24;
@@ -52,7 +52,7 @@ void runSphereIntoCorner()
   });
 
   auto applied_patch_traction = [=](auto, auto, double time) {
-    return 0.1 * (max_patch_traction * time / total_time) * load_direction;
+    return patch_traction_rate * time * load_direction;
   };
   solid.setTraction(applied_patch_traction, mesh->domain("load_patch"));
   solid.addCustomBoundaryIntegral(
