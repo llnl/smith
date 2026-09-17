@@ -115,7 +115,8 @@ struct finite_element<mfem::Geometry::SEGMENT, L2<p, c> > {
       auto& d10 = get<0>(get<1>(input(qx)));
       auto& d11 = get<1>(get<1>(input(qx)));
 
-      output[qx] = {d00 * phi_j + d01 * dphi_j_dxi, d10 * phi_j + d11 * dphi_j_dxi};
+      output[qx] =
+          std::remove_reference_t<decltype(output[qx])>{d00 * phi_j + d01 * dphi_j_dxi, d10 * phi_j + d11 * dphi_j_dxi};
     }
 
     return output;
@@ -144,7 +145,8 @@ struct finite_element<mfem::Geometry::SEGMENT, L2<p, c> > {
       const auto& d10 = get<0>(get<1>(input(qx)));
       const auto& d11 = get<1>(get<1>(input(qx)));
 
-      output[qx] = {d00 * phi0_j + d01 * phi1_j, d10 * phi0_j + d11 * phi1_j};
+      output[qx] =
+          std::remove_reference_t<decltype(output[qx])>{d00 * phi0_j + d01 * phi1_j, d10 * phi0_j + d11 * phi1_j};
     }
 
     return output;

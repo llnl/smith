@@ -324,7 +324,8 @@ struct finite_element<mfem::Geometry::CUBE, Hcurl<p>> {
           const auto& d10 = get<0>(get<1>(input(Q)));
           const auto& d11 = get<1>(get<1>(input(Q)));
 
-          output[Q] = {dot(d00, phi_j) + dot(d01, curl_phi_j), dot(d10, phi_j) + dot(d11, curl_phi_j)};
+          output[Q] = std::remove_reference_t<decltype(output[Q])>{dot(d00, phi_j) + dot(d01, curl_phi_j),
+                                                                   dot(d10, phi_j) + dot(d11, curl_phi_j)};
         }
       }
     }

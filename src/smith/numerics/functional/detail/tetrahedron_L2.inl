@@ -359,7 +359,8 @@ struct finite_element<mfem::Geometry::TETRAHEDRON, L2<p, c> > {
       const auto& d10 = get<0>(get<1>(input(i)));
       const auto& d11 = get<1>(get<1>(input(i)));
 
-      output[i] = {d00 * phi_j + dot(d01, dphi_j_dxi), d10 * phi_j + dot(d11, dphi_j_dxi)};
+      output[i] = std::remove_reference_t<decltype(output[i])>{d00 * phi_j + dot(d01, dphi_j_dxi),
+                                                               d10 * phi_j + dot(d11, dphi_j_dxi)};
     }
 
     return output;

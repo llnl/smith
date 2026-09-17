@@ -148,7 +148,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     depends_on("hypre@2.26.0:~superlu-dist+mpi")
 
     with when("+petsc"):
-        depends_on("petsc~mmg+metis")
+        depends_on("petsc~mmg+metis fflags=-ffree-line-length-none")
         depends_on("petsc+strumpack", when="+strumpack")
         depends_on("petsc~strumpack", when="~strumpack")
         depends_on("petsc+openmp", when="+openmp")
@@ -197,6 +197,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     with when("+caliper"):
         depends_on("caliper+mpi~papi")
         depends_on("caliper+adiak", when="+adiak")
+        # NOTE: Fixes undefined reference to symbol 'pthread_join@@GLIBC_2.2.5'
+        depends_on("caliper cxxflags='-pthread'", when="+cuda ^caliper~shared")
 
     depends_on("superlu-dist@8.1.2")
 
@@ -336,13 +338,25 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             entries.append(cmake_cache_option("ENABLE_CUDA", True))
             entries.append(cmake_cache_option("CMAKE_CUDA_SEPARABLE_COMPILATION", True))
 
+            # Set Clang as CUDA compiler, if building with Clang
+            # TODO eventually we should allow usage of NVCC as CUDA compiler. Then,
+            # check if enzyme and llvm is enabled, only then set Clang as CUDA compiler.
+            using_clang_cuda = False
+            if spec.satisfies("%llvm"):
+                using_clang_cuda = True
+                entries.append("# Override CUDA compiler to use Clang")
+                entries.append(cmake_cache_path("CMAKE_CUDA_COMPILER", "${CMAKE_CXX_COMPILER}", force=True))
+
             # CXX flags will be propagated to the host compiler
             cxxflags = " ".join(spec.compiler_flags["cxxflags"])
             cuda_flags = cxxflags
-            cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
+            if using_clang_cuda:
+                cuda_flags += " ${CMAKE_CUDA_FLAGS} -Wno-unknown-cuda-version "
+            else:
+                cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
             entries.append(cmake_cache_string("CMAKE_CUDA_FLAGS", cuda_flags, force=True))
 
-            entries.append("# nvcc does not like gtest's 'pthreads' flag\n")
+            entries.append("# nvcc does not like gtest's 'pthreads' flag")
             entries.append(cmake_cache_option("gtest_disable_pthreads", True))
 
         if spec.satisfies("+rocm"):

@@ -454,7 +454,7 @@ def set_group_and_perms(directory):
     return 0
 
 
-def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = False, short_path = False, mirror_location = '', job_count=""):
+def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = False, short_path = False, mirror_location = '', job_count="", skip_mirror=False):
     if spec:
         specs = [spec]
     else:
@@ -476,7 +476,7 @@ def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = 
     # unique install location
     prefix = builds_dir
     if not short_path:
-        prefix = pjoin(prefix, get_system_type())
+        prefix = pjoin(prefix, get_system_type(), get_machine_name())
     if not os.path.exists(prefix):
         os.mkdir(prefix)
     if not short_path:
@@ -484,8 +484,12 @@ def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = 
     if not os.path.exists(prefix):
         os.mkdir(prefix)
 
-    # create a mirror
-    uberenv_create_mirror(prefix, spec, "", mirror_dir, report_to_stdout)
+    if not skip_mirror:
+        # create a mirror
+        uberenv_create_mirror(prefix, spec, "", mirror_dir, report_to_stdout)
+    else:
+        print("[Skipping mirror setup]")
+
     # write info about this build
     write_build_info(pjoin(prefix, "info.json"))
 
@@ -541,6 +545,7 @@ def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = 
 
 def build_devtools(builds_dir, timestamp, short_path, report_to_stdout = False):
     sys_type = get_system_type()
+    machine_name = get_machine_name()
     project_file = "scripts/spack/devtools.json"
 
     if "toss_4" in sys_type:
@@ -554,7 +559,7 @@ def build_devtools(builds_dir, timestamp, short_path, report_to_stdout = False):
         prefix = builds_dir
     else:
         # unique install location
-        prefix = pjoin(builds_dir, sys_type, timestamp)
+        prefix = pjoin(builds_dir, sys_type, machine_name, timestamp)
 
     if not os.path.exists(prefix):
         os.makedirs(prefix)
@@ -575,7 +580,7 @@ def build_devtools(builds_dir, timestamp, short_path, report_to_stdout = False):
     print("[Build time: {0}]".format(convertSecondsToReadableTime(end_time - start_time)))
     # Only update the latest symlink if successful and short_path is not set
     if res == 0 and not short_path:
-        link_path = pjoin(builds_dir, sys_type, "latest")
+        link_path = pjoin(builds_dir, sys_type, machine_name, "latest")
         view_dir = pjoin(prefix, "view")
         print("[Creating symlink to latest devtools view:\n{0}\n->\n{1}]".format(link_path, view_dir))
         if os.path.exists(link_path) or os.path.islink(link_path):

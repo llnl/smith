@@ -681,7 +681,7 @@ class Functional<test(trials...), exec> {
       // mfem::Vector arg0 = ...;
       // mfem::Vector arg1 = ...;
       // e.g. auto [value, gradient_wrt_arg1] = my_functional(arg0, differentiate_wrt(arg1));
-      return {output_T_, grad_[wrt]};
+      return smith::tuple<mfem::Vector&, Gradient&>{output_T_, grad_[wrt]};
     }
 
     if constexpr (wrt == NO_DIFFERENTIATION) {

@@ -405,7 +405,7 @@ class Functional<double(trials...), exec> {
       // mfem::Vector arg0 = ...;
       // mfem::Vector arg1 = ...;
       // e.g. auto [value, gradient_wrt_arg1] = my_functional(arg0, differentiate_wrt(arg1));
-      return {output_T_[0], grad_[wrt]};
+      return smith::tuple<double&, Gradient&>{output_T_[0], grad_[wrt]};
     }
 
     if constexpr (wrt == NO_DIFFERENTIATION) {
