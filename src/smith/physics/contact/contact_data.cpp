@@ -25,10 +25,28 @@ namespace smith {
 
 #ifdef SMITH_USE_TRIBOL
 
+namespace {
+
+bool hasIndependentPressureState([[maybe_unused]] const ContactOptions& options)
+{
+#ifdef SMITH_USE_ENZYME
+  if (options.method == ContactMethod::EnergyMortar) {
+    // Smith currently supports EnergyMortar with penalty enforcement only. For nodal gaps, Tribol owns a pressure
+    // vector but recomputes it from the current gap on update; quadrature-point gaps do not expose a nodal pressure
+    // vector. In both cases there is no independent pressure state to reset or set here.
+    return false;
+  }
+#endif
+  return true;
+}
+
+}  // namespace
+
 ContactData::ContactData(const mfem::ParMesh& mesh)
     : mesh_{mesh},
       reference_nodes_{static_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
       current_coords_{*reference_nodes_},
+      shaped_reference_coords_{*reference_nodes_},
       have_lagrange_multipliers_{false},
       num_pressure_dofs_{0},
       offsets_up_to_date_{false}
@@ -45,7 +63,8 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
   SLIC_ERROR_ROOT_IF(cs != nullptr,
                      std::format("Contact interaction id {} is already registered with Tribol.", interaction_id));
 
-  interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_, contact_opts);
+  interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_,
+                             shaped_reference_coords_, contact_opts);
   if (contact_opts.enforcement == ContactEnforcement::LagrangeMultiplier) {
     have_lagrange_multipliers_ = true;
     num_pressure_dofs_ += interactions_.back().numPressureDofs();
@@ -76,9 +95,11 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
 void ContactData::reset()
 {
   for (auto& interaction : interactions_) {
-    FiniteElementState zero = interaction.pressure();
-    zero = 0.0;
-    interaction.setPressure(zero);
+    if (hasIndependentPressureState(interaction.getContactOptions())) {
+      FiniteElementState zero = interaction.pressure();
+      zero = 0.0;
+      interaction.setPressure(zero);
+    }
   }
 }
 
@@ -331,6 +352,10 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 {
   updateDofOffsets();
   for (size_t i{0}; i < interactions_.size(); ++i) {
+    if (!hasIndependentPressureState(interactions_[i].getContactOptions())) {
+      continue;
+    }
+
     FiniteElementState p_interaction(interactions_[i].pressureSpace());
     if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::LagrangeMultiplier) {
       // merged_pressures_const should not change; const cast is to create a vector view for copying to tribol pressures
@@ -352,12 +377,11 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 
 void ContactData::setDisplacements(const mfem::Vector& shape_u, const mfem::Vector& u)
 {
-  mfem::ParGridFunction prolonged_shape_disp{current_coords_};
   reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(u, current_coords_);
-  reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, prolonged_shape_disp);
+  reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, shaped_reference_coords_);
 
-  current_coords_ += *reference_nodes_;
-  current_coords_ += prolonged_shape_disp;
+  shaped_reference_coords_ += *reference_nodes_;
+  current_coords_ += shaped_reference_coords_;
 }
 
 void ContactData::updateDofOffsets() const
