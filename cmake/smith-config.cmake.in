@@ -183,6 +183,14 @@ if(NOT SMITH_FOUND)
     find_dependency(gretl REQUIRED PATHS "${GRETL_DIR}/lib/cmake")
   endif()
 
+  # Take openmp compiler options (likely set by either RAJA or Axom) and remove NVCC-specific flag prefix, -Xcompiler
+  if (SMITH_ENABLE_CUDA AND TARGET openmp)
+    get_target_property(_openmp_compile_options openmp INTERFACE_COMPILE_OPTIONS)
+    string(REPLACE "-Xcompiler=" "" _openmp_compile_options "${_openmp_compile_options}")
+    set_property(TARGET openmp PROPERTY INTERFACE_COMPILE_OPTIONS "${_openmp_compile_options}")
+    message(STATUS "Updated OpenMP compile options: ${_openmp_compile_options}")
+  endif()
+
   #----------------------------------------------------------------------------
   # Load BLT and Smith targets
   #----------------------------------------------------------------------------
