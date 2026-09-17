@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("-v", "--verbose",
                       action="store_true",
                       dest="verbose",
-                      default=True,
+                      default=False,
                       help="Output logs to screen as well as to files")
     parser.add_argument("-m", "--mirror",
                       dest="mirror",
