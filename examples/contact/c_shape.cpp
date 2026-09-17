@@ -116,9 +116,9 @@ int main(int argc, char* argv[])
                                         .penalty = penalty,
                                         .jacobian = smith::ContactJacobian::Exact};
 
-  smith::SolidMechanicsContact<ORDER, DIM> solid_solver(
-      nonlinear_options, linear_options, smith::solid_mechanics::default_quasistatic_options, name, mesh, {}, 0, 0.0,
-      CHECKPOINT_TO_DISK, USE_WARM_START);
+  smith::SolidMechanicsContact<ORDER, DIM> solid_solver(nonlinear_options, linear_options,
+                                                        smith::solid_mechanics::default_quasistatic_options, name, mesh,
+                                                        {}, 0, 0.0, CHECKPOINT_TO_DISK, USE_WARM_START);
   mfem::VisItDataCollection visit_dc(name + "_visit", &mesh->mfemParMesh());
   visit_dc.SetPrefixPath("visit_out");
   visit_dc.RegisterField("displacement", &solid_solver.displacement().gridFunction());
