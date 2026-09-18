@@ -4,7 +4,9 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <algorithm>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -32,11 +34,12 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
   using NonlinearBlockSolverBase::convergenceStatus;
 
   RecordingRampSolver(std::vector<bool> converged_by_call, mfem::Array<int> constrained_tdofs,
-                      bool warm_start_enabled = false, bool prediction_succeeds = true)
+                      bool warm_start_enabled = false, bool prediction_succeeds = true, bool equilibrate_result = false)
       : converged_by_call_(std::move(converged_by_call)),
         constrained_tdofs_(std::move(constrained_tdofs)),
         warm_start_enabled_(warm_start_enabled),
-        prediction_succeeds_(prediction_succeeds)
+        prediction_succeeds_(prediction_succeeds),
+        equilibrate_result_(equilibrate_result)
   {
   }
 
@@ -49,7 +52,13 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
     last_solve_converged_ = call < converged_by_call_.size() ? converged_by_call_[call] : true;
 
     std::vector<FieldPtr> results;
-    for (const auto& guess : u_guesses) results.push_back(std::make_shared<FiniteElementState>(*guess));
+    for (const auto& guess : u_guesses) {
+      auto result = std::make_shared<FiniteElementState>(*guess);
+      if (equilibrate_result_) {
+        for (int i = 0; i < result->Size(); ++i) (*result)[i] = attempt_alphas_.back();
+      }
+      results.push_back(std::move(result));
+    }
     return results;
   }
 
@@ -100,6 +109,59 @@ class RecordingRampSolver : public NonlinearBlockSolverBase {
   mutable std::vector<double> predicted_alphas_;
   bool warm_start_enabled_ = false;
   bool prediction_succeeds_ = true;
+  bool equilibrate_result_ = false;
+};
+
+class NonfiniteLargeStepWeakForm : public WeakForm {
+ public:
+  explicit NonfiniteLargeStepWeakForm(std::shared_ptr<WeakForm> wrapped)
+      : WeakForm(wrapped->name()), wrapped_(std::move(wrapped))
+  {
+  }
+
+  mfem::Vector residual(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+                        const std::vector<ConstQuadratureFieldPtr>& quad_fields) const override
+  {
+    auto result = wrapped_->residual(time_info, shape_disp, fields, quad_fields);
+    double minimum = std::numeric_limits<double>::infinity();
+    double maximum = -std::numeric_limits<double>::infinity();
+    for (int i = 0; i < fields[0]->Size(); ++i) {
+      minimum = std::min(minimum, (*fields[0])[i]);
+      maximum = std::max(maximum, (*fields[0])[i]);
+    }
+    if (maximum - minimum > 0.75) {
+      for (int i = 0; i < result.Size(); ++i) result[i] = std::numeric_limits<double>::quiet_NaN();
+    }
+    return result;
+  }
+
+  std::unique_ptr<mfem::HypreParMatrix> jacobian(const TimeInfo& time_info, ConstFieldPtr shape_disp,
+                                                 const std::vector<ConstFieldPtr>& fields,
+                                                 const std::vector<double>& field_argument_tangents,
+                                                 const std::vector<ConstQuadratureFieldPtr>& quad_fields) const override
+  {
+    return wrapped_->jacobian(time_info, shape_disp, fields, field_argument_tangents, quad_fields);
+  }
+
+  void jvp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+           const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_shape_disp,
+           const std::vector<ConstFieldPtr>& v_fields, const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
+           DualFieldPtr jvp_reaction) const override
+  {
+    wrapped_->jvp(time_info, shape_disp, fields, quad_fields, v_shape_disp, v_fields, v_quad_fields, jvp_reaction);
+  }
+
+  void vjp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+           const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_field,
+           DualFieldPtr vjp_shape_disp_sensitivity, const std::vector<DualFieldPtr>& vjp_sensitivities,
+           const std::vector<QuadratureFieldPtr>& vjp_quadrature_sensitivities) const override
+  {
+    wrapped_->vjp(time_info, shape_disp, fields, quad_fields, v_field, vjp_shape_disp_sensitivity, vjp_sensitivities,
+                  vjp_quadrature_sensitivities);
+  }
+
+ private:
+  std::shared_ptr<WeakForm> wrapped_;
 };
 
 template <typename FieldTypeT>
@@ -127,7 +189,7 @@ struct ScalarRampHarness {
   std::unique_ptr<DirichletBoundaryConditions> boundary_conditions;
   std::vector<const BoundaryConditionManager*> bc_managers;
 
-  ScalarRampHarness()
+  explicit ScalarRampHarness(bool reject_large_state_jump = false)
   {
     StateManager::initialize(datastore, "bc_ramp");
     mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL, true, 1.0, 1.0),
@@ -142,6 +204,7 @@ struct ScalarRampHarness {
     field_store->addIndependent(field_type, quasi_static);
 
     weak_form = buildScalarDiffusionWeakForm("temperature_main", mesh, field_store, field_type);
+    if (reject_large_state_jump) weak_form = std::make_shared<NonfiniteLargeStepWeakForm>(weak_form);
     residuals = {weak_form.get()};
     residual_names = {"temperature_main"};
     block_indices = field_store->indexMap(residual_names);
@@ -238,6 +301,21 @@ TEST(BcRamp, CombinedModePredictsEveryRequestedFraction)
   EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({1.0, 0.5, 1.0}));
   EXPECT_EQ(solver->predictionBaseAlphas(), std::vector<double>({0.0, 0.0, 0.5}));
   EXPECT_EQ(solver->predictedAlphas(), solver->attemptAlphas());
+}
+
+TEST(BcRamp, NonfiniteWarmStartResidualCutsBackBeforeSolve)
+{
+  ScalarRampHarness harness(true);
+  auto solver =
+      std::make_shared<RecordingRampSolver>(std::vector<bool>{true, true}, harness.constrainedDofs(), true, true, true);
+  solver->setBcRampOptions(BcRampOptions{.max_cutbacks = 2});
+
+  auto solved_states = harness.solve(solver);
+
+  ASSERT_EQ(solved_states.size(), 1);
+  EXPECT_EQ(solver->attemptAlphas(), std::vector<double>({0.5, 1.0}));
+  EXPECT_EQ(solver->predictedAlphas(), std::vector<double>({1.0, 0.5, 1.0}));
+  for (int i = 0; i < solved_states[0].get()->Size(); ++i) EXPECT_DOUBLE_EQ((*solved_states[0].get())[i], 1.0);
 }
 
 TEST(BcRamp, SuccessfulStepBecomesCutbackAnchor)

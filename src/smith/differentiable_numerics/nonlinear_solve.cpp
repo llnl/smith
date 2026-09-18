@@ -40,6 +40,21 @@ bool hasNonFinite(const std::vector<FEFieldPtr>& fields)
   return false;
 }
 
+bool hasNonFinite(const std::vector<mfem::Vector>& vectors)
+{
+  for (const auto& vector : vectors)
+    if (hasNonFinite(vector)) return true;
+  return false;
+}
+
+bool trueOnAllRanks(bool local_condition, MPI_Comm comm)
+{
+  int local_value = local_condition ? 1 : 0;
+  int global_value = 0;
+  MPI_Allreduce(&local_value, &global_value, 1, MPI_INT, MPI_MIN, comm);
+  return global_value == 1;
+}
+
 std::vector<FEFieldPtr> deepCopyFields(const std::vector<FEFieldPtr>& src)
 {
   std::vector<FEFieldPtr> out;
@@ -119,8 +134,18 @@ BcAttempt attemptBcStep(const NonlinearBlockSolverBase* solver, const std::vecto
     applyBoundaryConditions(time, bc_managers[row], initial_guess[row], current_bc_overrides[row]);
   }
 
+  if (solver->bcRampOptions().max_cutbacks > 0) {
+    auto initial_residuals = res_fn(initial_guess);
+    if (!trueOnAllRanks(!hasNonFinite(initial_residuals), initial_guess[0]->comm())) {
+      mfem::out << "[BcRamp] alpha=" << attempt_alpha << " has a non-finite initial residual; cutting back"
+                << std::endl;
+      return {std::move(initial_guess), false};
+    }
+  }
+
   auto fields = solver->solve(initial_guess, res_fn, jac_fn);
-  bool converged = solver->lastSolveConverged() && !hasNonFinite(fields);
+  bool local_converged = solver->lastSolveConverged() && !hasNonFinite(fields);
+  bool converged = trueOnAllRanks(local_converged, initial_guess[0]->comm());
   return {std::move(fields), converged};
 }
 
@@ -147,6 +172,8 @@ std::vector<FEFieldPtr> solveWithBcContinuation(const NonlinearBlockSolverBase* 
                               raw_jac_fn, base_bc, requested_bc, bc_managers, current_bc_overrides, time_info.time());
   if (result.converged || options.max_cutbacks == 0) return result.fields;
 
+  mfem::out << "[BcRamp] full boundary-condition update failed; starting cutback" << std::endl;
+
   auto anchor = deepCopyFields(previous_fields);
   double anchor_alpha = 0.0;
   double failed_alpha = 1.0;
@@ -156,6 +183,7 @@ std::vector<FEFieldPtr> solveWithBcContinuation(const NonlinearBlockSolverBase* 
     double attempt_alpha = anchor_alpha + options.shrink_factor * (failed_alpha - anchor_alpha);
     result = attemptBcStep(solver, anchor, anchor_alpha, attempt_alpha, anchor_time, res_fn, jac_fn, raw_jac_fn,
                            base_bc, requested_bc, bc_managers, current_bc_overrides, time_info.time());
+    mfem::out << "[BcRamp] alpha=" << attempt_alpha << " converged=" << result.converged << std::endl;
     if (!result.converged) {
       failed_alpha = attempt_alpha;
       continue;
@@ -166,6 +194,7 @@ std::vector<FEFieldPtr> solveWithBcContinuation(const NonlinearBlockSolverBase* 
     anchor_time = time_info.time();
     result = attemptBcStep(solver, anchor, anchor_alpha, 1.0, anchor_time, res_fn, jac_fn, raw_jac_fn, base_bc,
                            requested_bc, bc_managers, current_bc_overrides, time_info.time());
+    mfem::out << "[BcRamp] alpha=1 converged=" << result.converged << std::endl;
     if (result.converged) return result.fields;
     failed_alpha = 1.0;
   }
