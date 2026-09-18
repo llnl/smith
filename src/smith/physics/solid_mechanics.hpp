@@ -54,6 +54,7 @@
 #include "smith/physics/state/finite_element_vector.hpp"
 
 namespace smith {
+
 namespace solid_mechanics {
 
 namespace detail {

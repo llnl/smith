@@ -88,8 +88,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             description="Build MFEM TPL with Strumpack, a direct linear solver library")
     variant("sundials", default=True, sticky=True,
             description="Build MFEM TPL with SUNDIALS nonlinear/ODE solver support")
-    variant("tribol", default=True, sticky=True,
-            description="Build Tribol, an interface physics library")
+    variant("tribol", default=False, sticky=True,
+            description="Build external Tribol, an interface physics library (included in Smith build otherwise)")
     variant("umpire", default=True, sticky=True,
             description="Build with portable memory access support")
 

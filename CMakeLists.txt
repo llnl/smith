@@ -117,7 +117,13 @@ endforeach()
 set(BLT_REQUIRED_CLANGFORMAT_VERSION  "19" CACHE STRING "")
 
 set(ENABLE_ALL_WARNINGS ON CACHE BOOL "")
+
 set(ENABLE_WARNINGS_AS_ERRORS ON CACHE BOOL "")
+if(ENABLE_ASAN AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    # For more info: https://gcc.gnu.org/onlinedocs/gcc-14.1.0/gcc/Instrumentation-Options.html?utm_source=chatgpt.com#index-fsanitize_003dbuiltin
+    message(WARNING "GNU compiler produces false positive warnings when ASAN is enabled. Turning off Warnings as errors.")
+    set(ENABLE_WARNINGS_AS_ERRORS FALSE CACHE BOOL "" FORCE)
+endif()
 
 set(BLT_EXPORT_THIRDPARTY OFF CACHE BOOL "")
 if (BLT_EXPORT_THIRDPARTY)
@@ -212,12 +218,6 @@ install(TARGETS              smith
         )
 
 if (SMITH_ENABLE_CODEVELOP)
-    # This really shouldn't be needed but it keeps getting dropped from axom.
-    # It certainly shouldn't go here either.
-    target_include_directories(axom SYSTEM INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/axom/src>
-    )
-
     install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}
             EXPORT               smith-targets
             DESTINATION          lib

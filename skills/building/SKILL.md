@@ -15,8 +15,8 @@ If it prints `login`, do **not** run `./config-build.py`, `cmake --build ...`, o
 
 This repository supports two build workflows:
 
-- **Smith-only (default):** builds Smith against externally provided TPLs (e.g., via Spack/uberenv + a host-config).
-- **Co-develop Smith (opt-in):** additionally builds the `mfem`, `axom`, and `tribol` git submodules as CMake subdirectories.
+- **Smith-only (default):** builds Smith against externally provided TPLs (e.g., via Spack/uberenv + a host-config). This includes the `gretl`, `continuationsolver` and `tribol` git submodules as CMake subdirectories.
+- **Co-develop Smith (opt-in):** additionally builds the `mfem` and `axom` git submodules as CMake subdirectories.
 
 ## Smith-only build (default)
 
@@ -33,17 +33,11 @@ cmake --build build -j
 ctest --test-dir build
 ```
 
-## Co-develop Smith (MFEM + Axom + Tribol)
+## Co-develop Smith (MFEM + Axom)
 
 Use this only when you intend to modify/build Smith against the submodules.
 
-1) Initialize submodules (required):
-
-```bash
-git submodule update --init --recursive
-```
-
-2) Configure with co-develop enabled:
+1) Configure with co-develop enabled:
 
 ```bash
 ./config-build.py -bp build-codevelop -ip install-codevelop -hc "$(./skills/building/scripts/determine_host_config)" -DSMITH_ENABLE_CODEVELOP=ON --exportcompilercommands
