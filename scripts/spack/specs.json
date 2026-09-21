@@ -26,9 +26,6 @@
     "matrix":
     [ "+devtools+adiak+caliper~enzyme cuda_arch=90 %clang_19" ],
 
-    "blueos_3_ppc64le_ib_p9":
-    [ "+devtools+cuda+adiak+caliper~strumpack %clang_gfortran cuda_arch=70" ],
-
     "macos_sonoma_aarch64":
     [ "+devtools+adiak+caliper+enzyme~openmp %clang_19" ]
 }

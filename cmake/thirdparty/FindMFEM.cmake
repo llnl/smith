@@ -135,11 +135,13 @@ else()
         string(STRIP "${mfem_tpl_lnk_flags}" mfem_tpl_lnk_flags)
 
         # transform -Xlinker items to -Wl
-        set(_mfem_tpl_list ${mfem_tpl_lnk_flags})
-        separate_arguments(_mfem_tpl_list)
-        list(TRANSFORM _mfem_tpl_list
-                REPLACE "^-Xlinker=-rpath,(.*)$" "-Wl,-rpath,\\1")
-        set(mfem_tpl_lnk_flags ${_mfem_tpl_list})
+        if(BLT_ENABLE_CUDA)
+            set(_mfem_tpl_list ${mfem_tpl_lnk_flags})
+            separate_arguments(_mfem_tpl_list)
+            list(TRANSFORM _mfem_tpl_list
+                 REPLACE "^-Xlinker=-rpath,(.*)$" "-Wl,-rpath,\\1")
+            set(mfem_tpl_lnk_flags ${_mfem_tpl_list})
+        endif()
     else()
         message(WARNING "No third party library flags found in ${MFEM_CFG_DIR}/config.mk")
     endif()
