@@ -10,9 +10,9 @@ spack:
       when: '%c'
     - spec: '%cxx=llvm@19'
       when: '%cxx'
-    - spec: '%fortran=gcc@15'
+    - spec: '%fortran=gcc@16'
       when: '%fortran'
-    - spec: '%openmpi@5.0.9.clang_19'
+    - spec: '%openmpi@5.0.10.clang_19'
       when: '%mpi'
 
 
@@ -28,13 +28,13 @@ spack:
     #Compiler packages
     gcc:
       externals:
-      - spec: gcc@15.1.0 languages:=c,c++,fortran
-        prefix: /opt/homebrew/opt/gcc@15
+      - spec: gcc@16.2.0 languages:=c,c++,fortran
+        prefix: /opt/homebrew/opt/gcc@16
         extra_attributes:
           compilers:
-            c: /opt/homebrew/opt/gcc@15/bin/gcc-15
-            cxx: /opt/homebrew/opt/gcc@15/bin/g++-15
-            fortran: /opt/homebrew/opt/gcc@15/bin/gfortran
+            c: /opt/homebrew/opt/gcc@16/bin/gcc-16
+            cxx: /opt/homebrew/opt/gcc@16/bin/g++-16
+            fortran: /opt/homebrew/opt/gcc@16/bin/gfortran
     llvm:
       externals:
       - spec: llvm@19.1.7+clang~lld~lldb
@@ -52,17 +52,17 @@ spack:
     openmpi:
       buildable: false
       externals:
-      - spec: openmpi@5.0.9.clang_19
+      - spec: openmpi@5.0.10.clang_19
         prefix: /opt/homebrew
     openblas:
       buildable: false
       externals:
-      - spec: openblas@0.3.30
+      - spec: openblas@0.3.34
         prefix: /opt/homebrew
     netlib-lapack:
       buildable: false
       externals:
-      - spec: netlib-lapack@3.12.0
+      - spec: netlib-lapack@3.12.1
         prefix: /opt/homebrew/opt/lapack
     zlib:
       buildable: false
@@ -82,10 +82,10 @@ spack:
       - spec: bzip2@1.0.8
         prefix: /opt/homebrew/opt/bzip2
     cmake:
-      version: [4.3.4]
+      version: [4.4.2]
       buildable: false
       externals:
-      - spec: cmake@4.3.4
+      - spec: cmake@4.4.2
         prefix: /opt/homebrew
     diffutils:
       buildable: false
@@ -100,7 +100,7 @@ spack:
     gettext:
       buildable: false
       externals:
-      - spec: gettext@0.24
+      - spec: gettext@1.0
         prefix: /opt/homebrew
     graphviz:
       buildable: false
@@ -115,7 +115,7 @@ spack:
     libx11:
       buildable: false
       externals:
-      - spec: libx11@1.8.12
+      - spec: libx11@1.8.13
         prefix: /opt/homebrew
     lua:
       buildable: false
@@ -135,22 +135,22 @@ spack:
     pkgconf:
       buildable: false
       externals:
-      - spec: pkgconf@2.4.3
+      - spec: pkgconf@2.5.1
         prefix: /opt/homebrew
     readline:
       buildable: false
       externals:
-      - spec: readline@8.2.13
+      - spec: readline@8.3.3
         prefix: /opt/homebrew
     sqlite:
       buildable: false
       externals:
-      - spec: sqlite@3.49.1
+      - spec: sqlite@3.51.3
         prefix: /opt/homebrew
     xz:
       buildable: false
       externals:
-      - spec: xz@5.8.1
+      - spec: xz@5.8.3
         prefix: /opt/homebrew 
 
     # External packages in /usr
@@ -162,7 +162,7 @@ spack:
     git:
       buildable: false
       externals:
-      - spec: git@2.39.5
+      - spec: git@2.54.0
         prefix: /usr
     gmake:
       buildable: false

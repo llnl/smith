@@ -38,7 +38,7 @@ tuolumne-llvm_amdgpu_6_4_2-src:
   variables:
     EXTRA_CMAKE_OPTIONS: "-DENABLE_BENCHMARKS=ON -DENABLE_DOCS=OFF -DCMAKE_BUILD_TYPE=Release"
     ALLOC_NODES: "1"
-    ALLOC_TIME: "90"
+    ALLOC_TIME: "120"
   extends: .src_build_on_tuolumne
  
 tuolumne-llvm_amdgpu_6_4_2-src-codevelop:
@@ -49,7 +49,7 @@ tuolumne-llvm_amdgpu_6_4_2-src-codevelop:
     ALLOC_TIME: "90"
   extends: .src_build_on_tuolumne
 
-# NOTE: SPEC should matches specs.json, but devtools and profiling variants removed
+# NOTE: SPEC should match specs.json, but devtools and profiling variants removed
 tuolumne-llvm_amdgpu_6_4_2-tpl:
   variables:
     SPEC: "~devtools~profiling~openmp+rocm~petsc~slepc~enzyme~sundials amdgpu_target=gfx942,gfx90a %rocm_6_4_2"
