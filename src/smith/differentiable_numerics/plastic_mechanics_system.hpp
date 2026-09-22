@@ -167,7 +167,7 @@ struct PlasticMechanicsSystem : public SystemBase {
                                auto u, auto... params) {
           auto du_dX = get<DERIVATIVE>(u);
           auto Fp_old_tensor = this->recoverTensor(get<VALUE>(Fp_old));
-          auto [epsilon_current, epsilon_dot] = captured_strain_rule->interpolate(t_info, epsilon_p, epsilon_p_old);
+          auto epsilon_dot = captured_strain_rule->dot(t_info, epsilon_p, epsilon_p_old);
           auto dt = t_info.dt();
 
           auto Fp_predict_tensor = mat.plasticDeformGrad(dt, Fp_old_tensor, get<VALUE>(epsilon_dot), du_dX, params...);
