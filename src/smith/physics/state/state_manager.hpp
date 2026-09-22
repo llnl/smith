@@ -351,6 +351,9 @@ class StateManager {
     ds_ = nullptr;
   };
 
+  /// @brief Returns true when StateManager has an active DataStore.
+  static bool isInitialized() { return ds_ != nullptr; }
+
   /**
    * @brief Checks if StateManager has a mesh with the given mesh_tag
    * @param[in] mesh_tag A string that uniquely identifies the mesh
