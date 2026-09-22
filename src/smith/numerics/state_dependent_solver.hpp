@@ -19,7 +19,7 @@ namespace smith {
 /**
  * @brief Interface for solvers that can refresh state-dependent internals.
  */
-class StateDependentSolver {
+class StateDependentSolver : public mfem::Solver {
  public:
   virtual ~StateDependentSolver() = default;
 

@@ -18,7 +18,7 @@ namespace smith {
 ///
 /// This is used to keep a preconditioner alive when it is referenced by an
 /// iterative solver (e.g. GMRES) via SetPreconditioner().
-class SolverWithPreconditioner : public mfem::Solver, public StateDependentSolver {
+class SolverWithPreconditioner : public StateDependentSolver {
  public:
   /// @brief Construct from an owned linear solver and (optional) preconditioner.
   /// @param linear_solver Owned linear solver (must be non-null).

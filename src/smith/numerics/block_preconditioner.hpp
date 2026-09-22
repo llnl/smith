@@ -95,7 +95,7 @@ BlockProviderOverride makeStateDependentBlockProviderOverride(
  * @class BlockPreconditioner
  * @brief Base class for block preconditioners that own one sub-solver per block.
  */
-class BlockPreconditioner : public mfem::Solver, public StateDependentSolver {
+class BlockPreconditioner : public StateDependentSolver {
  public:
   /** @brief Return the number of sub-solvers owned by this preconditioner. */
   int numSubSolvers() const { return num_blocks_; }
