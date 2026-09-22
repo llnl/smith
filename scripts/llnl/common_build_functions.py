@@ -477,12 +477,10 @@ def full_build_and_test_of_tpls(builds_dir, timestamp, spec, report_to_stdout = 
     prefix = builds_dir
     if not short_path:
         prefix = pjoin(prefix, get_system_type(), get_machine_name())
-    if not os.path.exists(prefix):
-        os.mkdir(prefix)
     if not short_path:
         prefix = pjoin(prefix, timestamp)
     if not os.path.exists(prefix):
-        os.mkdir(prefix)
+        os.mkdirs(prefix, mode=0o775, exist_ok=True)
 
     if not skip_mirror:
         # create a mirror
