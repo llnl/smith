@@ -110,6 +110,31 @@ class ManagedHalvingSolver : public mfem::NewtonSolver, public smith::Convergenc
   std::shared_ptr<smith::EquationSolverConvergenceManager> convergence_manager_ = nullptr;
 };
 
+class ScalingPreconditioner : public mfem::Solver {
+ public:
+  explicit ScalingPreconditioner(double scale) : scale_(scale) {}
+
+  void SetOperator(const mfem::Operator& op) override
+  {
+    height = op.Height();
+    width = op.Width();
+    ++set_operator_count_;
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    y.SetSize(x.Size());
+    y = x;
+    y *= scale_;
+  }
+
+  int setOperatorCount() const { return set_operator_count_; }
+
+ private:
+  double scale_;
+  int set_operator_count_ = 0;
+};
+
 }  // namespace
 
 class EquationSolverSuite : public testing::TestWithParam<param_t> {
@@ -230,6 +255,40 @@ TEST(EquationSolverManualConvergence, InjectedManagedSolverSupportsScalarConverg
 
   EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
   EXPECT_LE(residual.Norml2(), 1.0e-2 * eq_solver.nonlinearSolver().GetInitialNorm());
+}
+
+// Verifies EquationSolver owns and attaches a caller-provided preconditioner.
+TEST(EquationSolverCustomPreconditioner, OptionsConstructorOwnsAndAttachesPreconditioner)
+{
+  LinearSolverOptions lin_opts;
+  lin_opts.linear_solver = LinearSolver::PrecondOnly;
+  lin_opts.preconditioner = Preconditioner::None;
+
+  NonlinearSolverOptions nonlin_opts;
+  nonlin_opts.nonlin_solver = NonlinearSolver::Newton;
+  nonlin_opts.print_level = 0;
+
+  auto preconditioner = std::make_unique<ScalingPreconditioner>(3.0);
+  auto* preconditioner_ptr = preconditioner.get();
+  EquationSolver eq_solver(nonlin_opts, lin_opts, std::move(preconditioner), MPI_COMM_WORLD);
+
+  EXPECT_EQ(&eq_solver.preconditioner(), preconditioner_ptr);
+
+  mfem::SparseMatrix op(2);
+  op.Add(0, 0, 1.0);
+  op.Add(1, 1, 1.0);
+  op.Finalize();
+
+  eq_solver.linearSolver().SetOperator(op);
+
+  mfem::Vector x(2), y(2);
+  x[0] = 2.0;
+  x[1] = -1.0;
+  eq_solver.linearSolver().Mult(x, y);
+
+  EXPECT_EQ(preconditioner_ptr->setOperatorCount(), 1);
+  EXPECT_NEAR(y[0], 6.0, 1e-12);
+  EXPECT_NEAR(y[1], -3.0, 1e-12);
 }
 
 /**

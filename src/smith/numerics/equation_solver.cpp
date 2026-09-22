@@ -1017,6 +1017,22 @@ EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolv
   attachConvergenceManager();
 }
 
+EquationSolver::EquationSolver(NonlinearSolverOptions nonlinear_opts, LinearSolverOptions lin_opts,
+                               std::unique_ptr<mfem::Solver> preconditioner, MPI_Comm comm)
+{
+  SLIC_ERROR_ROOT_IF(!preconditioner, "Custom EquationSolver preconditioner must be non-null");
+
+  auto [lin_solver, attached_preconditioner] =
+      buildLinearSolverAndPreconditioner(lin_opts, std::move(preconditioner), comm);
+
+  lin_solver_ = std::move(lin_solver);
+  preconditioner_ = std::move(attached_preconditioner);
+  nonlin_solver_ = buildNonlinearSolver(nonlinear_opts, lin_opts, *preconditioner_, comm);
+  convergence_manager_ = std::make_shared<EquationSolverConvergenceManager>(comm, nonlinear_opts.absolute_tol,
+                                                                            nonlinear_opts.relative_tol);
+  attachConvergenceManager();
+}
+
 EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_solver,
                                std::unique_ptr<mfem::Solver> linear_solver,
                                std::unique_ptr<mfem::Solver> preconditioner)
@@ -1027,6 +1043,11 @@ EquationSolver::EquationSolver(std::unique_ptr<mfem::NewtonSolver> nonlinear_sol
   nonlin_solver_ = std::move(nonlinear_solver);
   lin_solver_ = std::move(linear_solver);
   preconditioner_ = std::move(preconditioner);
+  if (preconditioner_) {
+    if (auto* iterative_solver = dynamic_cast<mfem::IterativeSolver*>(lin_solver_.get())) {
+      iterative_solver->SetPreconditioner(*preconditioner_);
+    }
+  }
 }
 
 void EquationSolver::attachConvergenceManager() const
@@ -1265,21 +1286,19 @@ std::unique_ptr<mfem::NewtonSolver> buildNonlinearSolver(NonlinearSolverOptions 
   return nonlinear_solver;
 }
 
-std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLinearSolverAndPreconditioner(
-    LinearSolverOptions linear_opts, MPI_Comm comm)
-{
-  auto preconditioner = buildPreconditioner(linear_opts, comm);
+namespace {
 
+std::unique_ptr<mfem::Solver> buildLinearSolver(LinearSolverOptions linear_opts, MPI_Comm comm,
+                                                mfem::Solver* preconditioner)
+{
   if (linear_opts.linear_solver == LinearSolver::SuperLU) {
-    auto lin_solver = std::make_unique<SuperLUSolver>(linear_opts.print_level, comm);
-    return {std::move(lin_solver), std::move(preconditioner)};
+    return std::make_unique<SuperLUSolver>(linear_opts.print_level, comm);
   }
 
 #ifdef MFEM_USE_STRUMPACK
 
   if (linear_opts.linear_solver == LinearSolver::Strumpack) {
-    auto lin_solver = std::make_unique<StrumpackSolver>(linear_opts.print_level, comm);
-    return {std::move(lin_solver), std::move(preconditioner)};
+    return std::make_unique<StrumpackSolver>(linear_opts.print_level, comm);
   }
 
 #endif
@@ -1324,7 +1343,37 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
     iter_lin_solver->SetPreconditioner(*preconditioner);
   }
 
-  return {std::move(iter_lin_solver), std::move(preconditioner)};
+  return iter_lin_solver;
+}
+
+}  // namespace
+
+std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLinearSolverAndPreconditioner(
+    LinearSolverOptions linear_opts, MPI_Comm comm)
+{
+  auto preconditioner = buildPreconditioner(linear_opts, comm);
+  auto lin_solver = buildLinearSolver(linear_opts, comm, preconditioner.get());
+  return {std::move(lin_solver), std::move(preconditioner)};
+}
+
+std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLinearSolverAndPreconditioner(
+    LinearSolverOptions linear_opts, std::unique_ptr<mfem::Solver> preconditioner, MPI_Comm comm)
+{
+  auto lin_solver = buildLinearSolver(linear_opts, comm, preconditioner.get());
+  return {std::move(lin_solver), std::move(preconditioner)};
+}
+
+std::vector<std::unique_ptr<mfem::Solver>> buildBlockPreconditionerSubSolvers(
+    const std::vector<LinearSolverOptions>& sub_block_options, MPI_Comm comm)
+{
+  std::vector<std::unique_ptr<mfem::Solver>> sub_solvers;
+  sub_solvers.reserve(sub_block_options.size());
+  for (const auto& opt : sub_block_options) {
+    auto [lin_solver, preconditioner] = buildLinearSolverAndPreconditioner(opt, comm);
+    sub_solvers.push_back(
+        std::make_unique<smith::SolverWithPreconditioner>(std::move(lin_solver), std::move(preconditioner)));
+  }
+  return sub_solvers;
 }
 
 bool requiresMonolithicOperator(const LinearSolverOptions& linear_opts)
@@ -1437,11 +1486,7 @@ std::unique_ptr<mfem::Solver> buildPreconditioner(LinearSolverOptions linear_opt
     preconditioner_solver = std::move(amgfcontact_preconditioner);
   } else if (preconditioner == Preconditioner::BlockDiagonal || preconditioner == Preconditioner::BlockTriangular ||
              preconditioner == Preconditioner::BlockSchur) {
-    std::vector<std::unique_ptr<mfem::Solver>> inner_solvers;
-    for (const auto& opt : linear_opts.sub_block_linear_solver_options) {
-      auto [lin, prec] = buildLinearSolverAndPreconditioner(opt, comm);
-      inner_solvers.push_back(std::make_unique<smith::SolverWithPreconditioner>(std::move(lin), std::move(prec)));
-    }
+    auto inner_solvers = buildBlockPreconditionerSubSolvers(linear_opts.sub_block_linear_solver_options, comm);
 
     if (preconditioner == Preconditioner::BlockDiagonal) {
       preconditioner_solver = std::make_unique<BlockDiagonalPreconditioner>(std::move(inner_solvers));

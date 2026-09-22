@@ -30,6 +30,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 - Added composable solid-mechanics and thermo-mechanics examples, tutorials, and regression tests covering coupled
   sensitivities, finite-difference checks, field parameters, and solves.
 - Added axisymmetric solid mechanics materials and loads for 2D `(r, z)` meshes.
+- Added diagonal, triangular, and Schur block preconditioners for linearized block systems.
+- Added support for custom block operators that are rebuilt from the current nonlinear state at each Newton iteration.
 
 ### Removed
 
