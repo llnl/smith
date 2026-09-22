@@ -274,9 +274,37 @@ enum class BlockSchurType
  */
 enum class SchurApproxType
 {
-  DiagInv, /**< Use assembled \f$ S \approx A_{22} - A_{21} \\mathrm{diag}(A_{11})^{-1} A_{12} \f$. */
-  A22Only, /**< Use \f$ S \approx A_{22} \f$. */
-  Custom   /**< Use a custom operator provider for block index 1. */
+  DiagInv,     /**< Use assembled \f$ S \approx A_{22} - A_{21} \\mathrm{diag}(A_{11})^{-1} A_{12} \f$. */
+  A22Only,     /**< Use \f$ S \approx A_{22} \f$. */
+  Custom,      /**< Use a custom operator provider for block index 1. */
+  CustomAction /**< Use a custom block-1 solver that applies the Schur inverse/action directly. */
+};
+
+/**
+ * @class SchurComplementActionSolver
+ * @brief Base class for custom solvers that apply an approximate Schur inverse/action directly.
+ *
+ * Subclasses normally override updateForState() to refresh any state-dependent
+ * approximation and Mult() to apply the approximate Schur inverse/action. Override
+ * setBlockContext() only when the current 2x2 block Jacobian is needed. In a
+ * nonlinear solve, updateForState() is called before Jacobian assembly and
+ * setBlockContext() is called later from BlockSchurPreconditioner::SetOperator().
+ */
+class SchurComplementActionSolver : public mfem::Solver, public StateDependentSolver {
+ public:
+  /// @brief Configure this action solver with the current 2x2 block context.
+  virtual void setBlockContext(const mfem::BlockOperator& jacobian, const mfem::Array<int>& block_offsets);
+
+  /// @overload
+  void SetOperator(const mfem::Operator& op) override;
+
+  /// @overload
+  void updateForState([[maybe_unused]] const mfem::Vector& state,
+                      [[maybe_unused]] const mfem::Array<int>& block_offsets) override;
+
+ protected:
+  const mfem::BlockOperator* block_jacobian_ = nullptr;  ///< Current 2x2 block Jacobian context.
+  mfem::Array<int> block_offsets_;                       ///< Current block offsets.
 };
 
 /**
@@ -334,7 +362,7 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
   //
   // For DiagInv and A22Only, the approximation is rebuilt on each SetOperator call and stored in
   // S_approx_owned_. For Custom, the approximation is provided via block_op_providers_[1] and referenced
-  // non-owningly via S_approx_view_.
+  // non-owningly via S_approx_view_. For CustomAction, the block-1 solver is configured directly.
   mutable std::unique_ptr<const mfem::Operator> S_approx_owned_;
   const mfem::Operator* S_approx_view_ = nullptr;
 
