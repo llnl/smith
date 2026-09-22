@@ -333,6 +333,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "jacobian");
+    SLIC_ERROR_IF(jacobian_weights.size() != fields.size(),
+                  axom::fmt::format("jacobian(): jacobian_weights.size()={} but fields.size()={}",
+                                    jacobian_weights.size(), fields.size()));
     SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     std::unique_ptr<mfem::HypreParMatrix> J;
