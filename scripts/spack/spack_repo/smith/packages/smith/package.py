@@ -331,9 +331,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         spec = self.spec
         entries = super(Smith, self).initconfig_hardware_entries()
 
-        entries.append(cmake_cache_option("ENABLE_OPENMP",
-                                          spec.satisfies("+openmp")))
-
         if spec.satisfies("^cuda"):
             entries.append(cmake_cache_option("ENABLE_CUDA", True))
             entries.append(cmake_cache_option("CMAKE_CUDA_SEPARABLE_COMPILATION", True))
@@ -356,8 +353,9 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
                 cuda_flags += " ${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr "
             entries.append(cmake_cache_string("CMAKE_CUDA_FLAGS", cuda_flags, force=True))
 
-            entries.append("# nvcc does not like gtest's 'pthreads' flag")
-            entries.append(cmake_cache_option("gtest_disable_pthreads", True))
+            if not using_clang_cuda:
+                entries.append("# nvcc does not like gtest's 'pthreads' flag")
+                entries.append(cmake_cache_option("gtest_disable_pthreads", True))
 
         if spec.satisfies("+rocm"):
             entries.append(cmake_cache_option("ENABLE_HIP", True))
@@ -422,6 +420,15 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
                 entries.append(cmake_cache_string(
                     "BLT_CMAKE_IMPLICIT_LINK_DIRECTORIES_EXCLUDE",
                     ";".join(_existing_paths)))
+
+        entries.extend([
+            "#------------------{0}".format("-" * 30),
+            "# OpenMP",
+            "#------------------{0}\n".format("-" * 30),
+        ])
+
+        entries.append(cmake_cache_option("ENABLE_OPENMP",
+                                          spec.satisfies("+openmp")))
 
         return entries
 

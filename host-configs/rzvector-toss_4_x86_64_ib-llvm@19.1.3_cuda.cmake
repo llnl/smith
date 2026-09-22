@@ -8,9 +8,9 @@ set(CMAKE_PREFIX_PATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/20
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-vbwtkhg76xjtkbhcx3y5thuplu32nhvo/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-vbwtkhg76xjtkbhcx3y5thuplu32nhvo/lib64;;/usr/tce/backend/installations/linux-rhel8-x86_64/gcc-13.3.1/llvm-19.1.3-gy2lu5xbi4csr2k47emlajzfs5mlsd4g/lib/x86_64-unknown-linux-gnu;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13;/usr/tce/packages/clang/clang-19.1.3/lib;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-alcgvwpunh3on5r5odtmsf62atx22tgt/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-alcgvwpunh3on5r5odtmsf62atx22tgt/lib64;;/usr/tce/backend/installations/linux-rhel8-x86_64/gcc-13.3.1/llvm-19.1.3-gy2lu5xbi4csr2k47emlajzfs5mlsd4g/lib/x86_64-unknown-linux-gnu;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13;/usr/tce/packages/clang/clang-19.1.3/lib;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-vbwtkhg76xjtkbhcx3y5thuplu32nhvo/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-vbwtkhg76xjtkbhcx3y5thuplu32nhvo/lib64;;/usr/tce/backend/installations/linux-rhel8-x86_64/gcc-13.3.1/llvm-19.1.3-gy2lu5xbi4csr2k47emlajzfs5mlsd4g/lib/x86_64-unknown-linux-gnu;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13;/usr/tce/packages/clang/clang-19.1.3/lib;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-alcgvwpunh3on5r5odtmsf62atx22tgt/lib;/usr/WS2/smithdev/libs/smith/toss_4_x86_64_ib/rzvector/2026_09_03_11_32_53/llvm-19.1.3/smith-develop-alcgvwpunh3on5r5odtmsf62atx22tgt/lib64;;/usr/tce/backend/installations/linux-rhel8-x86_64/gcc-13.3.1/llvm-19.1.3-gy2lu5xbi4csr2k47emlajzfs5mlsd4g/lib/x86_64-unknown-linux-gnu;/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13;/usr/tce/packages/clang/clang-19.1.3/lib;/collab/usr/global/tools/tce4/packages/gcc/gcc-13.3.1/lib/gcc/x86_64-redhat-linux/13" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
@@ -69,7 +69,7 @@ set(ENABLE_MPI ON CACHE BOOL "")
 
 set(CUDAToolkit_ROOT "/usr/tce/packages/cuda/cuda-12.9.1" CACHE PATH "")
 
-set(CMAKE_CUDA_COMPILER "${CMAKE_CXX_COMPILER}" CACHE PATH "")
+set(CMAKE_CUDA_COMPILER "${CUDAToolkit_ROOT}/bin/nvcc" CACHE PATH "")
 
 set(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}" CACHE PATH "")
 
@@ -79,17 +79,20 @@ set(CMAKE_CUDA_ARCHITECTURES "90" CACHE STRING "")
 
 set(CMAKE_CUDA_FLAGS "" CACHE STRING "")
 
-set(ENABLE_OPENMP ON CACHE BOOL "")
-
 set(ENABLE_CUDA ON CACHE BOOL "")
 
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON CACHE BOOL "")
 
-set(CMAKE_CUDA_FLAGS "-fPIC ${CMAKE_CUDA_FLAGS} -Wno-unknown-cuda-version" CACHE STRING "" FORCE)
+# Override CUDA compiler to use Clang
+set(CMAKE_CUDA_COMPILER "${CMAKE_CXX_COMPILER}" CACHE PATH "" FORCE)
 
-# nvcc does not like gtest's 'pthreads' flag
+set(CMAKE_CUDA_FLAGS "-fPIC ${CMAKE_CUDA_FLAGS} -Wno-unknown-cuda-version " CACHE STRING "" FORCE)
 
-set(gtest_disable_pthreads ON CACHE BOOL "")
+#------------------------------------------------
+# OpenMP
+#------------------------------------------------
+
+set(ENABLE_OPENMP ON CACHE BOOL "")
 
 #------------------------------------------------------------------------------
 # TPLs
@@ -160,3 +163,5 @@ set(SPHINX_EXECUTABLE "${DEVTOOLS_ROOT}/python-3.11.7/bin/sphinx-build" CACHE PA
 set(CPPCHECK_EXECUTABLE "${DEVTOOLS_ROOT}/cppcheck-2.9/bin/cppcheck" CACHE PATH "")
 
 set(DOXYGEN_EXECUTABLE "${DEVTOOLS_ROOT}/doxygen-1.9.8/bin/doxygen" CACHE PATH "")
+
+
