@@ -5,30 +5,31 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 /**
- * @file equation_solver.hpp
+ * @file trust_region_solver.hpp
  *
- * @brief This file contains the declaration of a trust region subspace solver
+ * @brief Trust-region subspace solver interface
  */
 
 #pragma once
 
 #include "smith/smith_config.hpp"
 
-#ifdef SMITH_USE_SLEPC
-
+#include <exception>
 #include <memory>
-#include <optional>
-#include <variant>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
-#include "smith/physics/state/finite_element_state.hpp"
-#include "smith/physics/state/finite_element_dual.hpp"
+#include "mfem.hpp"
 
 namespace smith {
 
-class PetscException : public std::exception {
+/// Exception type for trust-region subspace solve failures.
+class TrustRegionException : public std::exception {
  public:
   /// constructor
-  PetscException(const std::string& message) : msg(message) {}
+  TrustRegionException(const std::string& message) : msg(message) {}
 
   /// what is message
   const char* what() const noexcept override { return msg.c_str(); }
@@ -38,21 +39,15 @@ class PetscException : public std::exception {
   std::string msg;
 };
 
-/// @brief computes the global size of mfem::Vector
-int globalSize(const mfem::Vector& parallel_v, const MPI_Comm& comm);
-
-/// @brief computes the l2 inner product between two mfem::Vector in parallal
-double innerProduct(const mfem::Vector& a, const mfem::Vector& b, const MPI_Comm& comm);
+/// Subspace solution, leftmost eigenvectors, leftmost eigenvalues, and predicted model energy change.
+using TrustRegionSubspaceResult =
+    std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector<double>, double>;
 
 /// @brief returns the solution, as well as a list of the N leftmost eigenvectors
 /// and their eigenvalues, and the predicted model energy change
-std::tuple<mfem::Vector, std::vector<std::shared_ptr<mfem::Vector>>, std::vector<double>, double> solveSubspaceProblem(
-    const std::vector<const mfem::Vector*>& directions, const std::vector<const mfem::Vector*>& A_directions,
-    const mfem::Vector& b, double delta, int num_leftmost);
-
-std::pair<std::vector<const mfem::Vector*>, std::vector<const mfem::Vector*>> removeDependentDirections(
-    std::vector<const mfem::Vector*> directions, std::vector<const mfem::Vector*> A_directions);
+TrustRegionSubspaceResult solveSubspaceProblem(const std::vector<const mfem::Vector*>& directions,
+                                               const std::vector<const mfem::Vector*>& A_directions,
+                                               const mfem::Vector& b, double delta, int num_leftmost,
+                                               MPI_Comm comm = MPI_COMM_WORLD);
 
 }  // namespace smith
-
-#endif  // SMITH_USE_SLEPC

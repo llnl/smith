@@ -46,3 +46,6 @@ add_subdirectory(uniaxial)
 
 # Add the inertia relief example
 add_subdirectory(inertia_relief)
+
+# Add the obstacle design example
+add_subdirectory(obstacle_design)

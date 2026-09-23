@@ -7,8 +7,7 @@
 #------------------------------------------------------------------------------
 # Create variable for every TPL
 #------------------------------------------------------------------------------
-set(TPL_DEPS ADIAK AXOM CALIPER CAMP CONDUIT CONTINUATION CUDA ENZYME GRETL HDF5 HIP LUA MFEM MPI PETSC RAJA SLEPC STRUMPACK SUNDIALS TRIBOL UMPIRE)
-foreach(dep ${TPL_DEPS})
+foreach(dep ${SMITH_TPL_DEPS})
     if( ${dep}_FOUND OR ENABLE_${dep} )
         set(SMITH_USE_${dep} TRUE)
     endif()

@@ -85,7 +85,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
     addBodyIntegralImpl(body_name, qfunction, std::integer_sequence<int, active_parameters...>{});
   }
 
-  /// @brief Add a body integral to the objective function.
+  /// @brief Add a body integral depending on all input fields.
   template <typename FuncOfTimeSpaceAndParams>
   void addBodyIntegral(std::string body_name, const FuncOfTimeSpaceAndParams& qfunction)
   {
@@ -117,7 +117,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
     addBoundaryIntegralImpl(boundary_name, qfunction, std::integer_sequence<int, active_parameters...>{});
   }
 
-  /// @brief Add a boundary integral to the objective function.
+  /// @brief Add a boundary integral depending on all input fields.
   template <typename FuncOfTimeSpaceAndParams>
   void addBoundaryIntegral(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction)
   {
