@@ -61,23 +61,6 @@ void addQuadraticMassIntegral(ScalarWeakForm& weak_form, const std::shared_ptr<M
   });
 }
 
-// Verifies the flat utility assembles an operator directly from weak-form inputs.
-TEST_F(WeakFormBlockOperatorTest, BuildsOperatorFromWeakForm)
-{
-  const std::string physics_name = "weak_form_block_operator_build";
-  initialize(physics_name);
-  auto shape_disp = createFieldState(*graph, ShapeDispSpace{}, physics_name + "_shape_displacement", mesh->tag());
-  auto field = createFieldState(*graph, ScalarSpace{}, physics_name + "_field", mesh->tag());
-  ScalarWeakForm weak_form("mass", mesh, space(field), spaces({field}));
-  addMassIntegral(weak_form, mesh);
-
-  auto op = buildWeakFormOperator(weak_form, shape_disp, {field}, {1.0}, TimeInfo(0.0, 1.0));
-
-  ASSERT_NE(op, nullptr);
-  EXPECT_EQ(op->Height(), field.get()->Size());
-  EXPECT_EQ(op->Width(), field.get()->Size());
-}
-
 // Verifies the public fixed provider factory hides the implementation builder.
 TEST_F(WeakFormBlockOperatorTest, FixedOverrideProvidesWeakFormOperator)
 {

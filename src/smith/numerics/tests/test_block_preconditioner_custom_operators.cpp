@@ -256,6 +256,22 @@ std::unique_ptr<mfem::Operator> makeMutableLocalScaledIdentityOp(int n, double c
   return mat;
 }
 
+class StateScaledBlockOperatorBuilder final : public smith::StateDependentBlockOperatorBuilder {
+ public:
+  std::unique_ptr<mfem::Operator> build(const mfem::Vector& state,
+                                        const mfem::Array<int>& block_offsets) override
+  {
+    ++update_count_;
+    const int block_size = block_offsets[2] - block_offsets[1];
+    return makeMutableLocalScaledIdentityOp(block_size, state[block_offsets[1]]);
+  }
+
+  int updateCount() const { return update_count_; }
+
+ private:
+  int update_count_ = 0;
+};
+
 class OperatorDiagonalSolver : public mfem::Solver {
  public:
   void SetOperator(const mfem::Operator& op) override
@@ -724,14 +740,10 @@ TEST(BlockSchurPreconditionerCustom, StateDependentProviderUpdatesSchurSolve)
   solvers.push_back(std::make_unique<OperatorDiagonalSolver>());
   solvers.push_back(std::make_unique<OperatorDiagonalSolver>());
 
-  auto update_count = std::make_shared<int>(0);
+  auto builder = std::make_unique<StateScaledBlockOperatorBuilder>();
+  auto* builder_ptr = builder.get();
   std::vector<smith::BlockProviderOverride> overrides;
-  overrides.push_back(smith::makeStateDependentBlockProviderOverride(
-      1, [update_count](const mfem::Vector& state, const mfem::Array<int>& block_offsets) {
-        ++(*update_count);
-        const int block_size = block_offsets[2] - block_offsets[1];
-        return makeMutableLocalScaledIdentityOp(block_size, state[block_offsets[1]]);
-      }));
+  overrides.push_back(smith::makeStateDependentBlockProviderOverride(1, std::move(builder)));
 
   smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Diagonal, smith::SchurApproxType::Custom,
                                     std::move(overrides));
@@ -756,7 +768,7 @@ TEST(BlockSchurPreconditionerCustom, StateDependentProviderUpdatesSchurSolve)
   P.SetOperator(A);
   P.Mult(b, x);
 
-  EXPECT_EQ(*update_count, 2);
+  EXPECT_EQ(builder_ptr->updateCount(), 2);
   EXPECT_NEAR(x[0], b[0] / 2.0, 1e-12);
   EXPECT_NEAR(x[1], b[1] / 2.0, 1e-12);
   EXPECT_NEAR(x[2], b[2] / 7.0, 1e-12);

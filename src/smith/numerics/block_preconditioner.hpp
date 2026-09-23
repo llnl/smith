@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -33,16 +32,14 @@ class BlockOperatorProvider {
   virtual const mfem::Operator& currentOperator() const = 0;
 };
 
-/**
- * @brief Builder that rebuilds an operator from the current nonlinear state.
- *
- * Builders are invoked by BlockPreconditioner::updateForState(). In nonlinear
- * block solves created with a custom state-dependent preconditioner, that update
- * is wired into the Newton loop before the preconditioner is configured with the
- * current Jacobian.
- */
-using StateDependentBlockOperatorBuilder =
-    std::function<std::unique_ptr<mfem::Operator>(const mfem::Vector&, const mfem::Array<int>&)>;
+/** @brief Builds an operator from the current nonlinear state. */
+class StateDependentBlockOperatorBuilder {
+ public:
+  virtual ~StateDependentBlockOperatorBuilder() = default;
+
+  virtual std::unique_ptr<mfem::Operator> build(const mfem::Vector& state,
+                                                const mfem::Array<int>& block_offsets) = 0;
+};
 
 /**
  * @brief Optional provider override for a diagonal block operator.
@@ -76,7 +73,7 @@ BlockProviderOverride makeFixedBlockProviderOverride(int block_index, std::uniqu
 /**
  * @brief Build an override from a state-dependent operator builder.
  * @param block_index Block index to override.
- * @param builder Callable that returns a new concrete operator for a state.
+ * @param builder Owned builder that returns a new concrete operator for a state.
  * @param initial_operator Optional operator to use before the first update.
  *
  * The builder is called from BlockPreconditioner::updateForState() with the
@@ -88,7 +85,7 @@ BlockProviderOverride makeFixedBlockProviderOverride(int block_index, std::uniqu
  * has produced an operator.
  */
 BlockProviderOverride makeStateDependentBlockProviderOverride(
-    int block_index, StateDependentBlockOperatorBuilder builder,
+    int block_index, std::unique_ptr<StateDependentBlockOperatorBuilder> builder,
     std::unique_ptr<mfem::Operator> initial_operator = nullptr);
 
 /**
