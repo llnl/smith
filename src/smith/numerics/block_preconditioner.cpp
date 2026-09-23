@@ -34,7 +34,7 @@ class FixedBlockOperatorProvider : public BlockOperatorProvider {
 
 class StateDependentBlockOperatorProvider : public BlockOperatorProvider {
  public:
-  StateDependentBlockOperatorProvider(StateDependentBlockOperatorBuilder builder,
+  StateDependentBlockOperatorProvider(std::unique_ptr<StateDependentBlockOperatorBuilder> builder,
                                       std::unique_ptr<mfem::Operator> initial_operator)
       : builder_(std::move(builder)), op_(std::move(initial_operator))
   {
@@ -45,7 +45,7 @@ class StateDependentBlockOperatorProvider : public BlockOperatorProvider {
 
   void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
   {
-    op_ = builder_(state, block_offsets);
+    op_ = builder_->build(state, block_offsets);
     if (!op_) {
       throw std::invalid_argument("State-dependent block operator builder returned a null operator");
     }
@@ -60,7 +60,7 @@ class StateDependentBlockOperatorProvider : public BlockOperatorProvider {
   }
 
  private:
-  StateDependentBlockOperatorBuilder builder_;
+  std::unique_ptr<StateDependentBlockOperatorBuilder> builder_;
   std::unique_ptr<mfem::Operator> op_;
 };
 
@@ -100,7 +100,7 @@ BlockProviderOverride makeFixedBlockProviderOverride(int block_index, std::uniqu
 }
 
 BlockProviderOverride makeStateDependentBlockProviderOverride(int block_index,
-                                                              StateDependentBlockOperatorBuilder builder,
+                                                              std::unique_ptr<StateDependentBlockOperatorBuilder> builder,
                                                               std::unique_ptr<mfem::Operator> initial_operator)
 {
   return {block_index,
