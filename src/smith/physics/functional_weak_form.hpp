@@ -14,6 +14,7 @@
 #pragma once
 
 #include <functional>
+#include <utility>
 
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
@@ -425,7 +426,21 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     }
   }
 
-  /// @brief Set an optional current-state auxiliary-field refresh performed before assembly.
+  /**
+   * @brief Register a callback that refreshes auxiliary fields before each weak-form evaluation.
+   *
+   * The callback receives the current input fields in the same order as the weak form's
+   * `InputSpaces`. This lets a client reconstruct externally stored auxiliary or parameter fields
+   * from the current nonlinear iterate before evaluating the residual, Jacobian, JVP, or VJP. For
+   * example, a client can project the current solution gradient into a parameter field consumed by
+   * an integrand, ensuring that the integrand does not use a value from an earlier iterate.
+   *
+   * The callback should treat @p fields as read-only and update only fields that it owns or captures.
+   * Its operations are not differentiated, so derivatives through the auxiliary-field update are not
+   * automatically included in the assembled operators. Passing an empty callback disables the refresh.
+   *
+   * @param[in] callback Function invoked immediately before each weak-form evaluation.
+   */
   void setPreAssemblyCallback(std::function<void(const std::vector<ConstFieldPtr>&)> callback)
   {
     pre_assembly_callback_ = std::move(callback);
@@ -509,6 +524,15 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     }
   }
 
+  /**
+   * @brief Refresh externally stored auxiliary fields from the current weak-form inputs.
+   *
+   * This is a no-op unless a client registered a callback with setPreAssemblyCallback(). Keeping the
+   * invocation in one helper ensures that residual and derivative evaluations see the same auxiliary
+   * state for a given set of input fields.
+   *
+   * @param[in] fields Current weak-form input fields.
+   */
   void refreshAuxiliaryFields(const std::vector<ConstFieldPtr>& fields) const
   {
     if (pre_assembly_callback_) pre_assembly_callback_(fields);
@@ -613,7 +637,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /// @brief Active time information forwarded to integrands.
   mutable const TimeInfo* current_time_info_ = nullptr;
 
-  /// @brief Optional refresh of nonlocal parameter fields from the current nonlinear state.
+  /// Callback used to synchronize externally stored auxiliary fields with the current input state.
   std::function<void(const std::vector<ConstFieldPtr>&)> pre_assembly_callback_;
 
   /// @brief primary mesh
