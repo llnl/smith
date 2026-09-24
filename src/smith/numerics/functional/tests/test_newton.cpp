@@ -99,10 +99,10 @@ TEST(ScalarEquationSolver, ReturnsImmediatelyIfLowerBoundIsARoot)
 
 TEST(ScalarEquationSolver, ConvergesWithGuessOutsideNewtonBasin)
 {
-  double x0 = 9.5;
+  double x0 = 2.0;
   double lower = -10.0;
   double upper = 10.0;
-  auto nasty_function = [](auto x) { return sin(x) + x; };
+  auto nasty_function = [](auto x) { return x/(1.0 + x*x); };
   auto [x, status] = solve_scalar_equation(nasty_function, x0, lower, upper, default_solver_options);
   double error = std::abs(x);
   EXPECT_LT(error, default_solver_options.xtol);
