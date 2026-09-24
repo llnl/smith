@@ -24,9 +24,11 @@ _host_configs_map = {"rzgenie"   : "rzwhippet-toss_4_x86_64_ib-llvm@19.1.3.cmake
                      "rzwhippet" : "rzwhippet-toss_4_x86_64_ib-llvm@19.1.3.cmake",
                      "rzvernal"  : "rzvernal-toss_4_x86_64_ib_cray-rocmcc@6.2.1_hip.cmake",
                      "rzadams"   : "rzadams-toss_4_x86_64_ib_cray-llvm-amdgpu@6.4.2_hip.cmake",
+                     "rzvector"  : "rzvector-toss_4_x86_64_ib-llvm@19.1.3_cuda.cmake",
                      "dane"      : "dane-toss_4_x86_64_ib-llvm@19.1.3.cmake",
                      "tioga"     : "tuolumne-toss_4_x86_64_ib_cray-llvm-amdgpu@6.4.2_hip.cmake",
-                     "tuolumne"  : "tuolumne-toss_4_x86_64_ib_cray-llvm-amdgpu@6.4.2_hip.cmake"}
+                     "tuolumne"  : "tuolumne-toss_4_x86_64_ib_cray-llvm-amdgpu@6.4.2_hip.cmake",
+                     "matrix"    : "matrix-toss_4_x86_64_ib-llvm@19.1.3_cuda.cmake"}
 
 def get_machine_name():
     return socket.gethostname().rstrip('1234567890')

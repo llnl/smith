@@ -111,7 +111,7 @@ __global__ void elasticity(int* error)
 
   auto epsilon = sym(make_dual(grad_u));
 
-  tensor dsigma_depsilon = get_gradient(sigma(epsilon));
+  tensor<double, 3, 3, 3, 3> dsigma_depsilon = get_gradient(sigma(epsilon));
 
   CUDA_EXPECT_LT(abs(squared_norm(dsigma_depsilon - C)), tolerance);
 }
@@ -168,7 +168,7 @@ __global__ void navier_stokes(int* error)
   };
 
   double p = 3.14;
-  tensor v = {{1.0, 2.0, 3.0}};
+  tensor<double, 3> v = {{1.0, 2.0, 3.0}};
   tensor<double, 3, 3> L = {{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}}};
 
   {
