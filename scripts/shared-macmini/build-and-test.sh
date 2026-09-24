@@ -3,7 +3,7 @@
 # Build and test Smith on team's shared MacMini, then report results to a set of emails
 
 # Immediately fail upon error and update environment
-set -e
+set -eE
 source ~/.bash_profile
 
 # Variables
