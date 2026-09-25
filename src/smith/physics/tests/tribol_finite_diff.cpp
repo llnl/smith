@@ -27,9 +27,7 @@
 #include "smith/physics/state/state_manager.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/materials/solid_material.hpp"
-#include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
-#include "tribol/mesh/CouplingScheme.hpp"
 #include "tribol/interface/tribol.hpp"
 
 namespace smith {
