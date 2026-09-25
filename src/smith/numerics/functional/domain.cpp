@@ -109,6 +109,41 @@ Domain Domain::ofEdges(const mesh_t& mesh, std::function<bool(std::vector<vec3>)
   return domain_of_edges<3>(mesh, func);
 }
 
+template <int d>
+static Domain domain_of_vertices(const mesh_t& mesh, std::function<bool(tensor<double, d>)> predicate)
+{
+  assert(mesh.SpaceDimension() == d);
+
+  Domain output{mesh, 0, Domain::Type::Elements};
+
+  mfem::Vector vertices;
+  mesh.GetVertices(vertices);
+
+  int num_vertices = vertices.Size() / d;
+  for (int i = 0; i < num_vertices; i++) {
+    tensor<double, d> x{};
+    for (int j = 0; j < d; j++) {
+      x[j] = vertices[j * num_vertices + i];
+    }
+
+    if (predicate(x)) {
+      output.addElement(i, i, mfem::Geometry::POINT);
+    }
+  }
+
+  return output;
+}
+
+Domain Domain::ofVertices(const mesh_t& mesh, std::function<bool(vec2)> func)
+{
+  return domain_of_vertices<2>(mesh, func);
+}
+
+Domain Domain::ofVertices(const mesh_t& mesh, std::function<bool(vec3)> func)
+{
+  return domain_of_vertices<3>(mesh, func);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
@@ -267,7 +302,10 @@ Domain Domain::ofElements(const mesh_t& mesh, std::function<bool(std::vector<vec
 
 void Domain::addElement(int geom_id, int elem_id, mfem::Geometry::Type element_geometry)
 {
-  if (element_geometry == mfem::Geometry::SEGMENT) {
+  if (element_geometry == mfem::Geometry::POINT) {
+    vertex_ids_.push_back(geom_id);
+    mfem_vertex_ids_.push_back(elem_id);
+  } else if (element_geometry == mfem::Geometry::SEGMENT) {
     edge_ids_.push_back(geom_id);
     mfem_edge_ids_.push_back(elem_id);
   } else if (element_geometry == mfem::Geometry::TRIANGLE) {
@@ -478,7 +516,13 @@ mfem::Array<int> Domain::dof_list(const smith::fes_t* fes) const
   }
 
   if (dim_ == 0) {
-    // sam: what to do with vertex sets?
+    GetDofs = [&](int i, mfem::Array<int>& vdofs) { return fes->GetVertexDofs(i, vdofs); };
+    for (auto vertex_id : mfem_vertex_ids_) {
+      GetDofs(vertex_id, elem_dofs);
+      for (int i = 0; i < elem_dofs.Size(); i++) {
+        dof_ids.insert(elem_dofs[i]);
+      }
+    }
   }
 
   if (dim_ == 1) {
@@ -817,6 +861,10 @@ Domain set_operation(SET_OPERATION op, const Domain& a, const Domain& b)
 
   if (combined.dim_ == 1) {
     fill_combined_lists(a.edge_ids_, a.mfem_edge_ids_, b.edge_ids_, b.mfem_edge_ids_, mfem::Geometry::SEGMENT);
+  }
+
+  if (combined.dim_ == 0) {
+    fill_combined_lists(a.vertex_ids_, a.mfem_vertex_ids_, b.vertex_ids_, b.mfem_vertex_ids_, mfem::Geometry::POINT);
   }
 
   if (combined.dim_ == 2) {
