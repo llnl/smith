@@ -428,7 +428,7 @@ TEST(MfemPetscSmoketest, MfemPetscEx1)
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   if (rank == 0) {
     EXPECT_NE(output.find("--order 1"), std::string::npos);
-    EXPECT_NE(output.find("Linear  solve converged due to CONVERGED_"), std::string::npos);
+    EXPECT_NE(output.find("Linear solve converged due to CONVERGED_"), std::string::npos);
   }
 }
 

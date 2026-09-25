@@ -219,3 +219,8 @@ spack:
       externals:
       - spec: cppcheck@2.13.0
         prefix: /usr
+
+    # https://github.com/llnl/smith/issues/1656
+    petsc:
+      require:
+      - spec: "~shared"

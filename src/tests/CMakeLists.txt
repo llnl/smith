@@ -52,8 +52,11 @@ endif()
 # TPL regression and smoke tests
 #
 
+# TODO Axom was removing rpath information causing libstrumpack.so.8.0 to not be found.
+# Temporarily add our mfem target as a workaround, but remove it once the following PR
+# merges: https://github.com/llnl/axom/pull/1968
 smith_add_tests( SOURCES       axom_smoketest.cpp
-                 DEPENDS_ON    axom::inlet)
+                 DEPENDS_ON    axom::inlet mfem)
 
 if(PETSC_FOUND)
     smith_add_tests(SOURCES       mfem_petsc_smoketest.cpp
