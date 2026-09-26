@@ -104,7 +104,7 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
                                std::integer_sequence<int, all_params...>)
   {
     objective_->AddBoundaryIntegral(
-        smith::Dimension<spatial_dim>{}, smith::DependsOn<all_params...>{},
+        smith::Dimension<spatial_dim - 1>{}, smith::DependsOn<all_params...>{},
         [this, qfunction](double /*time*/, auto X, auto... params) { return qfunction(timeInfo(), X, params...); },
         mesh_->domain(boundary_name));
   }

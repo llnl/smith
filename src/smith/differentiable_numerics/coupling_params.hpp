@@ -164,7 +164,31 @@ template <typename... PFs, typename... Spaces>
 /// @brief Collect coupled physics packs followed by registered parameter fields.
 auto collectCouplingFields(const CouplingFields<PFs...>& coupled, const ParamFields<Spaces...>& params)
 {
-  return std::tuple_cat(coupled.packs, std::make_tuple(params));
+  if constexpr (sizeof...(Spaces) == 0) {
+    return coupled.packs;
+  } else {
+    return std::tuple_cat(coupled.packs, std::make_tuple(params));
+  }
+}
+
+/// @brief Collect no coupling or parameter packs when both are empty.
+inline auto collectCouplingFields(const CouplingFields<>& /* coupled */, const ParamFields<>& /* params */)
+{
+  return std::tuple<>{};
+}
+
+template <typename... PFs>
+/// @brief Collect only coupled physics packs when parameter fields are empty.
+auto collectCouplingFields(const CouplingFields<PFs...>& coupled, const ParamFields<>& /* params */)
+{
+  return coupled.packs;
+}
+
+template <typename... Spaces>
+/// @brief Collect only registered parameter fields when coupled physics packs are empty.
+auto collectCouplingFields(const CouplingFields<>& /* coupled */, const ParamFields<Spaces...>& params)
+{
+  return std::make_tuple(params);
 }
 
 // -------------------------------------------------------------------------
