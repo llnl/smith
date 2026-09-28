@@ -10,9 +10,16 @@ smith_add_executable( NAME        composable_solid_mechanics
                       DEPENDS_ON  smith
                       )
 
+smith_add_executable( NAME        logpile_compression
+                      SOURCES     logpile_compression.cpp
+                      OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}
+                      DEPENDS_ON  smith
+                      )
+
 install(
     FILES
         composable_solid_mechanics.cpp
+        logpile_compression.cpp
     DESTINATION
         examples/smith/solid_mechanics
 )
