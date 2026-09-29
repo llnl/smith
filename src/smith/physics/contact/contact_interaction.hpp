@@ -45,10 +45,9 @@ class ContactInteraction {
    * @param mesh Mesh of the entire domain
    * @param bdry_attr_surf1 MFEM boundary attributes for the first (mortar) surface
    * @param bdry_attr_surf2 MFEM boundary attributes for the second (nonmortar) surface
-   * @param current_coords Reference to the grid function holding current mesh
+   * @param current_coords Reference to the grid function holding current mesh coordinates
    * @param shaped_reference_coords Reference to the grid function holding the shape-displaced reference mesh
    * @param contact_opts Defines contact method, enforcement, type, and penalty
-   * coordinates
    */
   ContactInteraction(int interaction_id, const mfem::ParMesh& mesh, const std::set<int>& bdry_attr_surf1,
                      const std::set<int>& bdry_attr_surf2, const mfem::ParGridFunction& current_coords,
