@@ -72,6 +72,57 @@ std::string caseName(IroningCase ironing_case)
   return "square";
 }
 
+shared::MeshBuilder semiCircularShellMesh(int radial_divisions, int angular_divisions, double inner_radius,
+                                          double outer_radius)
+{
+  SLIC_ERROR_ROOT_IF(radial_divisions <= 0, "radial_divisions must be positive.");
+  SLIC_ERROR_ROOT_IF(angular_divisions <= 0, "angular_divisions must be positive.");
+  SLIC_ERROR_ROOT_IF(inner_radius <= 0.0, "inner_radius must be positive.");
+  SLIC_ERROR_ROOT_IF(outer_radius <= inner_radius, "outer_radius must be larger than inner_radius.");
+
+  const int num_vertices = (radial_divisions + 1) * (angular_divisions + 1);
+  const int num_elements = radial_divisions * angular_divisions;
+  const int num_boundary_elements = 2 * (radial_divisions + angular_divisions);
+  mfem::Mesh mesh(2, num_vertices, num_elements, num_boundary_elements, 2);
+
+  auto vertexIndex = [angular_divisions](int radial_idx, int angular_idx) {
+    return radial_idx * (angular_divisions + 1) + angular_idx;
+  };
+
+  for (int radial_idx = 0; radial_idx <= radial_divisions; ++radial_idx) {
+    const double radius =
+        inner_radius + (outer_radius - inner_radius) * static_cast<double>(radial_idx) / radial_divisions;
+    for (int angular_idx = 0; angular_idx <= angular_divisions; ++angular_idx) {
+      const double theta = M_PI + M_PI * static_cast<double>(angular_idx) / angular_divisions;
+      const double vertex[2] = {radius * std::cos(theta), radius * std::sin(theta)};
+      mesh.AddVertex(vertex);
+    }
+  }
+
+  for (int radial_idx = 0; radial_idx < radial_divisions; ++radial_idx) {
+    for (int angular_idx = 0; angular_idx < angular_divisions; ++angular_idx) {
+      mesh.AddQuad(vertexIndex(radial_idx, angular_idx), vertexIndex(radial_idx + 1, angular_idx),
+                   vertexIndex(radial_idx + 1, angular_idx + 1), vertexIndex(radial_idx, angular_idx + 1));
+    }
+  }
+
+  for (int radial_idx = 0; radial_idx < radial_divisions; ++radial_idx) {
+    mesh.AddBdrSegment(vertexIndex(radial_idx, 0), vertexIndex(radial_idx + 1, 0), 1);
+  }
+  for (int angular_idx = 0; angular_idx < angular_divisions; ++angular_idx) {
+    mesh.AddBdrSegment(vertexIndex(radial_divisions, angular_idx), vertexIndex(radial_divisions, angular_idx + 1), 2);
+  }
+  for (int radial_idx = 0; radial_idx < radial_divisions; ++radial_idx) {
+    mesh.AddBdrSegment(vertexIndex(radial_idx + 1, angular_divisions), vertexIndex(radial_idx, angular_divisions), 3);
+  }
+  for (int angular_idx = 0; angular_idx < angular_divisions; ++angular_idx) {
+    mesh.AddBdrSegment(vertexIndex(0, angular_idx + 1), vertexIndex(0, angular_idx), 4);
+  }
+
+  mesh.FinalizeQuadMesh(1, 0, true);
+  return shared::MeshBuilder(std::move(mesh));
+}
+
 MeshPtr buildSquareMesh(const std::string& mesh_tag)
 {
   constexpr auto mesh_factor = 8;
@@ -100,7 +151,7 @@ MeshPtr buildCircleMesh(const std::string& mesh_tag)
            .updateBdrAttrib(1, 6)
            .updateBdrAttrib(3, 9)
            .scale({1.0, 0.25}),
-       shared::MeshBuilder::SemiCircularShell(mesh_factor * 3 / 2, 10 * mesh_factor, 0.075, 0.125)
+       semiCircularShellMesh(mesh_factor * 3 / 2, 10 * mesh_factor, 0.075, 0.125)
            .translate({0.125, 0.375})
            .updateBdrAttrib(1, 5)
            .updateBdrAttrib(2, 8)

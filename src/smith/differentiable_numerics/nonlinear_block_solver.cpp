@@ -250,7 +250,14 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solveAdjoi
     }
   }
 
-  linear_solver.SetOperator(*block_jac);
+  mfem::Operator* adjoint_operator = block_jac.get();
+  std::unique_ptr<mfem::HypreParMatrix> monolithic_jacobian;
+  if (retained_linear_options_ && requiresMonolithicOperator(*retained_linear_options_)) {
+    monolithic_jacobian = buildMonolithicMatrix(*block_jac);
+    adjoint_operator = monolithic_jacobian.get();
+  }
+
+  linear_solver.SetOperator(*adjoint_operator);
   linear_solver.Mult(*block_r, *block_ds);
 
   for (int row_i = 0; row_i < num_rows; ++row_i) {

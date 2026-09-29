@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/infrastructure/logger.hpp"
 #include "smith/numerics/temporal_stencil.hpp"
 
@@ -154,6 +155,45 @@ struct FixedStepBDFOperator {
     }
 
     return result;
+
+  }
+
+  /**
+   * @brief Compute the weighted lag-state sum while preserving Gretl dependencies.
+   *
+   * This is the differentiable counterpart of weighted_sum().  Forming a plain
+   * FiniteElementState and copying its values into a FieldState gives the correct
+   * forward field, but it does not register a VJP from the sum to its history
+   * states.  Returning a FieldStateWeightedSum keeps those temporal dependencies
+   * in the graph so an adjoint can propagate to every lag state.
+   */
+  smith::FieldState
+  differentiable_weighted_sum(
+    smith::TemporalStencil<smith::FieldState> const &stencil,
+    int k_plus_1
+  ) const {
+
+    SLIC_ERROR_ROOT_IF(
+      k_plus_1 <= 0,
+      "No previous states available to compute weighted sum."
+    );
+
+    int const available_order = std::min(k_plus_1, s_order_);
+    auto history = stencil.view(available_order);
+
+    SLIC_ERROR_ROOT_IF(
+      history.size() != static_cast<size_t>(available_order),
+      axom::fmt::format(
+        "Expected {} previous states, but got {}.",
+        available_order,
+        history.size()
+      )
+    );
+
+    auto const beta = this->compute_beta(available_order);
+    std::vector<double> history_weights(beta.begin() + 1, beta.end());
+
+    return smith::FieldStateWeightedSum(history_weights, history);
 
   }
 

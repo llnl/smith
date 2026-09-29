@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/infrastructure/logger.hpp"
 #include "smith/numerics/temporal_stencil.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
@@ -129,6 +130,43 @@ public:
     }
 
     return result;
+
+  }
+
+  /**
+   * @brief Extrapolate while preserving Gretl dependencies on the history states.
+   *
+   * The value-only operator above is retained for existing callers.  This method
+   * instead constructs the extrapolation through differentiable FieldState
+   * operations.  Copying a computed FiniteElementState into an existing
+   * FieldState would reproduce the forward values but sever the reverse-mode
+   * path to the lagged fields.
+   */
+  smith::FieldState
+  differentiable(
+    TemporalStencil<smith::FieldState> const &stencil,
+    int cycle
+  ) const {
+
+    SLIC_ERROR_ROOT_IF(
+      cycle <= 0,
+      "Extrapolation requires at least one completed cycle."
+    );
+
+    int const available_order = std::min(cycle, order_);
+
+    if (available_order == 0) {
+      SLIC_ERROR_ROOT_IF(stencil.size() == 0, "Zero extrapolation requires a field space.");
+
+      // zeroCopy supplies a correctly typed zero FieldState. Its VJP is zero,
+      // as required because zero-order extrapolation is history-independent.
+      return smith::zeroCopy(stencil.view().front());
+    }
+
+    auto history = stencil.view(available_order);
+    auto const gammas = this->compute_gammas(available_order);
+
+    return smith::FieldStateWeightedSum(gammas, history);
 
   }
 
