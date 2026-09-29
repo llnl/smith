@@ -47,6 +47,7 @@ int main(int argc, char* argv[])
   double traction = 0.05;
   double binning_proximity_scale = 10.0;
   double normal_smoothing_start_angle_degrees = 90.0;
+  double normal_smoothing_end_angle_degrees = 90.0;
 
   axom::CLI::App app{"C-shaped self-contact example"};
   app.add_option("--contact-interactions", num_contact_interactions,
@@ -70,7 +71,10 @@ int main(int argc, char* argv[])
                  "Element-length multiplier used for the Tribol contact search radius.")
       ->check(axom::CLI::Range(2.0, 100.0));
   app.add_option("--normal-smoothing-start-angle", normal_smoothing_start_angle_degrees,
-                 "EnergyMortar normal smoothing start angle in degrees; 90 disables normal attenuation.")
+                 "EnergyMortar normal smoothing start angle in degrees; must not exceed the end angle.")
+      ->check(axom::CLI::Range(0.0, 90.0));
+  app.add_option("--normal-smoothing-end-angle", normal_smoothing_end_angle_degrees,
+                 "EnergyMortar normal smoothing end angle in degrees; 90 preserves the default cutoff.")
       ->check(axom::CLI::Range(0.0, 90.0));
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
@@ -84,15 +88,19 @@ int main(int argc, char* argv[])
                      "--num-x-elements must be greater than --arm-thickness-elements.");
   SLIC_ERROR_ROOT_IF(num_y_elements <= 2 * arm_thickness_elements,
                      "--num-y-elements must be greater than twice --arm-thickness-elements.");
+  SLIC_ERROR_ROOT_IF(normal_smoothing_start_angle_degrees > normal_smoothing_end_angle_degrees,
+                     "--normal-smoothing-start-angle must not exceed --normal-smoothing-end-angle.");
 
   const std::string interaction_name = num_contact_interactions == 1 ? "one_interaction" : "three_interactions";
   const std::string name = "contact_c_shape_" + interaction_name;
   const double normal_smoothing_start_angle = normal_smoothing_start_angle_degrees * std::acos(-1.0) / 180.0;
+  const double normal_smoothing_end_angle = normal_smoothing_end_angle_degrees * std::acos(-1.0) / 180.0;
 
   SLIC_INFO_ROOT("Running the C-shape example with "
                  << num_contact_interactions << " contact interaction(s), a " << residual_gap
                  << " residual gap, a binning proximity scale of " << binning_proximity_scale
-                 << ", and normal smoothing beginning at " << normal_smoothing_start_angle_degrees << " degrees.");
+                 << ", and normal smoothing over [" << normal_smoothing_start_angle_degrees << ", "
+                 << normal_smoothing_end_angle_degrees << "] degrees.");
 
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, name + "_data");
@@ -144,6 +152,7 @@ int main(int argc, char* argv[])
     tribol::setResidualGap(interaction_id, residual_gap);
     tribol::setEnforcementLocation(interaction_id, tribol::EnforcementLocation::QuadraturePoint);
     tribol::setEnergyMortarNormalSmoothingStartAngle(interaction_id, normal_smoothing_start_angle);
+    tribol::setEnergyMortarNormalSmoothingEndAngle(interaction_id, normal_smoothing_end_angle);
   };
 
   if (num_contact_interactions == 3) {
