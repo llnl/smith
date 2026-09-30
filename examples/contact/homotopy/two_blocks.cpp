@@ -155,8 +155,10 @@ int main(int argc, char* argv[])
   std::string physics_name = "solid";
 
   // construct residual
+  SolidWeakFormT::SpacesT input_spaces{&states[FIELD::DISP].space(), &states[FIELD::VELO].space(),
+                                       &states[FIELD::ACCEL].space(), &params[0].space()};
   auto solid_mechanics_weak_form =
-      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
+      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), input_spaces);
 
   // set material parameters
   SolidMaterial mat;
