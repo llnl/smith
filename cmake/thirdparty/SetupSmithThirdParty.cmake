@@ -21,6 +21,7 @@ set(SMITH_TPL_DEPS ADIAK
                    LUA
                    MFEM
                    MPI
+                   OPENMP
                    PETSC
                    RAJA
                    SLEPC
@@ -246,7 +247,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                                     TARGET       mfem
                                     DIR_VARIABLE MFEM_DIR)
 
-        if (SMITH_ENABLE_HIP AND STRUMPACK_DIR)
+        if (SMITH_ENABLE_HIP AND STRUMPACK_FOUND)
             string(APPEND MFEM_LIBRARIES " -lrocblas -lrocsolver")
             target_link_libraries(mfem INTERFACE rocblas rocsolver)
         endif()
@@ -511,7 +512,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         add_library(axom::cli11 ALIAS cli11)
         add_library(axom::fmt ALIAS fmt)
 
-        if (STRUMPACK_DIR)
+        if (STRUMPACK_FOUND)
             target_link_libraries(sidre PUBLIC STRUMPACK::strumpack)
         endif()
 
@@ -699,7 +700,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         mfem
         axom::mfem
         tribol::mfem)
-    if(STRUMPACK_DIR)
+    if(STRUMPACK_FOUND)
         list(GET MPI_C_LIBRARIES 0 _first_mpi_lib)
         get_filename_component(_mpi_lib_dir ${_first_mpi_lib} DIRECTORY)
     
