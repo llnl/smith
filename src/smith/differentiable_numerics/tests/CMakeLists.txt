@@ -28,3 +28,7 @@ set(differentiable_numerics_test_source
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}
                  DEPENDS_ON    ${differentiable_numerics_test_depends}
                  NUM_MPI_TASKS 1)
+
+smith_add_tests( SOURCES       test_weak_form_block_operator_mpi.cpp
+                 DEPENDS_ON    ${differentiable_numerics_test_depends} blt::mpi
+                 NUM_MPI_TASKS 2)

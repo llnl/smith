@@ -9,6 +9,7 @@ set(numerics_headers
     equation_solver.hpp
     nonlinear_convergence.hpp
     odes.hpp
+    pchip.hpp
     solver_config.hpp
     state_dependent_solver.hpp
     solver_with_preconditioner.hpp
