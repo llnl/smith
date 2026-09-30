@@ -322,10 +322,14 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                             PATHS "${STRUMPACK_DIR}"
                                   "${STRUMPACK_DIR}/lib/cmake/STRUMPACK"
                                   "${STRUMPACK_DIR}/lib64/cmake/STRUMPACK")
+            set(STRUMPACK_FOUND TRUE)
             set(STRUMPACK_REQUIRED_PACKAGES "MPI" "MPI_Fortran" "ParMETIS" "METIS"
                 "ScaLAPACK" CACHE STRING
                 "Additional packages required by STRUMPACK.")
             set(STRUMPACK_TARGET_NAMES STRUMPACK::strumpack CACHE STRING "")
+        else()
+            set(MFEM_USE_STRUMPACK OFF CACHE BOOL "")
+            set(STRUMPACK_FOUND FALSE)
         endif()
         set(MFEM_USE_ZLIB ON CACHE BOOL "")
         if(ENZYME_DIR)
