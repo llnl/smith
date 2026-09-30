@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include <mpi.h>
+
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 #include "smith/physics/weak_form.hpp"
@@ -121,9 +123,17 @@ class WeakFormBlockOperatorBuilder {
 
   void eliminateEssentialDofs(mfem::HypreParMatrix& op) const
   {
-    if (ess_tdofs_.Size() == 0) {
+    // The snapshot can contain boundary-supported Dirichlet conditions or algebraic point constraints such as a
+    // pressure pin.
+    const int local_essential_dof_count = ess_tdofs_.Size();
+    int global_essential_dof_count = 0;
+    MPI_Allreduce(&local_essential_dof_count, &global_essential_dof_count, 1, MPI_INT, MPI_SUM, op.GetComm());
+    if (global_essential_dof_count == 0) {
       return;
     }
+
+    // EliminateRowsCols communicates constrained off-diagonal columns, so all ranks must participate when any rank
+    // owns an essential true dof.
     mfem::HypreParMatrix* eliminated_entries = op.EliminateRowsCols(ess_tdofs_);
     delete eliminated_entries;
   }
