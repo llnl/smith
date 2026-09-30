@@ -96,11 +96,11 @@ int main(int argc, char* argv[])
   const double normal_smoothing_start_angle = normal_smoothing_start_angle_degrees * std::acos(-1.0) / 180.0;
   const double normal_smoothing_end_angle = normal_smoothing_end_angle_degrees * std::acos(-1.0) / 180.0;
 
-  SLIC_INFO_ROOT("Running the C-shape example with "
-                 << num_contact_interactions << " contact interaction(s), a " << residual_gap
-                 << " residual gap, a binning proximity scale of " << binning_proximity_scale
-                 << ", and normal smoothing over [" << normal_smoothing_start_angle_degrees << ", "
-                 << normal_smoothing_end_angle_degrees << "] degrees.");
+  SLIC_INFO_ROOT("Running the C-shape example with " << num_contact_interactions << " contact interaction(s), a "
+                                                     << residual_gap << " residual gap, a binning proximity scale of "
+                                                     << binning_proximity_scale << ", and normal smoothing over ["
+                                                     << normal_smoothing_start_angle_degrees << ", "
+                                                     << normal_smoothing_end_angle_degrees << "] degrees.");
 
   axom::sidre::DataStore datastore;
   smith::StateManager::initialize(datastore, name + "_data");
