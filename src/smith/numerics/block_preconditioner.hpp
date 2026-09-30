@@ -290,7 +290,7 @@ enum class SchurApproxType
  * nonlinear solve, updateForState() is called before Jacobian assembly and
  * setBlockContext() is called later from BlockSchurPreconditioner::SetOperator().
  */
-class SchurComplementActionSolver : public mfem::Solver, public StateDependentSolver {
+class SchurComplementActionSolver : public StateDependentSolver {
  public:
   /// @brief Configure this action solver with the current 2x2 block context.
   virtual void setBlockContext(const mfem::BlockOperator& jacobian, const mfem::Array<int>& block_offsets);
