@@ -285,6 +285,104 @@ TEST_F(WeakFormFixture, ForwardsOriginalTimeInfoToIntegrands)
   EXPECT_TRUE(observed_cycle_zero);
 }
 
+TEST_F(WeakFormFixture, ShapeJvpVjpConsistency)
+{
+  const auto fields = getConstFieldPointers(states, params);
+  const auto comm = states[DISP].space().GetComm();
+
+  // Shape direction ds, a smooth dilation.
+  smith::FiniteElementState ds(shape_disp->space(), "shape_direction");
+  ds.setFromFieldFunction([](smith::tensor<double, dim> x) { return 0.1 * x; });
+
+  // Test vector w in the residual's test space.
+  smith::FiniteElementState w(states[DISP].space(), "test_weight");
+  w = 1.0;
+
+  smith::FiniteElementDual j_ds(states[DISP].space(), "shape_jvp");
+  smith::FiniteElementDual jt_w(shape_disp->space(), "shape_vjp");
+  j_ds = 0.0;
+  jt_w = 0.0;  // VJP accumulates into this output.
+
+  // Zero directions for all non-shape fields.
+  std::vector<smith::ConstFieldPtr> zero_directions(fields.size(), nullptr);
+
+  // Compute j_ds = R_s ds.
+  weak_form->jvp(time_info, shape_disp.get(), fields, {}, &ds, zero_directions, {}, &j_ds);
+
+  // Request only the shape VJP.
+  std::vector<smith::DualFieldPtr> unused_field_outputs(fields.size(), nullptr);
+
+  // Compute jt_w = R_s^T w.
+  weak_form->vjp(time_info, shape_disp.get(), fields, {}, &w, &jt_w, unused_field_outputs, {});
+
+  // Global inner products across MPI ranks.
+  const double lhs = mfem::InnerProduct(comm, ds, jt_w);
+  const double rhs = mfem::InnerProduct(comm, w, j_ds);
+
+  const double tolerance = 1.0e-12 + 1.0e-10 * std::max(std::abs(lhs), std::abs(rhs));
+
+  EXPECT_NEAR(lhs, rhs, tolerance) << "Shape transpose consistency failed:\n"
+                                   << "ds^T (R_s^T w) = " << lhs << "\n"
+                                   << "w^T (R_s ds)  = " << rhs;
+}
+
+TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
+{
+  const auto fields = getConstFieldPointers(states, params);
+
+  // Shape direction: a smooth dilation.
+  smith::FiniteElementState ds(shape_disp->space(), "shape_direction");
+  ds.setFromFieldFunction([](smith::tensor<double, dim> x) { return 0.1 * x; });
+
+  // Perturb only the shape field.
+  constexpr double eps = 1.0e-6;
+  smith::FiniteElementState s_plus(shape_disp->space(), "shape_plus");
+  smith::FiniteElementState s_minus(shape_disp->space(), "shape_minus");
+
+  s_plus.Set(1.0, *shape_disp);
+  s_minus.Set(1.0, *shape_disp);
+  s_plus.Add(eps, ds);
+  s_minus.Add(-eps, ds);
+
+  mfem::Vector fd = weak_form->residual(time_info, &s_plus, fields);
+  mfem::Vector r_minus = weak_form->residual(time_info, &s_minus, fields);
+  fd -= r_minus;
+  fd /= (2.0 * eps);
+
+  auto global_norm = [](const mfem::Vector& x) { return std::sqrt(mfem::InnerProduct(MPI_COMM_WORLD, x, x)); };
+
+  const double fd_norm = global_norm(fd);
+  ASSERT_GT(fd_norm, 1.0e-10) << "This direction must produce a nonzero shape derivative.";
+
+  // JVP: all other field directions are zero.
+  std::vector<smith::ConstFieldPtr> zero_directions(fields.size(), nullptr);
+  smith::FiniteElementDual shape_jvp(states[DISP].space(), "shape_jvp");
+  shape_jvp = 0.0;
+
+  weak_form->jvp(time_info, shape_disp.get(), fields, {}, &ds, zero_directions, {}, &shape_jvp);
+
+  mfem::Vector error(shape_jvp);
+  error -= fd;
+  EXPECT_LE(global_norm(error), 1.0e-8 + 1.0e-6 * fd_norm)
+      << "Shape JVP disagrees with the residual finite difference.";
+
+  // VJP: check ds^T (R_s^T w) against w^T fd.
+  smith::FiniteElementState w(states[DISP].space(), "shape_test_weight");
+  w = 1.0;
+
+  // VJP accumulates, so initialize its output.
+  *shape_disp_dual = 0.0;
+  std::vector<smith::DualFieldPtr> unused_outputs(fields.size(), nullptr);
+
+  weak_form->vjp(time_info, shape_disp.get(), fields, {}, &w, shape_disp_dual.get(), unused_outputs, {});
+
+  const double reference = mfem::InnerProduct(MPI_COMM_WORLD, w, fd);
+  const double from_vjp = mfem::InnerProduct(MPI_COMM_WORLD, ds, *shape_disp_dual);
+
+  EXPECT_NEAR(from_vjp, reference, 1.0e-8 + 1.0e-6 * std::abs(reference))
+      << "Shape VJP disagrees with the residual finite difference.";
+}
+
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
