@@ -298,32 +298,35 @@ TEST_F(WeakFormFixture, ShapeJvpVjpConsistency)
   smith::FiniteElementState w(states[DISP].space(), "test_weight");
   w.Randomize(42);  // random with seed 42
 
-  smith::FiniteElementDual j_ds(states[DISP].space(), "shape_jvp");
-  smith::FiniteElementDual jt_w(shape_disp->space(), "shape_vjp");
-  j_ds = 0.0;
-  jt_w = 0.0;  // VJP accumulates into this output.
+  smith::FiniteElementDual J_ds(states[DISP].space(), "shape_jvp");
+  smith::FiniteElementDual Jt_w(shape_disp->space(), "shape_vjp");
+  J_ds = 0.0;
+  Jt_w = 0.0;  // VJP accumulates into this output.
 
   // Zero directions for all non-shape fields.
   std::vector<smith::ConstFieldPtr> zero_directions(fields.size(), nullptr);
 
-  // Compute j_ds = R_s ds.
-  weak_form->jvp(time_info, shape_disp.get(), fields, {}, &ds, zero_directions, {}, &j_ds);
+  // Compute J_ds = J ds.
+  weak_form->jvp(time_info, shape_disp.get(), fields, {}, &ds, zero_directions, {}, &J_ds);
 
   // Request only the shape VJP.
   std::vector<smith::DualFieldPtr> unused_field_outputs(fields.size(), nullptr);
 
-  // Compute jt_w = R_s^T w.
-  weak_form->vjp(time_info, shape_disp.get(), fields, {}, &w, &jt_w, unused_field_outputs, {});
+  // Compute Jt_w = J^T w.
+  weak_form->vjp(time_info, shape_disp.get(), fields, {}, &w, &Jt_w, unused_field_outputs, {});
 
   // Global inner products across MPI ranks.
-  const double lhs = mfem::InnerProduct(comm, ds, jt_w);
-  const double rhs = mfem::InnerProduct(comm, w, j_ds);
+  const double ds_Jt_w = mfem::InnerProduct(comm, ds, Jt_w);
+  const double w_J_ds = mfem::InnerProduct(comm, w, J_ds);
 
-  const double tolerance = 1.0e-12 + 1.0e-10 * std::max(std::abs(lhs), std::abs(rhs));
+  const double abs_tol = 1.0e-12;
+  const double rel_tol = 1.0e-10;
+  const double error_tolerance = abs_tol + rel_tol * std::max(std::abs(ds_Jt_w), std::abs(w_J_ds));
 
-  EXPECT_NEAR(lhs, rhs, tolerance) << "Shape transpose consistency failed:\n"
-                                   << "ds^T (R_s^T w) = " << lhs << "\n"
-                                   << "w^T (R_s ds)  = " << rhs;
+  // |ds^T (J^T w) - w^T (J ds)| <= 2 * max{abs_tol, rel_tol * max{|ds^T J^T w|, |w^T J ds|}
+  EXPECT_NEAR(ds_Jt_w, w_J_ds, error_tolerance) << "Shape transpose consistency failed:\n"
+                                                << "ds^T (J^T w) = " << ds_Jt_w << "\n"
+                                                << "w^T (J ds)  = " << w_J_ds << " (J = weak form Jacobian)\n";
 }
 
 TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
@@ -370,8 +373,11 @@ TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
   jvp_fderror -= fd;
 
   const double jvp_fderror_norm = mfem::GlobalLpNorm(2, jvp_fderror.Norml2(), comm);
+  const double jvp_fd_error_tolerance = abs_tol + rel_tol * fd_norm;
   // consistency of jvp and finite difference quotient variations of the shape field
-  EXPECT_LE(jvp_fderror_norm, abs_tol + rel_tol * fd_norm)
+  // ||J ds - (weak form fd quotient in direction ds)||_2 <= 2 * max{abs_tol, rel_tol * ||weal form fd quotient in
+  // direction ds||_2
+  EXPECT_LE(jvp_fderror_norm, jvp_fd_error_tolerance)
       << "Numerical inconsistency between weak_form shape JVP and weak_form finite difference quotient.";
 
   // VJP: check ds^T ((dweak_form / dshape)^T w) against w^T fd.
@@ -384,10 +390,12 @@ TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
 
   weak_form->vjp(time_info, shape_disp.get(), fields, {}, &w, shape_disp_dual.get(), unused_outputs, {});
 
-  const double reference = mfem::InnerProduct(comm, w, fd);             // w^T (fd in direction ds)
-  const double dsJTw = mfem::InnerProduct(comm, ds, *shape_disp_dual);  // ds^T (Jacobian^T w)
+  const double w_fd = mfem::InnerProduct(comm, w, fd);  // w^T (weak form finite difference quotient in direction ds)
+  const double ds_Jt_w = mfem::InnerProduct(comm, ds, *shape_disp_dual);  // ds^T (Jacobian^T w)
 
-  EXPECT_NEAR(dsJTw, reference, abs_tol + rel_tol * std::abs(reference))
+  const double vjp_fd_error_tolerance = abs_tol + rel_tol * std::abs(w_fd);
+  // |ds^T (J^T w) - w^T (weak form fd quotient)| <= 2 * max{abs_tol, rel_tol * |w^T (weak form fd quotient)|
+  EXPECT_NEAR(ds_Jt_w, w_fd, vjp_fd_error_tolerance)
       << "Numerical inconsistency between weak_form shape VJP and weak_form finite difference quotient.";
 }
 
