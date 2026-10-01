@@ -61,7 +61,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ###  Fixed
 - Use this section for any bug fixes
-
+- FunctionalWeakForm::jvp() to include shape-displacement contributions, which were previously ignored.
+ 
 ###  Security
 - Use this section in case of vulnerabilities
 
