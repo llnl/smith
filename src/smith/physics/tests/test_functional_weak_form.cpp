@@ -296,7 +296,7 @@ TEST_F(WeakFormFixture, ShapeJvpVjpConsistency)
 
   // Test vector w in the residual's test space.
   smith::FiniteElementState w(states[DISP].space(), "test_weight");
-  w = 1.0;
+  w.Randomize(42);  // random with seed 42
 
   smith::FiniteElementDual j_ds(states[DISP].space(), "shape_jvp");
   smith::FiniteElementDual jt_w(shape_disp->space(), "shape_vjp");
@@ -328,7 +328,12 @@ TEST_F(WeakFormFixture, ShapeJvpVjpConsistency)
 
 TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
 {
+  // tolerances used for finite-difference and jvp/vjp tests
+  const double abs_tol = 1.0e-8;
+  const double rel_tol = 1.0e-6;
+
   const auto fields = getConstFieldPointers(states, params);
+  const auto comm = states[DISP].space().GetComm();
 
   // Shape direction: a smooth dilation.
   smith::FiniteElementState ds(shape_disp->space(), "shape_direction");
@@ -341,17 +346,17 @@ TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
 
   s_plus.Set(1.0, *shape_disp);
   s_minus.Set(1.0, *shape_disp);
-  s_plus.Add(eps, ds);
-  s_minus.Add(-eps, ds);
+  s_plus.Add(eps, ds);    // s+ = shape_disp + eps * ds
+  s_minus.Add(-eps, ds);  // s- = shape_disp - eps * ds
 
+  // (fd = weak_form(shape_disp + eps * ds) - weak_form(shape_disp - eps * ds)) / (2 * eps) = (d weak_form/d shape) ds +
+  // O(eps^2)
   mfem::Vector fd = weak_form->residual(time_info, &s_plus, fields);
   mfem::Vector r_minus = weak_form->residual(time_info, &s_minus, fields);
   fd -= r_minus;
   fd /= (2.0 * eps);
 
-  auto global_norm = [](const mfem::Vector& x) { return std::sqrt(mfem::InnerProduct(MPI_COMM_WORLD, x, x)); };
-
-  const double fd_norm = global_norm(fd);
+  const double fd_norm = mfem::GlobalLpNorm(2, fd.Norml2(), comm);  // norm of finite difference quotient
   ASSERT_GT(fd_norm, 1.0e-10) << "This direction must produce a nonzero shape derivative.";
 
   // JVP: all other field directions are zero.
@@ -361,26 +366,29 @@ TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
 
   weak_form->jvp(time_info, shape_disp.get(), fields, {}, &ds, zero_directions, {}, &shape_jvp);
 
-  mfem::Vector error(shape_jvp);
-  error -= fd;
-  EXPECT_LE(global_norm(error), 1.0e-8 + 1.0e-6 * fd_norm)
-      << "Shape JVP disagrees with the residual finite difference.";
+  mfem::Vector jvp_fderror(shape_jvp);
+  jvp_fderror -= fd;
 
-  // VJP: check ds^T (R_s^T w) against w^T fd.
+  const double jvp_fderror_norm = mfem::GlobalLpNorm(2, jvp_fderror.Norml2(), comm);
+  // consistency of jvp and finite difference quotient variations of the shape field
+  EXPECT_LE(jvp_fderror_norm, abs_tol + rel_tol * fd_norm)
+      << "Numerical inconsistency between weak_form shape JVP and weak_form finite difference quotient.";
+
+  // VJP: check ds^T ((dweak_form / dshape)^T w) against w^T fd.
   smith::FiniteElementState w(states[DISP].space(), "shape_test_weight");
-  w = 1.0;
+  w.Randomize(42);  // random with seed 42
 
-  // VJP accumulates, so initialize its output.
+  // vjp accumulates, so initialize its output.
   *shape_disp_dual = 0.0;
   std::vector<smith::DualFieldPtr> unused_outputs(fields.size(), nullptr);
 
   weak_form->vjp(time_info, shape_disp.get(), fields, {}, &w, shape_disp_dual.get(), unused_outputs, {});
 
-  const double reference = mfem::InnerProduct(MPI_COMM_WORLD, w, fd);
-  const double from_vjp = mfem::InnerProduct(MPI_COMM_WORLD, ds, *shape_disp_dual);
+  const double reference = mfem::InnerProduct(comm, w, fd);             // w^T (fd in direction ds)
+  const double dsJTw = mfem::InnerProduct(comm, ds, *shape_disp_dual);  // ds^T (Jacobian^T w)
 
-  EXPECT_NEAR(from_vjp, reference, 1.0e-8 + 1.0e-6 * std::abs(reference))
-      << "Shape VJP disagrees with the residual finite difference.";
+  EXPECT_NEAR(dsJTw, reference, abs_tol + rel_tol * std::abs(reference))
+      << "Numerical inconsistency between weak_form shape VJP and weak_form finite difference quotient.";
 }
 
 int main(int argc, char* argv[])
