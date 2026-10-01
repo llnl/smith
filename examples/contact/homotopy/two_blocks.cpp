@@ -164,7 +164,7 @@ int main(int argc, char* argv[])
   for (auto& param : params) {
     input_spaces.push_back(&param.space());
   }
-  // construct residual/Jacobain callbacks
+  // construct residual/Jacobian callbacks
   auto solid_mechanics_weak_form =
       std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), input_spaces);
 
