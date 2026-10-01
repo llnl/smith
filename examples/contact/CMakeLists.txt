@@ -40,7 +40,7 @@ if(TRIBOL_FOUND AND STRUMPACK_FOUND)
                                                   --traction 0.05
                                                   --binning-proximity-scale 10
                                                   --normal-smoothing-start-angle 90
-                                                  --normal-smoothing-end-angle 90
+                                                  --residual-gap-ramp-angle 10
                                    NUM_MPI_TASKS  4)
             smith_add_example_test(NAME           contact_c_shape_one_interaction
                                    COMMAND        contact_${example_name}
@@ -54,7 +54,7 @@ if(TRIBOL_FOUND AND STRUMPACK_FOUND)
                                                   --traction 0.05
                                                   --binning-proximity-scale 10
                                                   --normal-smoothing-start-angle 90
-                                                  --normal-smoothing-end-angle 90
+                                                  --residual-gap-ramp-angle 10
                                    NUM_MPI_TASKS  4)
         elseif(example_name STREQUAL "ironing_2D")
             smith_add_example_test(NAME           contact_ironing_2D_square
