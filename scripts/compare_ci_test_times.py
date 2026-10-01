@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
 
+import re
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 
 def test_times(path):
-    return {
-        test.attrib["name"]: float(test.attrib.get("time", 0.0))
-        for test in ET.parse(path).iter("testcase")
-    }
+    text = Path(path).read_text(errors="replace")
+    if text.lstrip().startswith("<"):
+        times = {
+            test.attrib["name"]: float(test.attrib.get("time", 0.0))
+            for test in ET.fromstring(text).iter("testcase")
+        }
+    else:
+        pattern = r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+).*?\s+(\d+(?:\.\d+)?)\s+sec\s*$"
+        times = {name: float(seconds) for name, seconds in re.findall(pattern, text, re.MULTILINE)}
+
+    if not times:
+        sys.exit(f"no test timings found in {path}")
+    return times
 
 
 if len(sys.argv) != 3:
-    sys.exit(f"usage: {sys.argv[0]} BEFORE_JUNIT_XML AFTER_JUNIT_XML")
+    sys.exit(f"usage: {sys.argv[0]} BEFORE_RESULTS AFTER_RESULTS")
 
 before = test_times(sys.argv[1])
 after = test_times(sys.argv[2])
