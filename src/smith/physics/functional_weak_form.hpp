@@ -13,6 +13,9 @@
 
 #pragma once
 
+#include <functional>
+#include <utility>
+
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/numerics/functional/shape_aware_functional.hpp"
@@ -321,6 +324,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                         [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "residual");
+    refreshAuxiliaryFields(fields);
     SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
     auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
     return ret;
@@ -333,6 +337,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "jacobian");
+    refreshAuxiliaryFields(fields);
     SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     std::unique_ptr<mfem::HypreParMatrix> J;
@@ -371,6 +376,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
            DualFieldPtr jvp_reaction) const override
   {
     validateFields(fields, "jvp");
+    refreshAuxiliaryFields(fields);
     SLIC_ERROR_IF(v_fields.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
@@ -396,6 +402,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
            [[maybe_unused]] const std::vector<QuadratureFieldPtr>& vjp_quad_field_sensitivities) const override
   {
     validateFields(fields, "vjp");
+    refreshAuxiliaryFields(fields);
     SLIC_ERROR_IF(vjp_sensitivities.size() != fields.size(),
                   "Invalid number of field sensitivities relative to the number of fields");
 
@@ -417,6 +424,26 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
         *vjp_sensitivities[input_col] += *vec_jac_mfem_vector;
       }
     }
+  }
+
+  /**
+   * @brief Register a callback that refreshes auxiliary fields before each weak-form evaluation.
+   *
+   * The callback receives the current input fields in the same order as the weak form's
+   * `InputSpaces`. This lets a client reconstruct externally stored auxiliary or parameter fields
+   * from the current nonlinear iterate before evaluating the residual, Jacobian, JVP, or VJP. For
+   * example, a client can project the current solution gradient into a parameter field consumed by
+   * an integrand, ensuring that the integrand does not use a value from an earlier iterate.
+   *
+   * The callback should treat @p fields as read-only and update only fields that it owns or captures.
+   * Its operations are not differentiated, so derivatives through the auxiliary-field update are not
+   * automatically included in the assembled operators. Passing an empty callback disables the refresh.
+   *
+   * @param[in] callback Function invoked immediately before each weak-form evaluation.
+   */
+  void setPreAssemblyCallback(std::function<void(const std::vector<ConstFieldPtr>&)> callback)
+  {
+    pre_assembly_callback_ = std::move(callback);
   }
 
  protected:
@@ -495,6 +522,20 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     if constexpr (sizeof...(InputSpaces) > 0) {
       validateFieldsRecursive<0>(fields, method_name);
     }
+  }
+
+  /**
+   * @brief Refresh externally stored auxiliary fields from the current weak-form inputs.
+   *
+   * This is a no-op unless a client registered a callback with setPreAssemblyCallback(). Keeping the
+   * invocation in one helper ensures that residual and derivative evaluations see the same auxiliary
+   * state for a given set of input fields.
+   *
+   * @param[in] fields Current weak-form input fields.
+   */
+  void refreshAuxiliaryFields(const std::vector<ConstFieldPtr>& fields) const
+  {
+    if (pre_assembly_callback_) pre_assembly_callback_(fields);
   }
 
   /// @brief Validate that an mfem space matches the template space parameters
@@ -595,6 +636,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
   /// @brief Active time information forwarded to integrands.
   mutable const TimeInfo* current_time_info_ = nullptr;
+
+  /// Callback used to synchronize externally stored auxiliary fields with the current input state.
+  std::function<void(const std::vector<ConstFieldPtr>&)> pre_assembly_callback_;
 
   /// @brief primary mesh
   std::shared_ptr<Mesh> mesh_;
