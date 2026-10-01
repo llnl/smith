@@ -375,7 +375,7 @@ TEST_F(WeakFormFixture, ShapeFDDerivativeCheckOfVJPandJVP)
   const double jvp_fderror_norm = mfem::GlobalLpNorm(2, jvp_fderror.Norml2(), comm);
   const double jvp_fd_error_tolerance = abs_tol + rel_tol * fd_norm;
   // consistency of jvp and finite difference quotient variations of the shape field
-  // ||J ds - (weak form fd quotient in direction ds)||_2 <= 2 * max{abs_tol, rel_tol * ||weal form fd quotient in
+  // ||J ds - (weak form fd quotient in direction ds)||_2 <= 2 * max{abs_tol, rel_tol * ||weak form fd quotient in
   // direction ds||_2
   EXPECT_LE(jvp_fderror_norm, jvp_fd_error_tolerance)
       << "Numerical inconsistency between weak_form shape JVP and weak_form finite difference quotient.";
