@@ -85,7 +85,7 @@ set(ENABLE_HIP ON CACHE BOOL "")
 
 set(ROCM_ROOT_DIR "/opt/rocm-6.4.2" CACHE PATH "")
 
-set(CMAKE_EXE_LINKER_FLAGS "-lxpmem -L/opt/cray/pe/mpich/8.1.29/gtl/lib -Wl,-rpath,/opt/cray/pe/mpich/8.1.29/gtl/lib -lmpi_gtl_hsa -L/opt/rocm-6.4.2/lib/llvm/lib -Wl,-rpath,/opt/rocm-6.4.2/lib/llvm/lib -L/opt/rocm-6.4.2/lib -Wl,-rpath,/opt/rocm-6.4.2/lib -Wl,--disable-new-dtags -lflang -lflangrti -lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr -lpgmath -lhipblas " CACHE STRING "")
+set(CMAKE_EXE_LINKER_FLAGS "-lxpmem -L/opt/cray/pe/mpich/8.1.29/gtl/lib -Wl,-rpath,/opt/cray/pe/mpich/8.1.29/gtl/lib -lmpi_gtl_hsa -L/opt/rocm-6.4.2/lib/llvm/lib -Wl,-rpath,/opt/rocm-6.4.2/lib/llvm/lib -L/opt/rocm-6.4.2/lib -Wl,-rpath,/opt/rocm-6.4.2/lib -Wl,--disable-new-dtags -lflang -lflangrti -lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr -lpgmath " CACHE STRING "")
 
 #------------------------------------------------------------------------------
 # TPLs
@@ -150,5 +150,4 @@ set(ENABLE_CLANGFORMAT OFF CACHE BOOL "")
 set(ENABLE_CLANGTIDY OFF CACHE BOOL "")
 
 set(ENABLE_DOCS OFF CACHE BOOL "")
-
 

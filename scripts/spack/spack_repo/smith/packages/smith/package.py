@@ -397,8 +397,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr -lpgmath "
             if spec.satisfies("+openmp"):
                 hip_link_flags += "-lompstub "
-            if spec.satisfies("^hipblas"):
-                hip_link_flags += "-lhipblas "
 
             entries.append(cmake_cache_string("CMAKE_EXE_LINKER_FLAGS", hip_link_flags))
 
