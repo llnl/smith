@@ -7,15 +7,12 @@
 set(infrastructure_test_depends smith_infrastructure gtest)
 
 set(infrastructure_test_sources
+    application_manager.cpp
     debug_print.cpp
     input.cpp)
 
 smith_add_tests( SOURCES    ${infrastructure_test_sources}
                  DEPENDS_ON ${infrastructure_test_depends})
-
-smith_add_tests( SOURCES         application_manager.cpp
-                 DEPENDS_ON      ${infrastructure_test_depends}
-                 NO_AGGREGATION)
 
 
 # Infrastructure tests that require more than just infrastructure

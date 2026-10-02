@@ -57,6 +57,8 @@ set(MPIEXEC_EXECUTABLE "/usr/global/tools/flux_wrappers/bin/srun" CACHE PATH "")
 
 set(MPIEXEC_NUMPROC_FLAG "-n" CACHE STRING "")
 
+set(BLT_MPI_COMMAND_APPEND "--cpus-per-task=1" CACHE STRING "")
+
 set(ENABLE_MPI ON CACHE BOOL "")
 
 #------------------------------------------------------------------------------
@@ -150,4 +152,3 @@ set(ENABLE_CLANGFORMAT OFF CACHE BOOL "")
 set(ENABLE_CLANGTIDY OFF CACHE BOOL "")
 
 set(ENABLE_DOCS OFF CACHE BOOL "")
-

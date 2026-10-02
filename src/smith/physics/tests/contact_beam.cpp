@@ -26,10 +26,10 @@
 
 namespace smith {
 
-class ContactBeamTest
+class ContactTest
     : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactType, ContactJacobian, std::string>> {};
 
-TEST_P(ContactBeamTest, beam)
+TEST_P(ContactTest, beam)
 {
   // NOTE: p must be equal to 1 for now
   constexpr int p = 1;
@@ -111,7 +111,7 @@ TEST_P(ContactBeamTest, beam)
 
 // NOTE: if Penalty is first and Lagrange Multiplier is second, SuperLU gives a zero diagonal error
 INSTANTIATE_TEST_SUITE_P(
-    tribol, ContactBeamTest,
+    tribol, ContactTest,
     testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactType::TiedNormal, ContactJacobian::Approximate,
                                     "penalty_tiednormal_Japprox"),
                     std::make_tuple(ContactEnforcement::Penalty, ContactType::Frictionless,

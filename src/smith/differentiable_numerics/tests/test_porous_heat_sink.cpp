@@ -104,7 +104,7 @@ struct HeatSinkOptions {
   double f_mb = 1.0;
 };
 
-class PorousHeatSinkMeshFixture : public testing::Test {
+class MeshFixture : public testing::Test {
  protected:
   double length = 1.0;
   double width = 1.0;
@@ -131,8 +131,7 @@ class PorousHeatSinkMeshFixture : public testing::Test {
   }
 };
 
-class BlockPreconditionerTest : public PorousHeatSinkMeshFixture,
-                                public ::testing::WithParamInterface<BlockTestParams> {};
+class BlockPreconditionerTest : public MeshFixture, public ::testing::WithParamInterface<BlockTestParams> {};
 
 TEST_P(BlockPreconditionerTest, BlockSolve)
 {

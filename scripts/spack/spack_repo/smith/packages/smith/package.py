@@ -439,6 +439,11 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         if spec["mpi"].name == "spectrum-mpi":
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "mpibind"))
+        elif self._get_sys_type(spec) == "toss_4_x86_64_ib_cray":
+            # Give each Flux job step an explicit resource size so independent
+            # CTest jobs can be scheduled concurrently.
+            entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
+                                              "--cpus-per-task=1"))
 
         return entries
 

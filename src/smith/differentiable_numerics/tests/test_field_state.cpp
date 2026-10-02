@@ -19,7 +19,7 @@
 
 const std::string MESHTAG = "mesh";
 
-struct FieldStateMeshFixture : public ::testing::Test {
+struct MeshFixture : public ::testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
   using VectorSpace = smith::H1<disp_order, dim>;
@@ -77,7 +77,7 @@ struct FieldStateMeshFixture : public ::testing::Test {
   std::unique_ptr<gretl::State<double, double>> h_;
 };
 
-TEST_F(FieldStateMeshFixture, FieldStateWithDifferentiable_axpby)
+TEST_F(MeshFixture, FieldStateWithDifferentiable_axpby)
 {
   smith::FieldState disp = states_[0];
   smith::FieldState velo = states_[1];
@@ -99,7 +99,7 @@ TEST_F(FieldStateMeshFixture, FieldStateWithDifferentiable_axpby)
   EXPECT_GT(smith::checkGradWrt(uu, dt, 1e-7, 4, true), 0.95);
 }
 
-TEST_F(FieldStateMeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
+TEST_F(MeshFixture, FieldStateDifferentiablyWeightedSum_WithOperators)
 {
   smith::FieldState disp = states_[0];
   smith::FieldState velo = states_[1];

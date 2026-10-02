@@ -73,7 +73,7 @@ struct NeoHookeanWithFixedDensity {
   double density0;
 };
 
-struct ExplicitDynamicsMeshFixture : public testing::Test {
+struct MeshFixture : public testing::Test {
   static constexpr int dim = 2;
   static constexpr int disp_order = 1;
 
@@ -275,7 +275,7 @@ struct ExplicitDynamicsMeshFixture : public testing::Test {
   static constexpr double dt = total_simulation_time / num_steps;
 };
 
-TEST_F(ExplicitDynamicsMeshFixture, TransientDynamicsBasePhysics)
+TEST_F(MeshFixture, TransientDynamicsBasePhysics)
 {
   SMITH_MARK_FUNCTION;
 
@@ -307,7 +307,7 @@ TEST_F(ExplicitDynamicsMeshFixture, TransientDynamicsBasePhysics)
   }
 }
 
-TEST_F(ExplicitDynamicsMeshFixture, TransientDynamicsGretl)
+TEST_F(MeshFixture, TransientDynamicsGretl)
 {
   SMITH_MARK_FUNCTION;
 
@@ -358,7 +358,7 @@ TEST_F(ExplicitDynamicsMeshFixture, TransientDynamicsGretl)
   EXPECT_GT(smith::checkGradWrt(gretl_qoi, initial_states_[DENSITY], 0.01, 4, true), 0.8);
 }
 
-TEST_F(ExplicitDynamicsMeshFixture, TransientConstantGravity)
+TEST_F(MeshFixture, TransientConstantGravity)
 {
   SMITH_MARK_FUNCTION;
 

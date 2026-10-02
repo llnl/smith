@@ -286,22 +286,19 @@ endmacro(smith_convert_to_native_escaped_file_path)
 
 
 ##------------------------------------------------------------------------------
-## smith_add_tests( SOURCES          [source1 [source2 ...]]
-##                  USE_CUDA         [use CUDA if set]
-##                  NO_AGGREGATION   [always build one executable per source]
-##                  DEPENDS_ON       [dep1 [dep2 ...]]
-##                  NUM_MPI_TASKS    [num tasks]
-##                  NUM_OMP_THREADS  [num threads])
+## smith_add_tests( SOURCES         [source1 [source2 ...]]
+##                  USE_CUDA        [use CUDA if set]
+##                  DEPENDS_ON      [dep1 [dep2 ...]]
+##                  NUM_MPI_TASKS   [num tasks]
+##                  NUM_OMP_THREADS [num threads])
 ##
-## Creates an executable per given source and then adds the test to CTest.
-## When SMITH_AGGREGATE_TESTS is enabled, calls with multiple compatible
-## sources are collected into executables grouped by their launch settings.
+## Creates an executable per given source and then adds the test to CTest
 ## If USE_CUDA is set, this macro will compile a CUDA enabled version of
 ## of each unit test.
 ##------------------------------------------------------------------------------
 macro(smith_add_tests)
 
-    set(options NO_AGGREGATION)
+    set(options )
     set(singleValueArgs NUM_MPI_TASKS NUM_OMP_THREADS USE_CUDA)
     set(multiValueArgs SOURCES DEPENDS_ON)
 
@@ -317,101 +314,29 @@ macro(smith_add_tests)
         set( arg_NUM_OMP_THREADS 1 )
     endif()
 
-    list(LENGTH arg_SOURCES _smith_num_test_sources)
-    if(SMITH_AGGREGATE_TESTS AND NOT arg_NO_AGGREGATION AND _smith_num_test_sources GREATER 1)
-        set(_smith_test_group "mpi_${arg_NUM_MPI_TASKS}_omp_${arg_NUM_OMP_THREADS}")
-        if(DEFINED arg_USE_CUDA)
-            string(APPEND _smith_test_group "_cuda")
+    foreach(filename ${arg_SOURCES})
+        get_filename_component(test_name ${filename} NAME_WE)
+        if (DEFINED arg_USE_CUDA)
+            set(test_name "${test_name}_cuda")
         endif()
 
-        get_property(_smith_test_groups GLOBAL PROPERTY SMITH_AGGREGATED_TEST_GROUPS)
-        list(FIND _smith_test_groups "${_smith_test_group}" _smith_test_group_index)
-        if(_smith_test_group_index EQUAL -1)
-            set_property(GLOBAL APPEND PROPERTY SMITH_AGGREGATED_TEST_GROUPS "${_smith_test_group}")
+        smith_add_executable(NAME        ${test_name}
+                             SOURCES     ${filename}
+                             OUTPUT_DIR  ${TEST_OUTPUT_DIRECTORY}
+                             DEPENDS_ON  ${arg_DEPENDS_ON}
+                             FOLDER      smith/tests )
+
+        if (DEFINED arg_USE_CUDA)
+            target_compile_definitions(${test_name} PUBLIC SMITH_USE_CUDA_KERNEL_EVALUATION)
         endif()
 
-        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/aggregated_tests")
-        foreach(filename ${arg_SOURCES})
-            get_filename_component(_smith_test_source "${filename}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-            file(RELATIVE_PATH _smith_test_relative_source "${PROJECT_SOURCE_DIR}" "${_smith_test_source}")
-            string(MAKE_C_IDENTIFIER "${_smith_test_relative_source}" SMITH_AGGREGATED_TEST_ID)
-            set(SMITH_AGGREGATED_TEST_SOURCE "${_smith_test_source}")
-            set(_smith_test_wrapper "${CMAKE_BINARY_DIR}/aggregated_tests/${SMITH_AGGREGATED_TEST_ID}.cpp")
-            configure_file("${PROJECT_SOURCE_DIR}/cmake/SmithAggregatedTest.cpp.in" "${_smith_test_wrapper}" @ONLY)
-            set_property(GLOBAL APPEND PROPERTY
-                         "SMITH_AGGREGATED_TEST_SOURCES_${_smith_test_group}" "${_smith_test_wrapper}")
-        endforeach()
-
-        set_property(GLOBAL APPEND PROPERTY
-                     "SMITH_AGGREGATED_TEST_DEPENDS_${_smith_test_group}" ${arg_DEPENDS_ON})
-        set_property(GLOBAL PROPERTY
-                     "SMITH_AGGREGATED_TEST_MPI_TASKS_${_smith_test_group}" ${arg_NUM_MPI_TASKS})
-        set_property(GLOBAL PROPERTY
-                     "SMITH_AGGREGATED_TEST_OMP_THREADS_${_smith_test_group}" ${arg_NUM_OMP_THREADS})
-        if(DEFINED arg_USE_CUDA)
-            set_property(GLOBAL PROPERTY "SMITH_AGGREGATED_TEST_USES_CUDA_${_smith_test_group}" TRUE)
-        endif()
-    else()
-        foreach(filename ${arg_SOURCES})
-            get_filename_component(test_name ${filename} NAME_WE)
-            if (DEFINED arg_USE_CUDA)
-                set(test_name "${test_name}_cuda")
-            endif()
-
-            smith_add_executable(NAME        ${test_name}
-                                 SOURCES     ${filename}
-                                 OUTPUT_DIR  ${TEST_OUTPUT_DIRECTORY}
-                                 DEPENDS_ON  ${arg_DEPENDS_ON}
-                                 FOLDER      smith/tests )
-
-            if (DEFINED arg_USE_CUDA)
-                target_compile_definitions(${test_name} PUBLIC SMITH_USE_CUDA_KERNEL_EVALUATION)
-            endif()
-
-            blt_add_test(NAME            ${test_name}
-                         COMMAND         ${test_name}
-                         NUM_MPI_TASKS   ${arg_NUM_MPI_TASKS}
-                         NUM_OMP_THREADS ${arg_NUM_OMP_THREADS} )
-        endforeach()
-    endif()
+        blt_add_test(NAME            ${test_name}
+                     COMMAND         ${test_name}
+                     NUM_MPI_TASKS   ${arg_NUM_MPI_TASKS}
+                     NUM_OMP_THREADS ${arg_NUM_OMP_THREADS} )
+    endforeach()
 
 endmacro(smith_add_tests)
-
-##------------------------------------------------------------------------------
-## Creates the test executables collected by smith_add_tests.
-##------------------------------------------------------------------------------
-function(smith_finalize_aggregated_tests)
-    get_property(_smith_test_groups GLOBAL PROPERTY SMITH_AGGREGATED_TEST_GROUPS)
-    foreach(_smith_test_group ${_smith_test_groups})
-        get_property(_smith_test_sources GLOBAL PROPERTY
-                     "SMITH_AGGREGATED_TEST_SOURCES_${_smith_test_group}")
-        get_property(_smith_test_depends GLOBAL PROPERTY
-                     "SMITH_AGGREGATED_TEST_DEPENDS_${_smith_test_group}")
-        get_property(_smith_num_mpi_tasks GLOBAL PROPERTY
-                     "SMITH_AGGREGATED_TEST_MPI_TASKS_${_smith_test_group}")
-        get_property(_smith_num_omp_threads GLOBAL PROPERTY
-                     "SMITH_AGGREGATED_TEST_OMP_THREADS_${_smith_test_group}")
-        get_property(_smith_uses_cuda GLOBAL PROPERTY
-                     "SMITH_AGGREGATED_TEST_USES_CUDA_${_smith_test_group}")
-        list(REMOVE_DUPLICATES _smith_test_depends)
-
-        set(_smith_test_name "smith_tests_${_smith_test_group}")
-        smith_add_executable(NAME        ${_smith_test_name}
-                             SOURCES     ${_smith_test_sources} "${PROJECT_SOURCE_DIR}/src/tests/smith_test_main.cpp"
-                             OUTPUT_DIR  ${TEST_OUTPUT_DIRECTORY}
-                             DEPENDS_ON  ${_smith_test_depends} smith_infrastructure gtest
-                             FOLDER      smith/tests)
-
-        if(_smith_uses_cuda)
-            target_compile_definitions(${_smith_test_name} PUBLIC SMITH_USE_CUDA_KERNEL_EVALUATION)
-        endif()
-
-        blt_add_test(NAME            ${_smith_test_name}
-                     COMMAND         ${_smith_test_name}
-                     NUM_MPI_TASKS   ${_smith_num_mpi_tasks}
-                     NUM_OMP_THREADS ${_smith_num_omp_threads})
-    endforeach()
-endfunction(smith_finalize_aggregated_tests)
 
 
 ##------------------------------------------------------------------------------

@@ -29,15 +29,6 @@ if (NOT SMITH_BASICS_SETUP)
     cmake_dependent_option(SMITH_ENABLE_HIP "Enables Smith with HIP support" ON "ENABLE_HIP" OFF)
     cmake_dependent_option(SMITH_ENABLE_OPENMP "Enables Smith with OPENMP support" ON "ENABLE_OPENMP" OFF)
 
-    set(_smith_aggregate_tests_default OFF)
-    if(DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
-        set(_smith_aggregate_tests_default ON)
-    endif()
-    option(SMITH_AGGREGATE_TESTS
-        "Build compatible unit tests into shared executables to amortize process startup"
-        ${_smith_aggregate_tests_default})
-    unset(_smith_aggregate_tests_default)
-
     # Options for builtin TPLs
     option(SMITH_ENABLE_CONTINUATION "Enables Smith with Continuation Solver support" ON)
     option(SMITH_ENABLE_GRETL "Enables Smith with Gretl Support" ON)

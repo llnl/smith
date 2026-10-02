@@ -1,2 +1,0 @@
-#define main smith_ignored_main_@SMITH_AGGREGATED_TEST_ID@
-#include "@SMITH_AGGREGATED_TEST_SOURCE@"
