@@ -272,8 +272,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(MFEM_USE_CONDUIT OFF CACHE BOOL "")
         set(MFEM_USE_CUDA ${SMITH_ENABLE_CUDA} CACHE BOOL "")
         set(MFEM_USE_HIP ${SMITH_ENABLE_HIP} CACHE BOOL "")
-        set(MFEM_USE_HIPBLAS OFF CACHE BOOL
-            "Disable hipBLAS in Smith codevelop builds" FORCE)
         set(MFEM_USE_LAPACK ON CACHE BOOL "")
         # mfem+mpi requires metis
         set(MFEM_USE_METIS ON CACHE BOOL "")

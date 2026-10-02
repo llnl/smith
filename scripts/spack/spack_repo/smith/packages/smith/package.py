@@ -251,6 +251,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on(f"umpire {ext_rocm_dep}", when=f"+umpire {ext_rocm_dep}")
 
     depends_on("rocprim", when="+rocm")
+    depends_on("hipblas", when="+rocm")
 
 
     # -----------------------------------------------------------------------

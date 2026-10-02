@@ -20,7 +20,8 @@ set(language_depends
 blt_list_append(TO language_depends ELEMENTS blt::openmp IF SMITH_ENABLE_OPENMP)
 
 smith_add_tests( SOURCES    ${language_tests}
-                 DEPENDS_ON ${language_depends})
+                 DEPENDS_ON ${language_depends}
+                 NO_AGGREGATION)
 
 #
 # Enzyme test

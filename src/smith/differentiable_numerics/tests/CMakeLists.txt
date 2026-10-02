@@ -18,10 +18,14 @@ set(differentiable_numerics_test_source
     test_solid_static_with_internal_vars.cpp
     test_multiphysics_time_integrator.cpp
     test_thermo_mechanics_with_internal_vars.cpp
-    test_mixed_poisson.cpp
     test_amg_vdim_block_preconditioner.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}
                  DEPENDS_ON    ${differentiable_numerics_test_depends}
                  NUM_MPI_TASKS 1)
+
+smith_add_tests(SOURCES         test_mixed_poisson.cpp
+                DEPENDS_ON      ${differentiable_numerics_test_depends}
+                NUM_MPI_TASKS   1
+                NO_AGGREGATION)

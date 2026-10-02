@@ -191,6 +191,10 @@ include(${PROJECT_SOURCE_DIR}/cmake/SmithConfigHeader.cmake)
 
 add_subdirectory(src)
 
+if(SMITH_AGGREGATE_TESTS)
+    smith_finalize_aggregated_tests()
+endif()
+
 add_subdirectory(examples)
 
 #------------------------------------------------------------------------------

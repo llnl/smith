@@ -25,11 +25,11 @@
 
 namespace smith {
 
-class ContactTest
+class ContactPatchTest
     : public testing::TestWithParam<std::tuple<ContactEnforcement, ContactJacobian, std::string, mfem::Element::Type>> {
 };
 
-TEST_P(ContactTest, patch)
+TEST_P(ContactPatchTest, patch)
 {
   // NOTE: p must be equal to 1 for now
   constexpr int p = 1;
@@ -146,7 +146,7 @@ TEST_P(ContactTest, patch)
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    tribol, ContactTest,
+    tribol, ContactPatchTest,
     testing::Values(std::make_tuple(ContactEnforcement::Penalty, ContactJacobian::Approximate, "penalty_approxJ_hex",
                                     mfem::Element::HEXAHEDRON),
                     std::make_tuple(ContactEnforcement::LagrangeMultiplier, ContactJacobian::Approximate,

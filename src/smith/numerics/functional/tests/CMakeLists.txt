@@ -16,20 +16,29 @@ smith_add_executable(NAME        tensor_unit_tests
 
 # Then add the examples/tests
 set(functional_serial_test_sources
-    functional_shape_derivatives.cpp
     simplex_basis_function_unit_tests.cpp
-    element_restriction_tests.cpp
-    dg_restriction_operators.cpp
-    bug_boundary_qoi.cpp
-    domain_tests.cpp
-    geometric_factors_tests.cpp
     hcurl_unit_tests.cpp
     test_tensor_ad.cpp
-    tuple_arithmetic_unit_tests.cpp
-    test_newton.cpp)
+    tuple_arithmetic_unit_tests.cpp)
 
 smith_add_tests(SOURCES    ${functional_serial_test_sources}
                 DEPENDS_ON ${functional_test_depends})
+
+smith_add_tests(SOURCES         functional_shape_derivatives.cpp
+                                test_newton.cpp
+                DEPENDS_ON      ${functional_test_depends}
+                NO_AGGREGATION)
+
+smith_add_tests(SOURCES         bug_boundary_qoi.cpp
+                DEPENDS_ON      ${functional_test_depends}
+                NO_AGGREGATION)
+
+smith_add_tests(SOURCES         element_restriction_tests.cpp
+                                dg_restriction_operators.cpp
+                                domain_tests.cpp
+                                geometric_factors_tests.cpp
+                DEPENDS_ON      ${functional_test_depends}
+                NO_AGGREGATION)
 
 # Then add the examples/tests
 set(functional_parallel_test_sources
@@ -39,17 +48,21 @@ set(functional_parallel_test_sources
     functional_basic_h1_vector.cpp
     functional_basic_dg.cpp
     functional_multiphysics.cpp
-    functional_qoi.cpp
-    functional_nonlinear.cpp
-    functional_boundary_test.cpp
-    functional_comparisons.cpp
-    functional_comparison_L2.cpp
     dg_ghost_face_index.cpp
     )
 
 smith_add_tests(SOURCES       ${functional_parallel_test_sources}
                 DEPENDS_ON    ${functional_test_depends}
                 NUM_MPI_TASKS 4 )
+
+smith_add_tests(SOURCES         functional_qoi.cpp
+                                functional_nonlinear.cpp
+                                functional_boundary_test.cpp
+                                functional_comparisons.cpp
+                                functional_comparison_L2.cpp
+                DEPENDS_ON      ${functional_test_depends}
+                NUM_MPI_TASKS   4
+                NO_AGGREGATION)
 
 target_link_libraries(bug_boundary_qoi PUBLIC smith_physics)
 

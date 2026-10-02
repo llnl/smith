@@ -31,7 +31,6 @@ set(physics_serial_test_sources
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
-    test_functional_weak_form.cpp
     tet_quality.cpp
     thermomech_statics_patch.cpp
     parameterized_thermomechanics_example.cpp
@@ -41,8 +40,7 @@ set(physics_serial_test_sources
 
 if (TRIBOL_FOUND)
     set(physics_serial_tribol_test_sources 
-        test_contact_constraint.cpp
-        contact_solid_adjoint.cpp)
+        test_contact_constraint.cpp)
     if (ENZYME_FOUND)
         list(APPEND physics_serial_tribol_test_sources 
                     contact_finite_diff.cpp
@@ -52,16 +50,25 @@ if (TRIBOL_FOUND)
         ${physics_serial_tribol_test_sources})
 endif()
 
-if (SMITH_USE_ENZYME)
-    list(APPEND physics_serial_test_sources
-                test_dfem_explicit_dynamics.cpp)
-endif()
-
 smith_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
 
+set(physics_nonaggregated_test_sources
+    test_functional_weak_form.cpp)
+if (TRIBOL_FOUND)
+    list(APPEND physics_nonaggregated_test_sources contact_solid_adjoint.cpp)
+endif()
+smith_add_tests(SOURCES         ${physics_nonaggregated_test_sources}
+                DEPENDS_ON      ${physics_test_depends}
+                NUM_MPI_TASKS   1
+                NO_AGGREGATION)
+
 if (SMITH_USE_ENZYME)
+    smith_add_tests(SOURCES         test_dfem_explicit_dynamics.cpp
+                    DEPENDS_ON      ${physics_test_depends}
+                    NUM_MPI_TASKS   1
+                    NO_AGGREGATION)
     # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
     # desired occupancy was 4, final occupancy is 3 [-Werror,-Wpass-failed]
     target_compile_options(test_dfem_explicit_dynamics PRIVATE -Wno-pass-failed)
@@ -80,7 +87,6 @@ set(physics_parallel_test_sources
     thermal_robin_condition.cpp
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
-    thermal_nonlinear_solve.cpp
     shallow_arch_buckling.cpp
     )
 set(physics_parallel_tribol_test_sources
@@ -105,3 +111,8 @@ blt_list_append(TO       physics_parallel_test_sources
 smith_add_tests(SOURCES       ${physics_parallel_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 2)
+
+smith_add_tests(SOURCES         thermal_nonlinear_solve.cpp
+                DEPENDS_ON      ${physics_test_depends}
+                NUM_MPI_TASKS   2
+                NO_AGGREGATION)
