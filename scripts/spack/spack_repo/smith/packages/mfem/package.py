@@ -11,7 +11,7 @@ class Mfem(BuiltinMfem):
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    version("4.10.0.1", commit="a57763ace9c9ff67a57cdb4457a6d7caf79eae93")
+    version("4.10.0.2", commit="321c083f7974adde2114c03613cfde933c3841c1")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
@@ -47,3 +47,20 @@ class Mfem(BuiltinMfem):
                 env.append_flags(flag, "-fno-omit-frame-pointer")
                 if '+debug' in self.spec:
                     env.append_flags(flag, "-fno-optimize-sibling-calls")
+
+    def get_make_config_options(self, spec, prefix):
+        options = BuiltinMfem.get_make_config_options(self, spec, prefix)
+
+        if "+rocm" not in spec:
+            return options
+
+        # Smith does not use MFEM's hipBLAS batched linear algebra backend.
+        # Keep the rest of MFEM's HIP support enabled without linking hipBLAS.
+        options.append("MFEM_USE_HIPBLAS=NO")
+        for index, option in enumerate(options):
+            if option.startswith("HIP_LIB="):
+                options[index] = " ".join(
+                    flag for flag in option.split() if flag != "-lhipblas"
+                )
+
+        return options

@@ -272,6 +272,8 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(MFEM_USE_CONDUIT OFF CACHE BOOL "")
         set(MFEM_USE_CUDA ${SMITH_ENABLE_CUDA} CACHE BOOL "")
         set(MFEM_USE_HIP ${SMITH_ENABLE_HIP} CACHE BOOL "")
+        set(MFEM_USE_HIPBLAS OFF CACHE BOOL
+            "Disable hipBLAS in Smith codevelop builds" FORCE)
         set(MFEM_USE_LAPACK ON CACHE BOOL "")
         # mfem+mpi requires metis
         set(MFEM_USE_METIS ON CACHE BOOL "")
@@ -311,14 +313,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         if(STRUMPACK_DIR)
             smith_assert_is_directory(DIR_VARIABLE STRUMPACK_DIR)
             set(MFEM_USE_STRUMPACK ON CACHE BOOL "")
-            # Since we manually find strumpack before MFEM, we must manually find hip-related packages
-            if (SMITH_ENABLE_HIP)
-                find_package(hipblas REQUIRED)
-                find_package(rocblas REQUIRED)
-                find_package(rocsolver REQUIRED)
-                find_package(hipsparse REQUIRED)
-                find_package(rocthrust REQUIRED)
-            endif()
             find_dependency(strumpack CONFIG
                             PATHS "${STRUMPACK_DIR}"
                                   "${STRUMPACK_DIR}/lib/cmake/STRUMPACK"
