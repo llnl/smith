@@ -303,7 +303,7 @@ TEST_P(BlockPreconditionerTest, BlockSolve)
 
   auto nonlinear_block_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh);
 
-  auto sols = block_solve({&T1_form, &T2_form}, {{0, 1}, {0, 1}}, shape_disp, {T1_arguments, T2_arguments},
+  auto sols = block_solve({&T1_form, &T2_form}, {{{0}, {1}}, {{0}, {1}}}, shape_disp, {T1_arguments, T2_arguments},
                           {T1_params, T2_params}, smith::TimeInfo(time.get(), dt.get(), cycle),
                           nonlinear_block_solver.get(), {T1_bc_manager.get(), T2_bc_manager.get()});
 
