@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <iostream>
+#include <cmath>
 #include <string>
 #include <memory>
 #include <utility>
@@ -58,6 +59,10 @@ TEST(Mesh, TestMeshFromSerialMesh)
   };
   mesh->addDomainOfBodyElements("left", is_in_left);
   EXPECT_EQ(mesh->domain("left").total_elements(), 4);
+
+  mesh->addDomainOfVertices(
+      "origin", [](vec3 x) { return std::abs(x[0]) < 1e-12 && std::abs(x[1]) < 1e-12 && std::abs(x[2]) < 1e-12; });
+  EXPECT_EQ(mesh->domain("origin").total_elements(), 1);
 }
 
 TEST(Mesh, TestMeshFromFile)
