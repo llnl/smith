@@ -3,25 +3,8 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-from spack.directives import directive
 from spack.package import *
 from spack_repo.builtin.packages.mfem.package import Mfem as BuiltinMfem
-
-
-@directive(dicts="dependencies")
-def allow_cpu_strumpack_with_gpu_mfem():
-    def _execute(pkg):
-        for when_spec, dependencies in list(pkg.dependencies.items()):
-            strumpack = dependencies.get("strumpack")
-            if strumpack is None:
-                continue
-
-            if strumpack.spec.satisfies("+cuda") or strumpack.spec.satisfies("+rocm"):
-                del dependencies["strumpack"]
-                if not dependencies:
-                    del pkg.dependencies[when_spec]
-
-    return _execute
 
 
 class Mfem(BuiltinMfem):
@@ -34,10 +17,6 @@ class Mfem(BuiltinMfem):
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
     depends_on("fortran", type="build", when="+strumpack")
-
-    # MFEM can use a CPU-only STRUMPACK from CUDA and ROCm builds. Do not
-    # inherit the built-in recipe's propagation of MFEM's GPU variants.
-    allow_cpu_strumpack_with_gpu_mfem()
 
     # AddressSanitizer (ASan) is only supported by GCC and (some) LLVM-derived
     # compilers. Denylist compilers not known to support ASan
@@ -69,3 +48,22 @@ class Mfem(BuiltinMfem):
                 env.append_flags(flag, "-fno-omit-frame-pointer")
                 if '+debug' in self.spec:
                     env.append_flags(flag, "-fno-optimize-sibling-calls")
+
+
+def _allow_cpu_strumpack_with_gpu_mfem(package):
+    """Remove the built-in recipe's propagation of MFEM's GPU variants."""
+    for when_spec, dependencies in list(package.dependencies.items()):
+        strumpack = dependencies.get("strumpack")
+        if strumpack is None:
+            continue
+
+        if strumpack.spec.satisfies("+cuda") or strumpack.spec.satisfies("+rocm"):
+            del dependencies["strumpack"]
+            if not dependencies:
+                del package.dependencies[when_spec]
+
+
+# MFEM can use a CPU-only STRUMPACK from CUDA and ROCm builds. Materializing
+# the dependency table here ensures all inherited directives run before these
+# GPU-specific STRUMPACK constraints are removed.
+_allow_cpu_strumpack_with_gpu_mfem(Mfem)
