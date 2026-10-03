@@ -50,20 +50,32 @@ class Mfem(BuiltinMfem):
                     env.append_flags(flag, "-fno-optimize-sibling-calls")
 
 
-def _remove_gpu_strumpack_dependencies(package):
-    """Remove the built-in recipe's propagation of MFEM's GPU variants."""
-    for when_spec, dependencies in list(package.dependencies.items()):
-        strumpack = dependencies.get("strumpack")
-        if strumpack is None:
+def _remove_inherited_gpu_strumpack_dependencies(package, base_package):
+    """Remove unchanged GPU propagation rules inherited from base_package."""
+    for when_spec, inherited_dependencies in base_package.dependencies.items():
+        inherited_strumpack = inherited_dependencies.get("strumpack")
+        if inherited_strumpack is None:
             continue
 
-        if strumpack.spec.satisfies("+cuda") or strumpack.spec.satisfies("+rocm"):
-            del dependencies["strumpack"]
-            if not dependencies:
-                del package.dependencies[when_spec]
+        propagates_gpu_variant = any(
+            when_spec.satisfies(f"+{variant}")
+            and inherited_strumpack.spec.satisfies(f"+{variant}")
+            for variant in ("cuda", "rocm")
+        )
+        if not propagates_gpu_variant:
+            continue
+
+        dependencies = package.dependencies.get(when_spec)
+        strumpack = dependencies.get("strumpack") if dependencies is not None else None
+        if strumpack is None or strumpack.spec != inherited_strumpack.spec:
+            continue
+
+        del dependencies["strumpack"]
+        if not dependencies:
+            del package.dependencies[when_spec]
 
 
 # MFEM can use a CPU-only STRUMPACK from CUDA and ROCm builds. Materializing
 # the dependency table here ensures all inherited directives run before these
 # GPU-specific STRUMPACK constraints are removed.
-_remove_gpu_strumpack_dependencies(Mfem)
+_remove_inherited_gpu_strumpack_dependencies(Mfem, BuiltinMfem)
