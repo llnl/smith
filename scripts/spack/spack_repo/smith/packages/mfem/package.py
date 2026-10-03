@@ -50,7 +50,7 @@ class Mfem(BuiltinMfem):
                     env.append_flags(flag, "-fno-optimize-sibling-calls")
 
 
-def _allow_cpu_strumpack_with_gpu_mfem(package):
+def _remove_gpu_strumpack_dependencies(package):
     """Remove the built-in recipe's propagation of MFEM's GPU variants."""
     for when_spec, dependencies in list(package.dependencies.items()):
         strumpack = dependencies.get("strumpack")
@@ -66,4 +66,4 @@ def _allow_cpu_strumpack_with_gpu_mfem(package):
 # MFEM can use a CPU-only STRUMPACK from CUDA and ROCm builds. Materializing
 # the dependency table here ensures all inherited directives run before these
 # GPU-specific STRUMPACK constraints are removed.
-_allow_cpu_strumpack_with_gpu_mfem(Mfem)
+_remove_gpu_strumpack_dependencies(Mfem)
