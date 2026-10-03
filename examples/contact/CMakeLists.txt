@@ -56,6 +56,20 @@ if(TRIBOL_FOUND AND STRUMPACK_FOUND)
                                                   --normal-smoothing-start-angle 90
                                                   --residual-gap-ramp-angle 10
                                    NUM_MPI_TASKS  4)
+            smith_add_example_test(NAME           contact_c_shape_all_boundary_self_contact
+                                   COMMAND        contact_${example_name}
+                                                  --all-boundary-self-contact
+                                                  --num-x-elements 4
+                                                  --num-y-elements 4
+                                                  --arm-thickness-elements 1
+                                                  --residual-gap 0.05
+                                                  --num-steps 5
+                                                  --penalty 100
+                                                  --traction 0.05
+                                                  --binning-proximity-scale 10
+                                                  --normal-smoothing-start-angle 90
+                                                  --residual-gap-ramp-angle 10
+                                   NUM_MPI_TASKS  4)
         elseif(example_name STREQUAL "ironing_2D")
             smith_add_example_test(NAME           contact_ironing_2D_square
                                    COMMAND        contact_${example_name} --case square --num-steps 3

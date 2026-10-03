@@ -26,6 +26,7 @@ constexpr int FIXED_ATTR = 1;
 constexpr int INNER_TOP_ATTR = 2;
 constexpr int INNER_LEFT_ATTR = 3;
 constexpr int INNER_BOTTOM_ATTR = 4;
+constexpr int ARM_END_ATTR = 5;
 constexpr int OUTER_TOP_ATTR = 6;
 constexpr int OUTER_BOTTOM_ATTR = 7;
 constexpr bool CHECKPOINT_TO_DISK = false;
@@ -49,11 +50,15 @@ int main(int argc, char* argv[])
   double normal_smoothing_start_angle_degrees = 90.0;
   double residual_gap_ramp_angle_degrees = 10.0;
   bool update_residual_gap_ramp = false;
+  bool all_boundary_self_contact = false;
 
   axom::CLI::App app{"C-shaped self-contact example"};
   app.add_option("--contact-interactions", num_contact_interactions,
                  "Number of contact interactions: three pairwise interactions or one all-to-all interaction.")
       ->check(axom::CLI::IsMember({1, 3}));
+  app.add_flag("--all-boundary-self-contact", all_boundary_self_contact,
+               "Use one self-contact interaction with every C-shape boundary attribute on both sides; this "
+               "supersedes --contact-interactions.");
   app.add_option("--residual-gap", residual_gap,
                  "Residual gap applied to every contact interaction; positive values offset penetration from penalty "
                  "enforcement.")
@@ -91,14 +96,17 @@ int main(int argc, char* argv[])
                      "--num-x-elements must be greater than --arm-thickness-elements.");
   SLIC_ERROR_ROOT_IF(num_y_elements <= 2 * arm_thickness_elements,
                      "--num-y-elements must be greater than twice --arm-thickness-elements.");
-  const std::string interaction_name = num_contact_interactions == 1 ? "one_interaction" : "three_interactions";
+  const std::string interaction_name = all_boundary_self_contact
+                                           ? "all_boundary_self_contact"
+                                           : (num_contact_interactions == 1 ? "one_interaction" : "three_interactions");
   const std::string name = "contact_c_shape_" + interaction_name;
   const double normal_smoothing_start_angle = normal_smoothing_start_angle_degrees * std::acos(-1.0) / 180.0;
   const double residual_gap_ramp_angle = residual_gap_ramp_angle_degrees * std::acos(-1.0) / 180.0;
 
   SLIC_INFO_ROOT("Running the C-shape example with "
-                 << num_contact_interactions << " contact interaction(s), a " << residual_gap
-                 << " residual gap, a binning proximity scale of " << binning_proximity_scale
+                 << (all_boundary_self_contact ? "one all-boundary self-contact interaction"
+                                               : std::to_string(num_contact_interactions) + " contact interaction(s)")
+                 << ", a " << residual_gap << " residual gap, a binning proximity scale of " << binning_proximity_scale
                  << ", normal smoothing beginning at " << normal_smoothing_start_angle_degrees
                  << " degrees, and a residual-gap ramp angle of " << residual_gap_ramp_angle_degrees << " degrees"
                  << (update_residual_gap_ramp ? " updated every cycle." : " computed from the initial geometry."));
@@ -146,9 +154,11 @@ int main(int argc, char* argv[])
       },
       mesh->domain("outer_bottom"));
 
-  auto add_contact_interaction = [&](int interaction_id, const std::set<int>& surface_1,
-                                     const std::set<int>& surface_2) {
-    solid_solver.addContactInteraction(interaction_id, surface_1, surface_2, contact_options);
+  auto add_contact_interaction = [&](int interaction_id, const std::set<int>& surface_1, const std::set<int>& surface_2,
+                                     double penalty_scale = 1.0) {
+    auto interaction_options = contact_options;
+    interaction_options.penalty *= penalty_scale;
+    solid_solver.addContactInteraction(interaction_id, surface_1, surface_2, interaction_options);
     tribol::setBinningProximityScale(interaction_id, binning_proximity_scale);
     tribol::setResidualGap(interaction_id, residual_gap);
     tribol::setEnforcementLocation(interaction_id, tribol::EnforcementLocation::QuadraturePoint);
@@ -157,13 +167,19 @@ int main(int argc, char* argv[])
     tribol::setEnergyMortarResidualGapRampUpdates(interaction_id, update_residual_gap_ramp);
   };
 
-  if (num_contact_interactions == 3) {
+  if (all_boundary_self_contact) {
+    const std::set<int> all_boundary_attributes{FIXED_ATTR,   INNER_TOP_ATTR, INNER_LEFT_ATTR,  INNER_BOTTOM_ATTR,
+                                                ARM_END_ATTR, OUTER_TOP_ATTR, OUTER_BOTTOM_ATTR};
+    // Every physical pair is generated in both directed orientations.
+    add_contact_interaction(0, all_boundary_attributes, all_boundary_attributes, 0.5);
+  } else if (num_contact_interactions == 3) {
     add_contact_interaction(0, {INNER_TOP_ATTR}, {INNER_BOTTOM_ATTR});
     add_contact_interaction(1, {INNER_TOP_ATTR}, {INNER_LEFT_ATTR});
     add_contact_interaction(2, {INNER_BOTTOM_ATTR}, {INNER_LEFT_ATTR});
   } else {
     const std::set<int> inner_surface_attributes{INNER_TOP_ATTR, INNER_LEFT_ATTR, INNER_BOTTOM_ATTR};
-    add_contact_interaction(0, inner_surface_attributes, inner_surface_attributes);
+    // The all-to-all definition generates both directed orientations of each physical pair.
+    add_contact_interaction(0, inner_surface_attributes, inner_surface_attributes, 0.5);
   }
 
   solid_solver.completeSetup();
