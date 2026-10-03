@@ -397,8 +397,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr -lpgmath "
             if spec.satisfies("+openmp"):
                 hip_link_flags += "-lompstub "
-            if spec.satisfies("^hipblas"):
-                hip_link_flags += "-lhipblas "
 
             entries.append(cmake_cache_string("CMAKE_EXE_LINKER_FLAGS", hip_link_flags))
 
@@ -441,6 +439,11 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         if spec["mpi"].name == "spectrum-mpi":
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "mpibind"))
+        elif self._get_sys_type(spec) == "toss_4_x86_64_ib_cray":
+            # Give each Flux job step an explicit resource size so independent
+            # CTest jobs can be scheduled concurrently.
+            entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
+                                              "--cpus-per-task=1"))
 
         return entries
 
