@@ -51,31 +51,40 @@ class Mfem(BuiltinMfem):
 
 
 def _remove_inherited_gpu_strumpack_dependencies(package, base_package):
-    """Remove unchanged GPU propagation rules inherited from base_package."""
-    for when_spec, inherited_dependencies in base_package.dependencies.items():
-        inherited_strumpack = inherited_dependencies.get("strumpack")
-        if inherited_strumpack is None:
+    """Allow GPU-enabled MFEM to use a CPU-only STRUMPACK dependency.
+
+    The built-in MFEM package forces STRUMPACK to enable CUDA or ROCm whenever
+    MFEM enables that GPU option. Remove those rules from Smith's MFEM package.
+    """
+    for mfem_condition, base_dependencies in base_package.dependencies.items():
+        base_strumpack = base_dependencies.get("strumpack")
+        if base_strumpack is None:
             continue
 
-        propagates_gpu_variant = any(
-            when_spec.satisfies(f"+{variant}")
-            and inherited_strumpack.spec.satisfies(f"+{variant}")
+        # True when built-in MFEM has a GPU option enabled and forces STRUMPACK
+        # to enable the same option.
+        forces_gpu_option_on_strumpack = any(
+            mfem_condition.satisfies(f"+{variant}")
+            and base_strumpack.spec.satisfies(f"+{variant}")
             for variant in ("cuda", "rocm")
         )
-        if not propagates_gpu_variant:
+        if not forces_gpu_option_on_strumpack:
             continue
 
-        dependencies = package.dependencies.get(when_spec)
+        # Smith's MFEM package has its own dependency table containing both the
+        # inherited rules and any Smith-specific rules. Remove the inherited
+        # STRUMPACK rule only if Smith has not changed it.
+        dependencies = package.dependencies.get(mfem_condition)
         strumpack = dependencies.get("strumpack") if dependencies is not None else None
-        if strumpack is None or strumpack.spec != inherited_strumpack.spec:
+        if strumpack is None or strumpack.spec != base_strumpack.spec:
             continue
 
         del dependencies["strumpack"]
+        # Remove the condition itself if STRUMPACK was its only dependency.
         if not dependencies:
-            del package.dependencies[when_spec]
+            del package.dependencies[mfem_condition]
 
 
-# MFEM can use a CPU-only STRUMPACK from CUDA and ROCm builds. Materializing
-# the dependency table here ensures all inherited directives run before these
-# GPU-specific STRUMPACK constraints are removed.
+# Spack has finished building Smith's MFEM dependency table at this point, so
+# remove the inherited rules that unnecessarily require GPU-enabled STRUMPACK.
 _remove_inherited_gpu_strumpack_dependencies(Mfem, BuiltinMfem)
