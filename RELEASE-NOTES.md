@@ -6,7 +6,6 @@
 [comment]: # (SPDX-License-Identifier: (BSD-3-Clause))
 [comment]: # (#################################################################)
 
-
 # Smith Software Release Notes
 
 Notes describing significant changes in each Smith release are documented in this file.
@@ -43,6 +42,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ### Fixed
 
+- FunctionalWeakForm::jvp() to include shape-displacement contributions, which were previously ignored.
+
 ## [Version 0.1.0] - Release date 2026-04-28
 
 ## Legend for sections
@@ -61,7 +62,6 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ###  Fixed
 - Use this section for any bug fixes
-- FunctionalWeakForm::jvp() to include shape-displacement contributions, which were previously ignored.
  
 ###  Security
 - Use this section in case of vulnerabilities

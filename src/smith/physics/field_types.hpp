@@ -187,4 +187,19 @@ auto getConstFieldPointers(const T& state)
   return std::vector<T const*>{&state};
 }
 
+/// @brief Get a vector of const mfem::ParFiniteElementSpace* from vectors of FiniteElementStates
+inline std::vector<const mfem::ParFiniteElementSpace*> getConstSpacePointers(
+    const std::vector<FiniteElementState>& states, const std::vector<FiniteElementState>& params = {})
+{
+  std::vector<const mfem::ParFiniteElementSpace*> spaces;
+  spaces.reserve(states.size() + params.size());
+  for (const auto& state : states) {
+    spaces.push_back(&state.space());
+  }
+  for (const auto& param : params) {
+    spaces.push_back(&param.space());
+  }
+  return spaces;
+}
+
 }  // namespace smith
