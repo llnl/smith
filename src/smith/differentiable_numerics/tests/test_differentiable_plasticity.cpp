@@ -12,31 +12,18 @@
 
 namespace smith {
 
-LinearSolverOptions primal_lin_opts{.linear_solver = LinearSolver::CG,
-                                    .preconditioner = Preconditioner::HypreAMG,
-                                    .relative_tol = 1e-15,
-                                    .absolute_tol = 1e-15,
-                                    .max_iterations = 200,
-                                    .print_level = 0};
+LinearSolverOptions lin_opts{.linear_solver = LinearSolver::CG,
+                             .preconditioner = Preconditioner::HypreAMG,
+                             .relative_tol = 1e-15,
+                             .absolute_tol = 1e-15,
+                             .max_iterations = 200,
+                             .print_level = 0};
 
-NonlinearSolverOptions primal_nonlin_opts{.nonlin_solver = NonlinearSolver::Newton,
-                                          .relative_tol = 1e-9,
-                                          .absolute_tol = 1e-10,
-                                          .max_iterations = 25,
-                                          .print_level = 2};
-
-LinearSolverOptions state_lin_opts{.linear_solver = LinearSolver::CG,
-                                   .preconditioner = Preconditioner::HypreJacobi,
-                                   .relative_tol = 1e-10,
+NonlinearSolverOptions nonlin_opts{.nonlin_solver = NonlinearSolver::Newton,
+                                   .relative_tol = 1e-9,
                                    .absolute_tol = 1e-10,
-                                   .max_iterations = 200,
-                                   .print_level = 0};
-
-NonlinearSolverOptions state_nonlin_opts{.nonlin_solver = NonlinearSolver::Newton,
-                                         .relative_tol = 1e-7,
-                                         .absolute_tol = 1e-8,
-                                         .max_iterations = 25,
-                                         .print_level = 2};
+                                   .max_iterations = 25,
+                                   .print_level = 2};
 
 /// @brief Differentiable J2 material with nonlinear isotropic hardening and linear kinematic hardening
 template <int dim, typename HardeningType>
@@ -114,6 +101,17 @@ class DifferentiableJ2SmallStrain {
 TEST(DifferentiablePlasticity, J2SmallStrainLinearHardening)
 {
   MPI_Barrier(MPI_COMM_WORLD);
+
+  NonlinearSolverOptions primal_nonlin_opts = nonlin_opts;
+  LinearSolverOptions primal_lin_opts = lin_opts;
+
+  NonlinearSolverOptions state_nonlin_opts = nonlin_opts;
+  state_nonlin_opts.relative_tol = 1e-7;
+  state_nonlin_opts.absolute_tol = 1e-8;
+  LinearSolverOptions state_lin_opts = lin_opts;
+  state_lin_opts.preconditioner = Preconditioner::HypreJacobi;
+  state_lin_opts.relative_tol = 1e-10;
+  state_lin_opts.absolute_tol = 1e-10;
 
   int serial_refinement = 0;
   int parallel_refinement = 0;
@@ -283,8 +281,18 @@ TEST(DifferentiablePlasticity, PlasticLoadingFinitDiff)
 
   std::string physics_name = "differentiable_plasticity";
 
-  state_nonlin_opts.print_level = 0;
+  NonlinearSolverOptions primal_nonlin_opts = nonlin_opts;
   primal_nonlin_opts.print_level = 0;
+  LinearSolverOptions primal_lin_opts = lin_opts;
+
+  NonlinearSolverOptions state_nonlin_opts = nonlin_opts;
+  state_nonlin_opts.relative_tol = 1e-7;
+  state_nonlin_opts.absolute_tol = 1e-8;
+  state_nonlin_opts.print_level = 0;
+  LinearSolverOptions state_lin_opts = lin_opts;
+  state_lin_opts.preconditioner = Preconditioner::HypreJacobi;
+  state_lin_opts.relative_tol = 1e-10;
+  state_lin_opts.absolute_tol = 1e-10;
 
   int serial_refinement = 0;
   int parallel_refinement = 0;
