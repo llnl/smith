@@ -434,14 +434,21 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     def initconfig_mpi_entries(self):
         spec = self.spec
         entries = super(Smith, self).initconfig_mpi_entries()
+        mpi_exec = self.get_mpi_exec()
+        uses_flux_srun_wrapper = (
+            mpi_exec is not None
+            and os.path.basename(mpi_exec) == "srun"
+            and "flux_wrappers" in mpi_exec.split(os.path.sep)
+        )
 
         entries.append(cmake_cache_option("ENABLE_MPI", True))
         if spec["mpi"].name == "spectrum-mpi":
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "mpibind"))
-        elif self._get_sys_type(spec) == "toss_4_x86_64_ib_cray":
-            # Give each Flux job step an explicit resource size so independent
-            # CTest jobs can be scheduled concurrently.
+        elif uses_flux_srun_wrapper:
+            # The Flux srun compatibility wrapper needs an explicit resource
+            # size for each test. Without it, independent CTest jobs cannot run
+            # concurrently.
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "--cpus-per-task=1"))
 
