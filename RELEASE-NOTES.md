@@ -39,6 +39,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ### Changed
 
 - Reworked the trust-region solver to use an MFEM/LAPACK subspace solve with cached reduced problems and simplified Steihaug-Toint CG internals.
+- [Changed `TimeDiscretizedWeakForm` class name to `FunctionalWeakForm`](https://github.com/llnl/smith/pull/1609/).
 
 ### Fixed
 
