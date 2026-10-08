@@ -173,6 +173,37 @@ bool allNodesOnBoundary(const std::vector<vec2>& nodes, double x_target)
 
 }  // namespace
 
+TEST(FieldStore, WeakFormParametersExcludeUnrelatedSharedParametersAndPreserveOrder)
+{
+  axom::sidre::DataStore datastore;
+  StateManager::initialize(datastore, "weak_form_parameter_filtering");
+
+  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL),
+                                     "parameter_filter_mesh");
+  auto field_store = std::make_shared<FieldStore>(mesh, 10);
+
+  FieldType<H1<1, 2>> shape_displacement("shape_displacement");
+  field_store->addShapeDisp(shape_displacement);
+  FieldType<H1<1>> unknown("unknown");
+  field_store->addIndependent(unknown, std::make_shared<QuasiStaticRule>());
+  FieldType<H1<1>> first_parameter("first_parameter");
+  FieldType<H1<1>> second_parameter("second_parameter");
+  FieldType<H1<1>> unrelated_parameter("unrelated_parameter");
+  field_store->addParameter(first_parameter);
+  field_store->addParameter(second_parameter);
+  field_store->addParameter(unrelated_parameter);
+
+  field_store->createSpaces("parameter_filtered_weak_form", unknown.name,
+                            unknown, second_parameter, first_parameter);
+  auto parameters = field_store->getParameters("parameter_filtered_weak_form");
+
+  ASSERT_EQ(parameters.size(), 2u);
+  EXPECT_EQ(parameters[0].get()->name(), second_parameter.name);
+  EXPECT_EQ(parameters[1].get()->name(), first_parameter.name);
+
+  StateManager::reset();
+}
+
 TEST(MultiphysicsTimeIntegrator, CycleZeroUsesBcsForReactionFieldNotUnknownZero)
 {
   axom::sidre::DataStore datastore;

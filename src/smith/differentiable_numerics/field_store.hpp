@@ -420,6 +420,13 @@ struct FieldStore {
   std::vector<FieldState> getStates(const std::string& weak_form_name) const;
 
   /**
+   * @brief Get the parameter fields associated with a weak form.
+   * @param weak_form_name Name of the weak form.
+   * @return std::vector<FieldState> Parameter fields in weak-form argument order.
+   */
+  std::vector<FieldState> getParameters(const std::string& weak_form_name) const;
+
+  /**
    * @brief Extract state fields for a weak form from provided state and parameter vectors.
    * @param weak_form_name Name of the weak form.
    * @param state_fields Vector of all state fields.
