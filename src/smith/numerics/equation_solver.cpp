@@ -1089,7 +1089,9 @@ void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
   SLIC_ERROR_ROOT_IF(!superlu_mat_, "Operator must be set prior to solving with SuperLU");
 
   // Use the underlying MFEM-based solver and SuperLU matrix type to solve the system
+  printDiagnostic("SuperLU Mult: begin factorization and solve");
   superlu_solver_.Mult(input, output);
+  printDiagnostic("SuperLU Mult: factorization and solve complete");
 }
 
 /**
@@ -1138,12 +1140,16 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
 
 void SuperLUSolver::SetOperator(const mfem::Operator& op)
 {
+  printDiagnostic("SuperLU SetOperator: begin");
+
   // Check if this is a block operator
   auto* block_operator = dynamic_cast<const mfem::BlockOperator*>(&op);
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
+    printDiagnostic("SuperLU SetOperator: begin block-to-monolithic conversion");
     monolithic_mat_ = buildMonolithicMatrix(*block_operator);
+    printDiagnostic("SuperLU SetOperator: block-to-monolithic conversion complete");
 
     superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*monolithic_mat_);
   } else {
@@ -1154,9 +1160,12 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
 
     superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*matrix);
   }
+  printDiagnostic("SuperLU SetOperator: row-local matrix construction complete");
   height = op.Height();
   width = op.Width();
+  printDiagnostic("SuperLU SetOperator: begin MFEM operator setup");
   superlu_solver_.SetOperator(*superlu_mat_);
+  printDiagnostic("SuperLU SetOperator: MFEM operator setup complete");
 }
 
 #ifdef MFEM_USE_STRUMPACK
