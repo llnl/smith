@@ -1296,7 +1296,8 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
 #ifdef MFEM_USE_STRUMPACK
 
   if (linear_opts.linear_solver == LinearSolver::Strumpack) {
-    auto lin_solver = std::make_unique<StrumpackSolver>(linear_opts.print_level, comm);
+    auto lin_solver = std::make_unique<StrumpackSolver>(linear_opts.print_level,
+                                                       linear_opts.uses_natural_strumpack_ordering, comm);
     return {std::move(lin_solver), std::move(preconditioner)};
   }
 

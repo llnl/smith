@@ -441,6 +441,9 @@ struct LinearSolverOptions {
   /// Debugging print level for the linear solver
   int print_level = 0;
 
+  /// Whether STRUMPACK should retain the matrix's original ordering instead of invoking METIS
+  bool uses_natural_strumpack_ordering = false;
+
   /// Debugging print level for the preconditioner
   int preconditioner_print_level = 0;
 
