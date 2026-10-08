@@ -91,7 +91,7 @@ TEST_P(ContactFiniteDiff3D, patch)
   mesh->addDomainOfBoundaryElements("zmax_face", smith::by_attr<dim>(8));
 
 #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
 #else
   LinearSolverOptions linear_options{};
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -225,9 +225,13 @@ TEST_P(ContactFiniteDiff3D, patch)
     }
     std::cout << "Max diff = " << std::setprecision(15) << max_diff << std::endl;
     // Reset contact to the correct states (non-finite differenced) before advancing to the next step
+    std::cout << "ContactFiniteDiff3D step " << i << ": begin contact-state reset" << std::endl;
     f = 0.0;
     oper->Mult(merged_sol, f);
+    std::cout << "ContactFiniteDiff3D step " << i << ": contact-state reset complete" << std::endl;
+    std::cout << "ContactFiniteDiff3D step " << i << ": begin timestep advance" << std::endl;
     solid_solver.advanceTimestep(dt);
+    std::cout << "ContactFiniteDiff3D step " << i << ": timestep advance complete" << std::endl;
   }
 }
 

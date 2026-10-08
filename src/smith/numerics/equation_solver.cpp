@@ -273,7 +273,7 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     if (norm == 0.0) return;
 
     if (print_level == 1) {
-      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
+      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << std::endl;
     }
 
     prec->iterative_mode = false;
@@ -1166,17 +1166,23 @@ void StrumpackSolver::Mult(const mfem::Vector& input, mfem::Vector& output) cons
   SLIC_ERROR_ROOT_IF(!strumpack_mat_, "Operator must be set prior to solving with Strumpack");
 
   // Use the underlying MFEM-based solver and Strumpack matrix type to solve the system
+  printDiagnostic("STRUMPACK Mult: begin factorization and solve");
   strumpack_solver_.Mult(input, output);
+  printDiagnostic("STRUMPACK Mult: factorization and solve complete");
 }
 
 void StrumpackSolver::SetOperator(const mfem::Operator& op)
 {
+  printDiagnostic("STRUMPACK SetOperator: begin");
+
   // Check if this is a block operator
   auto* block_operator = dynamic_cast<const mfem::BlockOperator*>(&op);
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
+    printDiagnostic("STRUMPACK SetOperator: begin block-to-monolithic conversion");
     monolithic_mat_ = buildMonolithicMatrix(*block_operator);
+    printDiagnostic("STRUMPACK SetOperator: block-to-monolithic conversion complete");
 
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*monolithic_mat_);
   } else {
@@ -1187,9 +1193,12 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
 
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*matrix);
   }
+  printDiagnostic("STRUMPACK SetOperator: row-local matrix construction complete");
   height = op.Height();
   width = op.Width();
+  printDiagnostic("STRUMPACK SetOperator: begin MFEM operator setup");
   strumpack_solver_.SetOperator(*strumpack_mat_);
+  printDiagnostic("STRUMPACK SetOperator: MFEM operator setup complete");
 }
 
 #endif
