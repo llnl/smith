@@ -237,7 +237,7 @@ class StrumpackSolver : public mfem::Solver {
    * @param[in] print_level The verbosity level for the mfem::STRUMPACKSolver
    * @param[in] uses_natural_reordering Whether STRUMPACK should retain the matrix's original ordering
    */
-  StrumpackSolver(int print_level, bool uses_natural_reordering, MPI_Comm comm)
+  StrumpackSolver(int print_level, MPI_Comm comm, bool uses_natural_reordering = false)
       : print_diagnostics_(print_level > 0), strumpack_solver_(comm)
   {
     strumpack_solver_.SetKrylovSolver(strumpack::KrylovSolver::DIRECT);
