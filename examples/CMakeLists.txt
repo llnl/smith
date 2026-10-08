@@ -39,7 +39,8 @@ add_subdirectory(contact/homotopy)
 add_subdirectory(buckling)
 
 # Add the explicit dynamics examples
-add_subdirectory(explicit)
+# removing this example until dfem usage is updated
+#add_subdirectory(explicit)
 
 # Add the uniaxial examples
 add_subdirectory(uniaxial)
