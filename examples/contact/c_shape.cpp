@@ -59,9 +59,7 @@ int main(int argc, char* argv[])
   app.add_flag("--all-boundary-self-contact", all_boundary_self_contact,
                "Use one self-contact interaction with every C-shape boundary attribute on both sides; this "
                "supersedes --contact-interactions.");
-  app.add_option("--residual-gap", residual_gap,
-                 "Residual gap applied to every contact interaction; positive values offset penetration from penalty "
-                 "enforcement.")
+  app.add_option("--residual-gap", residual_gap, "Residual separation maintained by every contact interaction.")
       ->check(axom::CLI::NonNegativeNumber);
   app.add_option("--num-x-elements", num_x_elements, "Number of elements across the C-shape width.")
       ->check(axom::CLI::PositiveNumber);
