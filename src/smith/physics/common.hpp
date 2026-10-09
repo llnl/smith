@@ -10,7 +10,8 @@
  * @brief A file defining some enums and structs that are used by the different physics modules
  */
 #pragma once
-#include <utility>
+
+#include "smith/numerics/functional/tuple.hpp"
 
 namespace smith {
 
@@ -24,31 +25,38 @@ struct TimeInfo {
   };
 
   /// @brief constructor
-  TimeInfo(double t, double t_step, size_t c = 0, EvaluationMode mode = EvaluationMode::Regular)
-      : time_(std::make_pair(t, 0.0)), dt_(std::make_pair(t_step, 0.0)), cycle_(c), mode_(mode)
+  SMITH_HOST_DEVICE TimeInfo(double t, double t_step, size_t c = 0,
+                             EvaluationMode mode = EvaluationMode::Regular)
+      : time_(tuple<double, double>{t, 0.0}),
+        dt_(tuple<double, double>{t_step, 0.0}),
+        cycle_(c),
+        mode_(mode)
   {
   }
 
   /// @brief accessor for the current time
-  double time() const { return time_.first + dt_.first; }
+  SMITH_HOST_DEVICE double time() const
+  {
+    return get<0>(time_) + get<0>(dt_);
+  }
 
   /// @brief accessor for dt
-  double dt() const { return dt_.first; }
+  SMITH_HOST_DEVICE double dt() const { return get<0>(dt_); }
 
   /// @brief accessor for cycle
-  size_t cycle() const { return cycle_; }
+  SMITH_HOST_DEVICE size_t cycle() const { return cycle_; }
 
   /// @brief true when evaluating the startup acceleration solve.
-  bool isCycleZeroEvaluation() const { return mode_ == EvaluationMode::CycleZero; }
+  SMITH_HOST_DEVICE bool isCycleZeroEvaluation() const { return mode_ == EvaluationMode::CycleZero; }
 
   /// @brief accessor for residual evaluation mode.
-  EvaluationMode mode() const { return mode_; }
+  SMITH_HOST_DEVICE EvaluationMode mode() const { return mode_; }
 
  private:
-  std::pair<double, double> time_;  ///< time and its dual
-  std::pair<double, double> dt_;    ///< timestep and its dual
-  size_t cycle_;                    ///< cycle, step, iteration count
-  EvaluationMode mode_;             ///< residual evaluation mode
+  tuple<double, double> time_;  ///< time and its dual
+  tuple<double, double> dt_;    ///< timestep and its dual
+  size_t cycle_;                              ///< cycle, step, iteration count
+  EvaluationMode mode_;                       ///< residual evaluation mode
 };
 
 /**
