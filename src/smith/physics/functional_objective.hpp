@@ -103,6 +103,8 @@ class FunctionalObjective<spatial_dim, Parameters<InputSpaces...>, std::integer_
   void addBoundaryIntegralImpl(std::string boundary_name, const FuncOfTimeSpaceAndParams& qfunction,
                                std::integer_sequence<int, all_params...>)
   {
+    // AddBoundaryIntegral expects the intrinsic integration-domain dimension. A boundary of a
+    // spatial_dim-dimensional volume mesh therefore has dimension spatial_dim - 1.
     objective_->AddBoundaryIntegral(
         smith::Dimension<spatial_dim - 1>{}, smith::DependsOn<all_params...>{},
         [this, qfunction](double /*time*/, auto X, auto... params) { return qfunction(timeInfo(), X, params...); },

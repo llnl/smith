@@ -324,6 +324,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                         [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "residual");
+    // Synchronize stored auxiliary parameters with this supplied trial state.
     refreshAuxiliaryFields(fields);
     SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
     auto ret = (*weak_form_)(time_info.time(), *shape_disp, *fields[input_indices]...);
@@ -337,6 +338,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "jacobian");
+    // Derivative entry points are self-contained; no residual evaluation is assumed to precede this call.
     refreshAuxiliaryFields(fields);
     SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
@@ -429,15 +431,27 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   /**
    * @brief Register a callback that refreshes auxiliary fields before each weak-form evaluation.
    *
-   * The callback receives the current input fields in the same order as the weak form's
-   * `InputSpaces`. This lets a client reconstruct externally stored auxiliary or parameter fields
-   * from the current nonlinear iterate before evaluating the residual, Jacobian, JVP, or VJP. For
-   * example, a client can project the current solution gradient into a parameter field consumed by
-   * an integrand, ensuring that the integrand does not use a value from an earlier iterate.
+   * Some weak forms consume auxiliary fields obtained from the current nonlinear iterate by a
+   * projection, recovery, interpolation, or another operation outside the differentiable integrand.
+   * Such fields are commonly stored as parameters, so updating a primary unknown does not update
+   * them automatically. The callback receives the current input fields in `InputSpaces` order and
+   * lets a client synchronize its stored auxiliary fields before residual or derivative assembly.
+   * This prevents Newton, line-search, and other trial-iterate evaluations from consuming stale
+   * auxiliary values.
    *
    * The callback should treat @p fields as read-only and update only fields that it owns or captures.
-   * Its operations are not differentiated, so derivatives through the auxiliary-field update are not
-   * automatically included in the assembled operators. Passing an empty callback disables the refresh.
+   * It is invoked whenever residual(), jacobian(), jvp(), or vjp() is called, including derivative-only
+   * evaluations with no preceding residual call. It may therefore run several times for the same iterate,
+   * and should be safe to repeat with identical inputs. Passing an empty callback disables the refresh.
+   *
+   * The callback itself is outside Smith's automatic differentiation. If a residual has the form
+   * `R(u, g)` and the callback computes `g_star = G(u)`, the assembled state derivative is
+   * `partial R / partial u` evaluated at `g = g_star`. The auxiliary value is current, but is held fixed
+   * during differentiation; the chain-rule term `(partial R / partial g) (dG / du)` is not included.
+   * Jacobian, JVP, and VJP operations all follow this frozen-auxiliary, or quasi-Newton, convention.
+   * This is an intentional approximate linearization, but users needing exact coupled sensitivities
+   * through `G` must account for that dependence separately. Refreshing from the current supplied iterate
+   * is distinct from lagging an auxiliary field from a previous timestep or nonlinear iteration.
    *
    * @param[in] callback Function invoked immediately before each weak-form evaluation.
    */
@@ -528,8 +542,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
    * @brief Refresh externally stored auxiliary fields from the current weak-form inputs.
    *
    * This is a no-op unless a client registered a callback with setPreAssemblyCallback(). Keeping the
-   * invocation in one helper ensures that residual and derivative evaluations see the same auxiliary
-   * state for a given set of input fields.
+   * invocation in one helper ensures that every public evaluation path synchronizes independently and
+   * sees the same auxiliary state for a given set of input fields. Repeated calls may recompute the
+   * auxiliary quantities; callback implementations must therefore support repeated synchronization.
    *
    * @param[in] fields Current weak-form input fields.
    */
