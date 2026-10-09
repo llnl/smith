@@ -122,6 +122,10 @@ if(NOT SMITH_FOUND)
 
   # Caliper
   if(SMITH_USE_CALIPER)
+    if(SMITH_ENABLE_HIP)
+      find_package(rocprofiler-sdk CONFIG REQUIRED PATHS @ROCM_PATH@)
+      find_package(rocprofiler-sdk-roctx CONFIG REQUIRED PATHS @ROCM_PATH@)
+    endif()
     find_dependency(caliper REQUIRED PATHS "${CALIPER_DIR}" "${CALIPER_DIR}/share/cmake/caliper")
   endif()
 
@@ -177,6 +181,14 @@ if(NOT SMITH_FOUND)
   # Gretl
   if(SMITH_USE_GRETL)
     find_dependency(gretl REQUIRED PATHS "${GRETL_DIR}/lib/cmake")
+  endif()
+
+  # Take openmp compiler options (likely set by either RAJA or Axom) and remove NVCC-specific flag prefix, -Xcompiler
+  if (SMITH_ENABLE_CUDA AND TARGET openmp)
+    get_target_property(_openmp_compile_options openmp INTERFACE_COMPILE_OPTIONS)
+    string(REPLACE "-Xcompiler=" "" _openmp_compile_options "${_openmp_compile_options}")
+    set_property(TARGET openmp PROPERTY INTERFACE_COMPILE_OPTIONS "${_openmp_compile_options}")
+    message(STATUS "Updated OpenMP compile options: ${_openmp_compile_options}")
   endif()
 
   #----------------------------------------------------------------------------

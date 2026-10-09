@@ -77,6 +77,12 @@ std::string about()
   about += std::format("CUDA:             {0}\n", off);
 #endif
 
+#ifdef SMITH_USE_HIP
+  about += std::format("HIP:              {0}\n", on);
+#else
+  about += std::format("HIP:              {0}\n", off);
+#endif
+
   about += "\n";
 
   //------------------------

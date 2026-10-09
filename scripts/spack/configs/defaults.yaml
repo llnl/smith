@@ -33,6 +33,9 @@ packages:
   raja:
     require:
     - spec: "~shared~examples~exercises"
+  strumpack:
+    require:
+    - spec: "~cuda~rocm"
   tribol:
     require:
     - spec: "~examples~tests"
@@ -75,8 +78,6 @@ packages:
     - spec: "^axom+shared ^hypre+shared ^metis+shared ^mfem+shared~static ^netcdf-c+shared ^parmetis+shared ^superlu-dist+shared"
       when: "+shared"
     # Optional dependencies
-    - spec: "^petsc+shared"
-      when: "+shared+petsc"
     - spec: "^strumpack+shared"
       when: "+shared+strumpack"
     - spec: "^raja+shared"
@@ -96,8 +97,6 @@ packages:
     - spec: "^axom~shared ^hypre~shared ^metis~shared ^mfem~shared+static ^netcdf-c~shared ^parmetis~shared ^superlu-dist~shared"
       when: "~shared"
     # Optional dependencies
-    - spec: "^petsc~shared"
-      when: "~shared+petsc"
     - spec: "^raja~shared"
       when: "~shared+raja"
     - spec: "^umpire~shared"

@@ -6,12 +6,13 @@
 from spack.package import *
 from spack_repo.builtin.packages.mfem.package import Mfem as BuiltinMfem
 
+
 class Mfem(BuiltinMfem):
 
     # Note: Make sure this sha coincides with the git submodule
     # Note: We add a number to the end of the real version number to indicate that we have
     # moved forward past the release. Increment the last number when updating the commit sha.
-    version("4.9.0.3", commit="60c2ac77d19a2b0702328840ba101a8b11f8d52d")
+    version("4.10.0.1", commit="a57763ace9c9ff67a57cdb4457a6d7caf79eae93")
 
     variant('asan', default=False, description='Add Address Sanitizer flags')
 
@@ -47,3 +48,43 @@ class Mfem(BuiltinMfem):
                 env.append_flags(flag, "-fno-omit-frame-pointer")
                 if '+debug' in self.spec:
                     env.append_flags(flag, "-fno-optimize-sibling-calls")
+
+
+def _remove_inherited_gpu_strumpack_dependencies(package, base_package):
+    """Allow GPU-enabled MFEM to use a CPU-only STRUMPACK dependency.
+
+    The built-in MFEM package forces STRUMPACK to enable CUDA or ROCm whenever
+    MFEM enables that GPU option. Remove those rules from Smith's MFEM package.
+    """
+    for mfem_condition, base_dependencies in base_package.dependencies.items():
+        base_strumpack = base_dependencies.get("strumpack")
+        if base_strumpack is None:
+            continue
+
+        # True when built-in MFEM has a GPU option enabled and forces STRUMPACK
+        # to enable the same option.
+        forces_gpu_option_on_strumpack = any(
+            mfem_condition.satisfies(f"+{variant}")
+            and base_strumpack.spec.satisfies(f"+{variant}")
+            for variant in ("cuda", "rocm")
+        )
+        if not forces_gpu_option_on_strumpack:
+            continue
+
+        # Smith's MFEM package has its own dependency table containing both the
+        # inherited rules and any Smith-specific rules. Remove the inherited
+        # STRUMPACK rule only if Smith has not changed it.
+        dependencies = package.dependencies.get(mfem_condition)
+        strumpack = dependencies.get("strumpack") if dependencies is not None else None
+        if strumpack is None or strumpack.spec != base_strumpack.spec:
+            continue
+
+        del dependencies["strumpack"]
+        # Remove the condition itself if STRUMPACK was its only dependency.
+        if not dependencies:
+            del package.dependencies[mfem_condition]
+
+
+# Spack has finished building Smith's MFEM dependency table at this point, so
+# remove the inherited rules that unnecessarily require GPU-enabled STRUMPACK.
+_remove_inherited_gpu_strumpack_dependencies(Mfem, BuiltinMfem)

@@ -21,6 +21,7 @@ set(SMITH_TPL_DEPS ADIAK
                    LUA
                    MFEM
                    MPI
+                   OPENMP
                    PETSC
                    RAJA
                    SLEPC
@@ -66,10 +67,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Create global variable to toggle between GPU targets
     #------------------------------------------------------------------------------
     if(SMITH_ENABLE_CUDA)
-        # CUDAToolkit required to find cublasLt library
-        # Can be removed once this BLT PR is merged https://github.com/LLNL/blt/pull/585 (?)
-        find_package(CUDAToolkit REQUIRED)
-        set(smith_device_depends blt::cuda CUDA::cublasLt CACHE STRING "" FORCE)
+        set(smith_device_depends blt::cuda CACHE STRING "" FORCE)
     elseif(SMITH_ENABLE_HIP)
         set(smith_device_depends blt::hip CACHE STRING "" FORCE)
     else()
@@ -249,7 +247,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                                     TARGET       mfem
                                     DIR_VARIABLE MFEM_DIR)
 
-        if (SMITH_ENABLE_HIP AND STRUMPACK_DIR)
+        if (SMITH_ENABLE_HIP AND STRUMPACK_FOUND)
             string(APPEND MFEM_LIBRARIES " -lrocblas -lrocsolver")
             target_link_libraries(mfem INTERFACE rocblas rocsolver)
         endif()
@@ -325,10 +323,14 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
                             PATHS "${STRUMPACK_DIR}"
                                   "${STRUMPACK_DIR}/lib/cmake/STRUMPACK"
                                   "${STRUMPACK_DIR}/lib64/cmake/STRUMPACK")
+            set(STRUMPACK_FOUND TRUE)
             set(STRUMPACK_REQUIRED_PACKAGES "MPI" "MPI_Fortran" "ParMETIS" "METIS"
                 "ScaLAPACK" CACHE STRING
                 "Additional packages required by STRUMPACK.")
             set(STRUMPACK_TARGET_NAMES STRUMPACK::strumpack CACHE STRING "")
+        else()
+            set(MFEM_USE_STRUMPACK OFF CACHE BOOL "")
+            set(STRUMPACK_FOUND FALSE)
         endif()
         set(MFEM_USE_ZLIB ON CACHE BOOL "")
         if(ENZYME_DIR)
@@ -394,7 +396,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Restore previous runtime output directory
         set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${tmp_cmake_runtime_output_directory} CACHE PATH "" FORCE)
  
-        set(MFEM_FOUND TRUE CACHE BOOL "" FORCE)
+        set(MFEM_FOUND TRUE)
 
         # Patch the mfem target with the correct include directories
         get_target_property(_mfem_includes mfem INCLUDE_DIRECTORIES)
@@ -467,7 +469,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             message(FATAL_ERROR "Given AXOM_DIR did not contain a required header: axom/inlet/LuaReader.hpp"
                                 "\nTry building Axom with '-DLUA_DIR=path/to/lua/install'\n ")
         endif()
-        set(LUA_FOUND TRUE CACHE BOOL "")
+        set(LUA_FOUND TRUE)
 
         # MFEMSidreDataCollection.hpp
         find_path(
@@ -505,12 +507,12 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         else()
             add_subdirectory(${PROJECT_SOURCE_DIR}/axom/src ${CMAKE_BINARY_DIR}/axom)
         endif()
-        set(AXOM_FOUND TRUE CACHE BOOL "" FORCE)
+        set(AXOM_FOUND TRUE)
 
         add_library(axom::cli11 ALIAS cli11)
         add_library(axom::fmt ALIAS fmt)
 
-        if (STRUMPACK_DIR)
+        if (STRUMPACK_FOUND)
             target_link_libraries(sidre PUBLIC STRUMPACK::strumpack)
         endif()
 
@@ -698,7 +700,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         mfem
         axom::mfem
         tribol::mfem)
-    if(STRUMPACK_DIR)
+    if(STRUMPACK_FOUND)
         list(GET MPI_C_LIBRARIES 0 _first_mpi_lib)
         get_filename_component(_mpi_lib_dir ${_first_mpi_lib} DIRECTORY)
     

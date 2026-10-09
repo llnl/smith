@@ -372,8 +372,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
 
   /// @overload
   void jvp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields,
-           [[maybe_unused]] ConstFieldPtr v_shape_disp, const std::vector<ConstFieldPtr>& v_fields,
+           [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_shape_disp,
+           const std::vector<ConstFieldPtr>& v_fields,
            [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& v_quad_fields,
            DualFieldPtr jvp_reaction) const override
   {
@@ -388,6 +388,12 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
                                   shape_disp, fields);
 
     *jvp_reaction = 0.0;
+    if (v_shape_disp != nullptr) {
+      // index 0 in DifferentiateWRT corresponds to shape field
+      auto Kshape = smith::get<DERIVATIVE>(
+          (*weak_form_)(DifferentiateWRT<0>{}, time_info.time(), *shape_disp, *fields[input_indices]...));
+      Kshape.AddMult(*v_shape_disp, *jvp_reaction);
+    }
 
     for (size_t input_col = 0; input_col < fields.size(); ++input_col) {
       if (v_fields[input_col] != nullptr) {
