@@ -29,6 +29,9 @@ add_subdirectory(solid_mechanics)
 # Add the thermo-mechanics examples
 add_subdirectory(thermo_mechanics)
 
+# Add Kevin's temperature-dependent mechanics examples
+add_subdirectory(Kevin)
+
 # Add the contact examples
 add_subdirectory(contact)
 
