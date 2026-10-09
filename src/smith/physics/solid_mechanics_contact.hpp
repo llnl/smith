@@ -336,7 +336,7 @@ class SolidMechanicsContact<order, dim, Parameters<parameter_space...>,
   void completeSetup() override
   {
     double dt = 0.0;
-    mfem::Vector p = pressure();
+    mfem::HypreParVector p = pressure();
     contact_.updateForcesAndJacobian(cycle_, time_, dt, BasePhysics::shapeDisplacement(), displacement_, p);
     updateContactForceOutputs();
 
