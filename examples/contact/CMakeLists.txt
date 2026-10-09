@@ -42,16 +42,19 @@ if(TRIBOL_FOUND AND STRUMPACK_FOUND)
             smith_add_example_test(NAME           contact_c_shape_three_interactions
                                    COMMAND        contact_${example_name}
                                                   --contact-interactions 3
+                                                  --expected-final-displacement-norm 0.694238
                                                   ${C_SHAPE_TEST_ARGS}
                                    NUM_MPI_TASKS  4)
             smith_add_example_test(NAME           contact_c_shape_one_interaction
                                    COMMAND        contact_${example_name}
                                                   --contact-interactions 1
+                                                  --expected-final-displacement-norm 0.696899
                                                   ${C_SHAPE_TEST_ARGS}
                                    NUM_MPI_TASKS  4)
             smith_add_example_test(NAME           contact_c_shape_all_boundary_self_contact
                                    COMMAND        contact_${example_name}
                                                   --all-boundary-self-contact
+                                                  --expected-final-displacement-norm 0.693031
                                                   ${C_SHAPE_TEST_ARGS}
                                    NUM_MPI_TASKS  4)
         elseif(example_name STREQUAL "ironing_2D")

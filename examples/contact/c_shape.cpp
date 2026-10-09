@@ -49,17 +49,19 @@ int main(int argc, char* argv[])
   double binning_proximity_scale = 10.0;
   double normal_smoothing_start_angle_degrees = 90.0;
   double residual_gap_ramp_angle_degrees = 10.0;
+  double expected_final_displacement_norm = -1.0;
   bool update_residual_gap_ramp = false;
   bool all_boundary_self_contact = false;
 
-  axom::CLI::App app{"C-shaped self-contact example"};
+  axom::CLI::App app{"C-shaped self-contact example with advanced Tribol EnergyMortar controls"};
   app.add_option("--contact-interactions", num_contact_interactions,
                  "Number of contact interactions: three pairwise interactions or one all-to-all interaction.")
       ->check(axom::CLI::IsMember({1, 3}));
   app.add_flag("--all-boundary-self-contact", all_boundary_self_contact,
                "Use one self-contact interaction with every C-shape boundary attribute on both sides; this "
                "supersedes --contact-interactions.");
-  app.add_option("--residual-gap", residual_gap, "Residual separation maintained by every contact interaction.")
+  app.add_option("--residual-gap", residual_gap,
+                 "Nominal residual separation away from ramped nonconvex corners.")
       ->check(axom::CLI::NonNegativeNumber);
   app.add_option("--num-x-elements", num_x_elements, "Number of elements across the C-shape width.")
       ->check(axom::CLI::PositiveNumber);
@@ -82,6 +84,9 @@ int main(int argc, char* argv[])
       ->check(axom::CLI::Range(0.0, 90.0));
   app.add_flag("--update-residual-gap-ramp", update_residual_gap_ramp,
                "Recompute the residual-gap ramp once per cycle using current geometry.");
+  app.add_option("--expected-final-displacement-norm", expected_final_displacement_norm,
+                 "Optional final displacement L2 norm used to validate regression runs.")
+      ->check(axom::CLI::NonNegativeNumber);
   app.set_help_flag("--help");
   CLI11_PARSE(app, argc, argv);
 
@@ -168,7 +173,7 @@ int main(int argc, char* argv[])
   if (all_boundary_self_contact) {
     const std::set<int> all_boundary_attributes{FIXED_ATTR,   INNER_TOP_ATTR, INNER_LEFT_ATTR,  INNER_BOTTOM_ATTR,
                                                 ARM_END_ATTR, OUTER_TOP_ATTR, OUTER_BOTTOM_ATTR};
-    // Every physical pair is generated in both directed orientations.
+    // Search returns each physical pair in both directions, so half the penalty makes their combined force count once.
     add_contact_interaction(0, all_boundary_attributes, all_boundary_attributes, 0.5);
   } else if (num_contact_interactions == 3) {
     add_contact_interaction(0, {INNER_TOP_ATTR}, {INNER_BOTTOM_ATTR});
@@ -176,7 +181,7 @@ int main(int argc, char* argv[])
     add_contact_interaction(2, {INNER_BOTTOM_ATTR}, {INNER_LEFT_ATTR});
   } else {
     const std::set<int> inner_surface_attributes{INNER_TOP_ATTR, INNER_LEFT_ATTR, INNER_BOTTOM_ATTR};
-    // The all-to-all definition generates both directed orientations of each physical pair.
+    // Search returns each physical pair in both directions, so half the penalty makes their combined force count once.
     add_contact_interaction(0, inner_surface_attributes, inner_surface_attributes, 0.5);
   }
 
@@ -195,6 +200,16 @@ int main(int argc, char* argv[])
     visit_dc.SetCycle(step + 1);
     visit_dc.SetTime((step + 1) * timestep);
     visit_dc.Save();
+  }
+
+  const double final_displacement_norm = mfem::ParNormlp(solid_solver.displacement(), 2.0, MPI_COMM_WORLD);
+  SLIC_INFO_ROOT("Final displacement L2 norm: " << final_displacement_norm);
+  if (expected_final_displacement_norm >= 0.0) {
+    const double tolerance = 1.0e-6 + 1.0e-4 * std::abs(expected_final_displacement_norm);
+    SLIC_ERROR_ROOT_IF(std::abs(final_displacement_norm - expected_final_displacement_norm) > tolerance,
+                       "Final displacement L2 norm " << final_displacement_norm << " differs from expected value "
+                                                      << expected_final_displacement_norm << " by more than "
+                                                      << tolerance << ".");
   }
 
   return 0;
