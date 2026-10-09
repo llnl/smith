@@ -29,7 +29,7 @@ packages:
     - spec: "~shared~mpi"
   mfem:
     require:
-    - spec: "cxxstd=17"
+    - spec: "cxxstd=20"
   raja:
     require:
     - spec: "~shared~examples~exercises"
