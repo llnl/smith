@@ -53,7 +53,8 @@ if (TRIBOL_FOUND)
 endif()
 
 if (SMITH_USE_ENZYME)
-    list(APPEND physics_serial_test_sources)
+    list(APPEND physics_serial_test_sources
+                test_differentiable_operator_weak_form.cpp)
 endif()
 
 smith_add_tests(SOURCES       ${physics_serial_test_sources}
