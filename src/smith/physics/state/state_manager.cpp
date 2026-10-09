@@ -30,6 +30,8 @@ std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_stat
 std::unordered_map<std::string, mfem::ParGridFunction*> StateManager::named_duals_;
 std::vector<std::unique_ptr<mfem::ParGridFunction>> StateManager::owned_states_;
 std::vector<std::unique_ptr<mfem::ParGridFunction>> StateManager::owned_duals_;
+std::vector<std::shared_ptr<mfem::ParFiniteElementSpace>> StateManager::owned_spaces_;
+std::vector<std::shared_ptr<mfem::FiniteElementCollection>> StateManager::owned_colls_;
 
 double StateManager::newDataCollection(const std::string& mesh_tag, const std::optional<int> cycle_to_load)
 {
@@ -156,6 +158,10 @@ void StateManager::storeState(FiniteElementState& state)
     datacoll.RegisterField(name, grid_function);
     state.fillGridFunction(*grid_function);
     owned_states_.push_back(std::move(owned_grid_function));
+
+    // Keep a shared pointer to the space and collection so they outlive the user's FiniteElementState instance
+    owned_spaces_.push_back(state.shared_space());
+    owned_colls_.push_back(state.shared_coll());
   }
   named_states_[name] = grid_function;
 }
@@ -194,6 +200,10 @@ void StateManager::storeDual(FiniteElementDual& dual)
     datacoll.RegisterField(name, grid_function);
     grid_function->SetFromTrueDofs(dual);
     owned_duals_.push_back(std::move(owned_grid_function));
+
+    // Keep a shared pointer to the space and collection so they outlive the user's FiniteElementDual instance
+    owned_spaces_.push_back(dual.shared_space());
+    owned_colls_.push_back(dual.shared_coll());
   }
   named_duals_[name] = grid_function;
 }
