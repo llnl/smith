@@ -26,6 +26,9 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
   time-integration rule before invoking material, source, traction, and objective callbacks.
 - Added post-solve and cycle-zero auxiliary systems for stress projection, initial acceleration solves, and other
   derived-field updates in differentiable multiphysics time integration.
+- Added an optional `FunctionalWeakForm` pre-assembly callback for refreshing externally managed auxiliary fields
+  before residual and derivative evaluations. Callback updates are treated as fixed coefficients during Jacobian,
+  JVP, and VJP assembly.
 - Added composable solid-mechanics and thermo-mechanics examples, tutorials, and regression tests covering coupled
   sensitivities, finite-difference checks, field parameters, and solves.
 - Added axisymmetric solid mechanics materials and loads for 2D `(r, z)` meshes.
@@ -43,6 +46,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ### Fixed
 
+- Fixed `FunctionalObjective` boundary integrals to use the intrinsic boundary dimension.
 - FunctionalWeakForm::jvp() to include shape-displacement contributions, which were previously ignored.
 
 ## [Version 0.1.0] - Release date 2026-04-28

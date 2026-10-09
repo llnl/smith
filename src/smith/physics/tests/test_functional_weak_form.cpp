@@ -251,6 +251,127 @@ TEST_F(WeakFormFixture, JvpConsistency)
   }
 }
 
+TEST_F(WeakFormFixture, PreAssemblyCallbackRefreshesAuxiliaryFieldForEveryEvaluationPath)
+{
+  // Use the deliberately simple model R(u; p) = p u with the stored auxiliary
+  // parameter p refreshed as G(u) = u(0). Because p is stored independently,
+  // changing u alone cannot keep it current. Resetting p before each public
+  // evaluation detects stale values or a missing callback on that path. This
+  // test checks Smith's refresh and frozen-auxiliary contract, not exact total
+  // differentiation through G or any particular auxiliary-field algorithm.
+  using WeakFormT =
+      smith::FunctionalWeakForm<dim, VectorSpace, smith::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
+
+  std::vector<const mfem::ParFiniteElementSpace*> inputs{&states[DISP].space(), &states[VELO].space(),
+                                                         &params[DENSITY].space()};
+  auto callback_form = std::make_shared<WeakFormT>("callback_refresh", mesh, states[DISP].space(), inputs);
+  callback_form->addBodySource(smith::DependsOn<DISP, NUM_STATES>{}, mesh->entireBodyName(),
+                               [](const smith::TimeInfo& /*t_info*/, auto /*x*/, auto displacement, auto density) {
+                                 return density * displacement;
+                               });
+
+  int callback_count = 0;
+  auto refresh_auxiliary = [&](const std::vector<smith::ConstFieldPtr>& current_fields) {
+    ++callback_count;
+    params[DENSITY] = (*current_fields.at(DISP))(0);
+  };
+  callback_form->setPreAssemblyCallback(refresh_auxiliary);
+
+  states[DISP] = 2.0;
+  states[VELO] = 0.0;
+  auto input_fields = getConstFieldPointers(states, params);
+  auto reset_auxiliary = [&]() { params[DENSITY] = 0.0; };
+
+  reset_auxiliary();
+  auto residual = callback_form->residual(time_info, shape_disp.get(), input_fields);
+  EXPECT_DOUBLE_EQ(params[DENSITY](0), 2.0);
+  EXPECT_GT(residual.Norml2(), 0.0);
+
+  states[DISP] = 3.0;
+  reset_auxiliary();
+  auto updated_residual = callback_form->residual(time_info, shape_disp.get(), input_fields);
+  EXPECT_DOUBLE_EQ(params[DENSITY](0), 3.0);
+  // Both factors change from 2 to 3, so R must scale by (3 / 2)^2. This proves
+  // the refreshed parameter is consumed by assembly, not merely assigned.
+  mfem::Vector expected_updated_residual(residual);
+  expected_updated_residual *= 9.0 / 4.0;
+  updated_residual -= expected_updated_residual;
+  EXPECT_LE(updated_residual.Norml2(), 1.0e-12);
+
+  reset_auxiliary();
+  std::vector<double> jacobian_weights(input_fields.size(), 0.0);
+  jacobian_weights[DISP] = 1.0;
+  auto J = callback_form->jacobian(time_info, shape_disp.get(), input_fields, jacobian_weights);
+  state_tangents[DISP] = 1.0;
+  smith::FiniteElementDual jacobian_action(states[DISP].space(), "callback_jacobian_action");
+  J->Mult(state_tangents[DISP], jacobian_action);
+  EXPECT_DOUBLE_EQ(params[DENSITY](0), 3.0);
+  EXPECT_GT(jacobian_action.Norml2(), 0.0);
+
+  // The callback is outside automatic differentiation. Holding the refreshed
+  // p = 3 fixed, the assembled partial derivative dR/du = p must match this
+  // central difference. This is intentionally the frozen-parameter derivative.
+  constexpr double perturbation = 1.0e-6;
+  callback_form->setPreAssemblyCallback({});
+  params[DENSITY] = 3.0;
+  states[DISP] = 3.0 + perturbation;
+  auto frozen_plus = callback_form->residual(time_info, shape_disp.get(), input_fields);
+  params[DENSITY] = 3.0;
+  states[DISP] = 3.0 - perturbation;
+  auto frozen_minus = callback_form->residual(time_info, shape_disp.get(), input_fields);
+  states[DISP] = 3.0;
+  frozen_plus -= frozen_minus;
+  frozen_plus /= 2.0 * perturbation;
+  frozen_plus -= jacobian_action;
+  EXPECT_LE(frozen_plus.Norml2(), 1.0e-8 * jacobian_action.Norml2() + 1.0e-12);
+
+  // With refresh enabled, p(u) = u(0), so the total derivative along the
+  // constant direction is d(u^2)/du = 2u. This analytic comparison distinguishes
+  // that composite derivative from the frozen-p Jacobian Smith assembles.
+  callback_form->setPreAssemblyCallback(refresh_auxiliary);
+  reset_auxiliary();
+  states[DISP] = 3.0 + perturbation;
+  auto refreshed_plus = callback_form->residual(time_info, shape_disp.get(), input_fields);
+  reset_auxiliary();
+  states[DISP] = 3.0 - perturbation;
+  auto refreshed_minus = callback_form->residual(time_info, shape_disp.get(), input_fields);
+  states[DISP] = 3.0;
+  refreshed_plus -= refreshed_minus;
+  refreshed_plus /= 2.0 * perturbation;
+  mfem::Vector twice_frozen_jacobian(jacobian_action);
+  twice_frozen_jacobian *= 2.0;
+  refreshed_plus -= twice_frozen_jacobian;
+  EXPECT_LE(refreshed_plus.Norml2(), 1.0e-8 * twice_frozen_jacobian.Norml2() + 1.0e-12);
+
+  reset_auxiliary();
+  state_tangents[VELO] = 0.0;
+  param_tangents[DENSITY] = 0.0;
+  // JVP must reproduce the full Jacobian action, not only its norm.
+  smith::FiniteElementDual jvp(states[DISP].space(), "callback_jvp");
+  callback_form->jvp(time_info, shape_disp.get(), input_fields, {}, nullptr,
+                     getConstFieldPointers(state_tangents, param_tangents), {}, &jvp);
+  EXPECT_DOUBLE_EQ(params[DENSITY](0), 3.0);
+  jvp -= jacobian_action;
+  EXPECT_LE(jvp.Norml2(), 1.0e-12);
+
+  reset_auxiliary();
+  smith::FiniteElementState v(states[DISP].space(), "callback_v");
+  v = 1.0;
+  for (auto& sensitivity : state_duals) sensitivity = 0.0;
+  for (auto& sensitivity : param_duals) sensitivity = 0.0;
+  auto sensitivities = getFieldPointers(state_duals, param_duals);
+  callback_form->vjp(time_info, shape_disp.get(), input_fields, {}, &v, shape_disp_dual.get(), sensitivities, {});
+  EXPECT_DOUBLE_EQ(params[DENSITY](0), 3.0);
+  // Likewise, VJP must reproduce the vector J^T v for the same frozen p.
+  smith::FiniteElementDual expected_vjp(states[DISP].space(), "callback_expected_vjp");
+  expected_vjp = 0.0;
+  J->AddMultTranspose(v, expected_vjp);
+  state_duals[DISP] -= expected_vjp;
+  EXPECT_LE(state_duals[DISP].Norml2(), 1.0e-12);
+
+  EXPECT_EQ(callback_count, 7);
+}
+
 TEST_F(WeakFormFixture, ForwardsOriginalTimeInfoToIntegrands)
 {
   using TrialSpace = VectorSpace;
