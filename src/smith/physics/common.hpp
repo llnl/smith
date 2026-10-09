@@ -25,20 +25,13 @@ struct TimeInfo {
   };
 
   /// @brief constructor
-  SMITH_HOST_DEVICE TimeInfo(double t, double t_step, size_t c = 0,
-                             EvaluationMode mode = EvaluationMode::Regular)
-      : time_(tuple<double, double>{t, 0.0}),
-        dt_(tuple<double, double>{t_step, 0.0}),
-        cycle_(c),
-        mode_(mode)
+  SMITH_HOST_DEVICE TimeInfo(double t, double dt, size_t cycle = 0, EvaluationMode mode = EvaluationMode::Regular)
+      : time_(tuple<double, double>{t, 0.0}), dt_(tuple<double, double>{dt, 0.0}), cycle_(cycle), mode_(mode)
   {
   }
 
   /// @brief accessor for the current time
-  SMITH_HOST_DEVICE double time() const
-  {
-    return get<0>(time_) + get<0>(dt_);
-  }
+  SMITH_HOST_DEVICE double time() const { return get<0>(time_) + get<0>(dt_); }
 
   /// @brief accessor for dt
   SMITH_HOST_DEVICE double dt() const { return get<0>(dt_); }
@@ -55,8 +48,8 @@ struct TimeInfo {
  private:
   tuple<double, double> time_;  ///< time and its dual
   tuple<double, double> dt_;    ///< timestep and its dual
-  size_t cycle_;                              ///< cycle, step, iteration count
-  EvaluationMode mode_;                       ///< residual evaluation mode
+  size_t cycle_;                ///< cycle, step, iteration count
+  EvaluationMode mode_;         ///< residual evaluation mode
 };
 
 /**
