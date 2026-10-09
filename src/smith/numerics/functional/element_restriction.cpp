@@ -502,15 +502,9 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetFaceDofs(const smith::f
         if (mesh->Dimension() == 2) {
           mesh->GetElementEdges(elem, elem_side_ids, orientations);
 
-          // mfem returns {-1, 1} for edge orientations,
-          // but {0, 1, ... , n} for face orientations.
-          // Here, we renumber the edge orientations to
-          // {0 (no permutation), 1 (reversed)} so the values can be
-          // consistently used as indices into a permutation table
-          for (auto& o : orientations) {
-            o = (o == -1) ? 1 : 0;
-          }
-
+          // mfem returns {-1, 1} for edge orientations, but {0, 1, ... , n} for face orientations.
+          // Therefore, for 2D meshes, we discard orientations obtained by GetElementEdges and
+          // use orientations from GetFaceInformation
         } else {
           mesh->GetElementFaces(elem, elem_side_ids, orientations);
         }
@@ -528,13 +522,23 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetFaceDofs(const smith::f
 
         mfem::Geometry::Type elem_geom = mesh->GetElementGeometry(elem);
 
-        // mfem uses different conventions for boundary element orientations in 2D and 3D.
-        // In 2D, mfem's official edge orientations on the boundary will always be a mix of
-        // CW and CCW, so we have to discard mfem's orientation information in order
-        // to get a consistent winding.
+        // mfem uses different conventions for interface element (edge/face) orientations in 2D and 3D.
+        // In 2D, mfem's official edge orientations will always be a mix of CW and CCW, so we have to discard
+        // mfem's orientation information in order to get a consistent winding.
         //
-        // In 3D, mfem does use a consistently CCW winding for boundary faces (I think).
-        int orientation = (mesh->Dimension() == 2 && info.IsBoundary()) ? 0 : orientations[i];
+        // In 3D, mfem does use a consistently CCW winding for faces.
+        int orientation = -1;
+        if (mesh->Dimension() == 2) {
+          if (elem == info.element[0].index) {
+            orientation = info.element[0].orientation;
+          } else if (elem == info.element[1].index) {
+            orientation = info.element[1].orientation;
+          }
+        } else if (mesh->Dimension() == 3) {
+          orientation = orientations[i];
+        } else {
+          SLIC_ERROR("face orientation is not determined.");
+        }
 
         // 4. extract only the dofs that correspond to side `i`
         for (auto k : face_perm(orientation)) {
@@ -583,10 +587,9 @@ axom::Array<DoF, 2, smith::detail::host_memory_space> GetFaceDofs(const smith::f
           int ghost_orientation;
           if (mesh->Dimension() == 2) {
             // In 2D, orientations[i] sometimes is inverted as compared to the ones from GetFaceInformation
-            // In this case, we stay with the orientations constructed previously by GetElementEdges, which is strictly
-            // CCW So we set ghost orientation to be exactly the opposite of the original orientation (orientations[i])
-            // side note: even if you use info.element[1].orientation, looks like it's still fine.
-            // The only difference is the order those face dof indices gets registered in std::vector face_dofs
+            // In this case, we previously discarded orientations obtained by GetElementEdges and use the ones from
+            // GetFaceInformation, which is strictly CCW. Then, we set ghost orientation to be exactly the opposite
+            // of the original orientation
             ghost_orientation = (orientation == 0) ? 1 : 0;
           } else {
             // In 3D, I think it's consistently CCW. So we directly use the orientation from GetFaceInformation
