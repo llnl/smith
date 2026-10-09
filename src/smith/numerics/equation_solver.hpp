@@ -235,14 +235,11 @@ class StrumpackSolver : public mfem::Solver {
    * @brief Constructs a wrapper over an mfem::STRUMPACKSolver
    * @param[in] comm The MPI communicator used by the vectors and matrices in the solve
    * @param[in] print_level The verbosity level for the mfem::STRUMPACKSolver
-   * @param[in] uses_natural_reordering Whether STRUMPACK should retain the matrix's original ordering
    */
-  StrumpackSolver(int print_level, MPI_Comm comm, bool uses_natural_reordering = false)
-      : print_diagnostics_(print_level > 0), strumpack_solver_(comm)
+  StrumpackSolver(int print_level, MPI_Comm comm) : print_diagnostics_(print_level > 0), strumpack_solver_(comm)
   {
     strumpack_solver_.SetKrylovSolver(strumpack::KrylovSolver::DIRECT);
-    strumpack_solver_.SetReorderingStrategy(uses_natural_reordering ? strumpack::ReorderingStrategy::NATURAL
-                                                                   : strumpack::ReorderingStrategy::METIS);
+    strumpack_solver_.SetReorderingStrategy(strumpack::ReorderingStrategy::METIS);
 
     if (print_level == 1) {
       strumpack_solver_.SetPrintFactorStatistics(true);

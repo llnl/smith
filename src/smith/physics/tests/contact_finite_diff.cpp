@@ -91,9 +91,7 @@ TEST_P(ContactFiniteDiff3D, patch)
   mesh->addDomainOfBoundaryElements("zmax_face", smith::by_attr<dim>(8));
 
 #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack,
-                                     .print_level = 1,
-                                     .uses_natural_strumpack_ordering = true};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 1};
 #else
   LinearSolverOptions linear_options{};
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
@@ -284,9 +282,7 @@ TEST_P(ContactFiniteDiff2D, patch)
   mesh->addDomainOfBoundaryElements("ymax_face", smith::by_attr<dim>(9));
 
 #ifdef MFEM_USE_STRUMPACK
-  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack,
-                                     .print_level = 0,
-                                     .uses_natural_strumpack_ordering = true};
+  LinearSolverOptions linear_options{.linear_solver = LinearSolver::Strumpack, .print_level = 0};
 #else
   LinearSolverOptions linear_options{};
   SLIC_INFO_ROOT("Contact requires MFEM built with strumpack.");
