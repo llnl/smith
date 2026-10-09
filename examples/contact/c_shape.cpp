@@ -60,8 +60,7 @@ int main(int argc, char* argv[])
   app.add_flag("--all-boundary-self-contact", all_boundary_self_contact,
                "Use one self-contact interaction with every C-shape boundary attribute on both sides; this "
                "supersedes --contact-interactions.");
-  app.add_option("--residual-gap", residual_gap,
-                 "Nominal residual separation away from ramped nonconvex corners.")
+  app.add_option("--residual-gap", residual_gap, "Nominal residual separation away from ramped nonconvex corners.")
       ->check(axom::CLI::NonNegativeNumber);
   app.add_option("--num-x-elements", num_x_elements, "Number of elements across the C-shape width.")
       ->check(axom::CLI::PositiveNumber);
@@ -208,8 +207,8 @@ int main(int argc, char* argv[])
     const double tolerance = 1.0e-6 + 1.0e-4 * std::abs(expected_final_displacement_norm);
     SLIC_ERROR_ROOT_IF(std::abs(final_displacement_norm - expected_final_displacement_norm) > tolerance,
                        "Final displacement L2 norm " << final_displacement_norm << " differs from expected value "
-                                                      << expected_final_displacement_norm << " by more than "
-                                                      << tolerance << ".");
+                                                     << expected_final_displacement_norm << " by more than "
+                                                     << tolerance << ".");
   }
 
   return 0;
