@@ -6,7 +6,6 @@
 [comment]: # (SPDX-License-Identifier: (BSD-3-Clause))
 [comment]: # (#################################################################)
 
-
 # Smith Software Release Notes
 
 Notes describing significant changes in each Smith release are documented in this file.
@@ -40,8 +39,11 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ### Changed
 
 - Reworked the trust-region solver to use an MFEM/LAPACK subspace solve with cached reduced problems and simplified Steihaug-Toint CG internals.
+- [Changed `TimeDiscretizedWeakForm` class name to `FunctionalWeakForm`](https://github.com/llnl/smith/pull/1609/).
 
 ### Fixed
+
+- FunctionalWeakForm::jvp() to include shape-displacement contributions, which were previously ignored.
 
 ## [Version 0.1.0] - Release date 2026-04-28
 
@@ -61,7 +63,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ###  Fixed
 - Use this section for any bug fixes
-
+ 
 ###  Security
 - Use this section in case of vulnerabilities
 

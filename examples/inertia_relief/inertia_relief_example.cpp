@@ -163,10 +163,16 @@ int main(int argc, char* argv[])
 
   std::string physics_name = "solid";
 
-  // construct residual
-  auto solid_mechanics_weak_form =
-      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
+  // `input_spaces` stores non-owning pointers to the spaces owned by these
+  // state/parameter objects, so `states` and `params` must remain valid for
+  // the full lifetime of `solid_mechanics_weak_form`.
+  SolidWeakFormT::SpacesT input_spaces = getConstSpacePointers(states, params);
 
+  // construct residual/Jacobian callbacks
+  auto solid_mechanics_weak_form =
+      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), input_spaces);
+
+  // set material parameters
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;

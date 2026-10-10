@@ -11,7 +11,7 @@
  */
 #pragma once
 
-#include "fem/dfem/tuple.hpp"
+#include "smith/numerics/functional/tuple.hpp"
 
 namespace smith {
 
@@ -25,38 +25,31 @@ struct TimeInfo {
   };
 
   /// @brief constructor
-  MFEM_HOST_DEVICE TimeInfo(double t, double t_step, size_t c = 0,
-                            EvaluationMode mode = EvaluationMode::Regular)
-      : time_(mfem::future::tuple<double, double>{t, 0.0}),
-        dt_(mfem::future::tuple<double, double>{t_step, 0.0}),
-        cycle_(c),
-        mode_(mode)
+  SMITH_HOST_DEVICE TimeInfo(double t, double dt, size_t cycle = 0, EvaluationMode mode = EvaluationMode::Regular)
+      : time_(tuple<double, double>{t, 0.0}), dt_(tuple<double, double>{dt, 0.0}), cycle_(cycle), mode_(mode)
   {
   }
 
   /// @brief accessor for the current time
-  MFEM_HOST_DEVICE double time() const
-  {
-    return mfem::future::get<0>(time_) + mfem::future::get<0>(dt_);
-  }
+  SMITH_HOST_DEVICE double time() const { return get<0>(time_) + get<0>(dt_); }
 
   /// @brief accessor for dt
-  MFEM_HOST_DEVICE double dt() const { return mfem::future::get<0>(dt_); }
+  SMITH_HOST_DEVICE double dt() const { return get<0>(dt_); }
 
   /// @brief accessor for cycle
-  MFEM_HOST_DEVICE size_t cycle() const { return cycle_; }
+  SMITH_HOST_DEVICE size_t cycle() const { return cycle_; }
 
   /// @brief true when evaluating the startup acceleration solve.
-  MFEM_HOST_DEVICE bool isCycleZeroEvaluation() const { return mode_ == EvaluationMode::CycleZero; }
+  SMITH_HOST_DEVICE bool isCycleZeroEvaluation() const { return mode_ == EvaluationMode::CycleZero; }
 
   /// @brief accessor for residual evaluation mode.
-  MFEM_HOST_DEVICE EvaluationMode mode() const { return mode_; }
+  SMITH_HOST_DEVICE EvaluationMode mode() const { return mode_; }
 
  private:
-  mfem::future::tuple<double, double> time_;  ///< time and its dual
-  mfem::future::tuple<double, double> dt_;    ///< timestep and its dual
-  size_t cycle_;                              ///< cycle, step, iteration count
-  EvaluationMode mode_;                       ///< residual evaluation mode
+  tuple<double, double> time_;  ///< time and its dual
+  tuple<double, double> dt_;    ///< timestep and its dual
+  size_t cycle_;                ///< cycle, step, iteration count
+  EvaluationMode mode_;         ///< residual evaluation mode
 };
 
 /**

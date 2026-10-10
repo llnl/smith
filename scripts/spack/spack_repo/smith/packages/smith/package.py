@@ -397,8 +397,6 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
             hip_link_flags += "-lamdhip64 -lhsakmt -lhsa-runtime64 -lamd_comgr -lpgmath "
             if spec.satisfies("+openmp"):
                 hip_link_flags += "-lompstub "
-            if spec.satisfies("^hipblas"):
-                hip_link_flags += "-lhipblas "
 
             entries.append(cmake_cache_string("CMAKE_EXE_LINKER_FLAGS", hip_link_flags))
 
@@ -436,11 +434,23 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
     def initconfig_mpi_entries(self):
         spec = self.spec
         entries = super(Smith, self).initconfig_mpi_entries()
+        mpi_exec = self.get_mpi_exec()
+        uses_flux_srun_wrapper = (
+            mpi_exec is not None
+            and os.path.basename(mpi_exec) == "srun"
+            and "flux_wrappers" in mpi_exec.split(os.path.sep)
+        )
 
         entries.append(cmake_cache_option("ENABLE_MPI", True))
         if spec["mpi"].name == "spectrum-mpi":
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               "mpibind"))
+        elif uses_flux_srun_wrapper:
+            # The Flux srun compatibility wrapper needs an explicit resource
+            # size for each test. Without it, independent CTest jobs cannot run
+            # concurrently.
+            entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
+                                              "--cpus-per-task=1"))
 
         return entries
 
