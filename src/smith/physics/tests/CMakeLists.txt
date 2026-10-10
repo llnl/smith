@@ -61,11 +61,6 @@ smith_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
 
-if (TRIBOL_FOUND AND ENZYME_FOUND)
-    # Run this test alone to determine whether concurrent CTest-launched MPI jobs trigger the Tuolumne timeout.
-    set_tests_properties(contact_finite_diff PROPERTIES RUN_SERIAL TRUE)
-endif()
-
 if (SMITH_USE_ENZYME)
     # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
     # desired occupancy was 4, final occupancy is 3 [-Werror,-Wpass-failed]
