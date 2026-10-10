@@ -210,6 +210,9 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
   ConvergenceStatus evaluateConvergence(const mfem::Vector& x, mfem::Vector& rOut) const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton residual evaluation: begin" << std::endl;
+    }
     ConvergenceStatus status;
     status.global_norm = std::numeric_limits<double>::max();
     status.global_goal = std::numeric_limits<double>::max();
@@ -224,6 +227,9 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
       status.global_norm = std::numeric_limits<double>::max();
       status.global_goal = std::numeric_limits<double>::max();
     }
+    if (print_level >= 1) {
+      mfem::out << "Newton residual evaluation: complete" << std::endl;
+    }
     return status;
   }
 
@@ -231,6 +237,9 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
   void assembleJacobian(const mfem::Vector& x) const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton Jacobian assembly: begin" << std::endl;
+    }
     if (grad_monolithic) {
       delete grad;
       grad = nullptr;
@@ -238,20 +247,35 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     }
     mfem::Operator& assembled_gradient = oper->GetGradient(x);
     grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
+    if (print_level >= 1) {
+      mfem::out << "Newton Jacobian assembly: complete" << std::endl;
+    }
   }
 
   /// set the preconditioner for the linear solver
   void setPreconditioner() const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton linear operator setup: begin" << std::endl;
+    }
     prec->SetOperator(*grad);
+    if (print_level >= 1) {
+      mfem::out << "Newton linear operator setup: complete" << std::endl;
+    }
   }
 
   /// solve the linear system
   void solveLinearSystem(const mfem::Vector& r_, mfem::Vector& c_) const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton linear solve: begin" << std::endl;
+    }
     prec->Mult(r_, c_);  // c = [DF(x_i)]^{-1} [F(x_i)-b]
+    if (print_level >= 1) {
+      mfem::out << "Newton linear solve: complete" << std::endl;
+    }
   }
 
   /// @overload
