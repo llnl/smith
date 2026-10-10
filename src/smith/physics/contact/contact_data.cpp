@@ -307,7 +307,8 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
     auto block_1_1 =
         new mfem::HypreParMatrix(mesh_.GetComm(), global_pressure_dof_offsets_[global_pressure_dof_offsets_.Size() - 1],
                                  global_pressure_dof_offsets_, &inactive_diag);
-    block_1_1->SetOwnerFlags(3, 3, 1);
+    constexpr int mfem_owned_host_flag = 3;
+    block_1_1->SetOwnerFlags(mfem_owned_host_flag, block_1_1->OwnsOffd(), block_1_1->OwnsColMap());
     block_J->SetBlock(1, 1, block_1_1);
     // end building I_(inactive)
   }

@@ -210,6 +210,9 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
   ConvergenceStatus evaluateConvergence(const mfem::Vector& x, mfem::Vector& rOut) const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton residual evaluation: begin" << std::endl;
+    }
     ConvergenceStatus status;
     status.global_norm = std::numeric_limits<double>::max();
     status.global_goal = std::numeric_limits<double>::max();
@@ -224,6 +227,9 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
       status.global_norm = std::numeric_limits<double>::max();
       status.global_goal = std::numeric_limits<double>::max();
     }
+    if (print_level >= 1) {
+      mfem::out << "Newton residual evaluation: complete" << std::endl;
+    }
     return status;
   }
 
@@ -231,6 +237,9 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
   void assembleJacobian(const mfem::Vector& x) const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton Jacobian assembly: begin" << std::endl;
+    }
     if (grad_monolithic) {
       delete grad;
       grad = nullptr;
@@ -238,20 +247,35 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     }
     mfem::Operator& assembled_gradient = oper->GetGradient(x);
     grad_monolithic = monolithicizeOperatorIfNeeded(linear_options, assembled_gradient, grad);
+    if (print_level >= 1) {
+      mfem::out << "Newton Jacobian assembly: complete" << std::endl;
+    }
   }
 
   /// set the preconditioner for the linear solver
   void setPreconditioner() const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton linear operator setup: begin" << std::endl;
+    }
     prec->SetOperator(*grad);
+    if (print_level >= 1) {
+      mfem::out << "Newton linear operator setup: complete" << std::endl;
+    }
   }
 
   /// solve the linear system
   void solveLinearSystem(const mfem::Vector& r_, mfem::Vector& c_) const
   {
     SMITH_MARK_FUNCTION;
+    if (print_level >= 1) {
+      mfem::out << "Newton linear solve: begin" << std::endl;
+    }
     prec->Mult(r_, c_);  // c = [DF(x_i)]^{-1} [F(x_i)-b]
+    if (print_level >= 1) {
+      mfem::out << "Newton linear solve: complete" << std::endl;
+    }
   }
 
   /// @overload
@@ -273,7 +297,7 @@ class NewtonSolver : public mfem::NewtonSolver, public ConvergenceManagedNonline
     if (norm == 0.0) return;
 
     if (print_level == 1) {
-      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << "\n";
+      mfem::out << "Newton iteration " << std::setw(3) << 0 << " : ||r|| = " << std::setw(13) << norm << std::endl;
     }
 
     prec->iterative_mode = false;
@@ -1089,7 +1113,9 @@ void SuperLUSolver::Mult(const mfem::Vector& input, mfem::Vector& output) const
   SLIC_ERROR_ROOT_IF(!superlu_mat_, "Operator must be set prior to solving with SuperLU");
 
   // Use the underlying MFEM-based solver and SuperLU matrix type to solve the system
+  printDiagnostic("SuperLU Mult: begin factorization and solve");
   superlu_solver_.Mult(input, output);
+  printDiagnostic("SuperLU Mult: factorization and solve complete");
 }
 
 /**
@@ -1138,12 +1164,16 @@ std::unique_ptr<mfem::HypreParMatrix> buildMonolithicMatrix(const mfem::BlockOpe
 
 void SuperLUSolver::SetOperator(const mfem::Operator& op)
 {
+  printDiagnostic("SuperLU SetOperator: begin");
+
   // Check if this is a block operator
   auto* block_operator = dynamic_cast<const mfem::BlockOperator*>(&op);
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
+    printDiagnostic("SuperLU SetOperator: begin block-to-monolithic conversion");
     monolithic_mat_ = buildMonolithicMatrix(*block_operator);
+    printDiagnostic("SuperLU SetOperator: block-to-monolithic conversion complete");
 
     superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*monolithic_mat_);
   } else {
@@ -1154,9 +1184,12 @@ void SuperLUSolver::SetOperator(const mfem::Operator& op)
 
     superlu_mat_ = std::make_unique<mfem::SuperLURowLocMatrix>(*matrix);
   }
+  printDiagnostic("SuperLU SetOperator: row-local matrix construction complete");
   height = op.Height();
   width = op.Width();
+  printDiagnostic("SuperLU SetOperator: begin MFEM operator setup");
   superlu_solver_.SetOperator(*superlu_mat_);
+  printDiagnostic("SuperLU SetOperator: MFEM operator setup complete");
 }
 
 #ifdef MFEM_USE_STRUMPACK
@@ -1166,17 +1199,23 @@ void StrumpackSolver::Mult(const mfem::Vector& input, mfem::Vector& output) cons
   SLIC_ERROR_ROOT_IF(!strumpack_mat_, "Operator must be set prior to solving with Strumpack");
 
   // Use the underlying MFEM-based solver and Strumpack matrix type to solve the system
+  printDiagnostic("STRUMPACK Mult: begin factorization and solve");
   strumpack_solver_.Mult(input, output);
+  printDiagnostic("STRUMPACK Mult: factorization and solve complete");
 }
 
 void StrumpackSolver::SetOperator(const mfem::Operator& op)
 {
+  printDiagnostic("STRUMPACK SetOperator: begin");
+
   // Check if this is a block operator
   auto* block_operator = dynamic_cast<const mfem::BlockOperator*>(&op);
 
   // If it is, make a monolithic system from the underlying blocks
   if (block_operator) {
+    printDiagnostic("STRUMPACK SetOperator: begin block-to-monolithic conversion");
     monolithic_mat_ = buildMonolithicMatrix(*block_operator);
+    printDiagnostic("STRUMPACK SetOperator: block-to-monolithic conversion complete");
 
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*monolithic_mat_);
   } else {
@@ -1187,9 +1226,12 @@ void StrumpackSolver::SetOperator(const mfem::Operator& op)
 
     strumpack_mat_ = std::make_unique<mfem::STRUMPACKRowLocMatrix>(*matrix);
   }
+  printDiagnostic("STRUMPACK SetOperator: row-local matrix construction complete");
   height = op.Height();
   width = op.Width();
+  printDiagnostic("STRUMPACK SetOperator: begin MFEM operator setup");
   strumpack_solver_.SetOperator(*strumpack_mat_);
+  printDiagnostic("STRUMPACK SetOperator: MFEM operator setup complete");
 }
 
 #endif
