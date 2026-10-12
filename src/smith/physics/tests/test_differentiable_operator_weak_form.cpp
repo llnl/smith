@@ -7,6 +7,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -66,13 +67,20 @@ struct DifferentiableOperatorWeakFormFixture : public testing::Test {
         std::make_shared<WeakFormType>("dfem_test", mesh, states[0].space(), std::move(spaces));
     concrete_weak_form->addBodyIntegral(
         smith::DependsOn<0>{}, mesh->entireBodyName(),
-        [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto, auto displacement) {
-          return smith::tuple{-smith::get<smith::VALUE>(displacement),
-                              smith::get<smith::DERIVATIVE>(displacement)};
+        [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto position, auto displacement) {
+          using Coordinate = std::decay_t<decltype(mfem::future::get<smith::VALUE>(position))>;
+          using Value = std::decay_t<decltype(mfem::future::get<smith::VALUE>(displacement))>;
+          using Gradient = std::decay_t<decltype(mfem::future::get<smith::DERIVATIVE>(displacement))>;
+          static_assert(std::is_same_v<Coordinate, mfem::future::tensor<mfem::real_t, DIM>>);
+          static_assert(std::is_same_v<Value, mfem::future::tensor<mfem::real_t, DIM>>);
+          static_assert(std::is_same_v<Gradient, mfem::future::tensor<mfem::real_t, DIM, DIM>>);
+          return mfem::future::tuple{-mfem::future::get<smith::VALUE>(displacement),
+                                     mfem::future::get<smith::DERIVATIVE>(displacement)};
         });
     concrete_weak_form->addBodySource(
         smith::DependsOn<>{}, mesh->entireBodyName(),
-        [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto x) { return 0.5 * x; });
+        [] SMITH_HOST_DEVICE(const smith::TimeInfo&,
+                             const mfem::future::tensor<mfem::real_t, DIM>& x) { return 0.5 * x; });
     weak_form = concrete_weak_form;
   }
 
