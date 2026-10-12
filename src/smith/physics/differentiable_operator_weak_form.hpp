@@ -89,33 +89,6 @@ template <int spatial_dim, typename... Spaces>
 using DfemFieldGradientArgumentList =
     typename ConcatenateTypeLists<typename DfemFieldGradientArgumentType<Spaces, spatial_dim>::type...>::type;
 
-template <typename... T, typename... U, size_t... i, size_t... j>
-constexpr auto concatenateTuplesImpl(const mfem::future::tuple<T...>& first,
-                                     const mfem::future::tuple<U...>& second,
-                                     std::index_sequence<i...>, std::index_sequence<j...>)
-{
-  return mfem::future::tuple{mfem::future::get<i>(first)..., mfem::future::get<j>(second)...};
-}
-
-template <typename... T, typename... U>
-constexpr auto concatenateTuples(const mfem::future::tuple<T...>& first,
-                                 const mfem::future::tuple<U...>& second)
-{
-  return concatenateTuplesImpl(first, second, std::index_sequence_for<T...>{}, std::index_sequence_for<U...>{});
-}
-
-template <typename Tuple>
-constexpr auto concatenateTuples(const Tuple& tuple)
-{
-  return tuple;
-}
-
-template <typename First, typename Second, typename... Rest>
-constexpr auto concatenateTuples(const First& first, const Second& second, const Rest&... rest)
-{
-  return concatenateTuples(concatenateTuples(first, second), rest...);
-}
-
 template <typename T>
 MFEM_HOST_DEVICE constexpr T toSmithTensor(const T& value)
 {
@@ -515,7 +488,7 @@ class DifferentiableOperatorWeakForm<spatial_dim, OutputSpace, Parameters<InputS
         mfem::future::Weight{}};
     auto values = mfem::future::tuple{mfem::future::Value<INPUT_FIELD_OFFSET + field>{}...};
     auto active_gradients = mfem::future::tuple{mfem::future::Gradient<INPUT_FIELD_OFFSET + active>{}...};
-    return detail::concatenateTuples(fixed, values, active_gradients);
+    return mfem::future::tuple_cat(fixed, values, active_gradients);
   }
 
   struct DomainInfo {
