@@ -68,16 +68,16 @@ struct ConcatenateTypeLists<TypeList<T...>, TypeList<U...>, Rest...> {
 
 template <typename Space>
 struct DfemFieldValueArgumentType {
-  using Value = std::conditional_t<Space::components == 1, mfem::real_t,
-                                   mfem::future::tensor<mfem::real_t, Space::components>>;
+  using Value = std::conditional_t<Space::components == 1, double,
+                                   mfem::future::tensor<double, Space::components>>;
   using type = TypeList<Value>;
 };
 
 template <typename Space, int spatial_dim>
 struct DfemFieldGradientArgumentType {
   using Gradient =
-      std::conditional_t<Space::components == 1, mfem::future::tensor<mfem::real_t, spatial_dim>,
-                         mfem::future::tensor<mfem::real_t, Space::components, spatial_dim>>;
+      std::conditional_t<Space::components == 1, mfem::future::tensor<double, spatial_dim>,
+                         mfem::future::tensor<double, Space::components, spatial_dim>>;
   using type = TypeList<Gradient>;
 };
 
@@ -109,19 +109,19 @@ template <int spatial_dim, typename OutputSpace, typename Integrand, int... acti
           typename... FieldArguments, typename... InputSpaces>
 struct DfemBodyQFunction<spatial_dim, OutputSpace, Integrand, std::integer_sequence<int, active_parameters...>,
                          TypeList<FieldArguments...>, InputSpaces...> {
-  using Coordinate = mfem::future::tensor<mfem::real_t, spatial_dim>;
-  using CoordinateGradient = mfem::future::tensor<mfem::real_t, spatial_dim, spatial_dim>;
-  using OutputValue = std::conditional_t<OutputSpace::components == 1, mfem::real_t,
-                                         mfem::future::tensor<mfem::real_t, OutputSpace::components>>;
+  using Coordinate = mfem::future::tensor<double, spatial_dim>;
+  using CoordinateGradient = mfem::future::tensor<double, spatial_dim, spatial_dim>;
+  using OutputValue = std::conditional_t<OutputSpace::components == 1, double,
+                                         mfem::future::tensor<double, OutputSpace::components>>;
   using OutputGradient =
-      std::conditional_t<OutputSpace::components == 1, mfem::future::tensor<mfem::real_t, spatial_dim>,
-                         mfem::future::tensor<mfem::real_t, OutputSpace::components, spatial_dim>>;
+      std::conditional_t<OutputSpace::components == 1, mfem::future::tensor<double, spatial_dim>,
+                         mfem::future::tensor<double, OutputSpace::components, spatial_dim>>;
 
   Integrand integrand;
-  const mfem::real_t* time_data;
+  const double* time_data;
 
   MFEM_HOST_DEVICE void operator()(const Coordinate& deformed_coordinates,
-                                   const CoordinateGradient& deformed_jacobian, const mfem::real_t& weight,
+                                   const CoordinateGradient& deformed_jacobian, const double& weight,
                                    const FieldArguments&... field_arguments, OutputValue& output_value,
                                    OutputGradient& output_gradient) const
   {
