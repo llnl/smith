@@ -5,18 +5,25 @@
 // SPDX-License-Identifier: (BSD-3-Clause)
 
 #include <cmath>
+#include <fem/datacollection.hpp>
+#include <fem/fespace.hpp>
+#include <linalg/tensor.hpp>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <type_traits>
 #include <vector>
 
 #include <gtest/gtest.h>
 
-#include "axom/slic.hpp"
 #include "mfem.hpp"
 
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 #include "smith/infrastructure/accelerator.hpp"
 #include "smith/infrastructure/application_manager.hpp"
+#include "smith/mesh_utils/mesh_utils.hpp"
+#include "smith/mesh_utils/mesh_utils_base.hpp"
+#include "smith/numerics/functional/functional.hpp"
 #include "smith/physics/differentiable_operator_weak_form.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/state_manager.hpp"
@@ -286,6 +293,111 @@ TEST_F(DifferentiableOperatorWeakFormFixture, SupportsL2InputsAndOutputs)
   const double lhs = mfem::InnerProduct(mesh->getComm(), seed, jvp_result);
   const double rhs = mfem::InnerProduct(mesh->getComm(), parameter_tangents[0], sensitivity);
   EXPECT_NEAR(lhs, rhs, 1.0e-10 * std::max({1.0, std::abs(lhs), std::abs(rhs)}));
+}
+
+
+struct NeoHookeanDfem {
+  static constexpr double mu = 2e3;
+  static constexpr double lambda = 5e3;
+
+  template<typename Position, typename Displacement>
+  SMITH_HOST_DEVICE
+  auto operator()(const smith::TimeInfo&, Position /* position */, Displacement displacement) const
+  {
+    auto du_dX = smith::get<smith::DERIVATIVE>(displacement);
+    auto BmI = du_dX + mfem::future::transpose(du_dX) + mfem::future::dot(du_dX, mfem::future::transpose(du_dX));
+    auto trH = mfem::future::tr(du_dX);
+    auto Jm1 = trH + 0.5*(trH*trH - mfem::future::inner(du_dX, mfem::future::transpose(du_dX))) + mfem::future::det(du_dX);
+    auto I = mfem::future::IdentityMatrix<2>();
+    auto tau = mu*BmI + lambda*std::log1p(Jm1)*I;
+    auto invFT = mfem::future::inv(mfem::future::transpose(du_dX) + I);
+    auto P = mfem::future::dot(tau, invFT);
+    return mfem::future::tuple{mfem::future::zero{}, P};
+  }
+};
+
+struct DfemVectorPatchTestFixture : public testing::Test {
+  static constexpr int DIM = 2;
+  static constexpr int ORDER = 2;
+  static constexpr smith::tensor<double, 2, 2> H{{{-0.075978325497522, -0.351608916473704},
+                                                  { 0.165861877744271, -0.061622949650398}}};
+
+
+  using VectorSpace = smith::H1<ORDER, DIM>;
+  using DensitySpace = smith::L2<0>;
+  using WeakFormType =
+      smith::DifferentiableOperatorWeakForm<DIM, VectorSpace,
+                                            smith::Parameters<VectorSpace, VectorSpace, DensitySpace>>;
+
+  void SetUp() override
+  {
+    MPI_Barrier(MPI_COMM_WORLD);
+    smith::StateManager::initialize(datastore, "differentiable_operator_weak_form");
+    mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(std::string(SMITH_REPO_DIR) + "/data/meshes/" + "patch2D_quads.mesh"), "patch_mesh");
+
+    states.emplace_back(smith::StateManager::newState(VectorSpace{}, "displacement", mesh->tag()));
+    states.emplace_back(smith::StateManager::newState(VectorSpace{}, "velocity", mesh->tag()));
+    parameters.emplace_back(smith::StateManager::newState(DensitySpace{}, "density", mesh->tag()));
+    shape = std::make_unique<smith::FiniteElementState>(mesh->newShapeDisplacement());
+
+    states[0].setFromFieldFunction([](smith::tensor<double, DIM> x) { return smith::dot(H, x); });
+    states[1].setFromFieldFunction([](smith::tensor<double, DIM> x) { return -0.02 * x; });
+    parameters[0] = 1.2;
+
+    typename WeakFormType::SpacesT spaces{&states[0].space(), &states[1].space(), &parameters[0].space()};
+    concrete_weak_form =
+        std::make_shared<WeakFormType>("dfem_test", mesh, states[0].space(), std::move(spaces));
+    concrete_weak_form->addBodyIntegral(smith::DependsOn<0>{}, mesh->entireBodyName(), constitutive);
+    weak_form = concrete_weak_form;
+  }
+
+  std::vector<smith::ConstFieldPtr> inputFields() const
+  {
+    return smith::getConstFieldPointers(states, parameters);
+  }
+
+  axom::sidre::DataStore datastore;
+  std::shared_ptr<smith::Mesh> mesh;
+  std::shared_ptr<WeakFormType> concrete_weak_form;
+  std::shared_ptr<smith::WeakForm> weak_form;
+  std::unique_ptr<smith::FiniteElementState> shape;
+  std::vector<smith::FiniteElementState> states;
+  std::vector<smith::FiniteElementState> parameters;
+  smith::TimeInfo time_info{0.3, 0.1, 4};
+  NeoHookeanDfem constitutive;
+};
+
+TEST_F(DfemVectorPatchTestFixture, VectorPatchTest)
+{
+  const auto fields = inputFields();
+  auto res = weak_form->residual(time_info, shape.get(), fields);
+  //res.Print();
+
+  // Test 1: Check that the forces on all internal nodes are zero.
+  // First, get all boundary dofs
+  mfem::Array<int> boundary_dofs = mesh->entireBoundary().dof_list(&states[0].space());
+  states[0].space().DofsToVDofs(boundary_dofs);
+  mfem::Array<int> boundary_dof_markers;
+  mfem::FiniteElementSpace::ListToMarker(boundary_dofs, states[0].space().GetVSize(), boundary_dof_markers, 1);
+  // then check that if dof is on interior, it is in equilibrium.
+  for (int i = 0; i < states[0].space().GetVSize(); i++) {
+    if (!boundary_dof_markers[i]) {
+      EXPECT_LT(std::abs(res(i)), 1e-11);
+    }
+  }
+
+  // Test 2: Check that the forces on the boundary match the tractions due to the uniform stress field.
+  double X = 0;
+  auto disp_grad = mfem::future::make_tensor<2, 2>([](int i, int j) { return H[i][j]; });
+  auto displacement = tuple{mfem::future::tensor<double, 2>{0.0, 1.0}, disp_grad};
+  auto [b, P] = constitutive(time_info, X, displacement);
+  // These magic numbers are the consistent nodal forces on mid-edge nodes
+  // corresponding to the constant stress field.
+  // The solutions are computed by hand.
+  EXPECT_NEAR(res(30), 2.0/3.0*P[0][1], 1e-10);
+  EXPECT_NEAR(res(31), 2.0/3.0*P[1][1], 1e-10);
+  EXPECT_NEAR(res(24), 2.0/3.0*P[0][0], 1e-10);
+  EXPECT_NEAR(res(25), 2.0/3.0*P[1][0], 1e-10);
 }
 
 }  // namespace
