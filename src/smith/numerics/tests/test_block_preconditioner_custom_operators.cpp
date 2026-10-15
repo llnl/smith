@@ -6,6 +6,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -168,6 +169,23 @@ class HypreExactDiagonalSolver : public mfem::Solver {
  private:
   const mfem::HypreParMatrix* A_ = nullptr;
   mfem::Vector diag_;
+};
+
+class CountingHypreExactDiagonalSolver : public HypreExactDiagonalSolver {
+ public:
+  explicit CountingHypreExactDiagonalSolver(std::shared_ptr<int> applications)
+      : applications_(std::move(applications))
+  {
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    ++*applications_;
+    HypreExactDiagonalSolver::Mult(x, y);
+  }
+
+ private:
+  std::shared_ptr<int> applications_;
 };
 
 class Exact2x2Solver : public mfem::Solver {
@@ -574,6 +592,94 @@ TEST(BlockSchurPreconditionerCustom, WrappedIterativeSubSolversIgnoreTemporaryIn
 
   for (int i = 0; i < x.Size(); i++) {
     EXPECT_TRUE(std::isfinite(x[i]));
+  }
+}
+
+TEST(BlockSchurPreconditionerCustom, LowerFactorizationRetainsVelocityInverseResult)
+{
+  constexpr int n = 2;
+  Array<int> offsets({0, n, 2 * n});
+
+  auto A11o = makeHypreScaledIdentity(n, 2.0);
+  auto A12o = makeHypreScaledIdentity(n, -4.0);
+  auto A21o = makeHypreScaledIdentity(n, 3.0);
+  auto A22o = makeHypreScaledIdentity(n, 5.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0, 0, A11o.A.get());
+  A.SetBlock(0, 1, A12o.A.get());
+  A.SetBlock(1, 0, A21o.A.get());
+  A.SetBlock(1, 1, A22o.A.get());
+
+  auto velocity_applications = std::make_shared<int>(0);
+  auto schur_applications = std::make_shared<int>(0);
+  std::vector<std::unique_ptr<Solver>> solvers;
+  solvers.push_back(std::make_unique<CountingHypreExactDiagonalSolver>(velocity_applications));
+  solvers.push_back(std::make_unique<CountingHypreExactDiagonalSolver>(schur_applications));
+
+  smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Lower,
+                                    smith::SchurApproxType::A22Only);
+  P.SetOperator(A);
+
+  Vector rhs(2 * n), actual(2 * n), expected(2 * n);
+  rhs[0] = 1.0;
+  rhs[1] = -2.0;
+  rhs[2] = 4.0;
+  rhs[3] = 3.0;
+  P.Mult(rhs, actual);
+
+  expected[0] = rhs[0] / 2.0;
+  expected[1] = rhs[1] / 2.0;
+  expected[2] = (rhs[2] - 3.0 * expected[0]) / 5.0;
+  expected[3] = (rhs[3] - 3.0 * expected[1]) / 5.0;
+  for (int i = 0; i < actual.Size(); ++i) EXPECT_NEAR(actual[i], expected[i], 1.0e-13);
+  EXPECT_EQ(*velocity_applications, 1);
+  EXPECT_EQ(*schur_applications, 1);
+
+  Vector in_place(rhs);
+  P.Mult(in_place, in_place);
+  for (int i = 0; i < in_place.Size(); ++i) EXPECT_NEAR(in_place[i], expected[i], 1.0e-13);
+  EXPECT_EQ(*velocity_applications, 2);
+  EXPECT_EQ(*schur_applications, 2);
+}
+
+TEST(BlockSchurPreconditionerCustom, FactorizationsUseExpectedInverseApplicationCounts)
+{
+  constexpr int n = 2;
+  Array<int> offsets({0, n, 2 * n});
+
+  auto A11o = makeHypreScaledIdentity(n, 2.0);
+  auto A12o = makeHypreScaledIdentity(n, -4.0);
+  auto A21o = makeHypreScaledIdentity(n, 3.0);
+  auto A22o = makeHypreScaledIdentity(n, 5.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0, 0, A11o.A.get());
+  A.SetBlock(0, 1, A12o.A.get());
+  A.SetBlock(1, 0, A21o.A.get());
+  A.SetBlock(1, 1, A22o.A.get());
+
+  const std::vector<std::tuple<smith::BlockSchurType, int, int>> cases{
+      {smith::BlockSchurType::Diagonal, 1, 1},
+      {smith::BlockSchurType::Lower, 1, 1},
+      {smith::BlockSchurType::Upper, 2, 1},
+      {smith::BlockSchurType::Full, 2, 1}};
+
+  for (const auto& [factorization, expected_velocity_applications, expected_schur_applications] : cases) {
+    auto velocity_applications = std::make_shared<int>(0);
+    auto schur_applications = std::make_shared<int>(0);
+    std::vector<std::unique_ptr<Solver>> solvers;
+    solvers.push_back(std::make_unique<CountingHypreExactDiagonalSolver>(velocity_applications));
+    solvers.push_back(std::make_unique<CountingHypreExactDiagonalSolver>(schur_applications));
+
+    smith::BlockSchurPreconditioner P(std::move(solvers), factorization, smith::SchurApproxType::A22Only);
+    P.SetOperator(A);
+
+    Vector rhs(2 * n), x(2 * n);
+    rhs = 1.0;
+    P.Mult(rhs, x);
+    EXPECT_EQ(*velocity_applications, expected_velocity_applications);
+    EXPECT_EQ(*schur_applications, expected_schur_applications);
   }
 }
 

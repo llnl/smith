@@ -278,8 +278,7 @@ void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& 
   x2.Neg();             // x2 = -A21 x1
   x2 += b2;             // x2 = b2 - A21 x1
 
-  // 3) Reassign x1.
-  x1 = b1;
+  // Keep x1 = A11^-1 b1. The lower and full factorizations reuse this result.
 }
 
 void BlockSchurPreconditioner::UpperBlock(const mfem::Vector& in, mfem::Vector& out) const
@@ -321,7 +320,10 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
       // x = [A11^-1, 0; 0, S^-1][I, 0; -A21 A11^-1, I] b
       mfem::Vector tmp(out.Size());
       LowerBlock(in, tmp);
-      solver_diag_->Mult(tmp, out);
+      mfem::BlockVector tmp_block(tmp, block_offsets_);
+      mfem::BlockVector x(out, block_offsets_);
+      x.GetBlock(0) = tmp_block.GetBlock(0);
+      mfem_solvers_[1]->Mult(tmp_block.GetBlock(1), x.GetBlock(1));
       break;
     }
 
@@ -338,7 +340,10 @@ void BlockSchurPreconditioner::Mult(const mfem::Vector& in, mfem::Vector& out) c
       mfem::Vector tmp(out.Size());
       mfem::Vector tmp2(out.Size());
       LowerBlock(in, tmp);
-      solver_diag_->Mult(tmp, tmp2);
+      mfem::BlockVector tmp_block(tmp, block_offsets_);
+      mfem::BlockVector tmp2_block(tmp2, block_offsets_);
+      tmp2_block.GetBlock(0) = tmp_block.GetBlock(0);
+      mfem_solvers_[1]->Mult(tmp_block.GetBlock(1), tmp2_block.GetBlock(1));
       UpperBlock(tmp2, out);
       break;
     }
