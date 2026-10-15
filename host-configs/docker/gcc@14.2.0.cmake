@@ -4,28 +4,28 @@
 # CMake executable path: /usr/local/bin/cmake
 #------------------------------------------------------------------------------
 
-set(CMAKE_PREFIX_PATH "/home/smith/smith_tpls/gcc-14.2.0/tribol-0.1.0.25-6y5kpce53jwamc7xq44kzej2ekj7qejo;/home/smith/smith_tpls/gcc-14.2.0/axom-0.12.0.1-vczl3ae5hkjeth2w3msg7c7yxag6prsd;/home/smith/smith_tpls/gcc-14.2.0/conduit-0.9.5-an6lgnv2wosycyrwmlwwsre5v24eehrf;/home/smith/smith_tpls/gcc-14.2.0/mfem-4.9.1.1-njai3fezw45u3gkq7vlimo3vubmgluo7;/home/smith/smith_tpls/gcc-14.2.0/raja-2025.09.0-6coqg3v76zxvqoubbq3m5kb4pz4aetcq;/home/smith/smith_tpls/gcc-14.2.0/umpire-2025.09.0-3dejdu7quycjtikogju7aseulzna3eny;/home/smith/smith_tpls/gcc-14.2.0/netcdf-c-4.7.4-6k4xq27gbyjar7wskzq5dhjgkxlbzmb5;/home/smith/smith_tpls/gcc-14.2.0/slepc-3.21.2-atawbo7jfyai4zwaj2d7syyxtvzqimf7;/home/smith/smith_tpls/gcc-14.2.0/sundials-7.5.0-ne74sv2nuvh7xsq5rqxrpzqjb2lzskrq;/home/smith/smith_tpls/gcc-14.2.0/superlu-dist-8.1.2-tg7e6njcyn4fonx7ncxm3dlsluxppein;/home/smith/smith_tpls/gcc-14.2.0/camp-2025.09.2-si4b5sh5sinbirzw45mgj74pzchhzmjm;/home/smith/smith_tpls/gcc-14.2.0/fmt-11.0.2-ufhkktndklljmnsp6ec7sxroumecq34t;/home/smith/smith_tpls/gcc-14.2.0/hdf5-1.8.23-pnp3k6jpbuhrg3gthey3mob3gfz53hpg;/home/smith/smith_tpls/gcc-14.2.0/arpack-ng-3.9.1-wgrhkla4i7kvhmig7xxdb64iw4srno7n;/home/smith/smith_tpls/gcc-14.2.0/petsc-3.21.6-k5wbbt6gpdqceiqwl3f6fdnwcdqp6vlq;/home/smith/smith_tpls/gcc-14.2.0/hypre-2.33.0-wb3iyb7nl6bpwrmftwnxlfkfvcbgxgbl;/home/smith/smith_tpls/gcc-14.2.0/strumpack-8.0.0-liiygmnxy2bthw3ca6x7pkflu222wnnt;/home/smith/smith_tpls/gcc-14.2.0/netlib-scalapack-2.2.2-6ipqgujeofvverykin65w57iacy7twhj;/home/smith/smith_tpls/gcc-14.2.0/parmetis-4.0.3-dh34towgicfstf37dtmk4l7z73ave62z;/home/smith/smith_tpls/gcc-14.2.0/openblas-0.3.30-heqvc4c45vnxfai5xqcgjv4foilwtbdh;/home/smith/smith_tpls/gcc-14.2.0/metis-5.1.0-x6cbvn7ffihc2yxxtcoztbzqhv3xecbr;/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3;/home/smith/smith_tpls/gcc-14.2.0/hwloc-2.12.2-4h4goxji77xo2vunl6qbao3obg5y6s6s;/home/smith/smith_tpls/gcc-14.2.0/libfabric-2.4.0-zryeonlpck4o3fwuiceokjvhfbaddsuu;/home/smith/smith_tpls/gcc-14.2.0/yaksa-0.4-alttpthabjee4cdh4zqqq72frxn4vpbj;/home/smith/smith_tpls/gcc-14.2.0/libpciaccess-0.17-azaevba24f7yfjz23wyf2uakf3rscpyc;/home/smith/smith_tpls/gcc-14.2.0/libxml2-2.15.1-u3drorczqrzd4rca3b7v4wvneg7pzdgk;/home/smith/smith_tpls/gcc-14.2.0/ncurses-6.5-20250705-mqevvzhb2baxbcvkvzmi4g4infjrvt6s;/home/smith/smith_tpls/gcc-14.2.0/libiconv-1.18-yw5ygcmfbrlifsd6njij6dm2a42r3gye;/home/smith/smith_tpls/gcc-14.2.0/xz-5.6.3-wt4cklfzfc2zt5f7zokdvom4qke2yfdq;/home/smith/smith_tpls/none-none/gcc-runtime-14.2.0-xixp2gqgzzdiuaowdfuzwz3wb57xludc;/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z" CACHE STRING "")
+set(CMAKE_PREFIX_PATH "/home/smith/smith_tpls/gcc-14.2.0/axom-0.14.0.2-kj37dekvvpitfqqa5xc2ynhouqrx34yv;/home/smith/smith_tpls/gcc-14.2.0/conduit-0.9.6-2xu7oknwccack77my2lndusrl36zis5m;/home/smith/smith_tpls/gcc-14.2.0/mfem-4.10.0.1-l44sxabmgs7r646t66ol3fjffpkqvb2z;/home/smith/smith_tpls/gcc-14.2.0/raja-2025.12.2-zzkti4tkl4mmxts7ubis7dj6oa4ah5xp;/home/smith/smith_tpls/gcc-14.2.0/umpire-2025.12.0-ozrgnbfifen63cpkqzseskas45z3bqs4;/home/smith/smith_tpls/gcc-14.2.0/netcdf-c-4.10.0-pkhe4f7phm3xjzzquh3auaa5qf64k6ex;/home/smith/smith_tpls/gcc-14.2.0/slepc-3.23.3-jthiyejoj7j4jrlfyqo5mazh7c3fayca;/home/smith/smith_tpls/gcc-14.2.0/sundials-7.7.0-lh4xwl7sj5w23u34yebq4fbdpdo6yhxn;/home/smith/smith_tpls/gcc-14.2.0/superlu-dist-8.1.2-u5i7622rror2m7nqlzkflx6ce2tkkew2;/home/smith/smith_tpls/gcc-14.2.0/camp-2025.12.0-7gylv2th243ee5vyjnxe5ty77mhbacoi;/home/smith/smith_tpls/gcc-14.2.0/fmt-12.1.0-cowiirozwuk5xvcvctenwpoplppvtqrv;/home/smith/smith_tpls/gcc-14.2.0/hdf5-1.8.23-jwqlist2l6dylnhgt5rluvmktim7jzst;/home/smith/smith_tpls/gcc-14.2.0/arpack-ng-3.9.1-o6ftgsrpskje7tz5ch5s4yzctxob6eo6;/home/smith/smith_tpls/gcc-14.2.0/petsc-3.23.7-uoxhpu6lki3iazswp3xs7oo22hejv5ni;/home/smith/smith_tpls/gcc-14.2.0/hypre-2.33.0-pcv2qsco5zipxf63q4dci6qybbytk6uc;/home/smith/smith_tpls/gcc-14.2.0/strumpack-8.0.0-jai7mof5ebw2n37zwqzbev2ddcxj24ge;/home/smith/smith_tpls/gcc-14.2.0/netlib-scalapack-2.2.3-vwnv4u3hvecao3dlmzyyhncxko7wf6zi;/home/smith/smith_tpls/gcc-14.2.0/parmetis-4.0.3-cdyx6v75mwujkoimdtoitjdl5g64uuid;/home/smith/smith_tpls/gcc-14.2.0/openblas-0.3.34-thlti5uejwmiedr2ga66fznudidpix74;/home/smith/smith_tpls/gcc-14.2.0/metis-5.1.0-sjrbkklxpnlydlpi6fk4s2upmtkyzyea;/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-yasz2soff2po7g4y3fdoemydlry3dxtj;/home/smith/smith_tpls/gcc-14.2.0/hwloc-2.13.0-s6bfjuyvtwsvefxtwuvuft2dkderrw6o;/home/smith/smith_tpls/gcc-14.2.0/libfabric-2.6.0-vmwjrodfneteea6wh7j7tcmwtoruw3po;/home/smith/smith_tpls/gcc-14.2.0/yaksa-0.4-ansholl2fhhkgmvaicmodimu5oboqdav;/home/smith/smith_tpls/gcc-14.2.0/libpciaccess-0.17-rn3sfd67czkewl2etj54ftgphe5mvify;/home/smith/smith_tpls/gcc-14.2.0/libxml2-2.15.3-tya6p4hpi24ldxnwatkg7ewwgqs7i3p5;/home/smith/smith_tpls/gcc-14.2.0/ncurses-6.6-w5gts2pn7ccivwp27kqmqhfltfe5b2li;/home/smith/smith_tpls/gcc-14.2.0/libiconv-1.18-6h2jkibkg54ljx6lwin5wwlji2ukdum2;/home/smith/smith_tpls/gcc-14.2.0/xz-5.8.3-sddcb63xzxtqj6ae6zggicccabmmcz67;/home/smith/smith_tpls/none-none/gcc-runtime-14.2.0-n4crnnil46wca52mh54in5mkmd3aqs3m;/home/smith/smith_tpls/none-none/compiler-wrapper-1.1.0-m2hzi6ouuda4xfn6tiiaok5ekmsr62nh" CACHE STRING "")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH "ON" CACHE STRING "")
 
-set(CMAKE_BUILD_RPATH "/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib;/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib64;;" CACHE STRING "")
+set(CMAKE_BUILD_RPATH "/home/smith/smith_tpls/gcc-14.2.0/smith-develop-mhfa2rf6hbwxbyhc7a3zh6ravsg5soww/lib;/home/smith/smith_tpls/gcc-14.2.0/smith-develop-mhfa2rf6hbwxbyhc7a3zh6ravsg5soww/lib64;;" CACHE STRING "")
 
-set(CMAKE_INSTALL_RPATH "/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib;/home/smith/smith_tpls/gcc-14.2.0/smith-develop-pb6h4gcfmluggisuhsanqap22p6nzffw/lib64;;" CACHE STRING "")
+set(CMAKE_INSTALL_RPATH "/home/smith/smith_tpls/gcc-14.2.0/smith-develop-mhfa2rf6hbwxbyhc7a3zh6ravsg5soww/lib;/home/smith/smith_tpls/gcc-14.2.0/smith-develop-mhfa2rf6hbwxbyhc7a3zh6ravsg5soww/lib64;;" CACHE STRING "")
 
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
 #------------------------------------------------------------------------------
 # Compilers
 #------------------------------------------------------------------------------
-# Compiler Spec: gcc@14.2.0/tojnadwjp2mzzugcwcugexka7vm7n5gr
+# Compiler Spec: gcc@14.2.0/comrsbbymrciju4dru5f6ot4xmago7ra
 #------------------------------------------------------------------------------
 if(DEFINED ENV{SPACK_CC})
 
-  set(CMAKE_C_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z/libexec/spack/gcc/gcc" CACHE PATH "")
+  set(CMAKE_C_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.1.0-m2hzi6ouuda4xfn6tiiaok5ekmsr62nh/libexec/spack/gcc/gcc" CACHE PATH "")
 
-  set(CMAKE_CXX_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z/libexec/spack/gcc/g++" CACHE PATH "")
+  set(CMAKE_CXX_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.1.0-m2hzi6ouuda4xfn6tiiaok5ekmsr62nh/libexec/spack/gcc/g++" CACHE PATH "")
 
-  set(CMAKE_Fortran_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.0-u5fjo4cce7cqt6425ipfxnafausfog7z/libexec/spack/gcc/gfortran" CACHE PATH "")
+  set(CMAKE_Fortran_COMPILER "/home/smith/smith_tpls/none-none/compiler-wrapper-1.1.0-m2hzi6ouuda4xfn6tiiaok5ekmsr62nh/libexec/spack/gcc/gfortran" CACHE PATH "")
 
 else()
 
@@ -47,13 +47,13 @@ set(CMAKE_Fortran_FLAGS "-fPIC -pthread" CACHE STRING "")
 # MPI
 #------------------------------------------------------------------------------
 
-set(MPI_C_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpicc" CACHE PATH "")
+set(MPI_C_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-yasz2soff2po7g4y3fdoemydlry3dxtj/bin/mpicc" CACHE PATH "")
 
-set(MPI_CXX_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpicxx" CACHE PATH "")
+set(MPI_CXX_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-yasz2soff2po7g4y3fdoemydlry3dxtj/bin/mpicxx" CACHE PATH "")
 
-set(MPI_Fortran_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpif90" CACHE PATH "")
+set(MPI_Fortran_COMPILER "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-yasz2soff2po7g4y3fdoemydlry3dxtj/bin/mpif90" CACHE PATH "")
 
-set(MPIEXEC_EXECUTABLE "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-52g4dozom7jd7m4mmy2qtay77ei3foz3/bin/mpirun" CACHE PATH "")
+set(MPIEXEC_EXECUTABLE "/home/smith/smith_tpls/gcc-14.2.0/mpich-4.2.0-yasz2soff2po7g4y3fdoemydlry3dxtj/bin/mpirun" CACHE PATH "")
 
 set(MPIEXEC_NUMPROC_FLAG "-np" CACHE STRING "")
 
@@ -71,29 +71,29 @@ set(ENABLE_OPENMP ON CACHE BOOL "")
 
 set(TPL_ROOT "/home/smith/smith_tpls/gcc-14.2.0" CACHE PATH "")
 
-set(AXOM_DIR "${TPL_ROOT}/axom-0.12.0.1-vczl3ae5hkjeth2w3msg7c7yxag6prsd" CACHE PATH "")
+set(AXOM_DIR "${TPL_ROOT}/axom-0.14.0.2-kj37dekvvpitfqqa5xc2ynhouqrx34yv" CACHE PATH "")
 
-set(CAMP_DIR "${TPL_ROOT}/camp-2025.09.2-si4b5sh5sinbirzw45mgj74pzchhzmjm" CACHE PATH "")
+set(CAMP_DIR "${TPL_ROOT}/camp-2025.12.0-7gylv2th243ee5vyjnxe5ty77mhbacoi" CACHE PATH "")
 
-set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.5-an6lgnv2wosycyrwmlwwsre5v24eehrf" CACHE PATH "")
+set(CONDUIT_DIR "${TPL_ROOT}/conduit-0.9.6-2xu7oknwccack77my2lndusrl36zis5m" CACHE PATH "")
 
 set(LUA_DIR "/usr" CACHE PATH "")
 
-set(MFEM_DIR "${TPL_ROOT}/mfem-4.9.1.1-njai3fezw45u3gkq7vlimo3vubmgluo7" CACHE PATH "")
+set(MFEM_DIR "${TPL_ROOT}/mfem-4.10.0.1-l44sxabmgs7r646t66ol3fjffpkqvb2z" CACHE PATH "")
 
-set(HDF5_DIR "${TPL_ROOT}/hdf5-1.8.23-pnp3k6jpbuhrg3gthey3mob3gfz53hpg" CACHE PATH "")
+set(HDF5_DIR "${TPL_ROOT}/hdf5-1.8.23-jwqlist2l6dylnhgt5rluvmktim7jzst" CACHE PATH "")
 
-set(HYPRE_DIR "${TPL_ROOT}/hypre-2.33.0-wb3iyb7nl6bpwrmftwnxlfkfvcbgxgbl" CACHE PATH "")
+set(HYPRE_DIR "${TPL_ROOT}/hypre-2.33.0-pcv2qsco5zipxf63q4dci6qybbytk6uc" CACHE PATH "")
 
-set(METIS_DIR "${TPL_ROOT}/metis-5.1.0-x6cbvn7ffihc2yxxtcoztbzqhv3xecbr" CACHE PATH "")
+set(METIS_DIR "${TPL_ROOT}/metis-5.1.0-sjrbkklxpnlydlpi6fk4s2upmtkyzyea" CACHE PATH "")
 
-set(PARMETIS_DIR "${TPL_ROOT}/parmetis-4.0.3-dh34towgicfstf37dtmk4l7z73ave62z" CACHE PATH "")
+set(PARMETIS_DIR "${TPL_ROOT}/parmetis-4.0.3-cdyx6v75mwujkoimdtoitjdl5g64uuid" CACHE PATH "")
 
-set(NETCDF_DIR "${TPL_ROOT}/netcdf-c-4.7.4-6k4xq27gbyjar7wskzq5dhjgkxlbzmb5" CACHE PATH "")
+set(NETCDF_DIR "${TPL_ROOT}/netcdf-c-4.10.0-pkhe4f7phm3xjzzquh3auaa5qf64k6ex" CACHE PATH "")
 
-set(SUPERLUDIST_DIR "${TPL_ROOT}/superlu-dist-8.1.2-tg7e6njcyn4fonx7ncxm3dlsluxppein" CACHE PATH "")
+set(SUPERLUDIST_DIR "${TPL_ROOT}/superlu-dist-8.1.2-u5i7622rror2m7nqlzkflx6ce2tkkew2" CACHE PATH "")
 
-set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.1-wgrhkla4i7kvhmig7xxdb64iw4srno7n" CACHE PATH "")
+set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.1-o6ftgsrpskje7tz5ch5s4yzctxob6eo6" CACHE PATH "")
 
 # ADIAK not built
 
@@ -103,19 +103,19 @@ set(ARPACK_DIR "${TPL_ROOT}/arpack-ng-3.9.1-wgrhkla4i7kvhmig7xxdb64iw4srno7n" CA
 
 # ENZYME not built
 
-set(PETSC_DIR "${TPL_ROOT}/petsc-3.21.6-k5wbbt6gpdqceiqwl3f6fdnwcdqp6vlq" CACHE PATH "")
+set(PETSC_DIR "${TPL_ROOT}/petsc-3.23.7-uoxhpu6lki3iazswp3xs7oo22hejv5ni" CACHE PATH "")
 
-set(RAJA_DIR "${TPL_ROOT}/raja-2025.09.0-6coqg3v76zxvqoubbq3m5kb4pz4aetcq" CACHE PATH "")
+set(RAJA_DIR "${TPL_ROOT}/raja-2025.12.2-zzkti4tkl4mmxts7ubis7dj6oa4ah5xp" CACHE PATH "")
 
-set(SLEPC_DIR "${TPL_ROOT}/slepc-3.21.2-atawbo7jfyai4zwaj2d7syyxtvzqimf7" CACHE PATH "")
+set(SLEPC_DIR "${TPL_ROOT}/slepc-3.23.3-jthiyejoj7j4jrlfyqo5mazh7c3fayca" CACHE PATH "")
 
-set(STRUMPACK_DIR "${TPL_ROOT}/strumpack-8.0.0-liiygmnxy2bthw3ca6x7pkflu222wnnt" CACHE PATH "")
+set(STRUMPACK_DIR "${TPL_ROOT}/strumpack-8.0.0-jai7mof5ebw2n37zwqzbev2ddcxj24ge" CACHE PATH "")
 
-set(SUNDIALS_DIR "${TPL_ROOT}/sundials-7.5.0-ne74sv2nuvh7xsq5rqxrpzqjb2lzskrq" CACHE PATH "")
+set(SUNDIALS_DIR "${TPL_ROOT}/sundials-7.7.0-lh4xwl7sj5w23u34yebq4fbdpdo6yhxn" CACHE PATH "")
 
-set(UMPIRE_DIR "${TPL_ROOT}/umpire-2025.09.0-3dejdu7quycjtikogju7aseulzna3eny" CACHE PATH "")
+set(UMPIRE_DIR "${TPL_ROOT}/umpire-2025.12.0-ozrgnbfifen63cpkqzseskas45z3bqs4" CACHE PATH "")
 
-set(TRIBOL_DIR "${TPL_ROOT}/tribol-0.1.0.25-6y5kpce53jwamc7xq44kzej2ekj7qejo" CACHE PATH "")
+# TRIBOL not built
 
 #------------------------------------------------------------------------------
 # Devtools

@@ -43,3 +43,8 @@ find_library(ARPACK_LIBRARIES
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(ARPACK DEFAULT_MSG ARPACK_LIBRARIES ARPACK_INCLUDE_DIRS)
+
+blt_import_library(NAME      arpack
+                   INCLUDES  ${ARPACK_INCLUDE_DIRS}
+                   LIBRARIES ${ARPACK_LIBRARIES}
+                   TREAT_INCLUDES_AS_SYSTEM ON)

@@ -12,6 +12,9 @@ User Guide
   :maxdepth: 2
 
   simple_conduction_tutorial
+  composable_solid_mechanics_tutorial
+  composable_thermo_mechanics_tutorial
+  composable_thermo_mechanics_advanced_tutorial
   command_line_options
   input_schema
 

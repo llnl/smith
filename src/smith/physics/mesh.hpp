@@ -155,7 +155,7 @@ class Mesh {
   /// @brief string identifying mesh in the state manager
   std::string mesh_tag_;
 
-  /// @brief parallel mfem mesh
+  /// @brief Non-owning pointer to the parallel mfem mesh registered with StateManager
   mfem::ParMesh* mfem_mesh_;
 
   /// @brief map from registered domain name to the domain instance

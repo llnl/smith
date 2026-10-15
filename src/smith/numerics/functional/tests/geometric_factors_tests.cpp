@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -43,8 +42,8 @@ TEST(geometric_factors, with_2D_domains)
   auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
 
   // `d` will consist of one tri and one quad
-  Domain d = Domain::ofElements(
-      *mesh, std::function([](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; }));
+  Domain d =
+      Domain::ofElements(*mesh, [](std::vector<vec2> vertices, int /* attr */) { return average(vertices)[0] < 0.45; });
 
   int q = 2;
 
@@ -73,9 +72,9 @@ TEST(geometric_factors, with_3D_domains)
   auto mesh = smith::mesh::refineAndDistribute(std::move(bmesh));
 
   // `d` will consist of 6 tets and 1 hex
-  Domain d = Domain::ofElements(*mesh, std::function([](std::vector<vec3> vertices, int /*bdr_attr*/) {
+  Domain d = Domain::ofElements(*mesh, [](std::vector<vec3> vertices, int /*bdr_attr*/) {
     return average(vertices)[1] < 0.75;  // y coordinate of face center
-  }));
+  });
 
   int q = 2;
 

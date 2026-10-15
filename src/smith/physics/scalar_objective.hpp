@@ -41,7 +41,7 @@ class ScalarObjective {
    * @param fields inputs to residual operator
    * @return double which is the scalar objective value
    */
-  virtual double evaluate(TimeInfo time_info, ConstFieldPtr shape_disp,
+  virtual double evaluate(const TimeInfo& time_info, ConstFieldPtr shape_disp,
                           const std::vector<ConstFieldPtr>& fields) const = 0;
 
   /** @brief Virtual interface for computing objective gradient from a vector of smith::FiniteElementState*
@@ -52,8 +52,8 @@ class ScalarObjective {
    * @param field_ordinal index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
-  virtual mfem::Vector gradient(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-                                size_t field_ordinal) const = 0;
+  virtual mfem::Vector gradient(const TimeInfo& time_info, ConstFieldPtr shape_disp,
+                                const std::vector<ConstFieldPtr>& fields, size_t field_ordinal) const = 0;
 
   /** @brief Compute objective gradient from a vector of FiniteElementState*, using int for index
    *
@@ -63,8 +63,8 @@ class ScalarObjective {
    * @param field_ordinal index for which field to take the gradient with respect to
    * @return mfem::Vector
    */
-  virtual mfem::Vector gradient(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
-                                int field_ordinal) const
+  virtual mfem::Vector gradient(const TimeInfo& time_info, ConstFieldPtr shape_disp,
+                                const std::vector<ConstFieldPtr>& fields, int field_ordinal) const
   {
     return gradient(time_info, shape_disp, fields, static_cast<size_t>(field_ordinal));
   }
@@ -76,7 +76,7 @@ class ScalarObjective {
    * @param fields inputs to residual operator
    * @return mfem::Vector
    */
-  virtual mfem::Vector mesh_coordinate_gradient(TimeInfo time_info, ConstFieldPtr shape_disp,
+  virtual mfem::Vector mesh_coordinate_gradient(const TimeInfo& time_info, ConstFieldPtr shape_disp,
                                                 const std::vector<ConstFieldPtr>& fields) const = 0;
 
   /// @brief name

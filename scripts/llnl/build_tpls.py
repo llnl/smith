@@ -50,6 +50,11 @@ def parse_args():
                       dest="mirror",
                       default="",
                       help="Mirror location to use (defaults to shared location)")
+    parser.add_argument("-sm", "--skip-mirror",
+                      dest="skip_mirror",
+                      default=False,
+                      action="store_true",
+                      help="Skip updating of Spack mirror")
     parser.add_argument("-j", "--jobs",
                       dest="jobs",
                       default="",
@@ -92,7 +97,7 @@ def main():
         os.chdir(repo_dir)
 
         timestamp = get_timestamp()
-        res = full_build_and_test_of_tpls(builds_dir, timestamp, spec, args["verbose"], args["short_path"], args["mirror"], args["jobs"])
+        res = full_build_and_test_of_tpls(builds_dir, timestamp, spec, args["verbose"], args["short_path"], args["mirror"], args["jobs"], args["skip_mirror"])
     finally:
         os.chdir(original_wd)
 

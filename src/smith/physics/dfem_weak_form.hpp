@@ -189,7 +189,8 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  mfem::Vector residual(TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& fields,
+  mfem::Vector residual(const TimeInfo& time_info, ConstFieldPtr /*shape_disp*/,
+                        const std::vector<ConstFieldPtr>& fields,
                         const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {}) const override
   {
     dt_ = time_info.dt();
@@ -202,7 +203,7 @@ class DfemWeakForm : public WeakForm {
 
   /// @overload
   std::unique_ptr<mfem::HypreParMatrix> jacobian(
-      TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+      const TimeInfo& time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
       const std::vector<double>& /*jacobian_weights*/,
       const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/ = {}) const override
   {
@@ -214,7 +215,7 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  void jvp(TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+  void jvp(const TimeInfo& time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
            const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, ConstFieldPtr /*v_shape_disp*/,
            const std::vector<ConstFieldPtr>& /*v_fields*/,
            const std::vector<ConstQuadratureFieldPtr>& /*v_quad_fields*/, DualFieldPtr /*jvp_reaction*/) const override
@@ -242,7 +243,7 @@ class DfemWeakForm : public WeakForm {
   }
 
   /// @overload
-  void vjp(TimeInfo time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
+  void vjp(const TimeInfo& time_info, ConstFieldPtr /*shape_disp*/, const std::vector<ConstFieldPtr>& /*fields*/,
            const std::vector<ConstQuadratureFieldPtr>& /*quad_fields*/, ConstFieldPtr /*v_fields*/,
            DualFieldPtr /*vjp_shape_disp_sensitivity*/, const std::vector<DualFieldPtr>& /*vjp_sensitivities*/,
            const std::vector<QuadratureFieldPtr>& /*vjp_quad_field_sensitivities*/) const override

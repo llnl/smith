@@ -5,10 +5,9 @@
 # SPDX-License-Identifier: (BSD-3-Clause)
 
 if (SPHINX_FOUND)
-  blt_add_sphinx_target(smith_docs)
+  blt_add_sphinx_target(TARGET smith_docs)
 endif()
 
 if (DOXYGEN_FOUND)
   add_subdirectory(doxygen)
 endif()
-

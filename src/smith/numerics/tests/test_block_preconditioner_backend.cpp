@@ -141,15 +141,12 @@ TEST_P(BlockPreconditionerParamTest, SolvesBlockSystemApproximately)
   // Instantiate preconditioner
   std::unique_ptr<Solver> P;
   if (params.prec_kind == BlockPrecTestParams::PrecKind::Diagonal) {
-    P = std::make_unique<smith::BlockDiagonalPreconditioner>(block_offsets, std::move(block_solvers));
+    P = std::make_unique<smith::BlockDiagonalPreconditioner>(std::move(block_solvers));
   } else if (params.prec_kind == BlockPrecTestParams::PrecKind::Triangular) {
-    P = std::make_unique<smith::BlockTriangularPreconditioner>(block_offsets, std::move(block_solvers),
-                                                               params.tri_type);
+    P = std::make_unique<smith::BlockTriangularPreconditioner>(std::move(block_solvers), params.tri_type);
   } else {
-    P = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets, std::move(block_solvers), params.schur_type,
+    P = std::make_unique<smith::BlockSchurPreconditioner>(std::move(block_solvers), params.schur_type,
                                                           smith::SchurApproxType::A22Only);
-    // P = std::make_unique<smith::BlockSchurPreconditioner>(block_offsets, std::move(block_solvers),
-    // params.schur_type);
   }
   P->SetOperator(J);
 

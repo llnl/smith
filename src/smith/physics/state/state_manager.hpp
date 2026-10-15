@@ -340,9 +340,12 @@ class StateManager {
   {
     named_states_.clear();
     named_duals_.clear();
+    owned_states_.clear();
+    owned_duals_.clear();
     shape_displacements_.clear();
     shape_displacement_duals_.clear();
     datacolls_.clear();
+    meshes_.clear();
     output_dir_.clear();
     is_restart_ = false;
     ds_ = nullptr;
@@ -356,15 +359,30 @@ class StateManager {
   static bool hasMesh(const std::string& mesh_tag) { return datacolls_.find(mesh_tag) != datacolls_.end(); }
 
   /**
-   * @brief Gives ownership of mesh to StateManager
+   * @brief Shares ownership of mesh with StateManager
    * @param[in] pmesh The mesh to register
    * @param[in] mesh_tag A string that uniquely identifies the mesh
-   * @return A pointer to the stored mesh whose ownership was just passed to StateManager
+   * @return A reference to the stored mesh
+   */
+  static mfem::ParMesh& setMesh(std::shared_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag);
+
+  /**
+   * @brief Transfers mesh ownership to StateManager
+   * @param[in] pmesh The mesh to register
+   * @param[in] mesh_tag A string that uniquely identifies the mesh
+   * @return A reference to the stored mesh
    */
   static mfem::ParMesh& setMesh(std::unique_ptr<mfem::ParMesh> pmesh, const std::string& mesh_tag);
 
   /**
-   * @brief Returns a non-owning reference to mesh held by StateManager
+   * @brief Returns a non-owning reference to the registered mesh
+   *
+   * Meshes registered through setMesh() are held by StateManager, with either
+   * unique or shared ownership depending on the overload used. Meshes
+   * reconstructed during restart/load() are owned by the underlying
+   * MFEMSidreDataCollection. In all cases, this accessor returns only a
+   * borrowed reference to the mesh.
+   *
    * @param[in] mesh_tag A string that uniquely identifies the mesh
    * @pre A mesh identified by @a mesh_tag must be registered - either via @p load() or @p setMesh()
    */
@@ -489,6 +507,11 @@ class StateManager {
    * The object is constructed when the user calls StateManager::initialize.
    */
   static std::unordered_map<std::string, axom::sidre::MFEMSidreDataCollection> datacolls_;
+  /// @brief Shared ownership of meshes registered through setMesh()
+  ///
+  /// Restart meshes are reconstructed and owned by the MFEMSidreDataCollection,
+  /// not by this map.
+  static std::unordered_map<std::string, std::shared_ptr<mfem::ParMesh>> meshes_;
 
   /// @brief A map of the shape displacement fields for each stored mesh ID
   static std::unordered_map<std::string, std::unique_ptr<FiniteElementState>> shape_displacements_;
@@ -505,10 +528,16 @@ class StateManager {
   /// @brief Output directory to which all datacollections are saved
   static std::string output_dir_;
 
-  /// @brief A collection of FiniteElementState names and their corresponding Sidre-owned grid function pointers
+  /// @brief A collection of FiniteElementState names and their corresponding grid function pointers
   static std::unordered_map<std::string, mfem::ParGridFunction*> named_states_;
-  /// @brief A collection of FiniteElementDual names and their corresponding Sidre-owned grid function pointers
+  /// @brief A collection of FiniteElementDual names and their corresponding grid function pointers
   static std::unordered_map<std::string, mfem::ParGridFunction*> named_duals_;
+  /// @brief State grid functions allocated by StateManager and registered as non-owning data in Sidre.
+  /// Used for lifetime management only. May not contain all states (for example, restarted states).
+  static std::vector<std::unique_ptr<mfem::ParGridFunction>> owned_states_;
+  /// @brief Dual grid functions allocated by StateManager and registered as non-owning data in Sidre.
+  /// Used for lifetime management only. May not contain all duals (for example, restarted duals).
+  static std::vector<std::unique_ptr<mfem::ParGridFunction>> owned_duals_;
 };
 
 /// @brief Check that a mesh satisfies our required properties

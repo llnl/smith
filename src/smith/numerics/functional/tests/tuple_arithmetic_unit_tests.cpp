@@ -28,6 +28,24 @@ TEST(TupleArithmeticUnitTests, StructuredBinding)
   EXPECT_NEAR(c, 2.0f, 1.0e-10);
 }
 
+TEST(TupleArithmeticUnitTests, TenElementTuple)
+{
+  smith::tuple x{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  EXPECT_EQ(smith::get<9>(x), 9);
+  smith::get<9>(x) = 42;
+  EXPECT_EQ(smith::get<9>(x), 42);
+}
+
+TEST(TupleArithmeticUnitTests, ElevenElementTuple)
+{
+  smith::tuple x{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+  EXPECT_EQ(smith::get<10>(x), 10);
+  smith::get<10>(x) = 42;
+  EXPECT_EQ(smith::get<10>(x), 42);
+}
+
 TEST(TupleArithmeticUnitTests, Add)
 {
   smith::tuple a{0.0, make_tensor<3>([](int) { return 3.0; }),

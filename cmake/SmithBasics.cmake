@@ -30,8 +30,9 @@ if (NOT SMITH_BASICS_SETUP)
     cmake_dependent_option(SMITH_ENABLE_OPENMP "Enables Smith with OPENMP support" ON "ENABLE_OPENMP" OFF)
 
     # Options for builtin TPLs
-    option(SMITH_ENABLE_GRETL "Enables Smith with Gretl Support" ON)
     option(SMITH_ENABLE_CONTINUATION "Enables Smith with Continuation Solver support" ON)
+    option(SMITH_ENABLE_GRETL "Enables Smith with Gretl Support" ON)
+    option(SMITH_ENABLE_TRIBOL "Enables Smith with Tribol Support" ON)
 
     if (SMITH_ENABLE_HIP OR SMITH_ENABLE_CUDA)
         message(STATUS "Disabling Smith's Continuation Solver support due to currently non-supported GPU build")
