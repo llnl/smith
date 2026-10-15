@@ -6,6 +6,9 @@
 
 #include <cmath>
 #include <memory>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 #include "gtest/gtest.h"
 
 #include "smith/smith_config.hpp"
@@ -38,6 +41,27 @@ static constexpr int temperature_order = 1;
 
 using DispRule = QuasiStaticSecondOrderTimeIntegrationRule;
 using TemperatureRule = BackwardEulerFirstOrderTimeIntegrationRule;
+
+using TestScalarSpace = H1<temperature_order>;
+using TestPhysicsFields = PhysicsFields<dim, temperature_order, TemperatureRule, TestScalarSpace>;
+
+// Protect the exact normalized tuple contract for empty and mixed coupling inputs.
+// In particular, ParamFields<> contributes no tuple element or downstream parameter pack.
+static_assert(
+    std::is_same_v<decltype(detail::collectCouplingFields(std::declval<const CouplingFields<>&>())), std::tuple<>>);
+static_assert(
+    std::is_same_v<decltype(detail::collectCouplingFields(std::declval<const ParamFields<>&>())), std::tuple<>>);
+static_assert(
+    std::is_same_v<decltype(detail::collectCouplingFields(std::declval<const CouplingFields<>&>(),
+                                                          std::declval<const ParamFields<TestScalarSpace>&>())),
+                   std::tuple<ParamFields<TestScalarSpace>>>);
+static_assert(
+    std::is_same_v<decltype(detail::collectCouplingFields(std::declval<const CouplingFields<TestPhysicsFields>&>(),
+                                                          std::declval<const ParamFields<>&>())),
+                   std::tuple<TestPhysicsFields>>);
+static_assert(std::is_same_v<decltype(detail::collectCouplingFields(std::declval<const CouplingFields<>&>(),
+                                                                    std::declval<const ParamFields<>&>())),
+                             std::tuple<>>);
 
 TEST(CouplingTimeRuleInterpolation, AppliesEachForeignPhysicsRuleBeforeCallback)
 {
