@@ -109,7 +109,7 @@ struct DifferentiableOperatorWeakFormFixture : public testing::Test {
   std::vector<smith::FiniteElementState> parameter_tangents;
   std::vector<smith::FiniteElementDual> state_sensitivities;
   std::vector<smith::FiniteElementDual> parameter_sensitivities;
-  smith::TimeInfo time_info{0.3, 0.1, 4};
+  smith::TimeInfo time_info{0.3, 0.1, 4, smith::TimeInfo::EvaluationMode::CycleZero};
 };
 
 TEST_F(DifferentiableOperatorWeakFormFixture, JvpConsistency)
@@ -190,19 +190,26 @@ TEST_F(DifferentiableOperatorWeakFormFixture, ForwardsOriginalTimeInfoToIntegran
 {
   typename WeakFormType::SpacesT spaces{&states[0].space(), &states[1].space(), &parameters[0].space()};
   WeakFormType time_weak_form("time", mesh, states[0].space(), spaces);
+  double observed_time = std::numeric_limits<double>::quiet_NaN();
+  double observed_dt = std::numeric_limits<double>::quiet_NaN();
+  size_t observed_cycle = 0;
+  bool observed_cycle_zero = false;
   time_weak_form.addBodySource(
       smith::DependsOn<>{}, mesh->entireBodyName(),
-      [] SMITH_HOST_DEVICE(const smith::TimeInfo& info, auto x) {
-        const double mode = info.isCycleZeroEvaluation() ? 10.0 : 0.0;
-        return (info.time() + info.dt() + static_cast<double>(info.cycle()) + mode) * x;
+      [&observed_time, &observed_dt, &observed_cycle, &observed_cycle_zero] SMITH_HOST_DEVICE (
+          const smith::TimeInfo& time, auto x) {
+        observed_time = time.time();
+        observed_dt = time.dt();
+        observed_cycle = time.cycle();
+        observed_cycle_zero = time.isCycleZeroEvaluation();
+        return 0.0 * x;
       });
   const auto fields = inputFields();
-  const smith::TimeInfo regular(2.0, 0.25, 7);
-  const smith::TimeInfo cycle_zero(2.0, 0.25, 7, smith::TimeInfo::EvaluationMode::CycleZero);
-  const mfem::Vector regular_residual = time_weak_form.residual(regular, shape.get(), fields);
-  const mfem::Vector cycle_zero_residual = time_weak_form.residual(cycle_zero, shape.get(), fields);
-  EXPECT_GT(regular_residual.Norml2(), 0.0);
-  EXPECT_NEAR(cycle_zero_residual.Norml2() / regular_residual.Norml2(), 19.5 / 9.5, 1.0e-12);
+  const mfem::Vector regular_residual = time_weak_form.residual(time_info, shape.get(), fields);
+  EXPECT_DOUBLE_EQ(observed_time, time_info.time());
+  EXPECT_DOUBLE_EQ(observed_dt, time_info.dt());
+  EXPECT_EQ(observed_cycle, time_info.cycle());
+  EXPECT_TRUE(observed_cycle_zero);
 }
 
 TEST_F(DifferentiableOperatorWeakFormFixture, RejectsIncorrectJacobianWeightCount)
