@@ -31,16 +31,6 @@ std::shared_ptr<DirichletBoundaryConditions> FieldStore::addBoundaryConditions(F
   return std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), field->space());
 }
 
-void FieldStore::addWeakFormUnknownArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
-{
-  FieldLabel argument_name_and_index{.field_name = argument_name, .field_index_in_residual = argument_index};
-  if (weak_form_name_to_unknown_name_index_.count(weak_form_name)) {
-    weak_form_name_to_unknown_name_index_.at(weak_form_name).push_back(argument_name_and_index);
-  } else {
-    weak_form_name_to_unknown_name_index_[weak_form_name] = std::vector<FieldLabel>{argument_name_and_index};
-  }
-}
-
 void FieldStore::addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
 {
   // Store the field name instead of index to avoid confusion between states_ and params_ indices
@@ -55,71 +45,43 @@ void FieldStore::addWeakFormArg(std::string weak_form_name, std::string argument
 
 void FieldStore::printMap()
 {
-  for (auto& keyval : weak_form_name_to_unknown_name_index_) {
+  for (const auto& keyval : weak_form_name_to_field_names_) {
     std::cout << "for residual: " << keyval.first << " ";
-    for (auto& name_index : keyval.second) {
-      std::cout << "arg " << name_index.field_name << " at " << name_index.field_index_in_residual << ", ";
+    for (size_t argument_index = 0; argument_index < keyval.second.size(); ++argument_index) {
+      std::cout << "arg " << keyval.second[argument_index] << " at " << argument_index << ", ";
     }
     std::cout << std::endl;
   }
 }
 
-std::vector<std::vector<size_t>> FieldStore::indexMap(const std::vector<std::string>& residual_names) const
+BlockArgumentMap FieldStore::indexMap(const std::vector<std::string>& residual_names) const
 {
-  // Build a local column space: each residual in the subsystem contributes one local column,
-  // corresponding to its "self" diagonal unknown.  The self-unknown is preferably the residual's
-  // reaction (test) field if that field appears in the unknown-arg list for this weak form;
-  // otherwise fall back on the first unknown argument (handles cases like the cycle-zero
-  // acceleration solve, where the reaction field is a dependent/history field).
   std::map<size_t, size_t> global_state_to_local_col;
   for (size_t res_i = 0; res_i < residual_names.size(); ++res_i) {
     const std::string& res_name = residual_names[res_i];
-    size_t global_state_idx = invalid_block_index;
-
-    std::string reaction_name;
-    for (const auto& kv : weak_form_to_test_field_) {
-      if (kv.first == res_name) {
-        reaction_name = kv.second;
-        break;
-      }
-    }
-
-    // Check if the reaction field is one of the registered unknown args for this weak form.
-    bool reaction_is_unknown = false;
-    if (!reaction_name.empty() && weak_form_name_to_unknown_name_index_.count(res_name)) {
-      for (const auto& label : weak_form_name_to_unknown_name_index_.at(res_name)) {
-        if (label.field_name == reaction_name) {
-          reaction_is_unknown = true;
-          break;
-        }
-      }
-    }
-
-    if (reaction_is_unknown) {
-      global_state_idx = to_states_index_.at(reaction_name);
-    } else {
-      const auto& arg_info = weak_form_name_to_unknown_name_index_.at(res_name);
-      SLIC_ERROR_IF(arg_info.empty(),
-                    "Weak form '" << res_name << "' has no unknown arguments; cannot build index map.");
-      global_state_idx = to_states_index_.at(arg_info.front().field_name);
-    }
-    global_state_to_local_col[global_state_idx] = res_i;
+    size_t global_state_idx = to_states_index_.at(getWeakFormFieldNames(res_name).unknown);
+    auto [owner, inserted] = global_state_to_local_col.emplace(global_state_idx, res_i);
+    SLIC_ERROR_IF(!inserted, axom::fmt::format("Weak forms '{}' and '{}' both own state index {}",
+                                               residual_names[owner->second], res_name, global_state_idx));
   }
 
-  std::vector<std::vector<size_t>> block_indices(residual_names.size());
+  BlockArgumentMap block_indices(residual_names.size(),
+                                 std::vector<BlockArgumentIndices>(residual_names.size(), BlockArgumentIndices{}));
   for (size_t res_i = 0; res_i < residual_names.size(); ++res_i) {
-    std::vector<size_t>& res_indices = block_indices[res_i];
-    res_indices = std::vector<size_t>(residual_names.size(), invalid_block_index);
     const std::string& res_name = residual_names[res_i];
-    const auto& arg_info = weak_form_name_to_unknown_name_index_.at(res_name);
-
-    for (const auto& field_name_and_arg_index : arg_info) {
-      size_t global_state_index = to_states_index_.at(field_name_and_arg_index.field_name);
-      auto it = global_state_to_local_col.find(global_state_index);
-      if (it != global_state_to_local_col.end()) {
-        res_indices[it->second] = field_name_and_arg_index.field_index_in_residual;
+    const auto& field_names = weak_form_name_to_field_names_.at(res_name);
+    size_t state_slot = 0;
+    for (const auto& field_name : field_names) {
+      if (!to_states_index_.count(field_name)) {
+        continue;
       }
-      // else: field belongs to a different subsystem; treat as fixed input here.
+
+      size_t global_state_index = to_states_index_.at(field_name);
+      auto column = global_state_to_local_col.find(global_state_index);
+      if (column != global_state_to_local_col.end()) {
+        block_indices[res_i][column->second].push_back(state_slot);
+      }
+      ++state_slot;
     }
   }
 
@@ -132,7 +94,7 @@ std::vector<const BoundaryConditionManager*> FieldStore::getBoundaryConditionMan
   std::vector<std::string> field_names;
   field_names.reserve(weak_form_names.size());
   for (const auto& wf_name : weak_form_names) {
-    field_names.push_back(getWeakFormReaction(wf_name));
+    field_names.push_back(getWeakFormFieldNames(wf_name).unknown);
   }
   return getBoundaryConditionManagersForFields(field_names);
 }
@@ -359,26 +321,27 @@ void FieldStore::markWeakFormInternal(const std::string& weak_form_name)
   internal_weak_forms_.insert(weak_form_name);
 }
 
-void FieldStore::addWeakFormReaction(std::string weak_form_name, std::string field_name)
+void FieldStore::addWeakFormFieldNames(std::string weak_form_name, UnknownAndTestFieldNames field_names)
 {
-  for (auto& kv : weak_form_to_test_field_) {
+  for (auto& kv : weak_form_field_names_) {
     if (kv.first == weak_form_name) {
-      kv.second = field_name;
+      kv.second = std::move(field_names);
       return;
     }
   }
-  weak_form_to_test_field_.push_back({weak_form_name, field_name});
+  weak_form_field_names_.push_back({std::move(weak_form_name), std::move(field_names)});
 }
 
-std::string FieldStore::getWeakFormReaction(const std::string& weak_form_name) const
+const UnknownAndTestFieldNames& FieldStore::getWeakFormFieldNames(const std::string& weak_form_name) const
 {
-  for (const auto& kv : weak_form_to_test_field_) {
+  for (const auto& kv : weak_form_field_names_) {
     if (kv.first == weak_form_name) {
       return kv.second;
     }
   }
-  SLIC_ERROR("Reaction field not found for weak form " << weak_form_name);
-  return "";
+  SLIC_ERROR("Field names not found for weak form " << weak_form_name);
+  static const UnknownAndTestFieldNames empty;
+  return empty;
 }
 
 const std::vector<FieldState>& FieldStore::getParameterFields() const { return params_; }
@@ -405,12 +368,12 @@ std::vector<FieldState> FieldStore::getOutputFieldStates() const
 std::vector<ReactionInfo> FieldStore::getReactionInfos() const
 {
   std::vector<ReactionInfo> infos;
-  for (const auto& kv : weak_form_to_test_field_) {
+  for (const auto& kv : weak_form_field_names_) {
     const std::string& weak_form_name = kv.first;
     if (internal_weak_forms_.count(weak_form_name)) {
       continue;
     }
-    const std::string& field_name = kv.second;
+    const std::string& field_name = kv.second.test;
     infos.push_back({weak_form_name, &getField(field_name).get()->space()});
   }
   return infos;
