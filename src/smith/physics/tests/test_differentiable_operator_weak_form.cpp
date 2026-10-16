@@ -34,6 +34,7 @@ namespace {
 struct DifferentiableOperatorWeakFormFixture : public testing::Test {
   static constexpr int DIM = 2;
   static constexpr int ORDER = 1;
+  static constexpr double DENSITY_VALUE = 1.2;
 
   using VectorSpace = smith::H1<ORDER, DIM>;
   using DensitySpace = smith::L2<0>;
@@ -55,7 +56,7 @@ struct DifferentiableOperatorWeakFormFixture : public testing::Test {
 
     states[0].setFromFieldFunction([](smith::tensor<double, DIM> x) { return 0.1 * x; });
     states[1].setFromFieldFunction([](smith::tensor<double, DIM> x) { return -0.02 * x; });
-    parameters[0] = 1.2;
+    parameters[0] = DENSITY_VALUE;
 
     state_tangents = states;
     parameter_tangents = parameters;
@@ -271,12 +272,29 @@ TEST_F(DifferentiableOperatorWeakFormFixture, SupportsL2InputsAndOutputs)
 
   const std::vector<smith::ConstFieldPtr> fields{&parameters[0]};
   const mfem::Vector residual = scalar_weak_form.residual(time_info, shape.get(), fields);
-  EXPECT_GT(residual.Norml2(), 0.0);
+  // sum of nodal values = -DENSITY_VALUE*area, area = 1
+  EXPECT_NEAR(residual.Sum(), -DENSITY_VALUE, 1e-10);
+}
+
+TEST_F(DifferentiableOperatorWeakFormFixture, SupportsDerivativesOfL2Inputs)
+{
+  using ScalarWeakForm =
+      smith::DifferentiableOperatorWeakForm<DIM, DensitySpace, smith::Parameters<DensitySpace>>;
+  typename ScalarWeakForm::SpacesT spaces{&parameters[0].space()};
+  ScalarWeakForm scalar_weak_form("l2", mesh, parameters[0].space(), spaces);
+  scalar_weak_form.addBodySource(
+      mesh->entireBodyName(),
+      [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto, auto density) { return density; });
+
+  const std::vector<smith::ConstFieldPtr> fields{&parameters[0]};
+  const mfem::Vector residual = scalar_weak_form.residual(time_info, shape.get(), fields);
+
   {
     axom::slic::ScopedAbortToThrow abort_to_throw;
     EXPECT_THROW(scalar_weak_form.jacobian(time_info, shape.get(), fields, {1.0}),
                  axom::slic::SlicAbortException);
   }
+  // auto J = scalar_weak_form.jacobian(time_info, shape.get(), fields, {1.0});
 
   smith::FiniteElementDual jvp_result(parameters[0].space(), "l2_jvp");
   const std::vector<smith::ConstFieldPtr> tangents{&parameter_tangents[0]};
