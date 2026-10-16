@@ -246,7 +246,8 @@ TEST_F(DifferentiableOperatorWeakFormFixture, HonorsExplicitIntegrationOrder)
   const auto fields = inputFields();
   typename WeakFormType::SpacesT spaces{&states[0].space(), &states[1].space(), &parameters[0].space()};
   WeakFormType default_order("default_order", mesh, states[0].space(), spaces);
-  WeakFormType low_order("low_order", mesh, states[0].space(), spaces, 0);
+  const int integration_order_low = 0;
+  WeakFormType low_order("low_order", mesh, states[0].space(), spaces, integration_order_low);
   const auto source = [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto x) {
     return x[0] * x[0] * x;
   };
