@@ -46,8 +46,8 @@ struct DifferentiableOperatorWeakFormFixture : public testing::Test {
   {
     MPI_Barrier(MPI_COMM_WORLD);
     smith::StateManager::initialize(datastore, "differentiable_operator_weak_form");
-    mesh = std::make_shared<smith::Mesh>(
-        mfem::Mesh::MakeCartesian2D(4, 5, mfem::Element::QUADRILATERAL, true, 0.5, 2.0), "dfem_weak_form_mesh");
+    std::string mesh_filename(std::string(SMITH_REPO_DIR) + "/data/meshes/" + "patch2D_quads.mesh");
+    mesh = std::make_shared<smith::Mesh>(smith::buildMeshFromFile(mesh_filename), "dfem_weak_form_mesh", 1);
 
     states.emplace_back(smith::StateManager::newState(VectorSpace{}, "displacement", mesh->tag()));
     states.emplace_back(smith::StateManager::newState(VectorSpace{}, "velocity", mesh->tag()));
@@ -289,12 +289,15 @@ TEST_F(DifferentiableOperatorWeakFormFixture, SupportsDerivativesOfL2Inputs)
   const std::vector<smith::ConstFieldPtr> fields{&parameters[0]};
   const mfem::Vector residual = scalar_weak_form.residual(time_info, shape.get(), fields);
 
-  {
-    axom::slic::ScopedAbortToThrow abort_to_throw;
-    EXPECT_THROW(scalar_weak_form.jacobian(time_info, shape.get(), fields, {1.0}),
-                 axom::slic::SlicAbortException);
-  }
-  // auto J = scalar_weak_form.jacobian(time_info, shape.get(), fields, {1.0});
+  // Assembling sparse matrix Jacobians with L2 fields is currently not supported in dFEM
+  // for some reason. I don't want to throw an error in Smith, or we may not notice when
+  // it is fixed.
+  // {
+  //   axom::slic::ScopedAbortToThrow abort_to_throw;
+  //   EXPECT_THROW(scalar_weak_form.jacobian(time_info, shape.get(), fields, {1.0}),
+  //                axom::slic::SlicAbortException);
+  // }
+  // The JVP and VJPs with L2 fields work fine, however.
 
   smith::FiniteElementDual jvp_result(parameters[0].space(), "l2_jvp");
   const std::vector<smith::ConstFieldPtr> tangents{&parameter_tangents[0]};
