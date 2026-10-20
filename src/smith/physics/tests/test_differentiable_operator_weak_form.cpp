@@ -79,16 +79,16 @@ struct DifferentiableOperatorWeakFormFixture : public testing::Test {
           using Coordinate = std::decay_t<decltype(mfem::future::get<smith::VALUE>(position))>;
           using Value = std::decay_t<decltype(mfem::future::get<smith::VALUE>(displacement))>;
           using Gradient = std::decay_t<decltype(mfem::future::get<smith::DERIVATIVE>(displacement))>;
-          static_assert(std::is_same_v<Coordinate, mfem::future::tensor<mfem::real_t, DIM>>);
-          static_assert(std::is_same_v<Value, mfem::future::tensor<mfem::real_t, DIM>>);
-          static_assert(std::is_same_v<Gradient, mfem::future::tensor<mfem::real_t, DIM, DIM>>);
+          static_assert(std::is_same_v<Coordinate, mfem::future::tensor<double, DIM>>);
+          static_assert(std::is_same_v<Value, mfem::future::tensor<double, DIM>>);
+          static_assert(std::is_same_v<Gradient, mfem::future::tensor<double, DIM, DIM>>);
           return mfem::future::tuple{-mfem::future::get<smith::VALUE>(displacement),
                                      mfem::future::get<smith::DERIVATIVE>(displacement)};
         });
     concrete_weak_form->addBodySource(
         smith::DependsOn<>{}, mesh->entireBodyName(),
         [] SMITH_HOST_DEVICE(const smith::TimeInfo&,
-                             const mfem::future::tensor<mfem::real_t, DIM>& x) { return 0.5 * x; });
+                             const mfem::future::tensor<double, DIM>& x) { return 0.5 * x; });
     weak_form = concrete_weak_form;
   }
 
@@ -267,8 +267,10 @@ TEST_F(DifferentiableOperatorWeakFormFixture, SupportsL2InputsAndOutputs)
   typename ScalarWeakForm::SpacesT spaces{&parameters[0].space()};
   ScalarWeakForm scalar_weak_form("l2", mesh, parameters[0].space(), spaces);
   scalar_weak_form.addBodySource(
-      mesh->entireBodyName(),
-      [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto, auto density) { return density; });
+      mesh->entireBodyName(), [] SMITH_HOST_DEVICE(const smith::TimeInfo&,
+                                                   const mfem::future::tensor<double, DIM>&, double density) {
+        return density;
+      });
 
   const std::vector<smith::ConstFieldPtr> fields{&parameters[0]};
   const mfem::Vector residual = scalar_weak_form.residual(time_info, shape.get(), fields);
@@ -282,9 +284,17 @@ TEST_F(DifferentiableOperatorWeakFormFixture, SupportsDerivativesOfL2Inputs)
       smith::DifferentiableOperatorWeakForm<DIM, DensitySpace, smith::Parameters<DensitySpace>>;
   typename ScalarWeakForm::SpacesT spaces{&parameters[0].space()};
   ScalarWeakForm scalar_weak_form("l2", mesh, parameters[0].space(), spaces);
-  scalar_weak_form.addBodySource(
+  scalar_weak_form.addBodyIntegral(
       mesh->entireBodyName(),
-      [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto, auto density) { return density; });
+      [] SMITH_HOST_DEVICE(const smith::TimeInfo&, auto position, auto density) {
+        using Coordinate = std::decay_t<decltype(mfem::future::get<smith::VALUE>(position))>;
+        using Value = std::decay_t<decltype(mfem::future::get<smith::VALUE>(density))>;
+        using Gradient = std::decay_t<decltype(mfem::future::get<smith::DERIVATIVE>(density))>;
+        static_assert(std::is_same_v<Coordinate, mfem::future::tensor<double, DIM>>);
+        static_assert(std::is_same_v<Value, double>);
+        static_assert(std::is_same_v<Gradient, mfem::future::tensor<double, DIM>>);
+        return mfem::future::tuple{-mfem::future::get<smith::VALUE>(density), mfem::future::zero{}};
+      });
 
   const std::vector<smith::ConstFieldPtr> fields{&parameters[0]};
   const mfem::Vector residual = scalar_weak_form.residual(time_info, shape.get(), fields);
@@ -333,7 +343,7 @@ struct NeoHookeanDfem {
   SMITH_HOST_DEVICE
   auto operator()(const smith::TimeInfo&, Position /* position */, Displacement displacement) const
   {
-    auto du_dX = smith::get<smith::DERIVATIVE>(displacement);
+    auto du_dX = mfem::future::get<smith::DERIVATIVE>(displacement);
     auto BmI = du_dX + mfem::future::transpose(du_dX) + mfem::future::dot(du_dX, mfem::future::transpose(du_dX));
     auto trH = mfem::future::tr(du_dX);
     auto Jm1 = trH + 0.5*(trH*trH - mfem::future::inner(du_dX, mfem::future::transpose(du_dX))) + mfem::future::det(du_dX);
@@ -418,7 +428,7 @@ TEST_F(DfemVectorPatchTestFixture, VectorPatchTest)
   // Test 2: Check that the forces on the boundary match the tractions due to the uniform stress field.
   double X = 0;
   auto disp_grad = mfem::future::make_tensor<2, 2>([](int i, int j) { return H[i][j]; });
-  auto displacement = tuple{mfem::future::tensor<double, 2>{0.0, 1.0}, disp_grad};
+  auto displacement = mfem::future::tuple{mfem::future::tensor<double, 2>{0.0, 1.0}, disp_grad};
   auto [b, P] = constitutive(time_info, X, displacement);
   // These magic numbers are the consistent nodal forces on mid-edge nodes
   // corresponding to the constant stress field.

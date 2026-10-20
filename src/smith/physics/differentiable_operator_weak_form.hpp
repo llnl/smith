@@ -33,8 +33,6 @@
 
 #include "smith/infrastructure/logger.hpp"
 #include "smith/numerics/functional/finite_element.hpp"
-#include "smith/numerics/functional/tensor.hpp"
-#include "smith/numerics/functional/tuple.hpp"
 #include "smith/physics/field_types.hpp"
 #include "smith/physics/mesh.hpp"
 #include "smith/physics/state/finite_element_dual.hpp"
@@ -45,49 +43,14 @@ namespace smith {
 
 namespace detail {
 
-template <typename... T>
-struct TypeList {};
-
-template <typename... Lists>
-struct ConcatenateTypeLists;
-
-template <>
-struct ConcatenateTypeLists<> {
-  using type = TypeList<>;
-};
-
-template <typename... T>
-struct ConcatenateTypeLists<TypeList<T...>> {
-  using type = TypeList<T...>;
-};
-
-template <typename... T, typename... U, typename... Rest>
-struct ConcatenateTypeLists<TypeList<T...>, TypeList<U...>, Rest...> {
-  using type = typename ConcatenateTypeLists<TypeList<T..., U...>, Rest...>::type;
-};
-
 template <typename Space>
-struct DfemFieldValueArgumentType {
-  using Value = std::conditional_t<Space::components == 1, double,
-                                   mfem::future::tensor<double, Space::components>>;
-  using type = TypeList<Value>;
-};
+using DfemFieldValueArgument =
+    std::conditional_t<Space::components == 1, double, mfem::future::tensor<double, Space::components>>;
 
-template <typename Space, int spatial_dim>
-struct DfemFieldGradientArgumentType {
-  using Gradient =
-      std::conditional_t<Space::components == 1, mfem::future::tensor<double, spatial_dim>,
-                         mfem::future::tensor<double, Space::components, spatial_dim>>;
-  using type = TypeList<Gradient>;
-};
-
-template <typename... Spaces>
-using DfemFieldValueArgumentList =
-    typename ConcatenateTypeLists<typename DfemFieldValueArgumentType<Spaces>::type...>::type;
-
-template <int spatial_dim, typename... Spaces>
-using DfemFieldGradientArgumentList =
-    typename ConcatenateTypeLists<typename DfemFieldGradientArgumentType<Spaces, spatial_dim>::type...>::type;
+template <int spatial_dim, typename Space>
+using DfemFieldGradientArgument =
+    std::conditional_t<Space::components == 1, mfem::future::tensor<double, spatial_dim>,
+                       mfem::future::tensor<double, Space::components, spatial_dim>>;
 
 template <typename LoadFunction>
 struct BodySourceIntegrand {
@@ -96,8 +59,9 @@ struct BodySourceIntegrand {
   template <typename Position, typename... Inputs>
   MFEM_HOST_DEVICE auto operator()(const TimeInfo& time_info, const Position& position, const Inputs&... inputs) const
   {
-    return tuple{-load_function(time_info, get<VALUE>(position), get<VALUE>(inputs)...),
-                                smith::zero{}};
+    return mfem::future::tuple{-load_function(time_info, mfem::future::get<VALUE>(position),
+                                               mfem::future::get<VALUE>(inputs)...),
+                               mfem::future::zero{}};
   }
 };
 
@@ -108,7 +72,7 @@ struct DfemBodyQFunction;
 template <int spatial_dim, typename OutputSpace, typename Integrand, int... active_parameters,
           typename... FieldArguments, typename... InputSpaces>
 struct DfemBodyQFunction<spatial_dim, OutputSpace, Integrand, std::integer_sequence<int, active_parameters...>,
-                         TypeList<FieldArguments...>, InputSpaces...> {
+                         std::tuple<FieldArguments...>, InputSpaces...> {
   using Coordinate = mfem::future::tensor<double, spatial_dim>;
   using CoordinateGradient = mfem::future::tensor<double, spatial_dim, spatial_dim>;
   using OutputValue = std::conditional_t<OutputSpace::components == 1, double,
@@ -127,26 +91,26 @@ struct DfemBodyQFunction<spatial_dim, OutputSpace, Integrand, std::integer_seque
   {
     const auto inverse_jacobian = mfem::future::inv(deformed_jacobian);
     const auto jacobian_weight = mfem::future::det(deformed_jacobian) * weight;
-    const tuple<const FieldArguments&...> arguments{field_arguments...};
+    const mfem::future::tuple<const FieldArguments&...> arguments{field_arguments...};
     const TimeInfo time_info(time_data[0], time_data[1], static_cast<size_t>(time_data[2]),
                              time_data[3] == 0.0 ? TimeInfo::EvaluationMode::Regular
                                                  : TimeInfo::EvaluationMode::CycleZero);
-    const auto position = tuple{deformed_coordinates, deformed_jacobian};
+    const auto position = mfem::future::tuple{deformed_coordinates, deformed_jacobian};
     const auto result = evaluateIntegrand(time_info, position, arguments, inverse_jacobian,
                                           std::integer_sequence<int, active_parameters...>{},
                                           std::make_index_sequence<sizeof...(active_parameters)>{});
 
-    using Source = std::decay_t<decltype(get<VALUE>(result))>;
-    using Flux = std::decay_t<decltype(get<DERIVATIVE>(result))>;
-    if constexpr (smith::is_zero<Source>::value) {
+    using Source = std::decay_t<decltype(mfem::future::get<VALUE>(result))>;
+    using Flux = std::decay_t<decltype(mfem::future::get<DERIVATIVE>(result))>;
+    if constexpr (mfem::future::is_zero<Source>::value) {
       output_value = OutputValue{};
     } else {
-      output_value = get<VALUE>(result) * jacobian_weight;
+      output_value = mfem::future::get<VALUE>(result) * jacobian_weight;
     }
-    if constexpr (smith::is_zero<Flux>::value) {
+    if constexpr (mfem::future::is_zero<Flux>::value) {
       output_gradient = OutputGradient{};
     } else {
-      output_gradient = mfem::future::dot(get<DERIVATIVE>(result),
+      output_gradient = mfem::future::dot(mfem::future::get<DERIVATIVE>(result),
                                           mfem::future::transpose(inverse_jacobian)) *
                         jacobian_weight;
     }
@@ -165,9 +129,9 @@ struct DfemBodyQFunction<spatial_dim, OutputSpace, Integrand, std::integer_seque
   template <int field, size_t active_index, typename Arguments>
   MFEM_HOST_DEVICE static auto fieldArgument(const Arguments& arguments, const CoordinateGradient& inverse_jacobian)
   {
-    const auto& value = get<field>(arguments);
-    const auto& gradient = get<sizeof...(InputSpaces) + active_index>(arguments);
-    return tuple{value, mfem::future::dot(gradient, inverse_jacobian)};
+    const auto& value = mfem::future::get<field>(arguments);
+    const auto& gradient = mfem::future::get<sizeof...(InputSpaces) + active_index>(arguments);
+    return mfem::future::tuple{value, mfem::future::dot(gradient, inverse_jacobian)};
   }
 };
 
@@ -180,9 +144,10 @@ class DifferentiableOperatorWeakForm;
 /**
  * @brief A WeakForm implemented with mfem::future::DifferentiableOperator.
  *
- * The public body-integral interface matches FunctionalWeakForm. Integrands receive mfem::future::tensor values and
- * gradients in physical coordinates, while the adapter handles dFEM field operators and geometry transformations
- * internally.
+ * Body integrands use MFEM-native quadrature-function types. The position argument is an `mfem::future::tuple` of
+ * coordinates and the deformed Jacobian. Each selected input is an `mfem::future::tuple` of its value and physical
+ * gradient. Scalar values are `double`; all other values and gradients are `mfem::future::tensor` objects. Integrands
+ * return an `mfem::future::tuple` containing the source and flux and may use `mfem::future::zero` for either term.
  */
 template <int spatial_dim, typename OutputSpace, typename... InputSpaces, int... input_indices>
 class DifferentiableOperatorWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
@@ -409,15 +374,14 @@ class DifferentiableOperatorWeakForm<spatial_dim, OutputSpace, Parameters<InputS
     const auto& integration_rule = mfem::IntRules.Get(geometry, integration_order_);
     using QFunction = detail::DfemBodyQFunction<
         spatial_dim, OutputSpace, BodyIntegralType, std::integer_sequence<int, active_parameters...>,
-        typename detail::ConcatenateTypeLists<
-            detail::DfemFieldValueArgumentList<InputSpaces...>,
-            detail::DfemFieldGradientArgumentList<
-                spatial_dim, std::tuple_element_t<active_parameters, std::tuple<InputSpaces...>>...>>::type,
+        std::tuple<detail::DfemFieldValueArgument<InputSpaces>...,
+                   detail::DfemFieldGradientArgument<
+                       spatial_dim, std::tuple_element_t<active_parameters, std::tuple<InputSpaces...>>>...>,
         InputSpaces...>;
     QFunction q_function{std::move(integrand), time_data_.Read(true)};
     auto input_operators = makeInputOperators(std::integer_sequence<int, active_parameters...>{});
-    auto output_operators = tuple{mfem::future::Value<OUTPUT_FIELD_ID>{},
-                                  mfem::future::Gradient<OUTPUT_FIELD_ID>{}};
+    auto output_operators = mfem::future::tuple{mfem::future::Value<OUTPUT_FIELD_ID>{},
+                                                mfem::future::Gradient<OUTPUT_FIELD_ID>{}};
     auto derivatives =
         std::integer_sequence<size_t, SHAPE_FIELD_ID, INPUT_FIELD_OFFSET + active_parameters...>{};
     weak_form_.AddDomainIntegrator<mfem::future::LocalQFBackend, DERIVATIVE_KERNELS>(
@@ -438,12 +402,10 @@ class DifferentiableOperatorWeakForm<spatial_dim, OutputSpace, Parameters<InputS
   template <int... active, size_t... field>
   static auto makeInputOperatorsImpl(std::integer_sequence<int, active...>, std::index_sequence<field...>)
   {
-    auto fixed = tuple{
-        mfem::future::Value<SHAPE_FIELD_ID>{}, mfem::future::Gradient<SHAPE_FIELD_ID>{},
-        mfem::future::Weight{}};
-    auto values = tuple{mfem::future::Value<INPUT_FIELD_OFFSET + field>{}...};
-    auto active_gradients = tuple{mfem::future::Gradient<INPUT_FIELD_OFFSET + active>{}...};
-    return tuple_cat(fixed, values, active_gradients);
+    return mfem::future::tuple{mfem::future::Value<SHAPE_FIELD_ID>{},
+                               mfem::future::Gradient<SHAPE_FIELD_ID>{}, mfem::future::Weight{},
+                               mfem::future::Value<INPUT_FIELD_OFFSET + field>{}...,
+                               mfem::future::Gradient<INPUT_FIELD_OFFSET + active>{}...};
   }
 
   struct DomainInfo {
