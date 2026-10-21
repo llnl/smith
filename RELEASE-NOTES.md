@@ -40,10 +40,13 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 - Reworked the trust-region solver to use an MFEM/LAPACK subspace solve with cached reduced problems and simplified Steihaug-Toint CG internals.
 - [Changed `TimeDiscretizedWeakForm` class name to `FunctionalWeakForm`](https://github.com/llnl/smith/pull/1609/).
+- Required third-party libraries (Camp, Axom, MFEM, and Adiak/Caliper when profiling) are now found via the generic
+  `find_package` search paths (e.g. `CMAKE_PREFIX_PATH`) when their `<TPL>_DIR` variable is not given.
 
 ### Fixed
 
 - FunctionalWeakForm::jvp() to include shape-displacement contributions, which were previously ignored.
+- Given `<TPL>_DIR` variables now take precedence over packages installed in system paths.
 
 ## [Version 0.1.0] - Release date 2026-04-28
 
