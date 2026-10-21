@@ -178,8 +178,8 @@ TEST(FieldStore, WeakFormParametersExcludeUnrelatedSharedParametersAndPreserveOr
   axom::sidre::DataStore datastore;
   StateManager::initialize(datastore, "weak_form_parameter_filtering");
 
-  auto mesh = std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL),
-                                     "parameter_filter_mesh");
+  auto mesh =
+    std::make_shared<Mesh>(mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::QUADRILATERAL), "parameter_filter_mesh");
   auto field_store = std::make_shared<FieldStore>(mesh, 10);
 
   FieldType<H1<1, 2>> shape_displacement("shape_displacement");
@@ -193,8 +193,7 @@ TEST(FieldStore, WeakFormParametersExcludeUnrelatedSharedParametersAndPreserveOr
   field_store->addParameter(second_parameter);
   field_store->addParameter(unrelated_parameter);
 
-  field_store->createSpaces("parameter_filtered_weak_form", unknown.name,
-                            unknown, second_parameter, first_parameter);
+  field_store->createSpaces("parameter_filtered_weak_form", unknown.name, unknown, second_parameter, first_parameter);
   auto parameters = field_store->getParameters("parameter_filtered_weak_form");
 
   ASSERT_EQ(parameters.size(), 2u);
