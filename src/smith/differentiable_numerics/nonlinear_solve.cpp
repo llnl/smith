@@ -53,16 +53,16 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     for (size_t col = 0; col < num_rows_; ++col) {
       for (size_t idx : block_indices[row][col]) {
         SLIC_ERROR_IF(idx >= states[row].size(),
-                      axom::fmt::format("block_indices[{}][{}] contains {} outside states[{}] size {}", row, col, idx,
-                                        row, states[row].size()));
+                      std::format("block_indices[{}][{}] contains {} outside states[{}] size {}", row, col, idx, row,
+                                  states[row].size()));
         SLIC_ERROR_IF(
             slot_owners[idx] != invalid_block_index,
-            axom::fmt::format("State slot {} in row {} belongs to columns {} and {}", idx, row, slot_owners[idx], col));
+            std::format("State slot {} in row {} belongs to columns {} and {}", idx, row, slot_owners[idx], col));
         slot_owners[idx] = col;
       }
     }
     SLIC_ERROR_IF(block_indices[row][row].empty(),
-                  axom::fmt::format("block_indices[{}][{}] diagonal entry must not be empty", row, row));
+                  std::format("block_indices[{}][{}] diagonal entry must not be empty", row, row));
   }
 
   std::vector<size_t> num_state_inputs;

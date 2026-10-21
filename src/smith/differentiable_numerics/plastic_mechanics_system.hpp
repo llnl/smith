@@ -58,11 +58,11 @@ struct PlasticMechanicsSystem : public SystemBase {
                                     L2<disp_order, dim * dim>, H1<disp_order, dim>, parameter_space...>>;
 
   // Primary weak forms
-  std::shared_ptr<SolidWeakFormType> solid_weak_form;  ///< Solid mechanics weak form.
+  std::shared_ptr<SolidWeakFormType> solid_weak_form;
 
   // Internal variable weak forms to update in staggered solve
   std::shared_ptr<PlasticDeformWeakFormType> plastic_deform_weak_form;  ///< Plastic deformation weak form.
-  std::shared_ptr<PlasticStrainWeakFormType> plastic_strain_weak_form;  ///< Plastic deformation weak form.
+  std::shared_ptr<PlasticStrainWeakFormType> plastic_strain_weak_form;  ///< Plastic strain weak form.
 
   // Primary variable bcs
   std::shared_ptr<DirichletBoundaryConditions> disp_bc;  ///< Displacement boundary conditions.

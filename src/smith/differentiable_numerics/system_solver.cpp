@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <numeric>
 #include <axom/slic.hpp>
-#include <axom/fmt.hpp>
 
 namespace smith {
 
@@ -35,7 +34,7 @@ void SystemSolver::addSubsystemSolver(const std::vector<size_t>& block_indices,
 {
   SLIC_ERROR_IF(!solver, "SystemSolver stage solver must be non-null");
   SLIC_ERROR_IF(relaxation_factor <= 0.0 || relaxation_factor > 1.0,
-                axom::fmt::format("Stage relaxation_factor {} must be in (0, 1]", relaxation_factor));
+                std::format("Stage relaxation_factor {} must be in (0, 1]", relaxation_factor));
 
   stages_.push_back(Stage{block_indices, std::move(solver), relaxation_factor});
 }
@@ -53,8 +52,8 @@ void SystemSolver::appendStagesWithBlockMapping(const SystemSolver& subsystem_so
       remapped_block_indices.reserve(stage.block_indices.size());
       for (size_t local_block_index : stage.block_indices) {
         SLIC_ERROR_IF(local_block_index >= global_block_indices.size(),
-                      axom::fmt::format("Local block index {} exceeds subsystem size {}", local_block_index,
-                                        global_block_indices.size()));
+                      std::format("Local block index {} exceeds subsystem size {}", local_block_index,
+                                  global_block_indices.size()));
         remapped_block_indices.push_back(global_block_indices[local_block_index]);
       }
     }
@@ -76,16 +75,16 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
   SLIC_ERROR_IF(block_indices.size() != num_residuals, "Block index rows must match residual count");
   for (size_t row = 0; row < num_residuals; ++row) {
     SLIC_ERROR_IF(block_indices[row].size() != num_residuals,
-                  axom::fmt::format("Block index columns for row {} must match residual count", row));
+                  std::format("Block index columns for row {} must match residual count", row));
     for (size_t col = 0; col < num_residuals; ++col) {
       for (size_t slot : block_indices[row][col]) {
         SLIC_ERROR_IF(slot >= states[row].size(),
-                      axom::fmt::format("Block slot {} for row {}, column {} exceeds state count {}", slot, row, col,
-                                        states[row].size()));
+                      std::format("Block slot {} for row {}, column {} exceeds state count {}", slot, row, col,
+                                  states[row].size()));
       }
     }
     SLIC_ERROR_IF(block_indices[row][row].empty(),
-                  axom::fmt::format("Block index diagonal for row {} must not be empty", row));
+                  std::format("Block index diagonal for row {} must not be empty", row));
   }
   std::vector<Stage> active_stages = stages_;
   for (auto& stage : active_stages) {
@@ -95,7 +94,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
     }
     for (size_t block_index : stage.block_indices) {
       SLIC_ERROR_IF(block_index >= num_residuals,
-                    axom::fmt::format("Stage block index {} exceeds residual count {}", block_index, num_residuals));
+                    std::format("Stage block index {} exceeds residual count {}", block_index, num_residuals));
     }
   }
   // Set the inner tolerance factor based on the number of stages.  For single-stage
@@ -226,7 +225,7 @@ std::vector<FieldState> SystemSolver::solve(const std::vector<WeakForm*>& residu
         }
       }
       if (all_converged) {
-        SLIC_INFO_ROOT(axom::fmt::format("Staggered iteration converged after {} iteration(s)", iter + 1));
+        SLIC_INFO_ROOT(std::format("Staggered iteration converged after {} iteration(s)", iter + 1));
         break;
       }
     }

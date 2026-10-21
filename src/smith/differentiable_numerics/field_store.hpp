@@ -109,9 +109,9 @@ struct FieldStore {
       // Verify the space matches by checking vdim (== Space::components).
       auto& existing = params_[to_params_index_.at(type.name)];
       SLIC_ERROR_ROOT_IF(existing.get()->space().GetVDim() != Space::components,
-                         axom::fmt::format("Parameter '{}' re-registered with a different space "
-                                           "(existing vdim={}, new vdim={})",
-                                           type.name, existing.get()->space().GetVDim(), Space::components));
+                         std::format("Parameter '{}' re-registered with a different space "
+                                     "(existing vdim={}, new vdim={})",
+                                     type.name, existing.get()->space().GetVDim(), Space::components));
       return;
     }
     to_params_index_[type.name] = params_.size();
