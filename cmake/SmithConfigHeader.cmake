@@ -13,6 +13,9 @@ foreach(dep ${SMITH_TPL_DEPS})
     endif()
 endforeach()
 
+# OpenMP is controlled by a Smith option rather than a TPL found variable.
+set(SMITH_USE_OPENMP ${SMITH_ENABLE_OPENMP})
+
 
 #--------------------------------------------------------------------------
 # Add define we can use when debug builds are enabled
