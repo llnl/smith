@@ -58,13 +58,10 @@ class FiniteElementDual : public FiniteElementVector {
   /**
    * @brief Move assignment
    *
-   * @note Move assignment is deleted because replacing a registered dual's identity and FE space does not interact
-   * well with StateManager.
-   *
    * @param rhs The right hand side input Dual
    * @return The assigned FiniteElementDual
    */
-  FiniteElementDual& operator=(FiniteElementDual&& rhs) = delete;
+  FiniteElementDual& operator=(FiniteElementDual&& rhs) = default;
 
   /**
    * @brief Copy assignment
