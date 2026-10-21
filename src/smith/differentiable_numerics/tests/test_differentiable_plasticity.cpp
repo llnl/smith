@@ -4,11 +4,25 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
-#include <memory>
 #include "gtest/gtest.h"
 
-#include "smith/smith_config.hpp"
-#include "smith/smith.hpp"
+#include "gretl/data_store.hpp"
+
+#include "smith/mesh_utils/mesh_utils.hpp"
+#include "smith/infrastructure/application_manager.hpp"
+#include "smith/numerics/solver_config.hpp"
+
+#include "smith/physics/state/state_manager.hpp"
+#include "smith/physics/functional_objective.hpp"
+#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
+#include "smith/physics/materials/solid_material.hpp"
+
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/system_solver.hpp"
+#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
+#include "smith/differentiable_numerics/differentiable_test_utils.hpp"
+#include "smith/differentiable_numerics/plastic_mechanics_system.hpp"
 
 namespace smith {
 
