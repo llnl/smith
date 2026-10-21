@@ -13,7 +13,7 @@
 
 #include <algorithm>
 #include <numeric>
-#include <axom/slic.hpp>
+#include "axom/slic.hpp"
 
 namespace smith {
 
