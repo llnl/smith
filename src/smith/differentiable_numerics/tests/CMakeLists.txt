@@ -19,9 +19,16 @@ set(differentiable_numerics_test_source
     test_multiphysics_time_integrator.cpp
     test_thermo_mechanics_with_internal_vars.cpp
     test_mixed_poisson.cpp
+    test_nonlinear_mixed_diffusion.cpp
     test_amg_vdim_block_preconditioner.cpp
+    test_state_dependent_preconditioner.cpp
+    test_weak_form_block_operator.cpp
     )
 
 smith_add_tests( SOURCES       ${differentiable_numerics_test_source}
                  DEPENDS_ON    ${differentiable_numerics_test_depends}
                  NUM_MPI_TASKS 1)
+
+smith_add_tests( SOURCES       test_weak_form_block_operator_mpi.cpp
+                 DEPENDS_ON    ${differentiable_numerics_test_depends} blt::mpi
+                 NUM_MPI_TASKS 2)

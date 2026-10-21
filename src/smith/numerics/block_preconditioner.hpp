@@ -1,29 +1,135 @@
 #pragma once
 
-#include <memory>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
+
 #include "mfem.hpp"
 
+#include "smith/numerics/state_dependent_solver.hpp"
+
 namespace smith {
+/**
+ * @brief Supplies the current concrete operator for a block solver override.
+ */
+class BlockOperatorProvider {
+ public:
+  virtual ~BlockOperatorProvider() = default;
+
+  /**
+   * @brief Refresh the owned operator for the current nonlinear state.
+   * @param state Monolithic state vector at the current nonlinear iterate.
+   * @param block_offsets Offsets describing the block layout of @a state.
+   */
+  virtual void updateForState([[maybe_unused]] const mfem::Vector& state,
+                              [[maybe_unused]] const mfem::Array<int>& block_offsets)
+  {
+  }
+
+  /**
+   * @brief Return the current concrete operator.
+   */
+  virtual const mfem::Operator& currentOperator() const = 0;
+
+  /**
+   * @brief Notify the provider that currentOperator() was installed on its solver.
+   *
+   * State-dependent providers use this notification to retain the previously
+   * installed operator until the solver has been rebound successfully.
+   */
+  virtual void notifyOperatorSet() {}
+};
 
 /**
- * @brief Optional override for a diagonal block operator.
+ * @brief Builder that rebuilds an operator from the current nonlinear state.
  *
- * The integer is the block index i and the operator replaces the Jacobian block
- * A_ii (or, for 2x2 Schur systems, the block used to build/approximate the
- * (1,1) Schur operator).
- *
- * Ownership of the operator is transferred to the preconditioner.
+ * Builders are invoked by BlockPreconditioner::updateForState(). In nonlinear
+ * block solves created with a custom state-dependent preconditioner, that update
+ * is wired into the Newton loop before the preconditioner is configured with the
+ * current Jacobian.
  */
-using BlockOverride = std::pair<int, std::unique_ptr<const mfem::Operator>>;
+using StateDependentBlockOperatorBuilder =
+    std::function<std::unique_ptr<mfem::Operator>(const mfem::Vector&, const mfem::Array<int>&)>;
+
+/**
+ * @brief Optional provider override for a diagonal block operator.
+ *
+ * The block index i identifies the provider that supplies the operator used
+ * in place of the Jacobian block A_ii.
+ */
+struct BlockProviderOverride {
+  /**
+   * @brief Construct from a block index and owned provider.
+   * @param block_index_in Block index to override.
+   * @param provider_in Provider supplying the override operator.
+   */
+  BlockProviderOverride(int block_index_in, std::unique_ptr<BlockOperatorProvider> provider_in)
+      : block_index(block_index_in), provider(std::move(provider_in))
+  {
+  }
+
+  int block_index;                                  ///< Block index to override.
+  std::unique_ptr<BlockOperatorProvider> provider;  ///< Provider supplying the override operator.
+};
+
+/**
+ * @brief Operator source used to approximate a Schur complement.
+ *
+ * This semantic wrapper lets Schur-preconditioner callers provide a custom
+ * operator without specifying the Schur block index or approximation enum.
+ */
+class SchurOperator {
+ public:
+  /**
+   * @brief Construct from an owned fixed Schur operator.
+   * @param op Fixed assembled Schur operator.
+   */
+  explicit SchurOperator(std::unique_ptr<const mfem::Operator> op);
+
+  /**
+   * @brief Construct from an owned operator provider.
+   * @param provider Provider supplying the Schur operator.
+   */
+  explicit SchurOperator(std::unique_ptr<BlockOperatorProvider> provider) : provider_(std::move(provider)) {}
+
+ private:
+  std::unique_ptr<BlockOperatorProvider> provider_;
+
+  friend class BlockSchurPreconditioner;
+};
+
+/**
+ * @brief Build an override from a fixed concrete operator.
+ * @param block_index Block index to override.
+ * @param op Fixed concrete operator.
+ */
+BlockProviderOverride makeFixedBlockProviderOverride(int block_index, std::unique_ptr<const mfem::Operator> op);
+
+/**
+ * @brief Build an override from a state-dependent operator builder.
+ * @param block_index Block index to override.
+ * @param builder Callable that returns a new concrete operator for a state.
+ * @param initial_operator Optional operator to use before the first update.
+ *
+ * The builder is called from BlockPreconditioner::updateForState() with the
+ * current monolithic nonlinear state and its block offsets. The rebuilt operator
+ * is then used the next time SetOperator() configures the block solvers.
+ *
+ * Provide @a initial_operator when SetOperator() may be called before the first
+ * state update. Otherwise, currentOperator() will fail until updateForState()
+ * has produced an operator.
+ */
+BlockProviderOverride makeStateDependentBlockProviderOverride(
+    int block_index, StateDependentBlockOperatorBuilder builder,
+    std::unique_ptr<mfem::Operator> initial_operator = nullptr);
 
 /**
  * @class BlockPreconditioner
  * @brief Base class for block preconditioners that own one sub-solver per block.
  */
-class BlockPreconditioner : public mfem::Solver {
+class BlockPreconditioner : public StateDependentSolver {
  public:
   /** @brief Return the number of sub-solvers owned by this preconditioner. */
   int numSubSolvers() const { return num_blocks_; }
@@ -38,6 +144,9 @@ class BlockPreconditioner : public mfem::Solver {
     MFEM_VERIFY(i >= 0 && i < num_blocks_, "BlockPreconditioner::subSolver index out of range");
     return mfem_solvers_[static_cast<size_t>(i)].get();
   }
+
+  /// @overload
+  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override;
 
   virtual ~BlockPreconditioner();
 
@@ -60,8 +169,8 @@ class BlockPreconditioner : public mfem::Solver {
   /// @brief Owned MFEM solver for each block.
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
-  /// @brief Optional per-block operators; null entries use the corresponding Jacobian diagonal block.
-  std::vector<std::unique_ptr<const mfem::Operator>> block_op_overrides_;
+  /// @brief Per-block operator providers; null entries use the corresponding Jacobian diagonal block.
+  std::vector<std::unique_ptr<BlockOperatorProvider>> block_op_providers_;
 };
 
 /**
@@ -80,11 +189,11 @@ class BlockDiagonalPreconditioner : public BlockPreconditioner {
    * @brief Construct a new N by N block diagonal preconditioner.
    *
    * @param solvers One solver per block (size must match number of blocks).
-   * @param overrides Optional list of (block index, operator) pairs used in place
-   *        of the corresponding Jacobian diagonal block.
+   * @param overrides Optional provider overrides used in place of the
+   *        corresponding Jacobian diagonal blocks.
    */
   BlockDiagonalPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
-                              std::vector<BlockOverride> overrides = {});
+                              std::vector<BlockProviderOverride> overrides = {});
 
   /**
    * @brief The action of the precondition on the block vector (b_1, ..., b_n)
@@ -136,12 +245,12 @@ class BlockTriangularPreconditioner : public BlockPreconditioner {
    *
    * @param solvers One solver per diagonal block (size must match number of blocks).
    * @param type Sweep type (lower, upper, or symmetric).
-   * @param overrides Optional list of (block index, operator) pairs used in place
-   *        of the corresponding Jacobian diagonal block.
+   * @param overrides Optional provider overrides used in place of the
+   *        corresponding Jacobian diagonal blocks.
    */
   BlockTriangularPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                                 BlockTriangularType type = BlockTriangularType::Lower,
-                                std::vector<BlockOverride> overrides = {});
+                                std::vector<BlockProviderOverride> overrides = {});
 
   /**
    * @brief The action of the precondition on the block vector (b_1, ..., b_n)
@@ -200,8 +309,7 @@ enum class BlockSchurType
 enum class SchurApproxType
 {
   DiagInv, /**< Use assembled \f$ S \approx A_{22} - A_{21} \\mathrm{diag}(A_{11})^{-1} A_{12} \f$. */
-  A22Only, /**< Use \f$ S \approx A_{22} \f$. */
-  Custom,  /**< Use a custom operator provided via the overrides list for block index 1. */
+  A22Only  /**< Use \f$ S \approx A_{22} \f$. */
 };
 
 /**
@@ -220,15 +328,25 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
    * @param solvers Two solvers, for $ A_{11} $ and the Schur complement approximation.
    * @param type Preconditioner variant (diagonal, lower, upper, or full).
    * @param approxType Schur complement approximation strategy for the (1,1) block.
-   * @param overrides Optional list of (block index, operator) pairs used in place
-   *        of the corresponding Jacobian diagonal block. For Schur systems, index
-   *        0 overrides $A_{11}$ and index 1 provides a custom Schur operator when
-   *        approxType is SchurApproxType::Custom.
+   * @param overrides Optional provider overrides for diagonal blocks other than the Schur approximation.
    */
   BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers,
                            BlockSchurType type = BlockSchurType::Diagonal,
                            SchurApproxType approxType = SchurApproxType::DiagInv,
-                           std::vector<BlockOverride> overrides = {});
+                           std::vector<BlockProviderOverride> overrides = {});
+
+  /**
+   * @brief Construct with a custom Schur operator.
+   *
+   * Supplying @a schur selects the custom Schur approximation and installs it
+   * for the second block of the 2x2 system.
+   *
+   * @param solvers Two solvers, for $ A_{11} $ and the Schur approximation.
+   * @param type Preconditioner variant (diagonal, lower, upper, or full).
+   * @param schur Operator source used for the Schur approximation.
+   */
+  BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type,
+                           SchurOperator schur);
 
   /**
    * @brief The action of the precondition on the block vector (b_1, b_2)
@@ -250,6 +368,9 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
   virtual ~BlockSchurPreconditioner();
 
  private:
+  BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type,
+                           std::optional<SchurApproxType> approx_type, std::vector<BlockProviderOverride> overrides);
+
   // The diagonal part of the preconditioner containing BoomerAMG applications
   std::unique_ptr<mfem::BlockOperator> solver_diag_;
 
@@ -260,14 +381,12 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
   // Schur complement approximation operator used by solver for block (1,1).
   //
   // For DiagInv and A22Only, the approximation is rebuilt on each SetOperator call and stored in
-  // S_approx_owned_. For Custom, the approximation is provided via block_op_overrides_[1] and referenced
-  // non-owningly via S_approx_view_.
+  // S_approx_owned_. A custom assembled approximation is retained by block_op_providers_[1].
   mutable std::unique_ptr<const mfem::Operator> S_approx_owned_;
-  const mfem::Operator* S_approx_view_ = nullptr;
 
   BlockSchurType type_;
 
-  SchurApproxType approxType_;
+  std::optional<SchurApproxType> approx_type_;
 
   /**
    * @brief The action of the lower sweep on the block vector (b_1, b_2)
