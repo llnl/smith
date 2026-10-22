@@ -418,15 +418,15 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesGretl)
   reaction_squared.data_store().back_prop();
 
   for (auto s : initial_states) {
-    SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", s.get()->name(), s.get()->Norml2(), s.get_dual()->Norml2()));
+    SLIC_INFO_ROOT(std::format("{} {} {}", s.get()->name(), s.get()->Norml2(), s.get_dual()->Norml2()));
   }
 
-  SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", shape_disp.get()->name(), shape_disp.get()->Norml2(),
-                                   shape_disp.get_dual()->Norml2()));
+  SLIC_INFO_ROOT(
+      std::format("{} {} {}", shape_disp.get()->name(), shape_disp.get()->Norml2(), shape_disp.get_dual()->Norml2()));
 
   for (size_t p = 0; p < params.size(); ++p) {
-    SLIC_INFO_ROOT(axom::fmt::format("{} {} {}", params[p].get()->name(), params[p].get()->Norml2(),
-                                     params[p].get_dual()->Norml2()));
+    SLIC_INFO_ROOT(
+        std::format("{} {} {}", params[p].get()->name(), params[p].get()->Norml2(), params[p].get_dual()->Norml2()));
   }
 }
 
@@ -473,7 +473,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
       createSolidMechanicsBasePhysics(physics_name, mesh, solid_nonlinear_opts, solid_linear_options);
 
   double qoi = integrateForward(*physics, num_steps_, dt_, physics_name + "_reactions");
-  SLIC_INFO_ROOT(axom::fmt::format("{}", qoi));
+  SLIC_INFO_ROOT(std::format("{}", qoi));
 
   // Check that reaction forces are zero away from Dirichlet DOFs
   auto reactions = physics->getReactionStates();
@@ -491,14 +491,13 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesBasePhysics)
 
   auto state_sensitivities = physics->computeInitialConditionSensitivity();
   for (auto name_and_state_sensitivity : state_sensitivities) {
-    SLIC_INFO_ROOT(
-        axom::fmt::format("{} {}", name_and_state_sensitivity.first, name_and_state_sensitivity.second.Norml2()));
+    SLIC_INFO_ROOT(std::format("{} {}", name_and_state_sensitivity.first, name_and_state_sensitivity.second.Norml2()));
   }
 
-  SLIC_INFO_ROOT(axom::fmt::format("{} {}", shape_sensitivity.name(), shape_sensitivity.Norml2()));
+  SLIC_INFO_ROOT(std::format("{} {}", shape_sensitivity.name(), shape_sensitivity.Norml2()));
 
   for (size_t p = 0; p < num_params; ++p) {
-    SLIC_INFO_ROOT(axom::fmt::format("{} {}", parameter_sensitivities[p].name(), parameter_sensitivities[p].Norml2()));
+    SLIC_INFO_ROOT(std::format("{} {}", parameter_sensitivities[p].name(), parameter_sensitivities[p].Norml2()));
   }
 }
 
@@ -557,13 +556,13 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
 
   // Compare shape sensitivities
   double shape_diff = diff_norm(*shape_dispG.get_dual(), shape_sensitivityB);
-  SLIC_INFO_ROOT(axom::fmt::format("Shape sensitivity difference: {:.6e}", shape_diff));
+  SLIC_INFO_ROOT(std::format("Shape sensitivity difference: {:.6e}", shape_diff));
   EXPECT_LT(shape_diff, tol);
 
   // Compare parameter sensitivities
   for (size_t p = 0; p < num_params; ++p) {
     double param_diff = diff_norm(*paramsG[p].get_dual(), parameter_sensitivitiesB[p]);
-    SLIC_INFO_ROOT(axom::fmt::format("Parameter {} sensitivity difference: {:.6e}", p, param_diff));
+    SLIC_INFO_ROOT(std::format("Parameter {} sensitivity difference: {:.6e}", p, param_diff));
     EXPECT_LT(param_diff, tol);
   }
 
@@ -572,7 +571,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
   for (const auto& suffix : state_suffixes) {
     std::string nameG = physics_name + "_gretl_" + suffix;
     std::string nameB = physics_name + "_base_" + suffix;
-    SLIC_INFO_ROOT(axom::fmt::format("Comparing sensitivity for {}: {} vs {}", suffix, nameG, nameB));
+    SLIC_INFO_ROOT(std::format("Comparing sensitivity for {}: {} vs {}", suffix, nameG, nameB));
 
     // Find Gretl dual
     const FiniteElementDual* dualG = nullptr;
@@ -585,7 +584,7 @@ TEST_F(SolidMechanicsMeshFixture, SensitivitiesComparison)
     ASSERT_NE(dualG, nullptr) << "Could not find Gretl dual for " << nameG;
 
     double state_diff = diff_norm(*dualG, initial_condition_sensitivitiesB.at(nameB));
-    SLIC_INFO_ROOT(axom::fmt::format("Initial state {} sensitivity difference: {:.6e}", suffix, state_diff));
+    SLIC_INFO_ROOT(std::format("Initial state {} sensitivity difference: {:.6e}", suffix, state_diff));
     EXPECT_LT(state_diff, tol);
   }
 }

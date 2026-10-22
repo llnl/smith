@@ -28,15 +28,21 @@ class DirichletBoundaryConditions;
 /// @brief magic number for representing a field which is not an argument of the weak form.
 static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max() - 1;
 
+/// Local weak-form argument slots associated with one solved field.
+using BlockArgumentIndices = std::vector<size_t>;
+
+/// Matrix mapping residual rows and solved columns to local argument slots.
+using BlockArgumentMap = std::vector<std::vector<BlockArgumentIndices>>;
+
 /// @brief Solve a block nonlinear system of equations as defined by the vector of weak form
 /// @param residual_evals Vector of weak forms which define the equations to be solved
-/// @param block_indices Matrix of index arguments specifying where in each WeakForm the unknown fields are passed in.
+/// @param block_indices Matrix specifying every argument slot where each solved field is passed.
 /// Example: for a 2 weak-form system, with weak-forms, r1, r2
 /// r1(a,b,c)
 /// r2(b,d,e,a)
 // with unknowns (with respect to the solver) being a, and b.
-// r1 has unknowns a,b in the ‘slots’ 0, 1
-// r2 has unknowns a,b, in the ‘slots’ 3,0
+// r1 has unknowns a,b in slots {0}, {1}
+// r2 has unknowns a,b in slots {3}, {0}
 /// @param shape_disp The mesh-morphed shape displacement
 /// @param states The time varying states as inputs to the weak form
 /// @param params The fixed field parameters as inputs to the weak form
@@ -44,9 +50,8 @@ static constexpr size_t invalid_block_index = std::numeric_limits<size_t>::max()
 /// @param solver The nonlinear block solver used to solve the system of equations
 /// @param bc_managers Holds information about which degrees of freedom (DOFS)
 /// @return Vector of field solutions satisfying the weak forms
-std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals,
-                                    const std::vector<std::vector<size_t>> block_indices, const FieldState& shape_disp,
-                                    const std::vector<std::vector<FieldState>>& states,
+std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals, const BlockArgumentMap& block_indices,
+                                    const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
                                     const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                     const NonlinearBlockSolverBase* solver,
                                     const std::vector<const BoundaryConditionManager*>& bc_managers);
@@ -67,8 +72,9 @@ inline FieldState solve(const WeakForm& residual_eval, const FieldState& shape_d
                         const DirichletBoundaryConditions& bcs, size_t unknown_state_index = 0)
 {
   std::vector<const BoundaryConditionManager*> bc_managers{&bcs.getBoundaryConditionManager()};
-  auto solutions = block_solve({const_cast<WeakForm*>(&residual_eval)}, {{unknown_state_index}}, shape_disp, {states},
-                               {params}, time_info, &solver, bc_managers);
+  BlockArgumentMap block_indices{{BlockArgumentIndices{unknown_state_index}}};
+  auto solutions = block_solve({const_cast<WeakForm*>(&residual_eval)}, block_indices, shape_disp, {states}, {params},
+                               time_info, &solver, bc_managers);
   return solutions[0];
 }
 
