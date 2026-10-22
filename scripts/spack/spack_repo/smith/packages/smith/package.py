@@ -448,10 +448,11 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         elif uses_flux_srun_wrapper:
             # The Flux srun compatibility wrapper needs an explicit resource
             # size for each test. Without it, independent CTest jobs cannot run
-            # concurrently.
-            _append_options = "--cpus-per-task=1;-o;cpu-affinity=per-task"
+            # concurrently. `--mpibind=off` sets cpu and gpu affinity to per-task
+            # in the wrapper, which we may or may not need.
+            _append_options = "--mpibind=off;--cpus-per-task=1"
             if spec.satisfies("+cuda") or spec.satisfies("+rocm"):
-                _append_options += ";--gpus-per-task=1;-o;gpu-affinity=per-task"
+                _append_options += ";--gpus-per-task=1"
             
             entries.append(cmake_cache_string("BLT_MPI_COMMAND_APPEND",
                                               _append_options))
