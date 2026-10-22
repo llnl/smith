@@ -82,12 +82,14 @@ struct Domain {
   ///@}
 
   /// @cond
+  std::vector<int> vertex_ids_;
   std::vector<int> edge_ids_;
   std::vector<int> tri_ids_;
   std::vector<int> quad_ids_;
   std::vector<int> tet_ids_;
   std::vector<int> hex_ids_;
 
+  std::vector<int> mfem_vertex_ids_;
   std::vector<int> mfem_edge_ids_;
   std::vector<int> mfem_tri_ids_;
   std::vector<int> mfem_quad_ids_;
@@ -182,6 +184,7 @@ struct Domain {
   /// @brief get elements by geometry type
   const std::vector<int>& get(mfem::Geometry::Type geom) const
   {
+    if (geom == mfem::Geometry::POINT) return vertex_ids_;
     if (geom == mfem::Geometry::SEGMENT) return edge_ids_;
     if (geom == mfem::Geometry::TRIANGLE) return tri_ids_;
     if (geom == mfem::Geometry::SQUARE) return quad_ids_;
@@ -194,6 +197,7 @@ struct Domain {
   /// @brief get elements by geometry type
   const std::vector<int>& get_mfem_ids(mfem::Geometry::Type geom) const
   {
+    if (geom == mfem::Geometry::POINT) return mfem_vertex_ids_;
     if (geom == mfem::Geometry::SEGMENT) return mfem_edge_ids_;
     if (geom == mfem::Geometry::TRIANGLE) return mfem_tri_ids_;
     if (geom == mfem::Geometry::SQUARE) return mfem_quad_ids_;
@@ -208,7 +212,8 @@ struct Domain {
    */
   int total_elements() const
   {
-    return int(edge_ids_.size() + tri_ids_.size() + quad_ids_.size() + tet_ids_.size() + hex_ids_.size());
+    return int(vertex_ids_.size() + edge_ids_.size() + tri_ids_.size() + quad_ids_.size() + tet_ids_.size() +
+               hex_ids_.size());
   }
 
   /**
@@ -221,7 +226,7 @@ struct Domain {
 
     int total = 0;
     offsets[mfem::Geometry::POINT] = total;
-    total += 0;  // vertices;
+    total += int(vertex_ids_.size());
     offsets[mfem::Geometry::SEGMENT] = total;
     total += int(edge_ids_.size());
     offsets[mfem::Geometry::TRIANGLE] = total;
@@ -313,9 +318,9 @@ inline std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> geometry_counts(cons
 {
   std::array<uint32_t, mfem::Geometry::NUM_GEOMETRIES> counts{};
 
-  constexpr std::array<mfem::Geometry::Type, 5> geometries = {mfem::Geometry::SEGMENT, mfem::Geometry::TRIANGLE,
-                                                              mfem::Geometry::SQUARE, mfem::Geometry::TETRAHEDRON,
-                                                              mfem::Geometry::CUBE};
+  constexpr std::array<mfem::Geometry::Type, 6> geometries = {mfem::Geometry::POINT,       mfem::Geometry::SEGMENT,
+                                                              mfem::Geometry::TRIANGLE,    mfem::Geometry::SQUARE,
+                                                              mfem::Geometry::TETRAHEDRON, mfem::Geometry::CUBE};
   for (auto geom : geometries) {
     counts[uint32_t(geom)] = uint32_t(domain.get(geom).size());
   }
