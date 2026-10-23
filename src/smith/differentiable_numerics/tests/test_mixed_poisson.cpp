@@ -1,4 +1,8 @@
+#include <csignal>
+
+#include <execinfo.h>
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/equation_solver.hpp"
@@ -17,6 +21,34 @@
 
 #include "gretl/data_store.hpp"
 #include "gretl/wang_checkpoint_strategy.hpp"
+
+namespace {
+
+void mixedPoissonWatchdogHandler(int)
+{
+  static constexpr char message[] = "Mixed Poisson watchdog timeout\n";
+  (void)::write(STDERR_FILENO, message, sizeof(message) - 1);
+
+  void* call_stack[64];
+  int frame_count = ::backtrace(call_stack, 64);
+  ::backtrace_symbols_fd(call_stack, frame_count, STDERR_FILENO);
+  ::_exit(124);
+}
+
+class MixedPoissonWatchdog {
+ public:
+  MixedPoissonWatchdog()
+  {
+    void* call_stack[1];
+    (void)::backtrace(call_stack, 1);
+    (void)std::signal(SIGALRM, mixedPoissonWatchdogHandler);
+    ::alarm(60);
+  }
+
+  ~MixedPoissonWatchdog() { ::alarm(0); }
+};
+
+}  // namespace
 
 using namespace smith;
 
@@ -270,6 +302,7 @@ INSTANTIATE_TEST_SUITE_P(BlockPrecondSweep, BlockPreconditionerTest,
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
+  MixedPoissonWatchdog watchdog;
   smith::ApplicationManager applicationManager(argc, argv);
   return RUN_ALL_TESTS();
 }
