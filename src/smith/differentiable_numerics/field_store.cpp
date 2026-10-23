@@ -298,6 +298,22 @@ std::vector<FieldState> FieldStore::getStates(const std::string& weak_form_name)
   return fields_for_residual;
 }
 
+std::vector<FieldState> FieldStore::getParameters(const std::string& weak_form_name) const
+{
+  SLIC_ERROR_ROOT_IF(weak_form_name_to_field_names_.count(weak_form_name) == 0,
+                     axom::fmt::format("Weak form '{}' not found in FieldStore. Did you forget to call addReaction()?",
+                                       weak_form_name));
+
+  const auto& field_names = weak_form_name_to_field_names_.at(weak_form_name);
+  std::vector<FieldState> parameters_for_residual;
+  for (const auto& name : field_names) {
+    if (to_params_index_.count(name)) {
+      parameters_for_residual.push_back(getParameter(name));
+    }
+  }
+  return parameters_for_residual;
+}
+
 std::vector<FieldState> FieldStore::getStatesFromVectors(const std::string& weak_form_name,
                                                          const std::vector<FieldState>& state_fields,
                                                          const std::vector<FieldState>& param_fields) const
