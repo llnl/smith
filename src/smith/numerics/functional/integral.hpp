@@ -286,7 +286,8 @@ Integral MakeDomainIntegral(const Domain& domain, const lambda_type& qf,
  * @param integral the Integral object to initialize
  * @param qf the quadrature function
  */
-template <mfem::Geometry::Type geom, int Q, typename test, typename... trials, typename lambda_type>
+template <mfem::Geometry::Type geom, int Q, typename response_policy = boundary_integral::SourceOnlyResponse,
+          typename test, typename... trials, typename lambda_type>
 void generate_bdr_kernels(FunctionSignature<test(trials...)> s, Integral& integral, const lambda_type& qf)
 {
   integral.geometric_factors_[geom] = GeometricFactors(integral.domain_, Q, geom);
@@ -299,7 +300,7 @@ void generate_bdr_kernels(FunctionSignature<test(trials...)> s, Integral& integr
   const uint32_t qpts_per_element = num_quadrature_points(geom, Q);
 
   std::shared_ptr<zero> dummy_derivatives;
-  integral.evaluation_[geom] = boundary_integral::evaluation_kernel<NO_DIFFERENTIATION, Q, geom>(
+  integral.evaluation_[geom] = boundary_integral::evaluation_kernel<response_policy, NO_DIFFERENTIATION, Q, geom>(
       s, qf, positions, jacobians, dummy_derivatives, num_elements);
 
   constexpr std::size_t num_args = s.num_args;
@@ -310,14 +311,16 @@ void generate_bdr_kernels(FunctionSignature<test(trials...)> s, Integral& integr
     // Note: ptrs' lifetime is managed in an unusual way! It is captured by-value in the
     // action_of_gradient functor below to augment the reference count, and extend its lifetime to match
     // that of the boundaryIntegral that allocated it.
-    using derivative_type = decltype(boundary_integral::get_derivative_type<index, dim, trials...>(qf));
+    using derivative_type =
+        decltype(boundary_integral::get_derivative_type<response_policy, index, dim, trials...>(qf));
     auto ptr = accelerator::make_shared_array<ExecutionSpace::CPU, derivative_type>(num_elements * qpts_per_element);
 
     integral.evaluation_with_AD_[index][geom] =
-        boundary_integral::evaluation_kernel<index, Q, geom>(s, qf, positions, jacobians, ptr, num_elements);
+        boundary_integral::evaluation_kernel<response_policy, index, Q, geom>(s, qf, positions, jacobians, ptr,
+                                                                             num_elements);
 
-    integral.jvp_[index][geom] =
-        boundary_integral::jacobian_vector_product_kernel<index, Q, geom>(s, ptr, num_elements);
+    integral.jvp_[index][geom] = boundary_integral::jacobian_vector_product_kernel<response_policy, index, Q, geom>(
+        s, ptr, num_elements);
     integral.element_gradient_[index][geom] =
         boundary_integral::element_gradient_kernel<index, Q, geom>(s, ptr, num_elements);
   });
@@ -354,6 +357,38 @@ Integral MakeBoundaryIntegral(const Domain& domain, const lambda_type& qf, std::
   if constexpr (dim == 2) {
     generate_bdr_kernels<mfem::Geometry::TRIANGLE, Q>(signature, integral, qf);
     generate_bdr_kernels<mfem::Geometry::SQUARE, Q>(signature, integral, qf);
+  }
+
+  return integral;
+}
+
+/**
+ * @brief Create an Integral for a boundary q-function returning source and parametric-flux terms.
+ *
+ * The source is integrated against test-function values and the flux is integrated against test-function derivatives
+ * with respect to the boundary element's parametric coordinates.
+ *
+ * @note this function is not meant to be called by users
+ */
+template <typename s, int Q, int dim, typename lambda_type>
+Integral MakeBoundarySourceFluxIntegral(const Domain& domain, const lambda_type& qf,
+                                        std::vector<uint32_t> argument_indices)
+{
+  FunctionSignature<s> signature;
+
+  SLIC_ERROR_IF(domain.type_ != Domain::Type::BoundaryElements,
+                "Error: trying to evaluate a boundary integral over a non-boundary domain of integration");
+
+  Integral integral(domain, argument_indices);
+
+  if constexpr (dim == 1) {
+    generate_bdr_kernels<mfem::Geometry::SEGMENT, Q, boundary_integral::SourceAndFluxResponse>(signature, integral, qf);
+  }
+
+  if constexpr (dim == 2) {
+    generate_bdr_kernels<mfem::Geometry::TRIANGLE, Q, boundary_integral::SourceAndFluxResponse>(signature, integral,
+                                                                                               qf);
+    generate_bdr_kernels<mfem::Geometry::SQUARE, Q, boundary_integral::SourceAndFluxResponse>(signature, integral, qf);
   }
 
   return integral;
