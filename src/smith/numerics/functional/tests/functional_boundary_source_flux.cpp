@@ -26,11 +26,6 @@ using namespace smith;
 
 namespace {
 
-template <typename space>
-auto makeSpace(mfem::ParMesh& mesh)
-{
-  return generateParFiniteElementSpace<space>(&mesh);
-}
 
 TEST(FunctionalBoundarySourceFlux, ParametricDerivativeUsesPhysicalBoundaryMeasure)
 {
@@ -45,7 +40,7 @@ TEST(FunctionalBoundarySourceFlux, ParametricDerivativeUsesPhysicalBoundaryMeasu
   mesh.EnsureNodes();
 
   using space = H1<1>;
-  auto [fespace, fec] = makeSpace<space>(mesh);
+  auto [fespace, fec] = generateParFiniteElementSpace<space>(&mesh);
   Functional<space(space)> residual(fespace.get(), {fespace.get()});
   Domain boundary = EntireBoundary(mesh);
 
@@ -98,7 +93,7 @@ void checkSourceOnlyCompatibility(const std::string& mesh_file)
 {
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(SMITH_REPO_DIR + mesh_file), 0);
   using test_space = space;
-  auto [fespace, fec] = makeSpace<test_space>(*mesh);
+  auto [fespace, fec] = generateParFiniteElementSpace<test_space>(mesh.get());
   Domain boundary = EntireBoundary(*mesh);
 
   Functional<test_space(test_space)> legacy(fespace.get(), {fespace.get()});
@@ -139,7 +134,7 @@ template <typename space, int dim>
 void checkScalarGradient(const std::string& mesh_file)
 {
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(SMITH_REPO_DIR + mesh_file), 0);
-  auto [fespace, fec] = makeSpace<space>(*mesh);
+  auto [fespace, fec] = generateParFiniteElementSpace<space>(mesh.get());
 
   mfem::Vector U(fespace->TrueVSize());
   U.Randomize(19);
@@ -176,7 +171,7 @@ void checkVectorGradient(const std::string& mesh_file)
 {
   using space = H1<2, dim + 1>;
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(SMITH_REPO_DIR + mesh_file), 0);
-  auto [fespace, fec] = makeSpace<space>(*mesh);
+  auto [fespace, fec] = generateParFiniteElementSpace<space>(mesh.get());
 
   mfem::Vector U(fespace->TrueVSize());
   U.Randomize(23);
@@ -215,8 +210,8 @@ void checkShapeGradient(const std::string& mesh_file)
   using trial_space = H1<1>;
 
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(SMITH_REPO_DIR + mesh_file), 0);
-  auto [shape_fespace, shape_fec] = makeSpace<shape_space>(*mesh);
-  auto [test_fespace, test_fec] = makeSpace<test_space>(*mesh);
+  auto [shape_fespace, shape_fec] = generateParFiniteElementSpace<shape_space>(mesh.get());
+  auto [test_fespace, test_fec] = generateParFiniteElementSpace<test_space>(mesh.get());
 
   mfem::Vector shape(shape_fespace->TrueVSize());
   shape.Randomize(29);
