@@ -59,7 +59,7 @@ set(MPIEXEC_NUMPROC_FLAG "-n" CACHE STRING "")
 
 set(ENABLE_MPI ON CACHE BOOL "")
 
-set(BLT_MPI_COMMAND_APPEND "--cpus-per-task=1" CACHE STRING "")
+set(BLT_MPI_COMMAND_APPEND "--cpus-per-task=1;--gpus-per-task=1;-o;cpu-affinity=per-task;-o;gpu-affinity=per-task" CACHE STRING "")
 
 #------------------------------------------------------------------------------
 # Hardware
