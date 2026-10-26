@@ -32,6 +32,13 @@ smith_add_executable(
     DEPENDS_ON  smith
     )
 
+smith_add_executable(
+    NAME        gent_material_identifiability
+    SOURCES     GentMaterialIdentifiability.cpp
+    OUTPUT_DIR  ${EXAMPLE_OUTPUT_DIRECTORY}
+    DEPENDS_ON  smith
+    )
+
 smith_add_example_test(
     NAME          material_identifiability
     COMMAND       material_identifiability
@@ -56,12 +63,26 @@ smith_add_example_test(
     NUM_MPI_TASKS 2
     )
 
+smith_add_example_test(
+    NAME          gent_material_identifiability
+    COMMAND       gent_material_identifiability
+    NUM_MPI_TASKS 2
+    )
+
 install(
     FILES
         MaterialIdentifiability.cpp
         MaterialIdentifiabilityDesignedExperiments.cpp
         MaterialIdentifiabilityFixedPoisson.cpp
         MaterialIdentifiabilityFixedPoisson50.cpp
+        GentMaterialIdentifiability.cpp
     DESTINATION
         examples/smith/Kevin
+    )
+
+install(
+    DIRECTORY   ${CMAKE_CURRENT_SOURCE_DIR}/
+    DESTINATION examples/smith/Kevin
+    FILES_MATCHING
+        PATTERN "*.g"
     )
