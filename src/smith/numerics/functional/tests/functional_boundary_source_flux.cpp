@@ -12,6 +12,7 @@
 #include "gtest/gtest.h"
 #include "mfem.hpp"
 
+#include "smith/mesh_utils/mesh_utils_base.hpp"
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/mesh_utils/mesh_utils.hpp"
@@ -26,6 +27,80 @@ using namespace smith;
 
 namespace {
 
+TEST(FunctionalBoundarySourceFlux, SurfacePatchTest)
+{
+  constexpr int dim = 3;
+  std::string filename = std::string(SMITH_REPO_DIR) + "/data/meshes/" + "patch3D_hexes.mesh";
+  auto serial_mesh = buildMeshFromFile(filename);
+
+  
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
+  mesh->EnsureNodes();
+  mesh->Print();
+
+  // Jiggle the non-boundary node on the face so that the element
+  // shape mappings are nonlinear. This makes the integrand non-trivial.
+  // Although the physical stress is uniform on the surface, the
+  // *components* of the stress in the curvilinear bases are not.
+  double face_node_coordinates[dim];
+  constexpr int face_node_index = 64;
+  mesh->GetNode(face_node_index, face_node_coordinates);
+  face_node_coordinates[1] += 0.15;
+  face_node_coordinates[2] -= 0.03;
+  mesh->SetNode(face_node_index, face_node_coordinates);
+  mesh->NodesUpdated();
+
+  using space = H1<1, dim>;
+  auto [fespace, fec] = generateParFiniteElementSpace<space>(mesh.get());
+  Functional<space(space)> residual(fespace.get(), {fespace.get()});
+  // Attribute 1 of this mesh is on the yz plane
+  Domain boundary = Domain::ofBoundaryElements(*mesh, by_attr<dim>(1));
+
+  // Surface elasticity:
+  // Green-St Venant law expressed in curvilinear coordinates.
+  residual.AddBoundarySourceFluxIntegral(
+      Dimension<dim - 1>{}, DependsOn<0>{},
+      [](double, auto position, auto field) {
+        double E = 2.4;
+        double nu = 0.25;
+        double mu = 0.5*E/(1.0 + nu);
+        double lam_prime = E*nu/(1.0 - nu*nu); // second Lame modulus for plane stress
+        auto dX_dxi = get<DERIVATIVE>(position);
+        auto du_dxi = get<DERIVATIVE>(field);
+        // covariant components of Green's strain
+        auto epsilon = 0.5*(transpose(du_dxi) * dX_dxi + transpose(dX_dxi) * du_dxi);
+        auto g0 = dot(transpose(dX_dxi), dX_dxi); // metric tensor
+        auto g0_dual = inv(g0);  // dual metric tensor
+        auto tr_epsilon = inner(g0_dual, epsilon);
+        auto sigma = 2*mu*(g0_dual * epsilon * g0_dual) + lam_prime * tr_epsilon * g0_dual;
+        mfem::out << "sigma = " << sigma << std::endl;
+        return smith::tuple{zero{}, dX_dxi * sigma};
+      }, 
+      boundary);
+
+  tensor<double, dim, dim> H{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+                              {0.198344644470483, 0.060514559793513, 0.084137393813728},
+                              {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  mfem::DenseMatrix disp_grad(&H[0][0], dim, dim);
+  mfem::Vector U(fespace->TrueVSize());
+  mfem::ParGridFunction U_gf(fespace.get());
+  mfem::VectorFunctionCoefficient c(dim, [&disp_grad](const mfem::Vector& X, mfem::Vector& u) { disp_grad.Mult(X, u); });
+  U_gf.ProjectCoefficient(c);
+  U_gf.GetTrueDofs(U);
+
+  mfem::Vector F(fespace->TrueVSize());
+  F = residual(0.0, U);
+  mfem::out << "Residual\n";
+  F.Print();
+  mfem::ParGridFunction F_gf(fespace.get());
+  F_gf.SetFromTrueDofs(F);
+  double fy = F_gf(fespace->DofToVDof(64, 1));
+  double fz = F_gf(fespace->DofToVDof(64, 2));
+  mfem::out << axom::fmt::format("fy = {:.6e}\n", fy);
+  mfem::out << axom::fmt::format("fz = {:.6e}\n", fz);
+  ASSERT_LT(std::abs(fy), 1e-15);
+  ASSERT_LT(std::abs(fz), 1e-15);
+}
 
 TEST(FunctionalBoundarySourceFlux, ParametricDerivativeUsesPhysicalBoundaryMeasure)
 {
