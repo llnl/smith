@@ -29,6 +29,8 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 - Added composable solid-mechanics and thermo-mechanics examples, tutorials, and regression tests covering coupled
   sensitivities, finite-difference checks, field parameters, and solves.
 - Added axisymmetric solid mechanics materials and loads for 2D `(r, z)` meshes.
+- Added a C-shaped EnergyMortar self-contact example with residual-gap corner controls and numerical regression modes
+  for pairwise, all-to-all, and full-boundary interactions.
 - Added host-configs for CZMatrix and RZVector machines
 - Added CI pipelines for CZMatrix machine
 
@@ -44,6 +46,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ### Fixed
 
 - FunctionalWeakForm::jvp() to include shape-displacement contributions, which were previously ignored.
+- Generated `SMITH_USE_OPENMP` consistently from the Smith OpenMP option rather than relying on TPL discovery.
 
 ## [Version 0.1.0] - Release date 2026-04-28
 
