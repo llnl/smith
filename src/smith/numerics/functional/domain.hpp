@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <string_view>
 
 #include "mfem.hpp"
 
@@ -304,6 +305,31 @@ inline auto by_attr(std::set<int> values)
 {
   return [values](std::vector<tensor<double, dim>>, int attr) { return values.find(attr) != values.end(); };
 }
+
+/// @brief Import a domain from the attribute set of the mfem mesh.
+/// Search attributes of body elements.
+///
+/// The mfem mesh defines named "AttributeSets" which map a name to a
+/// set of element attributes. This creates a smith::Domain with the
+/// elements corresponding to those attributes.
+///
+///
+/// @param mesh the mfem mesh
+/// @param attribute_set_name the name to search for
+/// @return a smith::Domain corresponding to the attribute set name
+smith::Domain fromElementAttributeSet(const mesh_t& mesh, std::string_view attribute_set_name);
+
+/// @brief Import a domain from the attribute set of the mfem mesh.
+/// Search attributes of boundary elements.
+///
+/// The mfem mesh defines named "AttributeSets" which map a name to a
+/// set of element attributes. This creates a smith::Domain with the
+/// boundary elements corresponding to those attributes.
+///
+/// @param mesh the mfem mesh
+/// @param attribute_set_name the name to search for
+/// @return a smith::Domain corresponding to the attribute set name
+smith::Domain fromBoundaryElementAttributeSet(const mesh_t& mesh, std::string_view attribute_set_name);
 
 /**
  * @brief count the number of elements of each geometry in a domain
