@@ -16,6 +16,13 @@ namespace smith {
 
 namespace boundary_integral {
 
+// The structs "SourceOnlyResponse" and "SourceAndFluxResponse" exist to enable
+// backward compatilbility. Boundary integrals can now handle flux terms in
+// addition to source terms. These structs allow the source-only interface to
+// continue to be supported, while uniting the implementations.
+// They are used as "response_policy" template parameters.
+// This can be simplified if we drop support for source-only integrals.
+
 /// @brief Converts a legacy boundary q-function response into source-and-flux form.
 struct SourceOnlyResponse {
   template <typename T>
