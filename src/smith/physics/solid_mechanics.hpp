@@ -550,6 +550,17 @@ class SolidMechanics<order, dim, Parameters<parameter_space...>, std::integer_se
                                    qfunction, domain);
   }
 
+  template <int... active_parameters, typename callable>
+  void addCustomBoundarySourceFluxIntegral(DependsOn<active_parameters...>, callable qfunction,
+                                           const std::optional<Domain>& optional_domain = std::nullopt)
+  {
+    Domain domain = (optional_domain) ? *optional_domain : EntireBoundary(mfemParMesh());
+
+    residual_->AddBoundarySourceFluxIntegral(
+      Dimension<dim - 1>{}, DependsOn<0, 1, active_parameters + NUM_STATE_VARS...>{},
+      qfunction, domain);
+  }
+
   /// @overload
   std::vector<std::string> adjointNames() const override { return std::vector<std::string>{{"displacement"}}; }
 
