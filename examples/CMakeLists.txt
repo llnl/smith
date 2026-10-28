@@ -49,3 +49,6 @@ add_subdirectory(inertia_relief)
 
 # Add the obstacle design example
 add_subdirectory(obstacle_design)
+
+# Add the membrane example
+add_subdirectory(membrane)
