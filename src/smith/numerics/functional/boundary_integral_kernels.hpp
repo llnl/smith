@@ -44,7 +44,7 @@ struct SourceAndFluxResponse {
   template <typename T>
   SMITH_HOST_DEVICE static auto format(const T& response)
   {
-    using response_type = std::remove_cv_t<std::remove_reference_t<T>>;
+    using response_type = std::remove_cvref_t<T>;
     static_assert(is_tuple<response_type>::value,
                   "AddBoundarySourceFluxIntegral integrands must return smith::tuple{source, flux}");
     static_assert(tuple_size<response_type>::value == 2,
