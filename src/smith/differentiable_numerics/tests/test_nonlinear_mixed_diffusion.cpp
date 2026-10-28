@@ -89,7 +89,8 @@ struct ThermalConductivity {
 
 enum class PreconditionerCase
 {
-  StateDependentCustomFullSchur
+  StateDependentCustomFullSchur,
+  StateDependentDirectInverseAction
 };
 
 const char* preconditionerCaseName(PreconditionerCase preconditioner)
@@ -97,6 +98,8 @@ const char* preconditionerCaseName(PreconditionerCase preconditioner)
   switch (preconditioner) {
     case PreconditionerCase::StateDependentCustomFullSchur:
       return "StateDependentCustomFullSchur";
+    case PreconditionerCase::StateDependentDirectInverseAction:
+      return "StateDependentDirectInverseAction";
   }
   return "Unknown";
 }
@@ -134,6 +137,64 @@ class MeshFixture : public testing::Test {
 
 class NonlinearMixedDiffusionPreconditionerTest : public MeshFixture,
                                                   public ::testing::WithParamInterface<PreconditionerCase> {};
+
+/**
+ * @brief Custom Schur action solver that applies an approximate inverse of
+ *        the temperature diffusion Schur approximation.
+ *
+ * This direct inverse-action Schur input owns the state-dependent operator and
+ * applies an internal AMG-preconditioned GMRES solve.
+ */
+class TemperatureDiffusionSchurActionSolver : public smith::SchurComplementActionSolver {
+ public:
+  TemperatureDiffusionSchurActionSolver(const TemperatureSchurForm& weak_form, smith::FieldState shape_disp,
+                                        smith::FieldState temperature, smith::TimeInfo time_info,
+                                        const smith::BoundaryConditionManager* bc_manager)
+      : schur_operator_update_(smith::makeStateDependentWeakFormOperator(weak_form, std::move(shape_disp),
+                                                                         {std::move(temperature)}, {1.0}, time_info,
+                                                                         bc_manager, {smith::StateBlockBinding{1, 0}}))
+  {
+  }
+
+  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  {
+    auto schur_operator = schur_operator_update_(state, block_offsets);
+
+    auto amg_solver = std::make_unique<mfem::HypreBoomerAMG>();
+    amg_solver->SetPrintLevel(0);
+    amg_solver->SetOperator(*schur_operator);
+
+    auto linear_solver = std::make_unique<mfem::GMRESSolver>(schur_operator->GetComm());
+    linear_solver->SetRelTol(1.0e-8);
+    linear_solver->SetAbsTol(0.0);
+    linear_solver->SetMaxIter(100);
+    linear_solver->SetPrintLevel(0);
+    linear_solver->SetPreconditioner(*amg_solver);
+    linear_solver->SetOperator(*schur_operator);
+    linear_solver->iterative_mode = false;
+
+    // Replace dependents before their dependencies so the old stack remains
+    // valid throughout teardown and the new stack is fully configured first.
+    linear_solver_ = std::move(linear_solver);
+    amg_solver_ = std::move(amg_solver);
+    schur_operator_ = std::move(schur_operator);
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    MFEM_VERIFY(linear_solver_,
+                "TemperatureDiffusionSchurActionSolver requires updateForState() before its inverse action is used");
+    y.SetSize(x.Size());
+    y = 0.0;
+    linear_solver_->Mult(x, y);
+  }
+
+ private:
+  smith::StateDependentWeakFormOperator schur_operator_update_;
+  std::unique_ptr<mfem::HypreParMatrix> schur_operator_;
+  std::unique_ptr<mfem::HypreBoomerAMG> amg_solver_;
+  std::unique_ptr<mfem::GMRESSolver> linear_solver_;
+};
 
 // Exercises state-dependent Schur preconditioners on nonlinear mixed diffusion.
 TEST_P(NonlinearMixedDiffusionPreconditionerTest, BlockSolve)
@@ -238,6 +299,16 @@ TEST_P(NonlinearMixedDiffusionPreconditionerTest, BlockSolve)
     auto preconditioner = std::make_unique<smith::BlockSchurPreconditioner>(
         std::move(sub_solvers), linear_options.block_schur_type, std::move(schur));
     nonlinear_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh, std::move(preconditioner));
+  } else if (preconditioner_case == PreconditionerCase::StateDependentDirectInverseAction) {
+    const std::vector<smith::LinearSolverOptions> sub_solver_options{flux_solver_options};
+    auto sub_solvers = smith::buildBlockPreconditionerSubSolvers(sub_solver_options, mesh->getComm());
+
+    auto schur = std::make_unique<TemperatureDiffusionSchurActionSolver>(temperature_schur_form, shape_disp,
+                                                                         temperature, time_info, temp_bc_manager.get());
+
+    auto preconditioner = std::make_unique<smith::BlockSchurPreconditioner>(
+        std::move(sub_solvers), linear_options.block_schur_type, std::move(schur));
+    nonlinear_solver = smith::buildNonlinearBlockSolver(nonlin_opts, linear_options, *mesh, std::move(preconditioner));
   }
 
   ASSERT_TRUE(nonlinear_solver != nullptr);
@@ -263,7 +334,8 @@ TEST_P(NonlinearMixedDiffusionPreconditionerTest, BlockSolve)
 }
 
 INSTANTIATE_TEST_SUITE_P(StateDependentSchur, NonlinearMixedDiffusionPreconditionerTest,
-                         ::testing::Values(PreconditionerCase::StateDependentCustomFullSchur),
+                         ::testing::Values(PreconditionerCase::StateDependentCustomFullSchur,
+                                           PreconditionerCase::StateDependentDirectInverseAction),
                          preconditionerCaseNameGenerator);
 
 int main(int argc, char* argv[])
