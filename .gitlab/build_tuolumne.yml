@@ -2,7 +2,7 @@
 # This is the shared configuration of jobs for tuolumne
 .on_tuolumne:
   variables:
-    SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES}"
+    SCHEDULER_PARAMETERS: "--queue pci --exclusive --time-limit=${ALLOC_TIME}m --nodes=${ALLOC_NODES} --amd-gpumode=CPX"
     COMPILER: "llvm-amdgpu@6.4.2"
     HOST_CONFIG: "tuolumne-toss_4_x86_64_ib_cray-${COMPILER}_hip.cmake"
   tags:
