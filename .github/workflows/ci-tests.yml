@@ -118,7 +118,7 @@ jobs:
       with:
         submodules: recursive
     - name: Check ${{ matrix.check_type }}
-      run: ./scripts/github-actions/linux-check.sh 
+      run: ./scripts/github-actions/linux-check.sh
     - name: Upload coverage to Codecov
       if: ${{ matrix.check_type == 'coverage' }}
       uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
