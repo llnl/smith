@@ -525,6 +525,40 @@ TEST(domain, ofInteriorBoundaryElements)
   EXPECT_NEAR(calculatedArea, expectedArea, 1e-6);
 }
 
+TEST(domain, fromBodyElementAttributeSet)
+{
+  auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/mfem/data/compass.msh");
+  auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
+
+  Domain d_n_even = fromElementAttributeSet(*mesh, "N Even");
+  EXPECT_EQ(d_n_even.tri_ids_.size(), 1);
+
+  auto find_element_n_even = [](std::vector<vec2> vertices, int /* attr */) {
+    auto centroid = average(vertices);
+    vec2 target{{0.04714045207910317, 0.3804737854124365}};
+    return norm(centroid - target) < 1e-2;
+  };
+  Domain d1 = Domain::ofElements(*mesh, find_element_n_even);
+  EXPECT_EQ(d_n_even.tri_ids_, d1.tri_ids_);
+}
+
+TEST(domain, fromBoundaryElementAttributeSet)
+{
+  auto meshInput = buildMeshFromFile(SMITH_REPO_DIR "/mfem/data/compass.msh");
+  auto mesh = smith::mesh::refineAndDistribute(std::move(meshInput), 0, 0);
+
+  Domain d_nne = fromBoundaryElementAttributeSet(*mesh, "NNE");
+  EXPECT_EQ(d_nne.edge_ids_.size(), 1);
+
+  auto find_element_nne = [](std::vector<vec2> vertices, int /* attr */) {
+    auto centroid = average(vertices);
+    vec2 target{{0.35355339059327375, 0.85355339059327375}};
+    return norm(centroid - target) < 1e-2;
+  };
+  Domain d1 = Domain::ofBoundaryElements(*mesh, find_element_nne);
+  EXPECT_EQ(d_nne.edge_ids_, d1.edge_ids_);
+}
+
 int main(int argc, char* argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
