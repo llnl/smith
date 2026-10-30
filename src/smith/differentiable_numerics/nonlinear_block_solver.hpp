@@ -98,6 +98,9 @@ class NonlinearBlockSolverBase {
   /// @brief Set an inner-solve tolerance multiplier, e.g. for staggered solves.
   virtual void setInnerToleranceMultiplier(double multiplier) = 0;
 
+  /// @brief Return the configured solver print level.
+  virtual int printLevel() const { return 0; }
+
  protected:
   mutable bool is_setup_ = false;  ///< Records if this block solver has its preconditioner initialized.
   mutable NonlinearConvergenceContext convergence_context_ = {};  ///< Solver-owned convergence state for one solve.
@@ -139,6 +142,9 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
 
   /// @brief Set the inner tolerance multiplier.
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
+
+  /// @brief Return the configured solver print level.
+  int printLevel() const override { return retained_nonlinear_options_ ? retained_nonlinear_options_->print_level : 0; }
 
   /// @brief Build a fresh solver instance from retained config.
   std::shared_ptr<NonlinearBlockSolver> cloneFresh() const;
