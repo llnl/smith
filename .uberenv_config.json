@@ -8,5 +8,7 @@
 "spack_packages_url": "https://github.com/spack/spack-packages.git",
 "spack_packages_commit": "5f87aecc2419fc5184d9d7598a14f5ab348ba4d8",
 "spack_configs_path": "scripts/spack/configs",
-"spack_packages_path": ["scripts/spack/spack_repo/smith/packages"]
+"spack_packages_path": [
+  "tribol/scripts/spack/spack_repo/tribol/packages",
+  "scripts/spack/spack_repo/smith/packages"]
 }
