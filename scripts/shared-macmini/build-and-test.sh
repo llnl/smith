@@ -36,8 +36,8 @@ print_run_log cd $PROJECT_DIR
 
 # Update repo
 print_run_log git checkout develop
-print_run_log git pull
-print_run_log git submodule update --init --recursive
+print_run_log git deinit --force --all
+print_run_log git pull --recurse-submodules
 
 # Clear previous build(s)
 print_run_log rm -rf _smith_build_and_test*

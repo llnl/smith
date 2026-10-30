@@ -11,6 +11,7 @@
 #  MFEM_FOUND            - If MFEM was found
 #  mfem                  - BLT Registered Library 
 #  MFEM_BUILT_WITH_CMAKE - If MFEM was built with CMake
+#  STRUMPACK_FOUND       - If MFEM was built with STRUMPACK
 #------------------------------------------------------------------------------
 
 if(NOT MFEM_DIR)
@@ -26,6 +27,7 @@ set(MFEM_DIR ${_MFEM_DIR} CACHE PATH "" FORCE)
 
 set(_mfem_uses_mpi FALSE)
 set(_mfem_uses_openmp FALSE)
+set(_mfem_uses_strumpack FALSE)
 
 if(MFEM_FOUND)
     # MFEM was built with CMake so use that config file
@@ -45,6 +47,9 @@ if(MFEM_FOUND)
     endif()
     if(MFEM_USE_OPENMP OR MFEM_USE_LEGACY_OPENMP)
         set(_mfem_uses_openmp TRUE)
+    endif()
+    if(MFEM_USE_STRUMPACK)
+        set(_mfem_uses_strumpack TRUE)
     endif()
 else()
     set(MFEM_BUILT_WITH_CMAKE FALSE)
@@ -94,6 +99,9 @@ else()
     endif()
     if(mfem_cfg_file_txt MATCHES "MFEM_USE_(LEGACY_)?OPENMP[ \\t]*\\+?=[ \\t]*YES")
         set(_mfem_uses_openmp TRUE)
+    endif()
+    if(mfem_cfg_file_txt MATCHES "MFEM_USE_STRUMPACK[ \\t]*\\+?=[ \\t]*YES")
+        set(_mfem_uses_strumpack TRUE)
     endif()
     if(mfem_cfg_file_txt MATCHES "MFEM_SHARED[ \\t]*\\+?=[ \\t]*YES")
         set(SMITH_MFEM_SHARED_BUILD TRUE)
@@ -166,6 +174,8 @@ else()
         TREAT_INCLUDES_AS_SYSTEM ON)
 endif()
 
+set(STRUMPACK_FOUND ${_mfem_uses_strumpack})
+
 if(_mfem_uses_mpi)
     if(NOT TARGET blt::mpi)
         message(FATAL_ERROR "MFEM was built with MPI support, but MPI is not enabled in BLT. Configure with ENABLE_MPI=ON.")
@@ -188,6 +198,7 @@ endif()
 
 unset(_mfem_uses_mpi)
 unset(_mfem_uses_openmp)
+unset(_mfem_uses_strumpack)
 
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set MFEM_FOUND to TRUE

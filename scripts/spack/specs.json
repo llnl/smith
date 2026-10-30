@@ -27,5 +27,5 @@
     [ "+devtools+adiak+caliper~enzyme cuda_arch=90 %clang_19" ],
 
     "macos_tahoe_aarch64":
-    [ "+devtools+adiak+caliper+enzyme~openmp %clang_19" ]
+    [ "+devtools+adiak+caliper+enzyme+openmp %clang_19" ]
 }

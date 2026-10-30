@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
 
+permissions:
+  contents: read
+
 env:
   CLANG_DOCKER_IMAGE: seracllnl/tpls:clang-19_09-04-26_01h-36m
   CUDA_DOCKER_IMAGE: seracllnl/tpls:cuda-12_01-09-26_02h-37m
@@ -71,6 +74,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
+          persist-credentials: false
       - name: Print Matrix Variables
         run: |
           echo "build_src_opts ${{ matrix.config.build_src_opts }}"
@@ -97,12 +101,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
     - set_image_vars
-    strategy:
-      # If any of checks (e.g. style) fail, allow other jobs to continue running.
-      fail-fast: false
-      matrix:
-        # TODO re-enable coverage https://github.com/LLNL/smith/issues/1481
-        check_type: [style, header, docs] #[coverage, docs, style, header]
     container:
       image: ${{ needs.set_image_vars.outputs.clang_docker_image }}
       volumes:
@@ -110,22 +108,95 @@ jobs:
       # Required - default is set to user "smith"
       options: --user root
       env:
-        CHECK_TYPE: ${{ matrix.check_type }}
         HOST_CONFIG: llvm@19.1.1.cmake
     steps:
     - name: Checkout Smith
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         submodules: recursive
-    - name: Check ${{ matrix.check_type }}
-      run: ./scripts/github-actions/linux-check.sh
-    - name: Upload coverage to Codecov
-      if: ${{ matrix.check_type == 'coverage' }}
-      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
-      with:
-        fail_ci_if_error: true
-        files: smith_coverage.info.cleaned
-        flags: unittests
-        verbose: true
+        persist-credentials: false
+    - name: Configure, build, and install
+      id: setup
+      shell: bash
       env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        CHECK_TYPE: setup
+      run: |
+        mkdir -p code-quality-logs
+        ./scripts/github-actions/linux-check.sh 2>&1 | tee code-quality-logs/setup.log
+    # Let every check run, then report their combined result below.
+    - name: Check style
+      id: style
+      continue-on-error: true
+      shell: bash
+      env:
+        CHECK_TYPE: style
+      run: ./scripts/github-actions/linux-check.sh 2>&1 | tee code-quality-logs/style.log
+    - name: Check headers
+      id: header
+      continue-on-error: true
+      shell: bash
+      env:
+        CHECK_TYPE: header
+      run: ./scripts/github-actions/linux-check.sh 2>&1 | tee code-quality-logs/header.log
+    - name: Check docs
+      id: docs
+      continue-on-error: true
+      shell: bash
+      env:
+        CHECK_TYPE: docs
+      run: ./scripts/github-actions/linux-check.sh 2>&1 | tee code-quality-logs/docs.log
+    - name: Upload code quality logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+      with:
+        name: Code quality logs
+        path: code-quality-logs
+        if-no-files-found: warn
+
+    - name: Report code quality results
+      if: ${{ always() }}
+      shell: bash
+      env:
+        SETUP_RESULT: ${{ steps.setup.outcome }}
+        STYLE_RESULT: ${{ steps.style.outcome }}
+        HEADER_RESULT: ${{ steps.header.outcome }}
+        DOCS_RESULT: ${{ steps.docs.outcome }}
+      run: |
+        show_failed_log() {
+          local check_name="$1"
+          local result="$2"
+          local log_file="code-quality-logs/${check_name}.log"
+
+          if [[ "$result" != "failure" || ! -f "$log_file" ]]; then
+            return
+          fi
+
+          echo "::group::Last 200 lines from the ${check_name} log"
+          tail -n 200 "$log_file"
+          echo "::endgroup::"
+        }
+
+        if [[ "$SETUP_RESULT" != "success" ]]; then
+          echo "::error::Code quality setup failed; style, header, and docs checks could not run."
+          show_failed_log setup "$SETUP_RESULT"
+          echo "Download the 'Code quality logs' artifact for the complete setup log."
+          exit 1
+        fi
+
+        failed_checks=()
+
+        [[ "$STYLE_RESULT" == "success" ]] || failed_checks+=(style)
+        [[ "$HEADER_RESULT" == "success" ]] || failed_checks+=(header)
+        [[ "$DOCS_RESULT" == "success" ]] || failed_checks+=(docs)
+
+        if (( ${#failed_checks[@]} == 0 )); then
+          echo "All code quality checks passed."
+          exit 0
+        fi
+
+        echo "::error::Code quality checks failed: ${failed_checks[*]}"
+        show_failed_log style "$STYLE_RESULT"
+        show_failed_log header "$HEADER_RESULT"
+        show_failed_log docs "$DOCS_RESULT"
+        echo "Download the 'Code quality logs' artifact for the complete logs."
+        exit 1

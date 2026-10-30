@@ -43,8 +43,20 @@ spack:
           compilers:
             c: /opt/homebrew/opt/llvm@19/bin/clang
             cxx: /opt/homebrew/opt/llvm@19/bin/clang++
+          # _macos_openmp_start
+          # Homebrew installs the OpenMP runtime separately from LLVM.
+          # CMake's verbose compiler probes bypass Spack's normal flag injection,
+          # so expose the search paths through the compiler environment as well.
+          environment:
+            prepend_path:
+              CPATH: /opt/homebrew/opt/libomp/include
+              LIBRARY_PATH: /opt/homebrew/opt/libomp/lib
           flags:
             fflags: -fPIC
+            cflags: -I/opt/homebrew/opt/libomp/include
+            cxxflags: -I/opt/homebrew/opt/libomp/include
+            ldflags: -L/opt/homebrew/opt/libomp/lib -Wl,-rpath,/opt/homebrew/opt/libomp/lib
+          # _macos_openmp_end
 
     # Providers
     mpi:
