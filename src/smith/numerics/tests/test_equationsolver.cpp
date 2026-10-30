@@ -30,6 +30,88 @@ using namespace smith::mfem_ext;
 
 using param_t = std::tuple<NonlinearSolver, LinearSolver, Preconditioner>;
 
+namespace {
+
+class TwoBlockQuadraticOperator : public mfem::Operator {
+ public:
+  explicit TwoBlockQuadraticOperator(double second_scale = 100.0) : mfem::Operator(2), second_scale_(second_scale) {}
+
+  void Mult(const mfem::Vector& x, mfem::Vector& r) const override
+  {
+    r.SetSize(2);
+    r(0) = x(0) * x(0);
+    r(1) = second_scale_ * x(1) * x(1);
+  }
+
+  mfem::Operator& GetGradient(const mfem::Vector& x) const override
+  {
+    jacobian_diag_ = std::make_unique<mfem::SparseMatrix>(2);
+    jacobian_diag_->Add(0, 0, 2.0 * x(0));
+    jacobian_diag_->Add(1, 1, 2.0 * second_scale_ * x(1));
+    jacobian_diag_->Finalize();
+    jacobian_ = std::make_unique<mfem::HypreParMatrix>(MPI_COMM_WORLD, 2, 2, offsets_, offsets_, jacobian_diag_.get());
+    return *jacobian_;
+  }
+
+ private:
+  double second_scale_;
+  mutable std::unique_ptr<mfem::SparseMatrix> jacobian_diag_ = nullptr;
+  mutable std::unique_ptr<mfem::HypreParMatrix> jacobian_ = nullptr;
+  mutable HYPRE_BigInt offsets_[2] = {0, 2};
+};
+
+class ManagedHalvingSolver : public mfem::NewtonSolver, public smith::ConvergenceManagedNonlinearSolver {
+ public:
+  ManagedHalvingSolver() : mfem::NewtonSolver(MPI_COMM_WORLD) {}
+
+  void setConvergenceManager(std::shared_ptr<smith::EquationSolverConvergenceManager> convergence_manager) override
+  {
+    convergence_manager_ = std::move(convergence_manager);
+  }
+
+  void Mult(const mfem::Vector&, mfem::Vector& x) const override
+  {
+    mfem::Vector residual(x.Size());
+    oper->Mult(x, residual);
+    initial_norm = residual.Norml2();
+
+    int it = 0;
+    for (;; ++it) {
+      oper->Mult(x, residual);
+
+      smith::ConvergenceStatus status;
+      if (convergence_manager_) {
+        status = convergence_manager_->evaluate(1.0, residual);
+      } else {
+        status.global_norm = residual.Norml2();
+        status.global_goal = std::max(abs_tol, rel_tol * initial_norm);
+        status.global_converged = status.global_norm <= status.global_goal;
+        status.converged = status.global_converged;
+      }
+
+      if (status.converged) {
+        converged = true;
+        final_iter = it;
+        final_norm = status.global_norm;
+        return;
+      }
+      if (it >= max_iter) {
+        converged = false;
+        final_iter = it;
+        final_norm = status.global_norm;
+        return;
+      }
+
+      x *= 0.5;
+    }
+  }
+
+ private:
+  std::shared_ptr<smith::EquationSolverConvergenceManager> convergence_manager_ = nullptr;
+};
+
+}  // namespace
+
 class EquationSolverSuite : public testing::TestWithParam<param_t> {
  protected:
   void SetUp() override { std::tie(nonlin_solver, lin_solver, precond) = GetParam(); }
@@ -122,6 +204,32 @@ TEST_P(EquationSolverSuite, All)
   for (int i = 0; i < x_computed.Size(); ++i) {
     EXPECT_LT(std::abs((x_computed(i) - x_exact(i))) / x_exact(i), 1.0e-6);
   }
+}
+
+TEST(EquationSolverManualConvergence, InjectedManagedSolverSupportsScalarConvergence)
+{
+  auto nonlinear_solver = std::make_unique<ManagedHalvingSolver>();
+  nonlinear_solver->SetRelTol(1.0e-2);
+  nonlinear_solver->SetAbsTol(0.0);
+  nonlinear_solver->SetMaxIter(10);
+  nonlinear_solver->SetPrintLevel(0);
+
+  auto linear_solver = std::make_unique<mfem::CGSolver>(MPI_COMM_WORLD);
+  EquationSolver eq_solver(std::move(nonlinear_solver), std::move(linear_solver));
+
+  TwoBlockQuadraticOperator residual_opr;
+  eq_solver.setConvergenceTolerances(0.0, 1.0e-2, MPI_COMM_WORLD);
+  eq_solver.setOperator(residual_opr);
+
+  mfem::Vector x(2);
+  x = 1.0;
+  eq_solver.solve(x);
+
+  mfem::Vector residual(2);
+  residual_opr.Mult(x, residual);
+
+  EXPECT_TRUE(eq_solver.nonlinearSolver().GetConverged());
+  EXPECT_LE(residual.Norml2(), 1.0e-2 * eq_solver.nonlinearSolver().GetInitialNorm());
 }
 
 /**

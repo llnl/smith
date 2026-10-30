@@ -13,27 +13,29 @@ smith_add_library(
     HEADERS     ${physics_test_headers}
     )
       
-set(physics_test_depends smith_physics smith_physics_test_utils gtest)
+set(physics_test_depends smith_physics smith_differentiable_numerics smith_physics_test_utils gtest)
 
 set(physics_serial_test_sources
     beam_bending.cpp
+    test_adjoint_workflow.cpp
     fit_test.cpp
     test_mesh_wrapper.cpp
     thermal_finite_diff.cpp
     thermal_statics_patch.cpp
     thermal_dynamics_patch.cpp
     solid_finite_diff.cpp
+    test_solid_axisymmetric.cpp
     solid_statics_patch.cpp
     solid_dynamics_patch.cpp
     dynamic_solid_adjoint.cpp
     quasistatic_solid_adjoint.cpp
     finite_element_vector_set_over_domain.cpp
     solid_multi_material.cpp
-    test_solid_weak_form.cpp
-    test_heat_weak_form.cpp
     test_functional_weak_form.cpp
-    thermomech_finite_diff.cpp
+    tet_quality.cpp
     thermomech_statics_patch.cpp
+    parameterized_thermomechanics_example.cpp
+    test_tabulated_solid_properties.cpp
     test_kinematic_objective.cpp
     )
 
@@ -59,6 +61,10 @@ smith_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
 
+if (TRIBOL_FOUND AND ENZYME_FOUND AND ENABLE_HIP)
+    set_property(TEST contact_finite_diff APPEND PROPERTY ENVIRONMENT "MPICH_COLL_OPT_OFF=MPI_Alltoallv")
+endif()
+
 if (SMITH_USE_ENZYME)
     # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
     # desired occupancy was 4, final occupancy is 3 [-Werror,-Wpass-failed]
@@ -68,7 +74,6 @@ endif()
 set(physics_parallel_test_sources
     lce_Brighenti_tensile.cpp
     lce_Bertoldi_lattice.cpp
-    parameterized_thermomechanics_example.cpp
     parameterized_thermal.cpp
     solid.cpp
     solid_periodic.cpp
@@ -80,12 +85,17 @@ set(physics_parallel_test_sources
     dynamic_thermal_adjoint.cpp
     solid_reaction_adjoint.cpp
     thermal_nonlinear_solve.cpp
+    shallow_arch_buckling.cpp
     )
 set(physics_parallel_tribol_test_sources
     contact_patch.cpp
     contact_patch_tied.cpp
     contact_beam.cpp
     )
+if (ENZYME_FOUND)
+    list(APPEND physics_parallel_tribol_test_sources
+                energy_mortar_patch.cpp)
+endif()
 blt_list_append(TO       physics_parallel_test_sources
                 ELEMENTS ${physics_parallel_tribol_test_sources}
                 IF       TRIBOL_FOUND)

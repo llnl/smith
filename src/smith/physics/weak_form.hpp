@@ -51,7 +51,8 @@ class WeakForm {
    * @param quad_fields vector of ConstQuadratureFieldPtr
    * @return mfem::Vector
    */
-  virtual mfem::Vector residual(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  virtual mfem::Vector residual(const TimeInfo& time_info, ConstFieldPtr shape_disp,
+                                const std::vector<ConstFieldPtr>& fields,
                                 const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const = 0;
 
   /** @brief Derivative of the residual with respect to specified field arguments: sum_j d{r}/d{fields}_j *
@@ -65,7 +66,7 @@ class WeakForm {
    * {fields}_j is the jth field, {r} is the residual
    */
   virtual std::unique_ptr<mfem::HypreParMatrix> jacobian(
-      TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+      const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
       const std::vector<double>& field_argument_tangents,
       const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const = 0;
 
@@ -81,7 +82,7 @@ class WeakForm {
    * @param jvp_reaction output jvps: d{r} / d{fields}_j * fieldsV[j]
    * nullptr fieldsV are assumed to be all zero to avoid extra calculations
    */
-  virtual void jvp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  virtual void jvp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                    const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_shape_disp,
                    const std::vector<ConstFieldPtr>& v_fields,
                    const std::vector<ConstQuadratureFieldPtr>& v_quad_fields, DualFieldPtr jvp_reaction) const = 0;
@@ -98,7 +99,7 @@ class WeakForm {
    * @param vjp_quadrature_sensivities output vjps, 1 per input quadrature field: v_field * d{r} /
    * d{quadrature_field}_j
    */
-  virtual void vjp(TimeInfo time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
+  virtual void vjp(const TimeInfo& time_info, ConstFieldPtr shape_disp, const std::vector<ConstFieldPtr>& fields,
                    const std::vector<ConstQuadratureFieldPtr>& quad_fields, ConstFieldPtr v_field,
                    DualFieldPtr vjp_shape_disp_sensitivity, const std::vector<DualFieldPtr>& vjp_sensitivities,
                    const std::vector<QuadratureFieldPtr>& vjp_quadrature_sensivities) const = 0;

@@ -4,428 +4,300 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include <memory>
 #include "gtest/gtest.h"
 
 #include "smith/smith_config.hpp"
 #include "smith/infrastructure/application_manager.hpp"
 #include "smith/numerics/solver_config.hpp"
-
 #include "smith/physics/state/state_manager.hpp"
+#include "smith/physics/mesh.hpp"
 
-#include "smith/differentiable_numerics/field_state.hpp"
-#include "smith/differentiable_numerics/differentiable_solver.hpp"
-#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
-#include "smith/differentiable_numerics/time_integration_rule.hpp"
-#include "smith/differentiable_numerics/time_discretized_weak_form.hpp"
+#include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
+#include "smith/differentiable_numerics/coupled_system_solver.hpp"
+#include "smith/differentiable_numerics/thermo_mechanics_system.hpp"
 #include "smith/differentiable_numerics/paraview_writer.hpp"
+#include "smith/differentiable_numerics/dirichlet_boundary_conditions.hpp"
 #include "smith/differentiable_numerics/differentiable_test_utils.hpp"
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
-#include "gretl/strumm_walther_checkpoint_strategy.hpp"
+#include "smith/physics/functional_objective.hpp"
+#include "gretl/wang_checkpoint_strategy.hpp"
 
 namespace smith {
 
-/**
- * @brief Compute Green's strain from the displacement gradient
- */
-template <typename T, int dim>
-auto greenStrain(const tensor<T, dim, dim>& grad_u)
+static constexpr int dim = 3;
+static constexpr int displacement_order = 1;
+static constexpr int temperature_order = 1;
+
+template <typename T, int dim_>
+auto greenStrain(const tensor<T, dim_, dim_>& grad_u)
 {
   return 0.5 * (grad_u + transpose(grad_u) + dot(transpose(grad_u), grad_u));
 }
 
-/// @brief Green-Saint Venant isotropic thermoelastic model
-/// This an unparametrized version of the model in green_saint_venant_thermoelastic.hpp
-/// Another difference is that this implementation does not use 'State' as state is not supported in smith for
-/// autodifferentiation
 struct GreenSaintVenantThermoelasticMaterial {
-  double density;    ///< density
-  double E;          ///< Young's modulus
-  double nu;         ///< Poisson's ratio
-  double C_v;        ///< volumetric heat capacity
-  double alpha;      ///< thermal expansion coefficient
-  double theta_ref;  ///< datum temperature for thermal expansion
-  double kappa;      ///< thermal conductivity
-
+  double density;
+  double E0;
+  double nu;
+  double C_v;
+  double alpha;
+  double theta_ref;
+  double kappa;
   using State = Empty;
-
-  /**
-   * @brief Evaluate constitutive variables for thermomechanics
-   *
-   * @tparam T1 Type of the displacement gradient components (number-like)
-   * @tparam T2 Type of the temperature (number-like)
-   * @tparam T3 Type of the temperature gradient components (number-like)
-   *
-   * @param[in] grad_u Displacement gradient
-   * @param[in] theta Temperature
-   * @param[in] grad_theta Temperature gradient
-   * @param[in,out] state State variables for this material
-   *
-   * @return[out] tuple of constitutive outputs. Contains the
-   * First Piola stress, the volumetric heat capacity in the reference
-   * configuration, the heat generated per unit volume during the time
-   * step (units of energy), and the referential heat flux (units of
-   * energy per unit time and per unit area).
-   */
-  template <typename T1, typename T2, typename T3, typename T4, int dim>
+  template <typename T1, typename T2, typename T3, typename T4, typename T5>
   auto operator()(double, State&, const tensor<T1, dim, dim>& grad_u, const tensor<T2, dim, dim>& grad_v, T3 theta,
-                  const tensor<T4, dim>& grad_theta) const
+                  const tensor<T4, dim>& grad_theta, const T5& E_param) const
   {
-    const double K = E / (3.0 * (1.0 - 2.0 * nu));
-    const double G = 0.5 * E / (1.0 + nu);
-    const auto Eg = greenStrain(grad_u);
+    auto E = E0 + get<0>(E_param);
+    const auto K = E / (3.0 * (1.0 - 2.0 * nu));
+    const auto G = 0.5 * E / (1.0 + nu);
+    const auto Eg = greenStrain<T1, dim>(grad_u);
     const auto trEg = tr(Eg);
-
-    // stress
     static constexpr auto I = Identity<dim>();
     const auto S = 2.0 * G * dev(Eg) + K * (trEg - dim * alpha * (theta - theta_ref)) * I;
     auto F = grad_u + I;
     const auto Piola = dot(F, S);
-
-    // internal heat power
     auto greenStrainRate =
         0.5 * (grad_v + transpose(grad_v) + dot(transpose(grad_v), grad_u) + dot(transpose(grad_u), grad_v));
-    const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate);
-
-    // heat flux
+    const auto s0 = -dim * K * alpha * (theta + 273.1) * tr(greenStrainRate) + 0.0 * E;
     const auto q0 = -kappa * grad_theta;
-
     return smith::tuple{Piola, C_v, s0, q0};
   }
+  static constexpr int numParameters() { return 1; }
 };
 
-smith::LinearSolverOptions linear_options{.linear_solver = smith::LinearSolver::Strumpack,
-                                          .relative_tol = 1e-8,
-                                          .absolute_tol = 1e-8,
-                                          .max_iterations = 200,
-                                          .print_level = 0};
-
-smith::NonlinearSolverOptions nonlinear_opts{.nonlin_solver = NonlinearSolver::NewtonLineSearch,
-                                             .relative_tol = 1.9e-6,
-                                             .absolute_tol = 1.0e-10,
-                                             .max_iterations = 500,
-                                             .max_line_search_iterations = 50,
-                                             .print_level = 2};
-
-static constexpr int dim = 3;
-static constexpr int order = 1;
-
-struct SolidMechanicsMeshFixture : public testing::Test {
-  double length = 1.0;
-  double width = 0.04;
-  int num_elements_x = 12;
-  int num_elements_y = 2;
-  int num_elements_z = 2;
-  double elem_size = length / num_elements_x;
-
+struct ThermoMechanicsMeshFixture : public testing::Test {
   void SetUp()
   {
-    smith::StateManager::initialize(datastore_, "solid");
-    auto mfem_shape = mfem::Element::QUADRILATERAL;
+    datastore_ = std::make_unique<axom::sidre::DataStore>();
+    smith::StateManager::initialize(*datastore_, "solid");
     mesh_ = std::make_shared<smith::Mesh>(
-        mfem::Mesh::MakeCartesian3D(num_elements_x, num_elements_y, num_elements_z, mfem_shape, length, width, width),
-        "mesh", 0, 0);
+        mfem::Mesh::MakeCartesian3D(24, 2, 2, mfem::Element::HEXAHEDRON, 1.2, 0.03, 0.03), "mesh", 0, 0);
     mesh_->addDomainOfBoundaryElements("left", smith::by_attr<dim>(3));
     mesh_->addDomainOfBoundaryElements("right", smith::by_attr<dim>(5));
   }
-
-  static constexpr double total_simulation_time_ = 1.1;
-  static constexpr size_t num_steps_ = 4;
-  static constexpr double dt_ = total_simulation_time_ / num_steps_;
-
-  axom::sidre::DataStore datastore_;
+  std::unique_ptr<axom::sidre::DataStore> datastore_;
   std::shared_ptr<smith::Mesh> mesh_;
 };
 
-template <typename Space, typename Time = void*>
-struct FieldType {
-  FieldType(std::string n, int unknown_index_ = -1) : name(n), unknown_index(unknown_index_) {}
-  std::string name;
-  int unknown_index;
-};
+TEST_F(ThermoMechanicsMeshFixture, CreateDifferentiablePhysicsAllocatesReactionInfo)
+{
+  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
+  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
+                                            .relative_tol = 1e-10,
+                                            .absolute_tol = 1e-10,
+                                            .max_iterations = 4};
 
-struct FieldStore {
-  FieldStore(std::shared_ptr<Mesh> mesh, size_t storage_size = 50)
-      : mesh_(mesh),
-        data_store_(
-            std::make_shared<gretl::DataStore>(std::make_unique<gretl::StrummWaltherCheckpointStrategy>(storage_size)))
-  {
+  auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
+      mesh_, std::make_shared<CoupledSystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
+      BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
+
+  auto physics = system.createDifferentiablePhysics("thermo_physics");
+  const auto& solid_dual_space = physics->dual(system.prefix("solid_force")).space();
+  const auto& solid_state_space = physics->state(system.prefix("displacement")).space();
+  const auto& thermal_dual_space = physics->dual(system.prefix("thermal_flux")).space();
+  const auto& thermal_state_space = physics->state(system.prefix("temperature")).space();
+
+  EXPECT_EQ(physics->dualNames().size(), 2);
+  EXPECT_EQ(physics->dualNames()[0], system.prefix("solid_force"));
+  EXPECT_EQ(physics->dualNames()[1], system.prefix("thermal_flux"));
+  EXPECT_EQ(solid_dual_space.GetMesh(), solid_state_space.GetMesh());
+  EXPECT_STREQ(solid_dual_space.FEColl()->Name(), solid_state_space.FEColl()->Name());
+  EXPECT_EQ(solid_dual_space.GetVDim(), solid_state_space.GetVDim());
+  EXPECT_EQ(solid_dual_space.TrueVSize(), solid_state_space.TrueVSize());
+  EXPECT_EQ(thermal_dual_space.GetMesh(), thermal_state_space.GetMesh());
+  EXPECT_STREQ(thermal_dual_space.FEColl()->Name(), thermal_state_space.FEColl()->Name());
+  EXPECT_EQ(thermal_dual_space.GetVDim(), thermal_state_space.GetVDim());
+  EXPECT_EQ(thermal_dual_space.TrueVSize(), thermal_state_space.TrueVSize());
+}
+
+TEST_F(ThermoMechanicsMeshFixture, BackpropagateThroughPhysics)
+{
+  smith::LinearSolverOptions lin_opts{.linear_solver = smith::LinearSolver::SuperLU};
+  smith::NonlinearSolverOptions nonlin_opts{.nonlin_solver = smith::NonlinearSolver::Newton,
+                                            .relative_tol = 1e-10,
+                                            .absolute_tol = 1e-10,
+                                            .max_iterations = 4};
+
+  auto block_solver = buildNonlinearBlockSolver(nonlin_opts, lin_opts, *mesh_);
+  FieldType<L2<0>> youngs_modulus("youngs_modulus");
+  auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
+      mesh_, std::make_shared<CoupledSystemSolver>(block_solver), QuasiStaticSecondOrderTimeIntegrationRule{},
+      BackwardEulerFirstOrderTimeIntegrationRule{}, "thermo", youngs_modulus);
+
+  GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+  system.setMaterial(material, mesh_->entireBodyName());
+  system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 100.0; });
+  system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+  system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+
+  system.addSolidTraction("right", [=](double, auto X, auto, auto, auto, auto, auto, auto, auto) {
+    auto traction = 0.0 * X;
+    traction[0] = -0.015;
+    return traction;
+  });
+
+  auto physics = system.createDifferentiablePhysics("thermo_physics");
+
+  // Run forward
+  double dt = 1.0;
+  for (int step = 0; step < 2; ++step) {
+    physics->advanceTimestep(dt);
   }
 
-  template <typename Space>
-  void addShapeDisp(FieldType<Space> type)
-  {
-    shape_disp_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag()));
-  }
+  auto reactions = physics->getReactionStates();
+  auto obj = 0.5 * (innerProduct(reactions[0], reactions[0]) + innerProduct(reactions[1], reactions[1]));
 
-  template <typename Space>
-  std::shared_ptr<DirichletBoundaryConditions>& addUnknown(FieldType<Space>& type)
-  {
-    type.unknown_index = static_cast<int>(num_unknowns_);
-    to_fields_index_[type.name] = fields_.size();
-    to_unknown_index_[type.name] = num_unknowns_;
-    FieldState new_field = smith::createFieldState<Space>(*data_store_, Space{}, type.name, mesh_->tag());
-    fields_.push_back(new_field);
-    ++num_unknowns_;
-    boundary_conditions_.push_back(
-        std::make_shared<DirichletBoundaryConditions>(mesh_->mfemParMesh(), new_field.get()->space()));
-    SLIC_ERROR_IF(num_unknowns_ != boundary_conditions_.size(),
-                  "Inconsistency between num unknowns and boundary condition size");
-    return boundary_conditions_.back();
-  }
+  gretl::set_as_objective(obj);
+  obj.data_store().back_prop();
 
-  template <typename Space>
-  auto addDerived(FieldType<Space>, std::string name)
-  {
-    to_fields_index_[name] = fields_.size();
-    fields_.push_back(smith::createFieldState<Space>(*data_store_, Space{}, name, mesh_->tag()));
-    return FieldType<Space>(name);
-  }
+  auto param_sens = system.getParameterFields()[0].get_dual();
+  EXPECT_TRUE(param_sens->Norml2() > 0.0);
+}
 
-  void addWeakFormUnknownArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
-  {
-    FieldLabel argument_name_and_index{.field_name = argument_name, .field_index_in_residual = argument_index};
-    if (weak_form_name_to_unknown_name_index_.count(weak_form_name)) {
-      weak_form_name_to_unknown_name_index_.at(weak_form_name).push_back(argument_name_and_index);
-    } else {
-      weak_form_name_to_unknown_name_index_[weak_form_name] = std::vector<FieldLabel>{argument_name_and_index};
+TEST_F(ThermoMechanicsMeshFixture, MonolithicBucklingChallenge)
+{
+  constexpr double compressive_traction = 0.015;
+  constexpr double lateral_body_force = 2.5e-5;
+  constexpr double thermal_source = 1.0;
+
+  auto run_problem = [&](const std::string& label, std::shared_ptr<CoupledSystemSolver> coupled_solver) {
+    GreenSaintVenantThermoelasticMaterial material{1.0, 100.0, 0.25, 1.0, 0.0025, 0.0, 0.05};
+    FieldType<L2<0>> youngs_modulus("youngs_modulus");
+    auto system = buildThermoMechanicsSystem<dim, displacement_order, temperature_order>(
+        mesh_, coupled_solver, QuasiStaticSecondOrderTimeIntegrationRule{},
+        BackwardEulerFirstOrderTimeIntegrationRule{}, youngs_modulus);
+    system.setMaterial(material, mesh_->entireBodyName());
+    system.parameter_fields[0].get()->setFromFieldFunction([=](smith::tensor<double, dim>) { return 100.0; });
+    system.disp_bc->setFixedVectorBCs<dim>(mesh_->domain("left"));
+    system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
+    system.temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
+    system.addSolidTraction("right", [=](auto, auto X, auto... /*args*/) {
+      auto traction = 0.0 * X;
+      traction[0] = -compressive_traction;
+      return traction;
+    });
+    system.addSolidBodyForce(mesh_->entireBodyName(), [=](auto, auto X, auto... /*args*/) {
+      auto force = 0.0 * X;
+      force[1] = lateral_body_force;
+      return force;
+    });
+    system.addHeatSource(mesh_->entireBodyName(),
+                         [=](auto, auto, auto, auto, auto, auto, auto, auto) { return thermal_source; });
+
+    SLIC_INFO_ROOT("Starting " << label << " thermo-mechanics solve");
+
+    double dt = 1.0;
+    double time = 0.0;
+    auto shape_disp = system.field_store->getShapeDisp();
+    auto states = system.getStateFields();
+    auto params = system.getParameterFields();
+    std::vector<ReactionState> reactions;
+    for (size_t step = 0; step < 1; ++step) {
+      std::tie(states, reactions) =
+          system.advancer->advanceState(smith::TimeInfo(time, dt, step), shape_disp, states, params);
+      time += dt;
     }
-  }
 
-  void addWeakFormArg(std::string weak_form_name, std::string argument_name, size_t argument_index)
-  {
-    size_t field_index = to_fields_index_.at(argument_name);
-    if (weak_form_name_to_field_indices_.count(weak_form_name)) {
-      weak_form_name_to_field_indices_.at(weak_form_name).push_back(field_index);
-    } else {
-      weak_form_name_to_field_indices_[weak_form_name] = std::vector<size_t>{field_index};
-    }
-    SLIC_ERROR_IF(argument_index + 1 != weak_form_name_to_field_indices_.at(weak_form_name).size(),
-                  "Invalid order for adding weak form arguments.");
-  }
-
-  void printMap()
-  {
-    for (auto& keyval : weak_form_name_to_unknown_name_index_) {
-      std::cout << "for residual: " << keyval.first << " ";
-      for (auto& name_index : keyval.second) {
-        std::cout << "arg " << name_index.field_name << " at " << name_index.field_index_in_residual << ", ";
-      }
-      std::cout << std::endl;
-    }
-  }
-
-  std::vector<std::vector<size_t>> indexMap(const std::vector<std::string>& residual_names) const
-  {
-    std::vector<std::vector<size_t>> block_indices(residual_names.size());
-
-    for (size_t res_i = 0; res_i < residual_names.size(); ++res_i) {
-      std::vector<size_t>& res_indices = block_indices[res_i];
-      res_indices = std::vector<size_t>(num_unknowns_, invalid_block_index);
-      const std::string& res_name = residual_names[res_i];
-      const auto& arg_info = weak_form_name_to_unknown_name_index_.at(res_name);
-
-      for (const auto& field_name_and_arg_index : arg_info) {
-        const std::string field_name = field_name_and_arg_index.field_name;
-        size_t unknown_index = to_unknown_index_.at(field_name);
-        SLIC_ASSERT(unknown_index < num_unknowns_);
-        res_indices[unknown_index] = field_name_and_arg_index.field_index_in_residual;
-      }
-    }
-
-    return block_indices;
-  }
-
-  std::vector<const BoundaryConditionManager*> getBoundaryConditionManagers() const
-  {
-    std::vector<const BoundaryConditionManager*> bcs;
-    for (auto& bc : boundary_conditions_) {
-      bcs.push_back(&bc->getBoundaryConditionManager());
-    }
-    return bcs;
-  }
-
-  size_t getFieldIndex(const std::string& field_name) const { return to_fields_index_.at(field_name); }
-
-  const FieldState& getField(const std::string& field_name) const
-  {
-    size_t field_index = getFieldIndex(field_name);
-    return fields_[field_index];
-  }
-
-  void setField(const std::string& field_name, FieldState updated_field)
-  {
-    size_t field_index = getFieldIndex(field_name);
-    fields_[field_index] = updated_field;
-  }
-
-  const FieldState& getShapeDisp() const { return shape_disp_[0]; }
-
-  const std::vector<FieldState>& getAllFields() const { return fields_; }
-
-  std::vector<FieldState> getFields(const std::string& weak_form_name) const
-  {
-    auto unknown_field_indices = weak_form_name_to_field_indices_.at(weak_form_name);
-    std::vector<FieldState> fields_for_residual;
-    for (auto& i : unknown_field_indices) {
-      fields_for_residual.push_back(fields_[i]);
-    }
-    return fields_for_residual;
-  }
-
-  const std::shared_ptr<smith::Mesh>& getMesh() const { return mesh_; }
-
- private:
-  std::shared_ptr<Mesh> mesh_;
-  std::shared_ptr<gretl::DataStore> data_store_;
-
-  std::vector<FieldState> shape_disp_;
-  std::vector<FieldState> fields_;
-  std::map<std::string, size_t> to_fields_index_;
-
-  size_t num_unknowns_ = 0;
-  std::map<std::string, size_t> to_unknown_index_;
-  std::vector<std::shared_ptr<DirichletBoundaryConditions>> boundary_conditions_;
-
-  struct FieldLabel {
-    std::string field_name;
-    size_t field_index_in_residual;
+    return std::make_pair(mfem::Vector(*states[system.field_store->getFieldIndex("displacement_solve_state")].get()),
+                          mfem::Vector(*states[system.field_store->getFieldIndex("temperature_solve_state")].get()));
   };
 
-  std::map<std::string, std::vector<FieldLabel>> weak_form_name_to_unknown_name_index_;
+  smith::LinearSolverOptions monolithic_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
+                                                 .preconditioner = smith::Preconditioner::BlockDiagonal,
+                                                 .relative_tol = 1e-10,
+                                                 .absolute_tol = 1e-10,
+                                                 .max_iterations = 100,
+                                                 .print_level = 0};
+  smith::LinearSolverOptions block_opt{.linear_solver = smith::LinearSolver::SuperLU};
+  monolithic_lin_opts.sub_block_linear_solver_options.push_back(block_opt);
+  monolithic_lin_opts.sub_block_linear_solver_options.push_back(block_opt);
 
-  std::map<std::string, std::vector<size_t>> weak_form_name_to_field_indices_;
-};
+  smith::NonlinearSolverOptions monolithic_nonlin_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
+                                                       .relative_tol = 1e-10,
+                                                       .absolute_tol = 1e-10,
+                                                       .max_iterations = 5,
+                                                       .max_line_search_iterations = 6,
+                                                       .print_level = 2};
 
-template <typename FirstType, typename... Types>
-void createSpaces(const std::string& weak_form_name, FieldStore& field_store,
-                  std::vector<const mfem::ParFiniteElementSpace*>& spaces, size_t arg_num, FirstType type,
-                  Types... types)
-{
-  SLIC_ERROR_IF(spaces.size() != arg_num, "Error creating spaces recursively");
-  spaces.push_back(&field_store.getField(type.name).get()->space());
-  field_store.addWeakFormArg(weak_form_name, type.name, arg_num);
-  if (type.unknown_index >= 0) {
-    field_store.addWeakFormUnknownArg(weak_form_name, type.name, arg_num);
+  auto monolithic_block_solver = buildNonlinearBlockSolver(monolithic_nonlin_opts, monolithic_lin_opts, *mesh_);
+  auto monolithic_result = run_problem("monolithic", std::make_shared<CoupledSystemSolver>(monolithic_block_solver));
+  bool monolithic_converged = monolithic_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
+  int monolithic_iterations = monolithic_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
+
+  this->mesh_.reset();
+  smith::StateManager::reset();
+  this->SetUp();
+
+  auto staggered_coupled_solver = std::make_shared<CoupledSystemSolver>(10);
+
+  smith::LinearSolverOptions mech_lin_opts{.linear_solver = smith::LinearSolver::CG,
+                                           .preconditioner = smith::Preconditioner::HypreAMG,
+                                           .relative_tol = 1e-6,
+                                           .absolute_tol = 1e-10,
+                                           .max_iterations = 120,
+                                           .print_level = 0};
+  smith::NonlinearSolverOptions mech_nonlin_opts{.nonlin_solver = smith::NonlinearSolver::TrustRegion,
+                                                 .relative_tol = 1e-6,
+                                                 .absolute_tol = 1e-7,
+                                                 .max_iterations = 25,
+                                                 .print_level = 1};
+
+  smith::LinearSolverOptions therm_lin_opts{.linear_solver = smith::LinearSolver::GMRES,
+                                            .preconditioner = smith::Preconditioner::HypreAMG,
+                                            .relative_tol = 1e-6,
+                                            .absolute_tol = 1e-10,
+                                            .max_iterations = 80,
+                                            .print_level = 0};
+  smith::NonlinearSolverOptions therm_nonlin_opts{.nonlin_solver = smith::NonlinearSolver::NewtonLineSearch,
+                                                  .relative_tol = 1e-7,
+                                                  .absolute_tol = 1e-7,
+                                                  .max_iterations = 12,
+                                                  .max_line_search_iterations = 6,
+                                                  .print_level = 1};
+
+  auto solid_block_solver = buildNonlinearBlockSolver(mech_nonlin_opts, mech_lin_opts, *mesh_);
+  auto thermal_block_solver = buildNonlinearBlockSolver(therm_nonlin_opts, therm_lin_opts, *mesh_);
+  staggered_coupled_solver->addSubsystemSolver({0}, solid_block_solver);
+  staggered_coupled_solver->addSubsystemSolver({0, 1}, thermal_block_solver);
+
+  auto staggered_result = run_problem("staggered", staggered_coupled_solver);
+  bool staggered_solid_converged = solid_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
+  int staggered_solid_iterations = solid_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
+  bool staggered_thermal_converged = thermal_block_solver->nonlinear_solver_->nonlinearSolver().GetConverged();
+  int staggered_thermal_iterations = thermal_block_solver->nonlinear_solver_->nonlinearSolver().GetNumIterations();
+
+  double disp_diff = mfem::Vector(monolithic_result.first).Add(-1.0, staggered_result.first).Normlinf();
+  double temp_diff = mfem::Vector(monolithic_result.second).Add(-1.0, staggered_result.second).Normlinf();
+  double monolithic_lateral_deflection = 0.0;
+  for (int i = 1; i < monolithic_result.first.Size(); i += dim) {
+    monolithic_lateral_deflection = std::max(monolithic_lateral_deflection, std::abs(monolithic_result.first(i)));
   }
-  if constexpr (sizeof...(types) > 0) {
-    createSpaces(weak_form_name, field_store, spaces, arg_num + 1, types...);
+  double staggered_lateral_deflection = 0.0;
+  for (int i = 1; i < staggered_result.first.Size(); i += dim) {
+    staggered_lateral_deflection = std::max(staggered_lateral_deflection, std::abs(staggered_result.first(i)));
   }
-}
 
-template <int spatial_dim, typename TestSpaceType, typename... InputSpaceTypes>
-auto createWeakForm(std::string name, FieldType<TestSpaceType> test_type, FieldStore& field_store,
-                    FieldType<InputSpaceTypes>... field_types)
-{
-  const mfem::ParFiniteElementSpace& test_space = field_store.getField(test_type.name).get()->space();
-  std::vector<const mfem::ParFiniteElementSpace*> input_spaces;
-  createSpaces(name, field_store, input_spaces, 0, field_types...);
-  return std::make_shared<TimeDiscretizedWeakForm<spatial_dim, TestSpaceType, Parameters<InputSpaceTypes...>>>(
-      name, field_store.getMesh(), test_space, input_spaces);
-}
+  SLIC_INFO_ROOT("Monolithic converged: " << monolithic_converged << ", iterations: " << monolithic_iterations);
+  SLIC_INFO_ROOT("Monolithic solver tolerances: rel = 1e-10, abs = 1e-10");
+  SLIC_INFO_ROOT("Monolithic max lateral deflection: " << monolithic_lateral_deflection);
+  SLIC_INFO_ROOT("Staggered solid converged: " << staggered_solid_converged
+                                               << ", iterations: " << staggered_solid_iterations);
+  SLIC_INFO_ROOT("Staggered thermal converged: " << staggered_thermal_converged
+                                                 << ", iterations: " << staggered_thermal_iterations);
+  SLIC_INFO_ROOT("Staggered solver tolerances: solid rel/abs = 1e-6/1e-10, thermal rel/abs = 1e-7/1e-7");
+  SLIC_INFO_ROOT("Buckling displacement discrepancy: " << disp_diff);
+  SLIC_INFO_ROOT("Buckling temperature discrepancy: " << temp_diff);
+  SLIC_INFO_ROOT("Staggered max lateral deflection: " << staggered_lateral_deflection);
 
-std::vector<FieldState> solve(const std::vector<WeakForm*>& weak_forms, const FieldStore& field_store,
-                              const DifferentiableBlockSolver* solver, const TimeInfo& time_info)
-{
-  std::vector<std::string> weak_form_names;
-  for (const auto& wf : weak_forms) {
-    weak_form_names.push_back(wf->name());
-  }
-  std::vector<std::vector<size_t>> index_map = field_store.indexMap(weak_form_names);
-
-  std::vector<std::vector<FieldState>> inputs;
-  for (size_t i = 0; i < weak_forms.size(); ++i) {
-    std::string wf_name = weak_forms[i]->name();
-    std::vector<FieldState> fields_for_wk = field_store.getFields(wf_name);
-    inputs.push_back(fields_for_wk);
-  }
-  std::vector<std::vector<FieldState>> params(weak_forms.size());
-
-  return block_solve(weak_forms, index_map, field_store.getShapeDisp(), inputs, params, time_info, solver,
-                     field_store.getBoundaryConditionManagers());
-}
-
-TEST_F(SolidMechanicsMeshFixture, RunThermoMechanicalCoupled)
-{
-  SMITH_MARK_FUNCTION;
-
-  FieldType<H1<1, dim>> shape_disp_type("shape_displacement");
-  FieldType<H1<order, dim>> disp_type("displacement");
-  FieldType<H1<order>> temperature_type("temperature");
-
-  std::shared_ptr<DifferentiableBlockSolver> d_nonlinear_solver =
-      buildDifferentiableNonlinearBlockSolver(nonlinear_opts, linear_options, *mesh_);
-
-  double rho = 1.0;
-  double E = 100.0;
-  double nu = 0.25;
-  double c = 1.0;
-  double alpha = 1.0e-3;
-  double theta_ref = 0.0;
-  double k = 1.0;
-  GreenSaintVenantThermoelasticMaterial material{rho, E, nu, c, alpha, theta_ref, k};
-
-  FieldStore field_store(mesh_, 100);
-
-  field_store.addShapeDisp(shape_disp_type);
-
-  std::shared_ptr<DirichletBoundaryConditions>& disp_bc = field_store.addUnknown(disp_type);
-  disp_bc->setVectorBCs<dim>(mesh_->domain("left"), [](double t, smith::tensor<double, dim> X) {
-    auto bc = 0.0 * X;
-    bc[0] = 0.01 * t;
-    return bc;
-  });
-  disp_bc->setFixedVectorBCs<dim, dim>(mesh_->domain("right"));
-
-  auto disp_old_type = field_store.addDerived(disp_type, "displacement_old");
-
-  std::shared_ptr<DirichletBoundaryConditions>& temperature_bc = field_store.addUnknown(temperature_type);
-  temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("left"));
-  temperature_bc->setFixedScalarBCs<dim>(mesh_->domain("right"));
-
-  auto temperature_old_type = field_store.addDerived(temperature_type, "temperature_old");
-
-  QuasiStaticFirstOrderTimeIntegrationRule disp_time_rule;
-  BackwardEulerFirstOrderTimeIntegrationRule temperature_time_rule;
-
-  auto solid_weak_form = createWeakForm<dim>("solid_force", disp_type, field_store, disp_type, disp_old_type,
-                                             temperature_type, temperature_old_type);
-
-  solid_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto disp, auto disp_old,
-                                                                auto temperature, auto temperature_old) {
-    auto u = disp_time_rule.value(t_info, disp, disp_old);
-    auto v = disp_time_rule.dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule.value(t_info, temperature, temperature_old);
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    return smith::tuple{smith::zero{}, pk};
-  });
-
-  auto thermal_weak_form = createWeakForm<dim>("thermal_flux", temperature_type, field_store, temperature_type,
-                                               temperature_old_type, disp_type, disp_old_type);
-
-  thermal_weak_form->addBodyIntegral(mesh_->entireBodyName(), [=](auto t_info, auto /*X*/, auto temperature,
-                                                                  auto temperature_old, auto disp, auto disp_old) {
-    GreenSaintVenantThermoelasticMaterial::State state;
-    auto u = disp_time_rule.value(t_info, disp, disp_old);
-    auto v = disp_time_rule.dot(t_info, disp, disp_old);
-    auto T = temperature_time_rule.value(t_info, temperature, temperature_old);
-    auto T_dot = temperature_time_rule.dot(t_info, temperature, temperature_old);
-    auto [pk, C_v, s0, q0] =
-        material(t_info.dt(), state, get<DERIVATIVE>(u), get<DERIVATIVE>(v), get<VALUE>(T), get<DERIVATIVE>(T));
-    auto dT_dt = get<VALUE>(T_dot);
-    return smith::tuple{C_v * dT_dt - s0, -q0};
-  });
-
-  thermal_weak_form->addBodySource(smith::DependsOn<>(), mesh_->entireBodyName(),
-                                   [](auto /*t*/, auto /* x */) { return 100.0; });
-
-  std::vector<WeakForm*> weak_forms{solid_weak_form.get(), thermal_weak_form.get()};
-  std::vector<FieldState> disp_temp = solve(weak_forms, field_store, d_nonlinear_solver.get(), TimeInfo(0.0, 1.0));
-
-  // auto states = field_store.getFields();
-
-  EXPECT_EQ(0, 0);
+  EXPECT_TRUE(monolithic_converged);
+  EXPECT_TRUE(staggered_solid_converged);
+  EXPECT_TRUE(staggered_thermal_converged);
+  EXPECT_GT(staggered_lateral_deflection, 1e-5);
+  EXPECT_GT(disp_diff, 1e-8);
+  EXPECT_GT(temp_diff, 1e-8);
 }
 
 }  // namespace smith

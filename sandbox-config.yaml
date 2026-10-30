@@ -1,0 +1,4 @@
+mounts:
+  paths:
+    - "ro:/usr/WS2/smithdev/devtools"
+    - "ro:/usr/WS2/smithdev/libs"

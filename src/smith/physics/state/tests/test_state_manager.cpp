@@ -109,7 +109,17 @@ TEST(state_manager, QuadratureData_Restart)
   // Create DataStore
   std::string name = "basic";
   axom::sidre::DataStore datastore;
-  StateManager::initialize(datastore, name + "_data");
+  const std::string output_dir = name + "_data";
+
+  // Make the test robust to stale output from previous runs.
+  // This avoids HDF5/Conduit errors when attempting to overwrite an incompatible tree.
+  if (axom::utilities::filesystem::pathExists(output_dir)) {
+    GTEST_SKIP() << "Output directory already exists from a prior run: " << output_dir;
+  }
+  if (axom::utilities::filesystem::makeDirsForPath(output_dir) != 0) {
+    GTEST_SKIP() << "Could not create output directory: " << output_dir;
+  }
+  StateManager::initialize(datastore, output_dir);
 
   // Construct the appropriate dimension mesh and give it to the StateManager
   std::string filename = SMITH_REPO_DIR "/data/meshes/ball.mesh";
@@ -222,6 +232,25 @@ TEST(StateManager, StoresHighOrderMeshes)
   auto v2 = edge_coords[0] - edge_coords[2];
   double area = std::abs(v1[0] * v2[1] - v1[1] * v2[0]);
   EXPECT_GT(area, 1e-6);
+}
+
+TEST(StateManager, ResetDoesNotDeleteExternallySharedMesh)
+{
+  axom::sidre::DataStore datastore;
+  smith::StateManager::initialize(datastore, "shared_mesh_output_test");
+
+  const std::string filename = SMITH_REPO_DIR "/data/meshes/single_curved_quad.g";
+  auto mesh = std::shared_ptr<mfem::ParMesh>(mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0));
+  auto* raw_mesh = mesh.get();
+
+  auto& stored_mesh = smith::StateManager::setMesh(mesh, "shared_mesh");
+  EXPECT_EQ(raw_mesh, &stored_mesh);
+
+  smith::StateManager::reset();
+
+  ASSERT_NE(nullptr, mesh);
+  EXPECT_EQ(raw_mesh, mesh.get());
+  EXPECT_EQ(2, mesh->Dimension());
 }
 
 }  // namespace smith

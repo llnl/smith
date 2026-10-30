@@ -38,6 +38,13 @@ macro(smith_add_executable)
                        OUTPUT_NAME ${arg_OUTPUT_NAME}
                        FOLDER      ${arg_FOLDER})
 
+    # Avoid loading expensive unused ROCm solver dependencies exported by MFEM.
+    if(ENABLE_HIP AND
+       hip_VERSION VERSION_GREATER_EQUAL "6.0" AND
+       hip_VERSION VERSION_LESS "7.0")
+        target_link_options(${arg_NAME} PRIVATE "LINKER:--as-needed")
+    endif()
+
 endmacro(smith_add_executable)
 
 ##------------------------------------------------------------------------------

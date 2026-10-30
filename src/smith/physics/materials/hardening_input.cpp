@@ -18,6 +18,9 @@ void HardeningInputOptions::defineInputFileSchema(axom::inlet::Container& contai
   container.addDouble("sigma_y", "Yield strength");
   container.addDouble("eta", "Plastic viscosity");
 
+  // LinearHardening
+  container.addDouble("Hi", "Isotropic hardening modulus");
+
   // PowerLawHardening
   container.addDouble("n", "Hardening index in reciprocal form");
   container.addDouble("eps0", "Reference value of accumulated plastic strain");
@@ -30,6 +33,7 @@ void HardeningInputOptions::defineInputFileSchema(axom::inlet::Container& contai
   container.registerVerifier([](const axom::inlet::Container& c) -> bool {
     axom::inlet::InletType double_type = axom::inlet::InletType::Double;
     bool sigma_y_present = c.contains("sigma_y") && (c["sigma_y"].type() == double_type);
+    bool Hi_present = c.contains("Hi") && (c["Hi"].type() == double_type);
     bool n_present = c.contains("n") && (c["n"].type() == double_type);
     bool eps0_present = c.contains("eps0") && (c["eps0"].type() == double_type);
     bool sigma_sat_present = c.contains("sigma_sat") && (c["sigma_sat"].type() == double_type);
@@ -37,10 +41,14 @@ void HardeningInputOptions::defineInputFileSchema(axom::inlet::Container& contai
     bool eta_present = c.contains("eta") && (c["eta"].type() == double_type);
 
     std::string law = c["law"];
-    if (law == "PowerLawHardening") {
-      return sigma_y_present && n_present && eps0_present && eta_present && !sigma_sat_present && !sigma_sat_present;
+    if (law == "LinearHardening") {
+      return sigma_y_present && Hi_present && eta_present && !n_present && !eps0_present && !sigma_sat_present &&
+             !strain_constant_present;
+    } else if (law == "PowerLawHardening") {
+      return sigma_y_present && !Hi_present && n_present && eps0_present && eta_present && !sigma_sat_present &&
+             !strain_constant_present;
     } else if (law == "VoceHardening") {
-      return sigma_y_present && eta_present && !n_present && !eps0_present && sigma_sat_present &&
+      return sigma_y_present && !Hi_present && eta_present && !n_present && !eps0_present && sigma_sat_present &&
              strain_constant_present;
     }
 
@@ -54,7 +62,9 @@ smith::var_hardening_t FromInlet<smith::var_hardening_t>::operator()(const axom:
 {
   smith::var_hardening_t result;
   std::string law = base["law"];
-  if (law == "PowerLawHardening") {
+  if (law == "LinearHardening") {
+    result = smith::solid_mechanics::LinearHardening{.sigma_y = base["sigma_y"], .Hi = base["Hi"], .eta = base["eta"]};
+  } else if (law == "PowerLawHardening") {
     result = smith::solid_mechanics::PowerLawHardening{
         .sigma_y = base["sigma_y"], .n = base["n"], .eps0 = base["eps0"], .eta = base["eta"]};
   } else if (law == "VoceHardening") {

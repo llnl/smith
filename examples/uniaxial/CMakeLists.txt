@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: (BSD-3-Clause)
 
-if (STRUMPACK_DIR)
+if (STRUMPACK_FOUND)
     smith_add_executable( NAME        uniaxial_tension
                           SOURCES     uniaxial_tension.cpp
                           OUTPUT_DIR ${EXAMPLE_OUTPUT_DIRECTORY}

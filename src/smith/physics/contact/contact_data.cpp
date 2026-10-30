@@ -25,10 +25,28 @@ namespace smith {
 
 #ifdef SMITH_USE_TRIBOL
 
+namespace {
+
+bool hasIndependentPressureState([[maybe_unused]] const ContactOptions& options)
+{
+#ifdef SMITH_USE_ENZYME
+  if (options.method == ContactMethod::EnergyMortar) {
+    // Smith currently supports EnergyMortar with penalty enforcement only. For nodal gaps, Tribol owns a pressure
+    // vector but recomputes it from the current gap on update; quadrature-point gaps do not expose a nodal pressure
+    // vector. In both cases there is no independent pressure state to reset or set here.
+    return false;
+  }
+#endif
+  return true;
+}
+
+}  // namespace
+
 ContactData::ContactData(const mfem::ParMesh& mesh)
     : mesh_{mesh},
       reference_nodes_{static_cast<const mfem::ParGridFunction*>(mesh.GetNodes())},
       current_coords_{*reference_nodes_},
+      shaped_reference_coords_{*reference_nodes_},
       have_lagrange_multipliers_{false},
       num_pressure_dofs_{0},
       offsets_up_to_date_{false}
@@ -45,7 +63,8 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
   SLIC_ERROR_ROOT_IF(cs != nullptr,
                      std::format("Contact interaction id {} is already registered with Tribol.", interaction_id));
 
-  interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_, contact_opts);
+  interactions_.emplace_back(interaction_id, mesh_, bdry_attr_surf1, bdry_attr_surf2, current_coords_,
+                             shaped_reference_coords_, contact_opts);
   if (contact_opts.enforcement == ContactEnforcement::LagrangeMultiplier) {
     have_lagrange_multipliers_ = true;
     num_pressure_dofs_ += interactions_.back().numPressureDofs();
@@ -76,15 +95,17 @@ void ContactData::addContactInteraction(int interaction_id, const std::set<int>&
 void ContactData::reset()
 {
   for (auto& interaction : interactions_) {
-    FiniteElementState zero = interaction.pressure();
-    zero = 0.0;
-    interaction.setPressure(zero);
+    if (hasIndependentPressureState(interaction.getContactOptions())) {
+      FiniteElementState zero = interaction.pressure();
+      zero = 0.0;
+      interaction.setPressure(zero);
+    }
   }
 }
 
-void ContactData::updateGaps(int cycle, double time, double& dt,
-                             std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
-                             std::optional<std::reference_wrapper<const mfem::Vector>> u, bool eval_jacobian)
+void ContactData::updateGeometry(int cycle, double time, double& dt,
+                                 std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                                 std::optional<std::reference_wrapper<const mfem::Vector>> u, bool eval_jacobian)
 {
   cycle_ = cycle;
   time_ = time;
@@ -106,34 +127,39 @@ void ContactData::updateGaps(int cycle, double time, double& dt,
   tribol::update(cycle, time, dt);
 }
 
-void ContactData::update(int cycle, double time, double& dt,
-                         std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
-                         std::optional<std::reference_wrapper<const mfem::Vector>> u,
-                         std::optional<std::reference_wrapper<const mfem::Vector>> p)
+void ContactData::updateForcesAndJacobian(int cycle, double time, double& dt,
+                                          std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                                          std::optional<std::reference_wrapper<const mfem::Vector>> u,
+                                          std::optional<std::reference_wrapper<const mfem::Vector>> p)
 {
-  // First pass: update gaps if coordinates are provided
   if (u_shape && u) {
-    updateGaps(cycle, time, dt, u_shape, u, false);
+    updateGeometry(cycle, time, dt, u_shape, u, false);
   } else {
-    // Ensure internal timing is updated even if coordinates are not
     cycle_ = cycle;
     time_ = time;
     dt_ = dt;
   }
 
-  // second pass: update pressures and compute forces/Jacobians if p is provided
-  if (p) {
-    // with updated gaps, we can update pressure for contact interactions (active set detection and penalty)
-    setPressures(p->get());
+  SLIC_ERROR_ROOT_IF(haveLagrangeMultipliers() && !p,
+                     "updateForcesAndJacobian() requires pressure values for Lagrange multiplier contact.");
 
-    for (auto& interaction : interactions_) {
-      interaction.evalJacobian(true);
-    }
-    // This second call is required to synchronize the updated pressures to Tribol's internal redecomposed surface mesh
-    // and to ensure Tribol's internal state is correctly reset for the second pass.
-    tribol::updateMfemParallelDecomposition();
-    tribol::update(cycle, time, dt);
+  mfem::Vector zero_pressures;
+  if (!p) {
+    zero_pressures.SetSize(numPressureDofs());
+    zero_pressures = 0.0;
   }
+  const mfem::Vector& pressures = p ? p->get() : zero_pressures;
+
+  // With updated gaps, we can update pressure for contact interactions (active set detection and penalty).
+  setPressures(pressures);
+
+  for (auto& interaction : interactions_) {
+    interaction.evalJacobian(true);
+  }
+  // This second call is required to synchronize the updated pressures to Tribol's internal redecomposed surface mesh
+  // and to ensure Tribol's internal state is correctly reset for the second pass.
+  tribol::updateMfemParallelDecomposition();
+  tribol::update(cycle, time, dt);
 }
 
 FiniteElementDual ContactData::forces() const
@@ -259,6 +285,7 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
         inactive_tdofs_ct += inactive_tdofs_vector[i]->Size();
       }
     }
+    inactive_tdofs.GetMemory().SetHostPtrOwner(false);
     mfem::Array<int> rows(numPressureDofs() + 1);
     rows = 0;
     inactive_tdofs_ct = 0;
@@ -268,16 +295,15 @@ std::unique_ptr<mfem::BlockOperator> ContactData::mergedJacobian() const
       }
       rows[i + 1] = inactive_tdofs_ct;
     }
+    rows.GetMemory().SetHostPtrOwner(false);
     mfem::Vector ones(inactive_tdofs_ct);
     ones = 1.0;
+    ones.GetMemory().SetHostPtrOwner(false);
     mfem::SparseMatrix inactive_diag(rows.GetData(), inactive_tdofs.GetData(), ones.GetData(), numPressureDofs(),
                                      numPressureDofs(), false, false, true);
-    rows.GetMemory().ClearOwnerFlags();
-    inactive_tdofs.GetMemory().ClearOwnerFlags();
-    ones.GetMemory().ClearOwnerFlags();
-    inactive_diag.GetMemoryI().ClearOwnerFlags();
-    inactive_diag.GetMemoryJ().ClearOwnerFlags();
-    inactive_diag.GetMemoryData().ClearOwnerFlags();
+    // if the size of ones is zero, SparseMatrix creates its own memory which it
+    // owns.  explicitly prevent this...
+    inactive_diag.SetDataOwner(false);
     auto block_1_1 =
         new mfem::HypreParMatrix(mesh_.GetComm(), global_pressure_dof_offsets_[global_pressure_dof_offsets_.Size() - 1],
                                  global_pressure_dof_offsets_, &inactive_diag);
@@ -302,7 +328,7 @@ void ContactData::residualFunction(const mfem::Vector& u_shape, const mfem::Vect
   mfem::Vector r_blk(r, 0, disp_size);
   mfem::Vector g_blk(r, disp_size, numPressureDofs());
 
-  update(cycle_, time_, dt_, u_shape, u_blk, p_blk);
+  updateForcesAndJacobian(cycle_, time_, dt_, u_shape, u_blk, p_blk);
 
   r_blk += forces();
   // calling mergedGaps() with true will zero out gap on inactive dofs (so the residual converges and the linearized
@@ -327,6 +353,10 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 {
   updateDofOffsets();
   for (size_t i{0}; i < interactions_.size(); ++i) {
+    if (!hasIndependentPressureState(interactions_[i].getContactOptions())) {
+      continue;
+    }
+
     FiniteElementState p_interaction(interactions_[i].pressureSpace());
     if (interactions_[i].getContactOptions().enforcement == ContactEnforcement::LagrangeMultiplier) {
       // merged_pressures_const should not change; const cast is to create a vector view for copying to tribol pressures
@@ -348,12 +378,11 @@ void ContactData::setPressures(const mfem::Vector& merged_pressures) const
 
 void ContactData::setDisplacements(const mfem::Vector& shape_u, const mfem::Vector& u)
 {
-  mfem::ParGridFunction prolonged_shape_disp{current_coords_};
   reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(u, current_coords_);
-  reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, prolonged_shape_disp);
+  reference_nodes_->ParFESpace()->GetProlongationMatrix()->Mult(shape_u, shaped_reference_coords_);
 
-  current_coords_ += *reference_nodes_;
-  current_coords_ += prolonged_shape_disp;
+  shaped_reference_coords_ += *reference_nodes_;
+  current_coords_ += shaped_reference_coords_;
 }
 
 void ContactData::updateDofOffsets() const
@@ -467,17 +496,18 @@ void ContactData::addContactInteraction([[maybe_unused]] int interaction_id,
   SLIC_WARNING_ROOT("Smith built without Tribol support. No contact interaction will be added.");
 }
 
-void ContactData::updateGaps([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
-                             [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
-                             [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
-                             [[maybe_unused]] bool eval_jacobian)
+void ContactData::updateGeometry([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
+                                 [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+                                 [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
+                                 [[maybe_unused]] bool eval_jacobian)
 {
 }
 
-void ContactData::update([[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
-                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
-                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
-                         [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> p)
+void ContactData::updateForcesAndJacobian(
+    [[maybe_unused]] int cycle, [[maybe_unused]] double time, [[maybe_unused]] double& dt,
+    [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u_shape,
+    [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> u,
+    [[maybe_unused]] std::optional<std::reference_wrapper<const mfem::Vector>> p)
 {
 }
 

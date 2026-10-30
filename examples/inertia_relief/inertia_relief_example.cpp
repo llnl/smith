@@ -1,3 +1,4 @@
+
 // Copyright (c) Lawrence Livermore National Security, LLC and
 // other Smith Project Developers. See the top-level LICENSE file for
 // details.
@@ -16,6 +17,7 @@
 #include <format>
 
 #include "smith/smith.hpp"
+#include "smith/differentiable_numerics/paraview_writer.hpp"
 
 #include "mfem.hpp"
 
@@ -35,51 +37,17 @@ using VectorSpace = smith::H1<disp_order, dim>;
 using DensitySpace = smith::L2<disp_order - 1>;
 
 using SolidMaterial = smith::solid_mechanics::NeoHookeanWithFieldDensity;
-using SolidWeakFormT = smith::SolidWeakForm<disp_order, dim, smith::Parameters<DensitySpace>>;
+using SolidWeakFormT =
+    smith::FunctionalWeakForm<dim, smith::H1<disp_order, dim>,
+                              smith::Parameters<smith::H1<disp_order, dim>, smith::H1<disp_order, dim>,
+                                                smith::H1<disp_order, dim>, DensitySpace>>;
 
 enum FIELD
 {
-  DISP = SolidWeakFormT::DISPLACEMENT,
-  VELO = SolidWeakFormT::VELOCITY,
-  ACCEL = SolidWeakFormT::ACCELERATION,
-  DENSITY = SolidWeakFormT::NUM_STATES
-};
-
-class ParaviewWriter {
- public:
-  using StateVecs = std::vector<std::shared_ptr<smith::FiniteElementState>>;
-  using DualVecs = std::vector<std::shared_ptr<smith::FiniteElementDual>>;
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_)
-      : pv(std::move(pv_)), states(states_)
-  {
-  }
-
-  ParaviewWriter(std::unique_ptr<mfem::ParaViewDataCollection> pv_, const StateVecs& states_, const StateVecs& duals_)
-      : pv(std::move(pv_)), states(states_), dual_states(duals_)
-  {
-  }
-
-  void write(int step, double time, const std::vector<smith::FiniteElementState const*>& current_states)
-  {
-    SMITH_MARK_FUNCTION;
-    SLIC_ERROR_ROOT_IF(current_states.size() != states.size(), "wrong number of output states to write");
-
-    for (size_t n = 0; n < states.size(); ++n) {
-      auto& state = states[n];
-      *state = *current_states[n];
-      state->gridFunction();
-    }
-
-    pv->SetCycle(step);
-    pv->SetTime(time);
-    pv->Save();
-  }
-
- private:
-  std::unique_ptr<mfem::ParaViewDataCollection> pv;
-  StateVecs states;
-  StateVecs dual_states;
+  DISP = 0,
+  VELO = 1,
+  ACCEL = 2,
+  DENSITY = 3
 };
 
 /* Nonlinear problem of the form
@@ -195,28 +163,43 @@ int main(int argc, char* argv[])
 
   std::string physics_name = "solid";
 
-  // construct residual
-  auto solid_mechanics_weak_form =
-      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), getSpaces(params));
+  // `input_spaces` stores non-owning pointers to the spaces owned by these
+  // state/parameter objects, so `states` and `params` must remain valid for
+  // the full lifetime of `solid_mechanics_weak_form`.
+  SolidWeakFormT::SpacesT input_spaces = getConstSpacePointers(states, params);
 
+  // construct residual/Jacobian callbacks
+  auto solid_mechanics_weak_form =
+      std::make_shared<SolidWeakFormT>(physics_name, mesh, states[FIELD::DISP].space(), input_spaces);
+
+  // set material parameters
   SolidMaterial mat;
   mat.K = 1.0;
   mat.G = 0.5;
-  solid_mechanics_weak_form->setMaterial(smith::DependsOn<0>{}, mesh->entireBodyName(), mat);
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [mat](auto /*t_info*/, auto /*X*/, auto u, auto /*v*/, auto a, auto rho) {
+        typename SolidMaterial::State state;
+        auto pk_stress = mat.pkStress(state, smith::get<smith::DERIVATIVE>(u), rho);
+        return smith::tuple{smith::get<smith::VALUE>(a) * mat.density(rho), pk_stress};
+      });
 
   // apply some traction boundary conditions
   std::string surface_name = "side";
   mesh->addDomainOfBoundaryElements(surface_name, smith::by_attr<dim>(1));
-  solid_mechanics_weak_form->addBoundaryFlux(surface_name, [](auto /*x*/, auto n, auto /*t*/) { return 1.0 * n; });
+  solid_mechanics_weak_form->addBoundaryFlux(
+      surface_name, [](auto /*t_info*/, auto /*X*/, auto n, auto /*u*/, auto /*v*/, auto /*a*/, auto /*density*/) {
+        return 1.0 * n;
+      });
 
   smith::tensor<double, dim> constant_force{};
   for (int i = 0; i < dim; i++) {
     constant_force[i] = 1.e0;
   }
 
-  solid_mechanics_weak_form->addBodyIntegral(mesh->entireBodyName(), [constant_force](double /* t */, auto x) {
-    return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(x)};
-  });
+  solid_mechanics_weak_form->addBodyIntegral(
+      mesh->entireBodyName(), [constant_force](auto /*t_info*/, auto X, auto... /*inputs*/) {
+        return smith::tuple{constant_force, 0.0 * smith::get<smith::DERIVATIVE>(X)};
+      });
 
   // construct constraints
   params[0] = 1.;
@@ -235,20 +218,17 @@ int main(int argc, char* argv[])
 
   ObjectiveT mass_objective("mass constraining", mesh, param_space_ptrs);
 
-  mass_objective.addBodyIntegral(smith::DependsOn<1>{}, mesh->entireBodyName(),
-                                 [](double /*t*/, auto /*X*/, auto RHO) { return get<smith::VALUE>(RHO); });
+  mass_objective.addBodyIntegral(
+      mesh->entireBodyName(), [](auto /*t_info*/, auto /*X*/, auto /*U*/, auto RHO) { return get<smith::VALUE>(RHO); });
   double mass = mass_objective.evaluate(time_info, shape_disp.get(), objective_states);
 
   smith::tensor<double, dim> initial_cg;  // center of gravity
 
   for (int i = 0; i < dim; ++i) {
     auto cg_objective = std::make_shared<ObjectiveT>("translation " + std::to_string(i), mesh, param_space_ptrs);
-    cg_objective->addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-                                  [i](double
-                                      /*time*/,
-                                      auto X, auto U, auto RHO) {
-                                    return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
-                                  });
+    cg_objective->addBodyIntegral(mesh->entireBodyName(), [i](auto /*t_info*/, auto X, auto U, auto RHO) {
+      return (get<smith::VALUE>(X)[i] + get<smith::VALUE>(U)[i]) * get<smith::VALUE>(RHO);
+    });
     initial_cg[i] = cg_objective->evaluate(time_info, shape_disp.get(), objective_states) / mass;
 
     constraints.push_back(cg_objective);
@@ -257,8 +237,8 @@ int main(int argc, char* argv[])
   for (int i = 0; i < dim; ++i) {
     auto center_rotation_objective =
         std::make_shared<ObjectiveT>("rotation" + std::to_string(i), mesh, param_space_ptrs);
-    center_rotation_objective->addBodyIntegral(smith::DependsOn<0, 1>{}, mesh->entireBodyName(),
-                                               [i, initial_cg](double /*time*/, auto X, auto U, auto RHO) {
+    center_rotation_objective->addBodyIntegral(mesh->entireBodyName(),
+                                               [i, initial_cg](auto /*t_info*/, auto X, auto U, auto RHO) {
                                                  auto u = get<smith::VALUE>(U);
                                                  auto x = get<smith::VALUE>(X) + u;
                                                  auto dx = x - initial_cg;
@@ -274,7 +254,7 @@ int main(int argc, char* argv[])
     return u;
   });
 
-  auto writer = createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
+  auto writer = smith::createParaviewWriter(mesh->mfemParMesh(), objective_states, "inertia_relief");
   if (visualize) {
     writer.write(0, 0.0, objective_states);
   }
