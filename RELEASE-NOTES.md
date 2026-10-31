@@ -31,6 +31,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 - Added axisymmetric solid mechanics materials and loads for 2D `(r, z)` meshes.
 - Added host-configs for CZMatrix and RZVector machines
 - Added CI pipelines for CZMatrix machine
+- Added boundary interals that can integrate a flux term. Previously only source terms were supported.
 
 ### Removed
 
