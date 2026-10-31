@@ -7,6 +7,10 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <mfem/fem/gridfunc.hpp>
+#include <mfem/fem/pfespace.hpp>
+#include <mfem/fem/pgridfunc.hpp>
+#include <mfem/general/array.hpp>
 #include <string>
 
 #include "gtest/gtest.h"
@@ -29,40 +33,62 @@ namespace {
 
 TEST(FunctionalBoundarySourceFlux, SurfacePatchTest)
 {
+  // Check a finite element integral that uses the flux term capability.
+  // Set up a plane strain elasticity integral on one surface of a cube, then
+  // compute the internal force operator for a linear displacement field.
+  // Check 2 conditions:
+  // (1) The internal forces on the interior nodes of the surface vanish
+  // (2) The resultant force on an edge of the surface matches the uniform
+  //     surface stress * edge length.
   constexpr int dim = 3;
   std::string filename = std::string(SMITH_REPO_DIR) + "/data/meshes/" + "patch3D_hexes.mesh";
   auto serial_mesh = buildMeshFromFile(filename);
-
-  
   auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 1, 0);
-  mesh->EnsureNodes();
-  mesh->Print();
+  const int integration_surface_attr = 6;
 
-  // Jiggle the non-boundary node on the face so that the element
-  // shape mappings are nonlinear. This makes the integrand non-trivial.
-  // Although the physical stress is uniform on the surface, the
-  // *components* of the stress in the curvilinear bases are not.
-  double face_node_coordinates[dim];
-  constexpr int face_node_index = 64;
-  mesh->GetNode(face_node_index, face_node_coordinates);
-  face_node_coordinates[1] += 0.15;
-  face_node_coordinates[2] -= 0.03;
-  mesh->SetNode(face_node_index, face_node_coordinates);
+  // Domain for the surface integral
+  Domain membrane_surface = Domain::ofBoundaryElements(*mesh, by_attr<dim>(integration_surface_attr));
+
+  // Get the nodes on the interior of the surface
+  Domain complement_boundary = EntireBoundary(*mesh) - membrane_surface;
+  auto coord_space = dynamic_cast<const mfem::ParFiniteElementSpace*>(mesh->GetNodalFESpace());
+  mfem::Array<int> surface_dofs = membrane_surface.dof_list(coord_space);
+  mfem::Array<int> complement_dofs = complement_boundary.dof_list(coord_space);
+  mfem::Array<int> surface_interior_dofs;
+  for (const auto d : surface_dofs) {
+    bool not_in_complement = std::find(complement_dofs.begin(), complement_dofs.end(), d) == complement_dofs.end();
+    if (not_in_complement) surface_interior_dofs.Append(d);
+  }
+
+  // Jiggle the interior nodes on the face so that the element shape
+  // mappings are nonlinear. This tests that the parametric derivatives are
+  // being computed and used correctly in the integration. Although the
+  // physical stress is uniform on the surface, the *components* of the stress
+  // in the curvilinear bases are not because of this perturbation.
+  mfem::ParGridFunction perturbations(const_cast<mfem::ParFiniteElementSpace*>(coord_space));
+  perturbations.Randomize(42);
+  perturbations *= 0.5;
+  for (const auto& d : surface_interior_dofs) {
+    double x[dim];
+    mesh->GetNode(d, x);
+    x[0] += perturbations(coord_space->DofToVDof(d, 0));
+    x[1] += perturbations(coord_space->DofToVDof(d, 1));
+    mesh->SetNode(d, x);
+  }
   mesh->NodesUpdated();
 
+  // Make the functional object and add the surface integral
   using space = H1<1, dim>;
   auto [fespace, fec] = generateParFiniteElementSpace<space>(mesh.get());
   Functional<space(space)> residual(fespace.get(), {fespace.get()});
-  // Attribute 1 of this mesh is on the yz plane
-  Domain boundary = Domain::ofBoundaryElements(*mesh, by_attr<dim>(1));
 
   // Surface elasticity:
-  // Green-St Venant law expressed in curvilinear coordinates.
+  // St Venant-Kirchhoff law expressed in curvilinear coordinates.
+  constexpr double E = 2.4;
+  constexpr double nu = 0.25;
   residual.AddBoundarySourceFluxIntegral(
       Dimension<dim - 1>{}, DependsOn<0>{},
       [](double, auto position, auto field) {
-        double E = 2.4;
-        double nu = 0.25;
         double mu = 0.5*E/(1.0 + nu);
         double lam_prime = E*nu/(1.0 - nu*nu); // second Lame modulus for plane stress
         auto dX_dxi = get<DERIVATIVE>(position);
@@ -73,33 +99,74 @@ TEST(FunctionalBoundarySourceFlux, SurfacePatchTest)
         auto g0_dual = inv(g0);  // dual metric tensor
         auto tr_epsilon = inner(g0_dual, epsilon);
         auto sigma = 2*mu*(g0_dual * epsilon * g0_dual) + lam_prime * tr_epsilon * g0_dual;
-        mfem::out << "sigma = " << sigma << std::endl;
         return smith::tuple{zero{}, dX_dxi * sigma};
       }, 
-      boundary);
+      membrane_surface);
 
-  tensor<double, dim, dim> H{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
-                              {0.198344644470483, 0.060514559793513, 0.084137393813728},
-                              {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  // tensor<double, dim, dim> H{{{0.110791568544027, 0.230421268325901, 0.15167673653354},
+  //                             {0.198344644470483, 0.060514559793513, 0.084137393813728},
+  //                             {0.011544253485023, 0.060942846497753, 0.186383473579596}}};
+  double eps = 0.1;
+  tensor<double, dim, dim> H{{{eps, 0.0, 0.0},
+                              {0.0, -eps*nu, 0.0},
+                              {0.05, 0.23, 0.31}}};
   mfem::DenseMatrix disp_grad(&H[0][0], dim, dim);
   mfem::Vector U(fespace->TrueVSize());
   mfem::ParGridFunction U_gf(fespace.get());
-  mfem::VectorFunctionCoefficient c(dim, [&disp_grad](const mfem::Vector& X, mfem::Vector& u) { disp_grad.Mult(X, u); });
+  mfem::VectorFunctionCoefficient c(
+    dim,
+    [&disp_grad](const mfem::Vector& X, mfem::Vector& u) {
+      disp_grad.Mult(X, u);
+    });
   U_gf.ProjectCoefficient(c);
   U_gf.GetTrueDofs(U);
 
   mfem::Vector F(fespace->TrueVSize());
   F = residual(0.0, U);
-  mfem::out << "Residual\n";
-  F.Print();
   mfem::ParGridFunction F_gf(fespace.get());
   F_gf.SetFromTrueDofs(F);
-  double fy = F_gf(fespace->DofToVDof(64, 1));
-  double fz = F_gf(fespace->DofToVDof(64, 2));
-  mfem::out << axom::fmt::format("fy = {:.6e}\n", fy);
-  mfem::out << axom::fmt::format("fz = {:.6e}\n", fz);
-  ASSERT_LT(std::abs(fy), 1e-15);
-  ASSERT_LT(std::abs(fz), 1e-15);
+
+  // Test (1): interior nodes on the face are in equilibrium
+  for (const auto& d : surface_interior_dofs) {
+    double fx = F_gf(fespace->DofToVDof(d, 0));
+    double fy = F_gf(fespace->DofToVDof(d, 1));
+
+    // The forces should be near zero, since the internal forces should cancel
+    // out on interior nodes. However, if they are *exactly* zero, it mean
+    // we've grabbed the wrong node. Someone has broken the test.
+    EXPECT_GT(std::abs(fx), 0.0);
+    EXPECT_GT(std::abs(fy), 0.0);
+
+    EXPECT_LT(std::abs(fx), 1e-15);
+    EXPECT_LT(std::abs(fy), 1e-15);
+  }
+
+  // Check the total force on one edge of the membrane against exact solution
+  auto submesh = mfem::ParSubMesh::CreateFromBoundary(*mesh, mfem::Array<int>{integration_surface_attr});
+  auto submesh_coord_space = dynamic_cast<const mfem::ParFiniteElementSpace*>(submesh.GetNodalFESpace());
+  // get the elements and x-dofs on the edge at x = 0
+  Domain edge = Domain::ofBoundaryElements(submesh,
+                                           [](std::vector<vec3> vs, int) {
+                                            return std::abs(average(vs)[0] ) < 1e-6;
+                                           });
+  const int edge_attr = submesh.bdr_attributes.Max() + 1;
+  for (const auto& e : edge.edge_ids_) {
+    submesh.SetBdrAttribute(e, edge_attr);
+  }
+  mfem::Array<int> edge_dofs;
+  mfem::Array<int> markers(edge_attr);
+  markers[edge_attr - 1] = 1;
+  submesh_coord_space->GetEssentialTrueDofs(markers, edge_dofs, 0);
+
+  // compute the nex force in the x-direction
+  mfem::ParGridFunction F_gf_surface(const_cast<mfem::ParFiniteElementSpace*>(submesh_coord_space));
+  submesh.Transfer(F_gf, F_gf_surface);
+  double fx = 0;
+  for (const auto& d : edge_dofs) {
+    fx += F_gf_surface(d);
+  }
+  const double Lz = 2.0; // length of edge, specific to this mesh
+  EXPECT_NEAR(fx, -E*eps*Lz, 1e-14);
 }
 
 TEST(FunctionalBoundarySourceFlux, ParametricDerivativeUsesPhysicalBoundaryMeasure)
