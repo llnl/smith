@@ -8,7 +8,7 @@ This policy covers code, tests, documentation, build configuration, issue report
 
 ## Avoid extractive contributions
 
-An **extractive contribution**[1] demands more project effort than the value it adds, particularly by shifting avoidable verification, correction, or maintenance work onto others. This applies with or without AI use.
+An **extractive contribution**[^eghbal] demands more project effort than the value it adds, particularly by shifting avoidable verification, correction, or maintenance work onto others. This applies with or without AI use.
 
 Examples include unreviewed generated PRs, speculative issue reports presented as confirmed problems, repeated revisions that ignore feedback, and large volumes of low-value code or documentation. Unnecessary features, cleanups, or abstractions can also create disproportionate review and maintenance costs.
 
@@ -49,5 +49,4 @@ Maintainers may request explanation, validation, simplification, or splitting be
 
 Before escalating repeated violations to suspension or a ban, maintainers should ordinarily explain the problem, identify the expected correction, and give the contributor a reasonable opportunity to improve. Repeated extractive submissions or other repeated violations may result in suspension or a ban from project participation, at maintainer discretion.
 
-## Notes:
-[1] Credit for the term "Extractive Contribution" goes Nadia Eghbal in her book "Working in Public". Our definition paraphrases hers.
+[^eghbal]: Adapted from Nadia Eghbal's discussion of extractive contributions in *Working in Public: The Making and Maintenance of Open Source Software* (Stripe Press, 2020).
