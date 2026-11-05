@@ -4,7 +4,7 @@
 
 We encourage thoughtful use of AI tools, including agentic coding, to explore ideas, improve productivity, and strengthen software quality. Their use is optional. Contributions are evaluated on their quality and value, regardless of the tools used. Questions, mentoring, and early design discussions are always welcome.
 
-This policy covers code, tests, documentation, build configuration, issue reports, and discussion responses. Expectations depend on whether a submission seeks exploratory feedback or implementation review.
+This policy covers code, tests, documentation, issue reports, and discussion responses. Expectations depend on whether a submission seeks exploratory feedback or implementation review.
 
 ## Avoid extractive contributions
 
