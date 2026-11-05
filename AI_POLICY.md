@@ -6,6 +6,14 @@ We encourage thoughtful use of AI tools, including agentic coding, to explore id
 
 This policy covers code, tests, documentation, build configuration, issue reports, and discussion responses. Expectations depend on whether a submission seeks exploratory feedback or implementation review.
 
+## Avoid extractive contributions
+
+An **extractive contribution**[1] demands more project effort than the value it adds, particularly by shifting avoidable verification, correction, or maintenance work onto others. This applies with or without AI use.
+
+Examples include unreviewed generated PRs, speculative issue reports presented as confirmed problems, repeated revisions that ignore feedback, and large volumes of low-value code or documentation. Unnecessary features, cleanups, or abstractions can also create disproportionate review and maintenance costs.
+
+Clearly identified exploration and good-faith requests for help are not, by themselves, extractive. Contributors should explain what they have tried, what remains uncertain, and what help they need.
+
 ## Prepare contributions for review
 
 Before requesting implementation review or proposing a pull request (PR) for acceptance, authors must:
@@ -35,16 +43,11 @@ Personally review AI-generated issue reports. Include supporting evidence, repro
 
 AI may help draft replies, but a human must review, understand, and post each response. Clearly identify uncertainties in exploratory replies. **Do not configure agents to respond autonomously on PRs or issues.**
 
-## Avoid extractive contributions
-
-An **extractive contribution** demands more project effort than the value it adds, particularly by shifting avoidable verification, correction, or maintenance work onto others. This applies with or without AI use.
-
-Examples include unreviewed generated PRs, speculative issue reports presented as confirmed problems, repeated revisions that ignore feedback, and large volumes of low-value code or documentation. Unnecessary features, cleanups, or abstractions can also create disproportionate review and maintenance costs.
-
-Clearly identified exploration and good-faith requests for help are not, by themselves, extractive. Contributors should explain what they have tried, what remains uncertain, and what help they need.
-
 ## Enforcement
 
 Maintainers may request explanation, validation, simplification, or splitting before continuing review, and may defer or close extractive or impractical submissions.
 
 Before escalating repeated violations to suspension or a ban, maintainers should ordinarily explain the problem, identify the expected correction, and give the contributor a reasonable opportunity to improve. Repeated extractive submissions or other repeated violations may result in suspension or a ban from project participation, at maintainer discretion.
+
+## Notes:
+[1] Credit for the term "Extractive Contribution" goes Nadia Eghbal in her book "Working in Public". Our definition paraphrases hers.
