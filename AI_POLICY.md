@@ -12,7 +12,7 @@ An **extractive contribution**[^eghbal] costs the project more effort to review,
 
 ## Prepare contributions for review
 
-Before requesting implementation review or proposing a pull request (PR) for acceptance, authors must personally review the complete diff and understand the technical details well enough to discuss and revise them.
+Before requesting review of a pull request (PR), authors must personally review the complete diff and understand the technical details well enough to discuss and revise them.
 
 If the PR is meant for exploration and discussion, clearly label it in the PR description to set expectations of the reviewers. A complete understanding is not required for this type of PR. State what is uncertain and what feedback you want.
 
