@@ -31,7 +31,7 @@ Explicitly label the submission as exploratory, identify uncertainties, distingu
 
 ## Issue reports and responses
 
-Personally review AI-generated issue reports. Include supporting evidence, reproduction steps, and environment details when available; state whether you reproduced the behavior. Identify unverified explanations as hypotheses. Never present generated logs, test results, or reproduction claims as actual observations.
+Personally review AI-generated issue reports. Include supporting evidence, reproduction steps, and environment details when available; state whether you reproduced the behavior. Identify unverified explanations as hypotheses. Never present AI-generated logs, test results, or reproduction claims as actual observations.
 
 AI may help draft replies, but a human must review, understand, and post each response. Clearly identify uncertainties in exploratory replies. **Do not configure agents to respond autonomously on PRs or issues.**
 
