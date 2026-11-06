@@ -6,7 +6,7 @@ We encourage thoughtful use of AI tools, including agentic coding, to explore id
 
 Authors remain responsible for their contributions, including explaining their changes and helping address problems those changes cause.
 
-Questions, requests for help, and early design discussions are welcome, even without a polished proposal or PR.
+Questions, requests for help, and early design discussions are welcome, even without a polished pull request.
 
 This policy covers code, tests, documentation, issue reports, and discussion responses.
 
@@ -16,20 +16,20 @@ An **extractive contribution**[^eghbal] costs the project more effort to review,
 
 ## Make pull requests reviewable
 
-Authors can seek early feedback or review for merge. State which kind of review you want in the PR description so reviewers know what to expect.
+Authors can seek early feedback or review for merge. State which kind of review you want in the description so reviewers know what to expect.
 
 - **Exploratory review:** Say what is uncertain and what feedback you want. You do not need to understand every detail yet.
-- **Review for merge:**
-  - Personally review the complete diff and understand the changes well enough to discuss and revise them.
-  - Keep the PR focused and manageable, with a clear description.
-  - Split unrelated changes into separate PRs when practical.
+- **Review for merge:** Before requesting review, authors should:
+  - Read the complete diff and understand the changes well enough to discuss and revise them.
+  - Keep the pull request focused and manageable, with a clear description.
+  - Split unrelated changes into separate pull requests when practical.
   - Keep formatting changes to a minimum.
 
 ## Use AI to support your judgment not replace
 
 AI can help draft issue reports and replies, but the final message must reflect your own intent and judgment. Review it and check factual claims before posting. Be sure to label unverified claims.
 
-**Do not configure agents to respond autonomously on PRs or issues.**
+**Do not configure agents to respond autonomously on pull requests or issues.**
 
 ## Enforcement
 
