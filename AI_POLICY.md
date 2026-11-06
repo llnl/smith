@@ -2,7 +2,11 @@
 
 ## Purpose and scope
 
-We encourage thoughtful use of AI tools, including agentic coding, to explore ideas, improve productivity, and strengthen software quality. Their use is optional. Contributions are evaluated on their quality and value, regardless of the tools used. Questions, mentoring, and early design discussions are always welcome.
+We encourage thoughtful use of AI tools, including agentic coding, to explore ideas, improve productivity, and strengthen software quality. AI tool use is optional. Contributions are evaluated on quality and value, regardless of the tools used.
+
+Authors remain responsible for their contributions, including explaining their changes and helping address problems those changes cause.
+
+Questions, requests for help, and early design discussions are welcome, even without a polished proposal or PR.
 
 This policy covers code, tests, documentation, issue reports, and discussion responses.
 
@@ -12,7 +16,7 @@ An **extractive contribution**[^eghbal] costs the project more effort to review,
 
 ## Make pull requests reviewable
 
-Pull requests (PRs) can seek early feedback or review for merge. State which kind of review you want in the PR description so reviewers know what to expect.
+Authors can seek early feedback or review for merge. State which kind of review you want in the PR description so reviewers know what to expect.
 
 - **Exploratory review:** Say what is uncertain and what feedback you want. You do not need to understand every detail yet.
 - **Review for merge:**
