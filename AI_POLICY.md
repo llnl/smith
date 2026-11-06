@@ -1,4 +1,4 @@
-# AI-Assisted Development Policy
+# AI-Assisted Code Development Policy
 
 ## Purpose and scope
 
@@ -21,11 +21,11 @@ Pull requests (PRs) can seek early feedback or review for merge. State which kin
   - Split unrelated changes into separate PRs when practical.
   - Keep formatting changes to a minimum.
 
-## Issue reports and responses
+## Use AI to support your judgment not replace
 
-Personally review AI-generated issue reports. Identify unverified explanations as hypotheses. Never present AI-generated logs, test results, or reproduction claims as actual observations.
+AI can help draft issue reports and replies, but the final message must reflect your own intent and judgment. Review it and check factual claims before posting. Be sure to label unverified claims.
 
-AI may help draft replies, but a human must review, understand, and post each response. **Do not configure agents to respond autonomously on PRs or issues.**
+**Do not configure agents to respond autonomously on PRs or issues.**
 
 ## Enforcement
 
