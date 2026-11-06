@@ -4,26 +4,22 @@
 
 We encourage thoughtful use of AI tools, including agentic coding, to explore ideas, improve productivity, and strengthen software quality. Their use is optional. Contributions are evaluated on their quality and value, regardless of the tools used. Questions, mentoring, and early design discussions are always welcome.
 
-This policy covers code, tests, documentation, issue reports, and discussion responses. Expectations depend on whether a submission seeks exploratory feedback or implementation review.
+This policy covers code, tests, documentation, issue reports, and discussion responses.
 
 ## Avoid extractive contributions
 
-An **extractive contribution**[^eghbal] costs the project more effort to review, correct, or maintain than the value it adds.
+An **extractive contribution**[^eghbal] costs the project more effort to review, correct, or maintain than the value it adds. Consider the time your contribution will take to review and maintain.
 
-## Prepare contributions for review
+## Make pull requests reviewable
 
-Before requesting review of a pull request (PR), authors must personally review the complete diff and understand the technical details well enough to discuss and revise them.
+Pull requests (PRs) can seek early feedback or review for merge. State which kind of review you want in the PR description so reviewers know what to expect.
 
-If the PR is meant for exploration and discussion, clearly label it in the PR description to set expectations of the reviewers. A complete understanding is not required for this type of PR. State what is uncertain and what feedback you want.
-
-## Keep pull requests reviewable
-
-- Organize each PR around a single manageable concept
-- Keep size reasonable
-- Provide a good PR description and code comments
-- Separate large unrelated fixes, formatting, and refactoring into their own PR
-
-If splitting is impractical, explain why.
+- **Exploratory review:** Say what is uncertain and what feedback you want. You do not need to understand every detail yet.
+- **Review for merge:**
+  - Personally review the complete diff and understand the changes well enough to discuss and revise them.
+  - Keep the PR focused and manageable, with a clear description.
+  - Split unrelated changes into separate PRs when practical.
+  - Keep formatting changes to a minimum.
 
 ## Issue reports and responses
 
