@@ -26,7 +26,6 @@ set(infrastructure_headers
     mpi_fstream.hpp
     output.hpp
     profiling.hpp
-    variant.hpp
     )
 
 set(infrastructure_sources
@@ -62,7 +61,6 @@ smith_write_unified_header(
     EXCLUDE accelerator.hpp
             debug_print.hpp
             mpi_fstream.hpp
-            variant.hpp
     )
 
 target_include_directories(smith_infrastructure PUBLIC

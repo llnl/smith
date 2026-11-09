@@ -45,9 +45,15 @@ if (TRIBOL_FOUND)
         contact_solid_adjoint.cpp)
     if (ENZYME_FOUND)
         list(APPEND physics_serial_tribol_test_sources 
-                    contact_finite_diff.cpp
                     tribol_finite_diff.cpp)
     endif()
+
+    # Do not run the following test(s) when building on tuo or similar machines, for now
+    # https://github.com/llnl/smith/issues/1704
+    if (ENZYME_FOUND AND NOT ENABLE_HIP)
+        list(APPEND contact_finite_diff.cpp)
+    endif()
+
     list(APPEND physics_serial_test_sources
         ${physics_serial_tribol_test_sources})
 endif()
@@ -61,9 +67,10 @@ smith_add_tests(SOURCES       ${physics_serial_test_sources}
                 DEPENDS_ON    ${physics_test_depends}
                 NUM_MPI_TASKS 1)
 
-if (TRIBOL_FOUND AND ENZYME_FOUND AND ENABLE_HIP)
-    set_property(TEST contact_finite_diff APPEND PROPERTY ENVIRONMENT "MPICH_COLL_OPT_OFF=MPI_Alltoallv")
-endif()
+# https://github.com/llnl/smith/issues/1704
+# if (TRIBOL_FOUND AND ENZYME_FOUND AND ENABLE_HIP)
+#     set_property(TEST contact_finite_diff APPEND PROPERTY ENVIRONMENT "MPICH_COLL_OPT_OFF=MPI_Alltoallv")
+# endif()
 
 if (SMITH_USE_ENZYME)
     # error: failed to meet occupancy target given by 'amdgpu-waves-per-eu' in ...
