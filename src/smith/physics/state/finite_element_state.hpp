@@ -18,9 +18,9 @@
 #include <optional>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #include "mfem.hpp"
-#include "smith/infrastructure/variant.hpp"
 #include "smith/physics/state/finite_element_vector.hpp"
 #include "smith/numerics/functional/domain.hpp"
 #include "smith/numerics/functional/tensor.hpp"
@@ -97,7 +97,7 @@ auto evaluateTensorFunctionOnMfemVector(const mfem::Vector& X_mfem, Callable&& f
  */
 inline bool is_scalar_valued(const GeneralCoefficient& coef)
 {
-  return holds_alternative<std::shared_ptr<mfem::Coefficient>>(coef);
+  return std::holds_alternative<std::shared_ptr<mfem::Coefficient>>(coef);
 }
 
 /**
@@ -105,7 +105,7 @@ inline bool is_scalar_valued(const GeneralCoefficient& coef)
  */
 inline bool is_vector_valued(const GeneralCoefficient& coef)
 {
-  return holds_alternative<std::shared_ptr<mfem::VectorCoefficient>>(coef);
+  return std::holds_alternative<std::shared_ptr<mfem::VectorCoefficient>>(coef);
 }
 
 /**
