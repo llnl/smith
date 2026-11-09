@@ -6,9 +6,9 @@
 
 #include <algorithm>
 #include <memory>
+#include <variant>
 
 #include "smith/physics/boundary_conditions/boundary_condition.hpp"
-#include "smith/infrastructure/variant.hpp"
 #include "smith/physics/state/finite_element_state.hpp"
 
 namespace smith {
@@ -17,7 +17,7 @@ BoundaryCondition::BoundaryCondition(GeneralCoefficient coef, const std::optiona
                                      const mfem::ParFiniteElementSpace& space, const std::set<int>& attrs)
     : coef_(coef), component_(component), attr_markers_(space.GetMesh()->bdr_attributes.Max()), space_(space)
 {
-  if (get_if<std::shared_ptr<mfem::VectorCoefficient>>(&coef_)) {
+  if (std::get_if<std::shared_ptr<mfem::VectorCoefficient>>(&coef_)) {
     SLIC_ERROR_ROOT_IF(component_, "A vector coefficient must be applied to all components");
   }
 
@@ -35,7 +35,7 @@ BoundaryCondition::BoundaryCondition(GeneralCoefficient coef, const std::optiona
                                      const mfem::ParFiniteElementSpace& space, const mfem::Array<int>& true_dofs)
     : coef_(coef), component_(component), attr_markers_(0), space_(space)
 {
-  if (get_if<std::shared_ptr<mfem::VectorCoefficient>>(&coef_)) {
+  if (std::get_if<std::shared_ptr<mfem::VectorCoefficient>>(&coef_)) {
     SLIC_ERROR_IF(component_, "A vector coefficient must be applied to all components");
   }
   setTrueDofList(true_dofs);
@@ -94,13 +94,13 @@ void BoundaryCondition::setDofs(mfem::Vector& vector, const double time) const
 
   // the only reason to store a VectorCoefficient is to act on all components
   if (is_vector_valued(coef_)) {
-    auto vec_coef = get<std::shared_ptr<mfem::VectorCoefficient>>(coef_);
+    auto vec_coef = std::get<std::shared_ptr<mfem::VectorCoefficient>>(coef_);
     vec_coef->SetTime(time);
     state.project(*vec_coef, dof_list);
   } else {
     // an mfem::Coefficient could be used to describe a scalar-valued function, or
     // a single component of a vector-valued function
-    auto scalar_coef = get<std::shared_ptr<mfem::Coefficient>>(coef_);
+    auto scalar_coef = std::get<std::shared_ptr<mfem::Coefficient>>(coef_);
     scalar_coef->SetTime(time);
     if (component_) {
       state.project(*scalar_coef, dof_list, *component_);
