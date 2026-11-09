@@ -3,7 +3,7 @@
 # Build and test Smith on team's shared MacMini, then report results to a set of emails
 
 # Immediately fail upon error and update environment
-set -e
+set -eE
 source ~/.bash_profile
 
 # Variables
@@ -36,6 +36,7 @@ print_run_log cd $PROJECT_DIR
 
 # Update repo
 print_run_log git checkout develop
+print_run_log git submodule deinit --force --all
 print_run_log git pull
 print_run_log git submodule update --init --recursive
 

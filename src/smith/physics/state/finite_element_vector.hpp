@@ -17,12 +17,12 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <variant>
 
 #include "mpi.h"
 #include "mfem.hpp"
 
 #include "smith/smith_config.hpp"
-#include "smith/infrastructure/variant.hpp"
 #include "smith/numerics/functional/functional.hpp"
 
 namespace smith {
@@ -30,7 +30,7 @@ namespace smith {
 /**
  * @brief A sum type for encapsulating either a scalar or vector coeffient
  */
-using GeneralCoefficient = variant<std::shared_ptr<mfem::Coefficient>, std::shared_ptr<mfem::VectorCoefficient>>;
+using GeneralCoefficient = std::variant<std::shared_ptr<mfem::Coefficient>, std::shared_ptr<mfem::VectorCoefficient>>;
 
 /// @brief The type of a finite element basis function
 /// @note TODO This class is used instead of the Family class from functional due to incompatibilities with Vector

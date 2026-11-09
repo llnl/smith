@@ -18,6 +18,18 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 
 ### Added
 
+### Removed
+
+### Deprecated
+
+### Changed
+
+### Fixed
+
+## [Version 0.2.0] - Release date 2026-10-15
+
+### Added
+
 - Added this release notes file to track changes in project
 - Added composable differentiable-numerics systems for solid mechanics, thermal mechanics, internal variables, and
   thermo-mechanics coupling through shared field stores.
@@ -70,4 +82,7 @@ The Smith project release numbers follow [Semantic Versioning](http://semver.org
 ###  Security
 - Use this section in case of vulnerabilities
 
+
+[Unreleased]:    https://github.com/LLNL/smith/compare/v0.2.0...develop
+[Version 0.2.0]: https://github.com/LLNL/smith/compare/v0.1.0...v0.2.0
 [Version 0.1.0]: https://github.com/llnl/smith/releases/tag/v0.1.0

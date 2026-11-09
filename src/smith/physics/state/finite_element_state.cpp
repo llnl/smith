@@ -6,6 +6,8 @@
 
 #include "smith/physics/state/finite_element_state.hpp"
 
+#include <variant>
+
 #include "smith/numerics/functional/domain.hpp"
 #include "smith/infrastructure/logger.hpp"
 
@@ -37,7 +39,7 @@ void FiniteElementState::project(const GeneralCoefficient& coef)
 
   // The generic lambda parameter, auto&&, allows the component type (mfem::Coef or mfem::VecCoef)
   // to be deduced, and the appropriate version of ProjectCoefficient is dispatched.
-  visit(
+  std::visit(
       [this, &grid_function](auto&& concrete_coef) {
         grid_function.ProjectCoefficient(*concrete_coef);
         setFromGridFunction(grid_function);
