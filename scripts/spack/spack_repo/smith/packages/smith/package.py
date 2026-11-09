@@ -55,8 +55,8 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
 
     version("main", branch="main")
     version("develop", branch="develop")
-    version("0.2.0", tag="v0.2.0", commit="37c51c38d144276cf00cbe6ac37de126746cb148")
-    version("0.1.0", tag="v0.1.0", commit="cbe2e173eb1cbc36525ba454a386e4fe0b7e6440")
+    version("0.2.0", commit="37c51c38d144276cf00cbe6ac37de126746cb148")
+    version("0.1.0", commit="cbe2e173eb1cbc36525ba454a386e4fe0b7e6440")
 
     # -----------------------------------------------------------------------
     # Variants
