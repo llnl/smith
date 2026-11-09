@@ -400,7 +400,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # Restore previous runtime output directory
         set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${tmp_cmake_runtime_output_directory} CACHE PATH "" FORCE)
  
-        set(MFEM_FOUND TRUE CACHE BOOL "" FORCE)
+        set(MFEM_FOUND TRUE)
 
         # Patch the mfem target with the correct include directories
         target_include_directories(mfem SYSTEM BEFORE INTERFACE
@@ -472,7 +472,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             message(FATAL_ERROR "Given AXOM_DIR did not contain a required header: axom/inlet/LuaReader.hpp"
                                 "\nTry building Axom with '-DLUA_DIR=path/to/lua/install'\n ")
         endif()
-        set(LUA_FOUND TRUE CACHE BOOL "")
+        set(LUA_FOUND TRUE)
 
         # MFEMSidreDataCollection.hpp
         find_path(
@@ -510,7 +510,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         else()
             add_subdirectory(${PROJECT_SOURCE_DIR}/axom/src ${CMAKE_BINARY_DIR}/axom)
         endif()
-        set(AXOM_FOUND TRUE CACHE BOOL "" FORCE)
+        set(AXOM_FOUND TRUE)
 
         add_library(axom::cli11 ALIAS cli11)
         add_library(axom::fmt ALIAS fmt)
