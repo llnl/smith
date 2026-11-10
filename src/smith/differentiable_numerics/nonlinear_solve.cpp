@@ -4,60 +4,20 @@
 #include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/differentiable_numerics/nonlinear_block_solver.hpp"
 
-#include <string>
-#include <unordered_map>
-
 namespace smith {
-
-namespace {
-
-using ResolvedBoundaryFields = std::unordered_map<std::string, FEFieldPtr>;
-
-ResolvedBoundaryFields findPrescribedBoundaryFields(const BoundaryConditionManager* bc_manager,
-                                                    const std::vector<FEFieldPtr>& input_fields, size_t first_parameter)
-{
-  ResolvedBoundaryFields prescribed_fields;
-  if (!bc_manager) {
-    return prescribed_fields;
-  }
-
-  for (const auto& bc : bc_manager->essentials()) {
-    const auto* prescribed_field = bc.prescribedField();
-    if (!prescribed_field || prescribed_fields.contains(prescribed_field->name)) {
-      continue;
-    }
-
-    for (size_t i = first_parameter; i < input_fields.size(); ++i) {
-      if (input_fields[i]->name() == prescribed_field->name) {
-        prescribed_fields.emplace(prescribed_field->name, input_fields[i]);
-        break;
-      }
-    }
-
-    SLIC_ERROR_IF(!prescribed_fields.contains(prescribed_field->name),
-                  "Prescribed boundary-condition field '" << prescribed_field->name
-                                                          << "' is not a parameter input to the weak form");
-  }
-
-  return prescribed_fields;
-}
-
-}  // namespace
 
 /// @brief apply boundary conditions
 void applyBoundaryConditions(double time, const smith::BoundaryConditionManager* bc_manager,
-                             smith::FEFieldPtr& primal_field, const ResolvedBoundaryFields& prescribed_fields)
+                             smith::FEFieldPtr& primal_field, const std::vector<smith::FEFieldPtr>& prescribed_fields)
 {
   if (!bc_manager) {
     return;
   }
 
+  size_t prescribed_field_index = 0;
   for (const auto& bc : bc_manager->essentials()) {
-    if (const auto* prescribed_field = bc.prescribedField()) {
-      const auto field = prescribed_fields.find(prescribed_field->name);
-      SLIC_ERROR_IF(field == prescribed_fields.end(),
-                    "Prescribed boundary-condition field '" << prescribed_field->name << "' was not resolved");
-      bc.setDofs(*primal_field, *field->second);
+    if (bc.prescribedField()) {
+      bc.setDofs(*primal_field, *prescribed_fields[prescribed_field_index++]);
     } else {
       bc.setDofs(*primal_field, time);
     }
@@ -84,6 +44,25 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
   for (size_t r = 0; r < num_rows_; ++r) {
     SLIC_ERROR_IF(num_rows_ != block_indices[r].size(), "All block index rows must have the same number of columns");
+  }
+
+  std::vector<std::vector<size_t>> prescribed_field_indices(num_rows_);
+  for (size_t row = 0; row < num_rows_; ++row) {
+    if (!bc_managers[row]) continue;
+    for (const auto& bc : bc_managers[row]->essentials()) {
+      const auto* prescribed_field = bc.prescribedField();
+      if (!prescribed_field) continue;
+
+      size_t parameter_index = 0;
+      while (parameter_index < params[row].size() &&
+             params[row][parameter_index].get()->name() != prescribed_field->name) {
+        ++parameter_index;
+      }
+      SLIC_ERROR_IF(parameter_index == params[row].size(), "Prescribed boundary-condition field '"
+                                                               << prescribed_field->name
+                                                               << "' is not a parameter input to the weak form");
+      prescribed_field_indices[row].push_back(parameter_index);
+    }
   }
 
   // Validate block_indices bounds against states sizes
@@ -151,10 +130,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       }
     }
 
-    std::vector<ResolvedBoundaryFields> prescribed_fields(num_rows);
+    std::vector<std::vector<FEFieldPtr>> prescribed_fields(num_rows);
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      prescribed_fields[row_i] =
-          findPrescribedBoundaryFields(bc_managers[row_i], input_fields[row_i], num_state_inputs[row_i]);
+      for (size_t parameter_index : prescribed_field_indices[row_i]) {
+        prescribed_fields[row_i].push_back(input_fields[row_i][num_state_inputs[row_i] + parameter_index]);
+      }
     }
 
     std::vector<FEFieldPtr> diagonal_fields(num_rows);
@@ -284,10 +264,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       }
     }
 
-    std::vector<ResolvedBoundaryFields> prescribed_fields(num_rows);
+    std::vector<std::vector<FEFieldPtr>> prescribed_fields(num_rows);
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      prescribed_fields[row_i] =
-          findPrescribedBoundaryFields(bc_managers[row_i], input_fields[row_i], num_state_inputs[row_i]);
+      for (size_t parameter_index : prescribed_field_indices[row_i]) {
+        prescribed_fields[row_i].push_back(input_fields[row_i][num_state_inputs[row_i] + parameter_index]);
+      }
     }
 
     // if the field is a primal variable we solved before,
