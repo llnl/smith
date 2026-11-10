@@ -140,9 +140,6 @@ class BoundaryCondition {
    */
   const mfem::Array<int>& getLocalDofList() const { return local_dofs_; }
 
-  /// @brief Returns the source of prescribed values.
-  const BoundaryValue& value() const { return value_; }
-
   /**
    * @brief Returns the stored coefficient
    * @pre This boundary condition must be coefficient-valued

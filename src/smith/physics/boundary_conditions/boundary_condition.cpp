@@ -13,17 +13,6 @@
 
 namespace smith {
 
-namespace {
-
-void validatePrescribedField(const FiniteElementState& prescribed_field, const mfem::ParFiniteElementSpace& space)
-{
-  SLIC_ERROR_IF(prescribed_field.name().empty(), "A prescribed boundary-condition field must have a name");
-  SLIC_ERROR_IF(!sameFiniteElementSpace(prescribed_field.space(), space),
-                "Prescribed boundary-condition field and constrained field have incompatible spaces");
-}
-
-}  // namespace
-
 BoundaryCondition::BoundaryCondition(GeneralCoefficient coef, const std::optional<int> component,
                                      const mfem::ParFiniteElementSpace& space, const std::set<int>& attrs)
     : value_(coef), component_(component), attr_markers_(space.GetMesh()->bdr_attributes.Max()), space_(space)
@@ -49,7 +38,8 @@ BoundaryCondition::BoundaryCondition(const FiniteElementState& prescribed_field,
       attr_markers_(space.GetMesh()->bdr_attributes.Max()),
       space_(space)
 {
-  validatePrescribedField(prescribed_field, space);
+  SLIC_ERROR_IF(!sameFiniteElementSpace(prescribed_field.space(), space),
+                "Prescribed boundary-condition field and constrained field have incompatible spaces");
 
   attr_markers_ = 0;
   for (const int attr : attrs) {
@@ -74,7 +64,8 @@ BoundaryCondition::BoundaryCondition(const FiniteElementState& prescribed_field,
                                      const mfem::ParFiniteElementSpace& space, const mfem::Array<int>& true_dofs)
     : value_(PrescribedFieldReference{prescribed_field.name()}), component_(component), attr_markers_(0), space_(space)
 {
-  validatePrescribedField(prescribed_field, space);
+  SLIC_ERROR_IF(!sameFiniteElementSpace(prescribed_field.space(), space),
+                "Prescribed boundary-condition field and constrained field have incompatible spaces");
   setTrueDofList(true_dofs);
 }
 

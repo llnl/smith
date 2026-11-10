@@ -13,7 +13,6 @@
 #pragma once
 
 #include <optional>
-#include <utility>
 
 #include "smith/differentiable_numerics/field_state.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
@@ -121,10 +120,8 @@ class DirichletBoundaryConditions {
    */
   void setScalarBCs(const Domain& domain, const FieldState& prescribed_field)
   {
-    SLIC_ERROR_IF(space_.GetVDim() != 1, "Scalar field boundary conditions require a scalar constrained field");
-
     auto dof_list = domain.dof_list(&space_);
-    space_.DofsToVDofs(0, dof_list);
+    space_.DofsToVDofs(static_cast<int>(0), dof_list);
     bcs_.addEssential(dof_list, *prescribed_field.get(), space_, 0);
   }
 
@@ -140,15 +137,11 @@ class DirichletBoundaryConditions {
    */
   void setVectorBCs(const Domain& domain, std::vector<int> components, const FieldState& prescribed_field)
   {
-    const int field_dim = space_.GetVDim();
-    auto scalar_dofs = domain.dof_list(&space_);
-    for (int component : components) {
-      SLIC_ERROR_IF(component < 0 || component >= field_dim,
-                    std::format("Trying to set boundary conditions on a field with dim {}, using component {}",
-                                field_dim, component));
-      auto vector_dofs = scalar_dofs;
-      space_.DofsToVDofs(component, vector_dofs);
-      bcs_.addEssential(vector_dofs, *prescribed_field.get(), space_, component);
+    for (auto component : components) {
+      auto dof_list = domain.dof_list(&space_);
+      // scalar ldofs -> vector ldofs
+      space_.DofsToVDofs(static_cast<int>(component), dof_list);
+      bcs_.addEssential(dof_list, *prescribed_field.get(), space_, static_cast<int>(component));
     }
   }
 
@@ -168,7 +161,7 @@ class DirichletBoundaryConditions {
     for (int component = 0; component < field_dim; ++component) {
       components[static_cast<size_t>(component)] = component;
     }
-    setVectorBCs(domain, std::move(components), prescribed_field);
+    setVectorBCs(domain, components, prescribed_field);
   }
 
   /// @brief Constrain the dofs of a scalar field over a domain
