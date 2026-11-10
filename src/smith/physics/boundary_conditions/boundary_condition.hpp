@@ -27,10 +27,8 @@
 
 namespace smith {
 
-/** @brief Reference to a finite-element field that supplies prescribed boundary values. */
-struct PrescribedFieldReference {
-  std::string name;  ///< Name used to resolve the field from solve inputs.
-};
+/** @brief Name used to resolve a finite-element field that supplies prescribed boundary values. */
+using PrescribedFieldReference = std::string;
 
 /** @brief Source of values for an essential boundary condition. */
 using BoundaryValue = std::variant<GeneralCoefficient, PrescribedFieldReference>;

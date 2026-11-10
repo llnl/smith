@@ -54,12 +54,11 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       if (!prescribed_field) continue;
 
       size_t parameter_index = 0;
-      while (parameter_index < params[row].size() &&
-             params[row][parameter_index].get()->name() != prescribed_field->name) {
+      while (parameter_index < params[row].size() && params[row][parameter_index].get()->name() != *prescribed_field) {
         ++parameter_index;
       }
       SLIC_ERROR_IF(parameter_index == params[row].size(), "Prescribed boundary-condition field '"
-                                                               << prescribed_field->name
+                                                               << *prescribed_field
                                                                << "' is not a parameter input to the weak form");
       prescribed_field_indices[row].push_back(parameter_index);
     }

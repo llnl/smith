@@ -33,7 +33,7 @@ BoundaryCondition::BoundaryCondition(GeneralCoefficient coef, const std::optiona
 
 BoundaryCondition::BoundaryCondition(const FiniteElementState& prescribed_field, const std::optional<int> component,
                                      const mfem::ParFiniteElementSpace& space, const std::set<int>& attrs)
-    : value_(PrescribedFieldReference{prescribed_field.name()}),
+    : value_(prescribed_field.name()),
       component_(component),
       attr_markers_(space.GetMesh()->bdr_attributes.Max()),
       space_(space)
@@ -62,7 +62,7 @@ BoundaryCondition::BoundaryCondition(GeneralCoefficient coef, const std::optiona
 
 BoundaryCondition::BoundaryCondition(const FiniteElementState& prescribed_field, const std::optional<int> component,
                                      const mfem::ParFiniteElementSpace& space, const mfem::Array<int>& true_dofs)
-    : value_(PrescribedFieldReference{prescribed_field.name()}), component_(component), attr_markers_(0), space_(space)
+    : value_(prescribed_field.name()), component_(component), attr_markers_(0), space_(space)
 {
   SLIC_ERROR_IF(!sameFiniteElementSpace(prescribed_field.space(), space),
                 "Prescribed boundary-condition field and constrained field have incompatible spaces");
