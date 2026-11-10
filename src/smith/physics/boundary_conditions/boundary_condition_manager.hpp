@@ -13,8 +13,8 @@
 #pragma once
 
 #include <memory>
-#include <optional>
 #include <set>
+#include <optional>
 #include <vector>
 
 #include "smith/physics/boundary_conditions/boundary_condition.hpp"

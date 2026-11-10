@@ -84,40 +84,6 @@ DirichletBoundaryConditions::DirichletBoundaryConditions(const Mesh& mesh, mfem:
 {
 }
 
-void DirichletBoundaryConditions::setScalarBCs(const Domain& domain, const FieldState& prescribed_field)
-{
-  SLIC_ERROR_IF(space_.GetVDim() != 1, "Scalar field boundary conditions require a scalar constrained field");
-
-  auto dof_list = domain.dof_list(&space_);
-  space_.DofsToVDofs(0, dof_list);
-  bcs_.addEssential(dof_list, *prescribed_field.get(), space_, 0);
-}
-
-void DirichletBoundaryConditions::setVectorBCs(const Domain& domain, std::vector<int> components,
-                                               const FieldState& prescribed_field)
-{
-  const int field_dim = space_.GetVDim();
-  auto scalar_dofs = domain.dof_list(&space_);
-  for (int component : components) {
-    SLIC_ERROR_IF(component < 0 || component >= field_dim,
-                  std::format("Trying to set boundary conditions on a field with dim {}, using component {}", field_dim,
-                              component));
-    auto vector_dofs = scalar_dofs;
-    space_.DofsToVDofs(component, vector_dofs);
-    bcs_.addEssential(vector_dofs, *prescribed_field.get(), space_, component);
-  }
-}
-
-void DirichletBoundaryConditions::setVectorBCs(const Domain& domain, const FieldState& prescribed_field)
-{
-  const int field_dim = space_.GetVDim();
-  std::vector<int> components(static_cast<size_t>(field_dim));
-  for (int component = 0; component < field_dim; ++component) {
-    components[static_cast<size_t>(component)] = component;
-  }
-  setVectorBCs(domain, std::move(components), prescribed_field);
-}
-
 const BoundaryConditionManager& DirichletBoundaryConditions::getSecondDerivativeManager() const
 {
   second_derivative_manager_.emplace(mfem_mesh_);
@@ -136,11 +102,11 @@ void DirichletBoundaryConditions::rebuildSecondDerivativeManager(BoundaryConditi
 
     if (is_vector_valued(bc.coefficient())) {
       auto deriv_coef = std::make_shared<SecondTimeDerivativeVectorCoefficient>(
-          std::get<std::shared_ptr<mfem::VectorCoefficient>>(bc.coefficient()));
+          get<std::shared_ptr<mfem::VectorCoefficient>>(bc.coefficient()));
       target.addEssentialByTrueDofs(bc.getTrueDofList(), deriv_coef, space_);
     } else {
       auto deriv_coef = std::make_shared<SecondTimeDerivativeScalarCoefficient>(
-          std::get<std::shared_ptr<mfem::Coefficient>>(bc.coefficient()));
+          get<std::shared_ptr<mfem::Coefficient>>(bc.coefficient()));
       target.addEssential(bc.getLocalDofList(), deriv_coef, space_, bc.component());
     }
   }

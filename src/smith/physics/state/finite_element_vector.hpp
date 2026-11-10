@@ -44,14 +44,11 @@ enum class ElementType
 };
 
 /**
- * @brief Check whether two finite element spaces are compatible
+ * @brief Check if two finite element spaces are the same
  *
- * Compatible spaces use the same mesh, finite element collection, vector
- * dimension, and ordering.
- *
- * @param left The first finite element space
- * @param right The second finite element space
- * @return True if the finite element spaces are compatible, otherwise false
+ * @param left
+ * @param right
+ * @return Bool which is true if the spaces are the same, otherwise false
  */
 bool sameFiniteElementSpace(const mfem::FiniteElementSpace& left, const mfem::FiniteElementSpace& right);
 

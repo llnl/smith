@@ -17,11 +17,9 @@ namespace {
 mfem::Array<int> getTrueDofs(const mfem::Array<int>& local_dofs, mfem::ParFiniteElementSpace& space)
 {
   mfem::Array<int> true_dofs;
-  for (int local_dof : local_dofs) {
-    const int true_dof = space.GetLocalTDofNumber(local_dof);
-    if (true_dof >= 0) {
-      true_dofs.Append(true_dof);
-    }
+  for (int j = 0; j < local_dofs.Size(); ++j) {
+    int tdof = space.GetLocalTDofNumber(local_dofs[j]);
+    if (tdof >= 0) true_dofs.Append(tdof);
   }
   return true_dofs;
 }

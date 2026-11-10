@@ -119,7 +119,14 @@ class DirichletBoundaryConditions {
    * @param[in] domain Domain whose scalar DOFs are constrained.
    * @param[in] prescribed_field Full-volume field containing the prescribed values.
    */
-  void setScalarBCs(const Domain& domain, const FieldState& prescribed_field);
+  void setScalarBCs(const Domain& domain, const FieldState& prescribed_field)
+  {
+    SLIC_ERROR_IF(space_.GetVDim() != 1, "Scalar field boundary conditions require a scalar constrained field");
+
+    auto dof_list = domain.dof_list(&space_);
+    space_.DofsToVDofs(0, dof_list);
+    bcs_.addEssential(dof_list, *prescribed_field.get(), space_, 0);
+  }
 
   /**
    * @brief Prescribe selected vector components from a finite-element field over a domain.
@@ -131,7 +138,19 @@ class DirichletBoundaryConditions {
    * @param[in] components Vector components to constrain.
    * @param[in] prescribed_field Full-volume field containing the prescribed values.
    */
-  void setVectorBCs(const Domain& domain, std::vector<int> components, const FieldState& prescribed_field);
+  void setVectorBCs(const Domain& domain, std::vector<int> components, const FieldState& prescribed_field)
+  {
+    const int field_dim = space_.GetVDim();
+    auto scalar_dofs = domain.dof_list(&space_);
+    for (int component : components) {
+      SLIC_ERROR_IF(component < 0 || component >= field_dim,
+                    std::format("Trying to set boundary conditions on a field with dim {}, using component {}",
+                                field_dim, component));
+      auto vector_dofs = scalar_dofs;
+      space_.DofsToVDofs(component, vector_dofs);
+      bcs_.addEssential(vector_dofs, *prescribed_field.get(), space_, component);
+    }
+  }
 
   /**
    * @brief Prescribe all vector components from a finite-element field over a domain.
@@ -142,7 +161,15 @@ class DirichletBoundaryConditions {
    * @param[in] domain Domain whose vector DOFs are constrained.
    * @param[in] prescribed_field Full-volume field containing the prescribed values.
    */
-  void setVectorBCs(const Domain& domain, const FieldState& prescribed_field);
+  void setVectorBCs(const Domain& domain, const FieldState& prescribed_field)
+  {
+    const int field_dim = space_.GetVDim();
+    std::vector<int> components(static_cast<size_t>(field_dim));
+    for (int component = 0; component < field_dim; ++component) {
+      components[static_cast<size_t>(component)] = component;
+    }
+    setVectorBCs(domain, std::move(components), prescribed_field);
+  }
 
   /// @brief Constrain the dofs of a scalar field over a domain
   template <int spatial_dim>
