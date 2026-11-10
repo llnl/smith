@@ -57,10 +57,10 @@ class BoundaryConditionManager {
                     mfem::ParFiniteElementSpace& space, std::optional<int> component = {});
 
   /**
-   * @brief Set a list of local degrees of freedom from a prescribed finite-element field
+   * @brief Set a list of local degrees of freedom from a prescribed finite element field
    *
-   * @param[in] local_dofs Indices of ldofs to constrain
-   * @param[in] prescribed_field Field supplying the prescribed values
+   * @param[in] local_dofs Indices of ldofs to set with a Dirichlet condition
+   * @param[in] prescribed_field Finite element field supplying the prescribed values
    * @param[in] space The finite element space to which the BC should be applied
    * @param[in] component The component to set (null implies all components are set)
    */

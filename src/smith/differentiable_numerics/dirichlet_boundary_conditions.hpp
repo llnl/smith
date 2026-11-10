@@ -106,18 +106,10 @@ class DirichletBoundaryConditions {
     bcs_.addEssential(local_dofs, component_disp_bdr_coef_, space_, 0);
   }
 
-  /**
-   * @brief Prescribe scalar values from a finite-element field over a domain.
-   *
-   * Only values on the DOFs selected by @p domain are used. The prescribed field must have the same finite-element
-   * space as the constrained field and must be an input to the differentiable solve.
-   *
-   * @warning Reverse-mode sensitivity through the prescribed boundary values is not yet propagated. Uses of the field
-   * in weak forms retain their existing differentiation behavior.
-   *
-   * @param[in] domain Domain whose scalar DOFs are constrained.
-   * @param[in] prescribed_field Full-volume field containing the prescribed values.
-   */
+  /// @brief Specify spatially varying Dirichlet boundary conditions from a finite element field over a domain.
+  /// @param domain All dofs in this domain have boundary conditions applied to it.
+  /// @param prescribed_field Finite element field containing the prescribed values; must have
+  /// the same finite element space as the constrained field.
   void setScalarBCs(const Domain& domain, const FieldState& prescribed_field)
   {
     auto dof_list = domain.dof_list(&space_);
@@ -125,16 +117,13 @@ class DirichletBoundaryConditions {
     bcs_.addEssential(dof_list, *prescribed_field.get(), space_, 0);
   }
 
-  /**
-   * @brief Prescribe selected vector components from a finite-element field over a domain.
-   *
-   * @warning Reverse-mode sensitivity through the prescribed boundary values is not yet propagated. Uses of the field
-   * in weak forms retain their existing differentiation behavior.
-   *
-   * @param[in] domain Domain whose vector DOFs are constrained.
-   * @param[in] components Vector components to constrain.
-   * @param[in] prescribed_field Full-volume field containing the prescribed values.
-   */
+  /// @brief Specify spatially varying Dirichlet boundary conditions from a finite element field over a domain.
+  /// @param domain All dofs in this domain have boundary conditions applied to it.
+  /// @param components vectors of computents.  The prescribed_field contains the full vector, this
+  /// specifies which subset of those should have dirichlet boundary conditions applied.  direction to apply boundary
+  /// condition to if the underlying field is a vector-field.
+  /// @param prescribed_field Vector-valued finite element field containing the prescribed values; must have
+  /// the same finite element space as the constrained field.
   void setVectorBCs(const Domain& domain, std::vector<int> components, const FieldState& prescribed_field)
   {
     for (auto component : components) {
@@ -145,15 +134,7 @@ class DirichletBoundaryConditions {
     }
   }
 
-  /**
-   * @brief Prescribe all vector components from a finite-element field over a domain.
-   *
-   * @warning Reverse-mode sensitivity through the prescribed boundary values is not yet propagated. Uses of the field
-   * in weak forms retain their existing differentiation behavior.
-   *
-   * @param[in] domain Domain whose vector DOFs are constrained.
-   * @param[in] prescribed_field Full-volume field containing the prescribed values.
-   */
+  /// @overload
   void setVectorBCs(const Domain& domain, const FieldState& prescribed_field)
   {
     const int field_dim = space_.GetVDim();
@@ -226,8 +207,7 @@ class DirichletBoundaryConditions {
   ///
   /// For a value-level essential boundary condition @c u_b(t), this manager constrains a dependent
   /// second-derivative field to @c u_b''(t), computed by one-sided three-point forward FD with step
-  /// @c h = 1e-4 * max(1,|t|). Prescribed finite-element fields are treated as time-independent and
-  /// constrain the second derivative to zero.
+  /// @c h = 1e-4 * max(1,|t|). Prescribed finite element fields are treated as time-independent.
   ///
   /// Rebuilt on each call from current value-level essentials, so late additions are reflected.
   const smith::BoundaryConditionManager& getSecondDerivativeManager() const;
