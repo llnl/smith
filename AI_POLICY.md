@@ -1,10 +1,10 @@
 # AI-Assisted Code Development Policy
 
-## Purpose and scope
+## Our approach to AI use
 
 We encourage thoughtful use of AI tools, including agentic coding, to explore ideas, improve productivity, and strengthen software quality. AI tool use is optional. Contributions are evaluated on quality and value, regardless of the tools used.
 
-Authors remain responsible for their contributions, including explaining their changes and helping address problems those changes cause.
+Use AI to support your judgment not replace. Authors remain responsible for their contributions, including explaining their changes and helping address problems those changes cause.
 
 Questions, requests for help, and early design discussions are welcome, even without a polished pull request.
 
@@ -25,9 +25,11 @@ Authors can seek early feedback or review for merge. State which kind of review 
   - Split unrelated changes into separate pull requests when practical.
   - Keep formatting changes to a minimum.
 
-## Use AI to support your judgment not replace
+## Issue reports and discussion
 
-AI can help draft issue reports and replies, but the final message must reflect your own intent and judgment. Review it and check factual claims before posting. Be sure to label unverified claims.
+AI can help draft issue reports and replies, but the final message must reflect your own intent and judgment.
+
+Personally review AI-generated issue reports and replies before posting. Check factual claims, ground assessments of severity and cause in evidence, and label unverified claims. In issue reports, state whether you reproduced the behavior.
 
 **Do not configure agents to respond autonomously on pull requests or issues.**
 
