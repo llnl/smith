@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "axom/fmt.hpp"
 #include "axom/slic.hpp"
 
 namespace smith {

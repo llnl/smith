@@ -123,9 +123,9 @@ bool monolithicizeOperatorIfNeeded(const LinearSolverOptions& linear_options, mf
 
   gradient_operator = buildMonolithicMatrix(*block_gradient).release();
   SLIC_DEBUG_ROOT(
-      axom::fmt::format("Automatically monolithicizing block Jacobian for linear solver {} with "
-                        "preconditioner {}",
-                        linearName(linear_options.linear_solver), preconditionerName(linear_options.preconditioner)));
+      std::format("Automatically monolithicizing block Jacobian for linear solver {} with "
+                  "preconditioner {}",
+                  linearName(linear_options.linear_solver), preconditionerName(linear_options.preconditioner)));
   return true;
 }
 

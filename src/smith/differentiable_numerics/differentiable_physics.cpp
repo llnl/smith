@@ -67,9 +67,8 @@ DifferentiablePhysics::DifferentiablePhysics(std::shared_ptr<Mesh> mesh, std::sh
 
   reaction_names_.reserve(reaction_infos_.size());
   for (size_t i = 0; i < reaction_infos_.size(); ++i) {
-    SLIC_ERROR_IF(
-        reaction_infos_[i].space == nullptr,
-        axom::fmt::format("Dual '{}' in physics module '{}' has null FE space.", reaction_infos_[i].name, name_));
+    SLIC_ERROR_IF(reaction_infos_[i].space == nullptr,
+                  std::format("Dual '{}' in physics module '{}' has null FE space.", reaction_infos_[i].name, name_));
     reaction_names_.push_back(reaction_infos_[i].name);
     reaction_name_to_reaction_index_[reaction_infos_[i].name] = i;
   }
@@ -135,7 +134,7 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& reaction
   if (reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end()) {
     std::string available;
     for (auto& n : reaction_names_) available += n + " ";
-    SLIC_ERROR(axom::fmt::format(
+    SLIC_ERROR(std::format(
         "Could not find reaction named {0} in mesh with tag \"{1}\" to get. Available reactions (size {2}): {3}",
         reaction_name, mesh_->tag(), reaction_names_.size(), available));
   }
@@ -153,11 +152,10 @@ const FiniteElementDual& DifferentiablePhysics::dual(const std::string& reaction
 
 FiniteElementDual DifferentiablePhysics::loadCheckpointedDual(const std::string& reaction_name, int cycle)
 {
-  SLIC_ERROR_IF(
-      cycle != cycle_,
-      axom::fmt::format("Due to checkpointing restrictions in smith::DifferentiablePhysics, cannot ask for "
-                        "an arbitrary checkpointed reaction cycle, asking for cycle {}, but physics is at cycle {}",
-                        cycle, cycle_));
+  SLIC_ERROR_IF(cycle != cycle_,
+                std::format("Due to checkpointing restrictions in smith::DifferentiablePhysics, cannot ask for "
+                            "an arbitrary checkpointed reaction cycle, asking for cycle {}, but physics is at cycle {}",
+                            cycle, cycle_));
   return dual(reaction_name);
 }
 
@@ -218,9 +216,8 @@ void DifferentiablePhysics::setAdjointLoad(
   for (auto string_reaction_pair : string_to_reaction) {
     std::string field_name = string_reaction_pair.first;
     const smith::FiniteElementDual& reaction = string_reaction_pair.second;
-    SLIC_ERROR_IF(
-        state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
-        axom::fmt::format("Could not find reaction named {0} in mesh with tag {1}", field_name, mesh_->tag()));
+    SLIC_ERROR_IF(state_name_to_field_index_.find(field_name) == state_name_to_field_index_.end(),
+                  std::format("Could not find reaction named {0} in mesh with tag {1}", field_name, mesh_->tag()));
     size_t state_index = state_name_to_field_index_.at(field_name);
     *field_states_[state_index].get_dual() += reaction;
   }
@@ -232,10 +229,9 @@ void DifferentiablePhysics::setDualAdjointBcs(
   for (auto string_bc_pair : string_to_bc) {
     std::string reaction_name = string_bc_pair.first;
     const smith::FiniteElementState& reaction_adjoint_load = string_bc_pair.second;
-    SLIC_ERROR_IF(
-        reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
-        axom::fmt::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
-                          reaction_name, mesh_->tag()));
+    SLIC_ERROR_IF(reaction_name_to_reaction_index_.find(reaction_name) == reaction_name_to_reaction_index_.end(),
+                  std::format("When calling setDualAdjointBcs, could not find reaction named {0} in mesh with tag {1}",
+                              reaction_name, mesh_->tag()));
     size_t reaction_index = reaction_name_to_reaction_index_.at(reaction_name);
     *reaction_states_[reaction_index].get_dual() += reaction_adjoint_load;
   }

@@ -333,6 +333,9 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       [[maybe_unused]] const std::vector<ConstQuadratureFieldPtr>& quad_fields = {}) const override
   {
     validateFields(fields, "jacobian");
+    SLIC_ERROR_IF(jacobian_weights.size() != fields.size(),
+                  std::format("jacobian(): jacobian_weights.size()={} but fields.size()={}", jacobian_weights.size(),
+                              fields.size()));
     SetCurrentTimeInfoRAII clear_current_time_info_on_exit(current_time_info_, time_info);
 
     std::unique_ptr<mfem::HypreParMatrix> J;
@@ -474,7 +477,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   {
     if constexpr (I < sizeof...(InputSpaces)) {
       using Space = typename std::tuple_element<I, std::tuple<InputSpaces...>>::type;
-      validateSpace<Space>(*input_mfem_spaces[I], axom::fmt::format("input[{}]", I));
+      validateSpace<Space>(*input_mfem_spaces[I], std::format("input[{}]", I));
       validateInputSpaces<I + 1>(input_mfem_spaces);
     }
   }
@@ -486,7 +489,7 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
     if constexpr (I < sizeof...(InputSpaces)) {
       using Space = typename std::tuple_element<I, std::tuple<InputSpaces...>>::type;
       validateSpace<Space>(fields[I]->space(),
-                           axom::fmt::format("{}(): field[{}] ('{}')", method_name, I, fields[I]->name()));
+                           std::format("{}(): field[{}] ('{}')", method_name, I, fields[I]->name()));
       validateFieldsRecursive<I + 1>(fields, method_name);
     }
   }
@@ -495,8 +498,8 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
   void validateFields(const std::vector<ConstFieldPtr>& fields, const std::string& method_name) const
   {
     SLIC_ERROR_ROOT_IF(fields.size() != sizeof...(InputSpaces),
-                       axom::fmt::format("{}(): fields.size()={} but weak form expects {} InputSpaces", method_name,
-                                         fields.size(), sizeof...(InputSpaces)));
+                       std::format("{}(): fields.size()={} but weak form expects {} InputSpaces", method_name,
+                                   fields.size(), sizeof...(InputSpaces)));
 
     if constexpr (sizeof...(InputSpaces) > 0) {
       validateFieldsRecursive<0>(fields, method_name);
@@ -516,27 +519,26 @@ class FunctionalWeakForm<spatial_dim, OutputSpace, Parameters<InputSpaces...>,
       bool is_h1 =
           (fec_name.find("H1") != std::string::npos || fec_name.find("ND_") != std::string::npos ||  // Nedelec elements
            fec_name.find("Linear") != std::string::npos);
-      SLIC_ERROR_ROOT_IF(!is_h1, axom::fmt::format("Space '{}': Template specifies H1 family but mfem space uses '{}'",
-                                                   space_name, fec_name));
+      SLIC_ERROR_ROOT_IF(!is_h1, std::format("Space '{}': Template specifies H1 family but mfem space uses '{}'",
+                                             space_name, fec_name));
     } else if constexpr (Space::family == Family::L2) {
       std::string fec_name = fec->Name();
       bool is_l2 = (fec_name.find("L2") != std::string::npos || fec_name.find("DG") != std::string::npos ||
                     fec_name.find("Const") != std::string::npos);
-      SLIC_ERROR_ROOT_IF(
-          !is_l2, axom::fmt::format("Space '{}': Template specifies L2/DG family but mfem space uses '{}'", space_name,
-                                    fec_name));
+      SLIC_ERROR_ROOT_IF(!is_l2, std::format("Space '{}': Template specifies L2/DG family but mfem space uses '{}'",
+                                             space_name, fec_name));
     }
 
     // Validate order
     SLIC_ERROR_ROOT_IF(fec->GetOrder() != Space::order,
-                       axom::fmt::format("Space '{}': Template specifies order {} but mfem space has order {}",
-                                         space_name, Space::order, fec->GetOrder()));
+                       std::format("Space '{}': Template specifies order {} but mfem space has order {}", space_name,
+                                   Space::order, fec->GetOrder()));
 
     // Validate vector dimension
     SLIC_ERROR_ROOT_IF(
         mfem_space.GetVDim() != Space::components,
-        axom::fmt::format("Space '{}': Template specifies {} components but mfem space has {} components (VDim)",
-                          space_name, Space::components, mfem_space.GetVDim()));
+        std::format("Space '{}': Template specifies {} components but mfem space has {} components (VDim)", space_name,
+                    Space::components, mfem_space.GetVDim()));
   }
 
   /// @brief Utility to get array of jacobian functions, one for each input field in fs
