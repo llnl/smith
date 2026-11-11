@@ -379,6 +379,51 @@ class PreconditionerLifetimeCheckingSolver : public mfem::Solver {
   std::shared_ptr<bool> lifetime_ok_;
 };
 
+class MockSchurActionSolver : public smith::SchurComplementActionSolver {
+ public:
+  MockSchurActionSolver(double scale, std::shared_ptr<int> context_calls, std::shared_ptr<int> update_calls,
+                        std::shared_ptr<std::vector<int>> update_order, std::shared_ptr<double> updated_state,
+                        std::shared_ptr<int> context_block_size)
+      : scale_(scale),
+        context_calls_(std::move(context_calls)),
+        update_calls_(std::move(update_calls)),
+        update_order_(std::move(update_order)),
+        updated_state_(std::move(updated_state)),
+        context_block_size_(std::move(context_block_size))
+  {
+  }
+
+  void setBlockContext(const mfem::BlockOperator& jacobian) override
+  {
+    smith::SchurComplementActionSolver::setBlockContext(jacobian);
+    ++(*context_calls_);
+    update_order_->push_back(2);
+    *context_block_size_ = block_offsets_[2] - block_offsets_[1];
+  }
+
+  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  {
+    ++(*update_calls_);
+    update_order_->push_back(1);
+    *updated_state_ = state[block_offsets[1]];
+  }
+
+  void Mult(const mfem::Vector& x, mfem::Vector& y) const override
+  {
+    y.SetSize(x.Size());
+    y = x;
+    y *= scale_;
+  }
+
+ private:
+  double scale_;
+  std::shared_ptr<int> context_calls_;
+  std::shared_ptr<int> update_calls_;
+  std::shared_ptr<std::vector<int>> update_order_;
+  std::shared_ptr<double> updated_state_;
+  std::shared_ptr<int> context_block_size_;
+};
+
 }  // namespace
 /* ============================================================
    Tests
@@ -828,13 +873,13 @@ TEST(BlockSchurPreconditionerCustom, StateDependentProviderUpdatesSchurSolve)
   solvers.push_back(std::make_unique<OperatorDiagonalSolver>());
 
   auto update_count = std::make_shared<int>(0);
-  auto schur_override = smith::makeStateDependentBlockProviderOverride(
+  auto schur_provider = smith::makeStateDependentBlockProviderOverride(
       1, [update_count](const mfem::Vector& state, const mfem::Array<int>& block_offsets) {
         ++(*update_count);
         const int block_size = block_offsets[2] - block_offsets[1];
         return makeMutableLocalScaledIdentityOp(block_size, state[block_offsets[1]]);
       });
-  smith::SchurOperator schur(std::move(schur_override.provider));
+  smith::SchurOperator schur(std::move(schur_provider.provider));
 
   smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Diagonal, std::move(schur));
 
@@ -930,6 +975,57 @@ TEST(BlockSchurPreconditionerCustom, ProviderOperatorOutlivesAttachedSolverRefer
 
   EXPECT_TRUE(*lifetime_ok);
   EXPECT_FALSE(*updated_operator_alive);
+}
+
+// Verifies direct Schur inverse actions receive the state and current block context.
+TEST(BlockSchurPreconditionerCustom, DirectInverseActionReceivesStateAndBlockContext)
+{
+  constexpr int n = 2;
+  Array<int> offsets({0, n, 2 * n});
+
+  auto A11o = makeHypreScaledIdentity(n, 2.0);
+  auto A12o = makeHypreScaledIdentity(n, 0.0);
+  auto A21o = makeHypreScaledIdentity(n, 0.0);
+  auto A22o = makeHypreScaledIdentity(n, 3.0);
+
+  BlockOperator A(offsets);
+  A.SetBlock(0, 0, A11o.A.get());
+  A.SetBlock(0, 1, A12o.A.get());
+  A.SetBlock(1, 0, A21o.A.get());
+  A.SetBlock(1, 1, A22o.A.get());
+
+  auto context_calls = std::make_shared<int>(0);
+  auto update_calls = std::make_shared<int>(0);
+  auto update_order = std::make_shared<std::vector<int>>();
+  auto updated_state = std::make_shared<double>(0.0);
+  auto context_block_size = std::make_shared<int>(0);
+
+  std::vector<std::unique_ptr<Solver>> solvers;
+  solvers.push_back(std::make_unique<IdentitySolver>());
+  auto schur = std::make_unique<MockSchurActionSolver>(0.25, context_calls, update_calls, update_order, updated_state,
+                                                       context_block_size);
+
+  smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Diagonal, std::move(schur));
+
+  Vector state(2 * n);
+  state = 0.0;
+  state[offsets[1]] = 9.0;
+  P.updateForState(state, offsets);
+  P.SetOperator(A);
+
+  Vector b(2 * n), x(2 * n);
+  b.Randomize();
+  P.Mult(b, x);
+
+  EXPECT_EQ(*update_calls, 1);
+  EXPECT_EQ(*context_calls, 1);
+  EXPECT_EQ(*updated_state, 9.0);
+  EXPECT_EQ(*context_block_size, n);
+  EXPECT_EQ(*update_order, (std::vector<int>{1, 2}));
+  EXPECT_NEAR(x[0], b[0], 1e-12);
+  EXPECT_NEAR(x[1], b[1], 1e-12);
+  EXPECT_NEAR(x[2], 0.25 * b[2], 1e-12);
+  EXPECT_NEAR(x[3], 0.25 * b[3], 1e-12);
 }
 
 TEST(BlockDiagonalPreconditionerCustom, ThrowsOnOutOfRangeOverrideIndex)
