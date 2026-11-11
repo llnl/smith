@@ -76,7 +76,7 @@ void L2_index_test(std::string meshfile)
         // note: the orientation convention is such that the normal
         //       computed as above will point from from side 1->2
         auto [u_1, u_2] = velocity;
-        SLIC_INFO(std::format("One size = {}, The other side = {}, Jump = {}", smith::format::streamed(u_1),
+        SLIC_INFO(std::format("One side = {}, The other side = {}, Jump = {}", smith::format::streamed(u_1),
                               smith::format::streamed(u_2), smith::format::streamed(u_1 - u_2)));
 
         auto a = dot(u_2 - u_1, n);
