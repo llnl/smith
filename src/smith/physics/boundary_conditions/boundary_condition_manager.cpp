@@ -4,10 +4,11 @@
 //
 // SPDX-License-Identifier: (BSD-3-Clause)
 
+#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
+
 #include <algorithm>
 #include <iterator>
 
-#include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
 #include "smith/infrastructure/logger.hpp"
 
 namespace smith {
@@ -50,6 +51,18 @@ void BoundaryConditionManager::addEssentialByTrueDofs(const mfem::Array<int>& tr
 {
   ess_bdr_.emplace_back(ess_bdr_coef, std::nullopt, space, true_dofs);
   all_dofs_valid_ = false;
+}
+
+std::unique_ptr<mfem::HypreParMatrix> BoundaryConditionManager::eliminateEssentialDofsFromMatrix(
+    mfem::HypreParMatrix& matrix, const mfem::Array<int>& essential_true_dofs)
+{
+  return std::unique_ptr<mfem::HypreParMatrix>(matrix.EliminateRowsCols(essential_true_dofs));
+}
+
+std::unique_ptr<mfem::HypreParMatrix> BoundaryConditionManager::eliminateAllEssentialDofsFromMatrix(
+    mfem::HypreParMatrix& matrix) const
+{
+  return eliminateEssentialDofsFromMatrix(matrix, allEssentialTrueDofs());
 }
 
 void BoundaryConditionManager::updateAllDofs() const

@@ -15,6 +15,7 @@
 #include <memory>
 #include <functional>
 #include <optional>
+#include <utility>
 #include <vector>
 #include <mpi.h>
 
@@ -22,6 +23,8 @@
 #include "smith/numerics/nonlinear_convergence.hpp"
 
 namespace mfem {
+template <typename T>
+class Array;
 class Solver;
 class Vector;
 class HypreParMatrix;
@@ -35,6 +38,7 @@ class BoundaryConditionManager;
 class FiniteElementState;
 class FiniteElementDual;
 class Mesh;
+class StateDependentSolver;
 struct NonlinearSolverOptions;
 struct LinearSolverOptions;
 
@@ -140,7 +144,10 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   /// @brief Set the inner tolerance multiplier.
   void setInnerToleranceMultiplier(double multiplier) override { inner_tol_multiplier_ = multiplier; }
 
-  /// @brief Build a fresh solver instance from retained config.
+  /// @brief Register a solver refreshed with the current nonlinear state before Jacobian assembly.
+  void setStateDependentSolver(StateDependentSolver* solver) { state_dependent_solver_ = solver; }
+
+  /// @brief Build a fresh solver instance from retained config, or nullptr when this solver has injected state.
   std::shared_ptr<NonlinearBlockSolver> cloneFresh() const;
 
   mutable std::unique_ptr<mfem::BlockOperator>
@@ -158,6 +165,7 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
   double inner_tol_multiplier_ = 1.0;  ///< multiplier for tolerances during inner solves
   std::optional<NonlinearSolverOptions> retained_nonlinear_options_ = std::nullopt;  ///< retained nonlinear config
   std::optional<LinearSolverOptions> retained_linear_options_ = std::nullopt;        ///< retained linear config
+  StateDependentSolver* state_dependent_solver_ = nullptr;  ///< optional solver refreshed during Jacobian evaluation
 };
 
 /// @brief Create an equation-backed nonlinear block solver.
@@ -167,5 +175,15 @@ class NonlinearBlockSolver : public NonlinearBlockSolverBase {
 std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
                                                                 LinearSolverOptions linear_opts,
                                                                 const smith::Mesh& mesh);
+
+/// @brief Create an equation-backed nonlinear block solver with a custom preconditioner.
+/// @param nonlinear_opts nonlinear options struct
+/// @param linear_opts linear options struct
+/// @param mesh mesh
+/// @param preconditioner custom preconditioner attached to the linear solver
+std::shared_ptr<NonlinearBlockSolver> buildNonlinearBlockSolver(NonlinearSolverOptions nonlinear_opts,
+                                                                LinearSolverOptions linear_opts,
+                                                                const smith::Mesh& mesh,
+                                                                std::unique_ptr<mfem::Solver> preconditioner);
 
 }  // namespace smith
