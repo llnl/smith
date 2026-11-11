@@ -19,6 +19,8 @@ find_dependency(smith REQUIRED NO_DEFAULT_PATH PATHS "${SMITH_DIR}/lib/cmake")
 # Remove non-existent INTERFACE_INCLUDE_DIRECTORIES from imported targets
 # to work around CMake error
 #---------------------------------------------------------------------------
+# TODO remove this once we get the following Spack PR:
+# https://github.com/spack/spack-packages/pull/7550
 set(_imported_targets
    axom
    conduit
