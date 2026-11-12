@@ -15,41 +15,6 @@ endif()
 include(CMakeFindDependencyMacro)
 find_dependency(smith REQUIRED NO_DEFAULT_PATH PATHS "${SMITH_DIR}/lib/cmake")
 
-#---------------------------------------------------------------------------
-# Remove non-existent INTERFACE_INCLUDE_DIRECTORIES from imported targets
-# to work around CMake error
-#---------------------------------------------------------------------------
-# TODO remove this once we get the following Spack PR:
-# https://github.com/spack/spack-packages/pull/7550
-set(_imported_targets
-   axom
-   conduit
-   conduit::conduit_mpi
-   conduit::conduit
-   conduit_relay_mpi
-   conduit_relay_mpi_io
-   conduit_blueprint
-   conduit_blueprint_mpi
-   mfem)
-
-foreach(_target ${_imported_targets})
-   if(TARGET ${_target})
-      message(STATUS "Removing non-existant include directories from target[${_target}]")
-
-      get_target_property(_dirs ${_target} INTERFACE_INCLUDE_DIRECTORIES)
-      set(_existing_dirs)
-      foreach(_dir ${_dirs})
-         if (EXISTS "${_dir}")
-            list(APPEND _existing_dirs "${_dir}")
-         endif()
-      endforeach()
-      if (_existing_dirs)
-         set_target_properties(${_target} PROPERTIES
-                               INTERFACE_INCLUDE_DIRECTORIES "${_existing_dirs}" )
-      endif()
-   endif()
-endforeach()
-
 add_executable(smith_example smith_example.cpp)
 target_link_libraries(smith_example smith::smith)
 

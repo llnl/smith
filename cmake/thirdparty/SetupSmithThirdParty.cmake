@@ -431,27 +431,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         message(FATAL_ERROR "MFEM target not found")
     endif()
 
-    # Remove non-existent INTERFACE_INCLUDE_DIRECTORIES from imported targets
-    # to work around CMake error
-    # TODO remove this once we get the following Spack PR:
-    # https://github.com/spack/spack-packages/pull/7550
-    get_target_property(_dirs mfem INTERFACE_INCLUDE_DIRECTORIES)
-    set(_existing_dirs)
-    foreach(_dir ${_dirs})
-        if("${_dir}" MATCHES "^\\$<" OR IS_DIRECTORY "${_dir}")
-            list(APPEND _existing_dirs "${_dir}")
-        endif()
-    endforeach()
-    if(_existing_dirs)
-        if(NOT "${_existing_dirs}" STREQUAL "${_dirs}")
-            message(STATUS "Removed non-existent include directories from target 'mfem'")
-        endif()
-        set_target_properties(mfem PROPERTIES
-                                INTERFACE_INCLUDE_DIRECTORIES "${_existing_dirs}" )
-    endif()
-    unset(_existing_dirs)
-    unset(_dirs)
-
     # When both MFEM and Strumpack are on, MFEM adds the Fortran
     # MPI library/directory but in some cases Spack cannot determine
     # the correct MPI lib directory. This guards against that.
