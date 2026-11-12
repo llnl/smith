@@ -27,15 +27,27 @@ packages:
   hdf5:
     require:
     - spec: "~shared~mpi"
+  hypre:
+    require:
+    - spec: "+int64"
   mfem:
     require:
-    - spec: "cxxstd=17"
+    - spec: "cxxstd=20"
   raja:
     require:
     - spec: "~shared~examples~exercises"
+  petsc:
+    require:
+    - spec: "+int64"
   strumpack:
     require:
     - spec: "~cuda~rocm"
+  superlu-dist:
+    require:
+    - spec: "+int64"
+  sundials:
+    require:
+    - spec: "~examples~examples-install+static~shared"
   tribol:
     require:
     - spec: "~examples~tests"
@@ -84,8 +96,6 @@ packages:
       when: "+shared+caliper"
     - spec: "^adiak+shared"
       when: "+shared+adiak"
-    - spec: "^sundials+shared"
-      when: "+shared+sundials"
     ########
     # Static
     ########
@@ -97,5 +107,3 @@ packages:
       when: "~shared+caliper"
     - spec: "^adiak~shared"
       when: "~shared+adiak"
-    - spec: "^sundials~shared"
-      when: "~shared+sundials"

@@ -4,11 +4,12 @@
 "package_final_phase" : "initconfig",
 "package_source_dir" : "../..",
 "spack_url": "https://github.com/spack/spack.git",
-"spack_commit": "47173cd6afeac2823fd61ade3b639de79d9dabfc",
+"spack_commit": "eb7432ef448bffa93f2f279fd1f0a268c2ad0979",
 "spack_packages_url": "https://github.com/spack/spack-packages.git",
-"spack_packages_commit": "5f87aecc2419fc5184d9d7598a14f5ab348ba4d8",
+"spack_packages_commit": "6ebc5fb786292e93375b3fbb374abf4cb088b59e",
 "spack_configs_path": "scripts/spack/configs",
 "spack_packages_path": [
+  "../spack-packages-fork/repos/spack_repo/builtin/packages/",
   "tribol/scripts/spack/spack_repo/tribol/packages",
   "scripts/spack/spack_repo/smith/packages"]
 }
