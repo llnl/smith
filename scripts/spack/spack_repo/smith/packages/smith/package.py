@@ -127,8 +127,7 @@ class Smith(CachedCMakePackage, CudaPackage, ROCmPackage):
         depends_on("py-sphinx")
 
     with when("+sundials"):
-        # MFEM is deprecating the monitoring support with sundials v6.0 and later
-        depends_on("sundials+hypre~trilinos~monitoring~examples~examples-install+static~shared~petsc")
+        depends_on("sundials@6:")
         depends_on("sundials+asan", when="+asan")
 
     depends_on("mfem+netcdf+metis+superlu-dist+lapack+mpi")
