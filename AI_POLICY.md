@@ -21,6 +21,7 @@ Authors can seek early feedback or review for merge. State which kind of review 
 - **Exploratory review:** Say what is uncertain and what feedback you want. You do not need to understand every detail yet.
 - **Review for merge:** Before requesting review, authors should:
   - Read the complete diff and understand the changes well enough to discuss and revise them.
+  - Check for existing functionality, and reuse or extend it instead of duplicating it.
   - Keep the pull request focused and manageable, with a clear description.
   - Split unrelated changes into separate pull requests when practical.
   - Keep formatting changes to a minimum.
