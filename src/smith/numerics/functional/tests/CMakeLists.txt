@@ -23,6 +23,7 @@ set(functional_serial_test_sources
     bug_boundary_qoi.cpp
     domain_tests.cpp
     geometric_factors_tests.cpp
+    functional_boundary_source_flux.cpp
     hcurl_unit_tests.cpp
     test_tensor_ad.cpp
     tuple_arithmetic_unit_tests.cpp

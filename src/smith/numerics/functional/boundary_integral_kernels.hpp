@@ -6,6 +6,7 @@
 #pragma once
 
 #include <array>
+#include <type_traits>
 
 #include "smith/smith_config.hpp"
 #include "smith/numerics/functional/quadrature_data.hpp"
@@ -14,6 +15,66 @@
 namespace smith {
 
 namespace boundary_integral {
+
+// The structs "SourceOnlyResponse" and "SourceAndFluxResponse" exist to enable
+// backward compatilbility. Boundary integrals can now handle flux terms in
+// addition to source terms. These structs allow the source-only interface to
+// continue to be supported, while uniting the implementations.
+// They are used as "response_policy" template parameters.
+// This can be simplified if we drop support for source-only integrals.
+
+/// @brief Converts a legacy boundary q-function response into source-and-flux form.
+struct SourceOnlyResponse {
+  template <typename T>
+  SMITH_HOST_DEVICE static auto format(const T& response)
+  {
+    return tuple{response, zero{}};
+  }
+
+  template <typename T>
+  SMITH_HOST_DEVICE static auto derivative(const T& response)
+  {
+    return tuple{get_gradient(response), zero{}};
+  }
+
+  template <typename S, typename T>
+  SMITH_HOST_DEVICE static auto apply_chain_rule(const S& dfdx, const T& dx)
+  {
+    auto source = smith::chain_rule(smith::get<0>(smith::get<0>(dfdx)), smith::get<0>(dx)) +
+                  smith::chain_rule(smith::get<1>(smith::get<0>(dfdx)), smith::get<1>(dx));
+    return tuple{source, zero{}};
+  }
+};
+
+/// @brief Validates and preserves a boundary q-function source-and-flux response.
+struct SourceAndFluxResponse {
+  template <typename T>
+  SMITH_HOST_DEVICE static auto format(const T& response)
+  {
+    using response_type = std::remove_cvref_t<T>;
+    static_assert(is_tuple<response_type>::value,
+                  "AddBoundarySourceFluxIntegral integrands must return smith::tuple{source, flux}");
+    static_assert(tuple_size<response_type>::value == 2,
+                  "AddBoundarySourceFluxIntegral integrands must return exactly two values");
+    return response;
+  }
+
+  template <typename T>
+  SMITH_HOST_DEVICE static auto derivative(const T& response)
+  {
+    return get_gradient(format(response));
+  }
+
+  template <typename S, typename T>
+  SMITH_HOST_DEVICE static auto apply_chain_rule(const S& dfdx, const T& dx)
+  {
+    auto source = smith::chain_rule(smith::get<0>(smith::get<0>(dfdx)), smith::get<0>(dx)) +
+                  smith::chain_rule(smith::get<1>(smith::get<0>(dfdx)), smith::get<1>(dx));
+    auto flux = smith::chain_rule(smith::get<0>(smith::get<1>(dfdx)), smith::get<0>(dx)) +
+                smith::chain_rule(smith::get<1>(smith::get<1>(dfdx)), smith::get<1>(dx));
+    return tuple{source, flux};
+  }
+};
 
 /**
  *  @tparam space the user-specified trial space
@@ -101,22 +162,22 @@ SMITH_HOST_DEVICE auto apply_qf(const lambda& qf, double t, const coords_type& x
   return apply_qf_helper(qf, t, x_q, arg_tuple, std::make_integer_sequence<int, static_cast<int>(sizeof...(T))>{});
 }
 
-template <int i, int dim, typename... trials, typename lambda>
+template <typename response_policy, int i, int dim, typename... trials, typename lambda>
 auto get_derivative_type(lambda qf)
 {
   using qf_arguments = smith::tuple<typename QFunctionArgument<trials, smith::Dimension<dim>>::type...>;
-  return tuple{get_gradient(apply_qf(qf, double{}, tensor<double, dim + 1>{}, make_dual_wrt<i>(qf_arguments{}))),
-               zero{}};
+  return response_policy::derivative(
+      apply_qf(qf, double{}, tensor<double, dim + 1>{}, make_dual_wrt<i>(qf_arguments{})));
 };
 
-template <typename lambda, int n, typename... T>
+template <typename response_policy, typename lambda, int n, typename... T>
 SMITH_HOST_DEVICE auto batch_apply_qf(lambda qf, double t, const tensor<double, 2, n>& positions,
                                       const tensor<double, 1, 2, n>& jacobians, const T&... inputs)
 {
   constexpr int dim = 2;
   using first_arg_t = smith::tuple<tensor<double, dim>, tensor<double, dim>>;
-  using return_type = decltype(qf(double{}, first_arg_t{}, T{}[0]...));
-  tensor<tuple<return_type, zero>, n> outputs{};
+  using return_type = decltype(response_policy::format(qf(double{}, first_arg_t{}, T{}[0]...)));
+  tensor<return_type, n> outputs{};
   for (int i = 0; i < n; i++) {
     tensor<double, dim> x_q;
     tensor<double, dim> J_q;
@@ -126,19 +187,19 @@ SMITH_HOST_DEVICE auto batch_apply_qf(lambda qf, double t, const tensor<double, 
     }
     double scale = norm(cross(J_q));
 
-    get<0>(outputs[i]) = qf(t, smith::tuple{x_q, J_q}, inputs[i]...) * scale;
+    outputs[i] = response_policy::format(qf(t, smith::tuple{x_q, J_q}, inputs[i]...)) * scale;
   }
   return outputs;
 }
 
-template <typename lambda, int n, typename... T>
+template <typename response_policy, typename lambda, int n, typename... T>
 SMITH_HOST_DEVICE auto batch_apply_qf(lambda qf, double t, const tensor<double, 3, n>& positions,
                                       const tensor<double, 2, 3, n>& jacobians, const T&... inputs)
 {
   constexpr int dim = 3;
   using first_arg_t = smith::tuple<tensor<double, dim>, tensor<double, dim, dim - 1>>;
-  using return_type = decltype(qf(double{}, first_arg_t{}, T{}[0]...));
-  tensor<tuple<return_type, zero>, n> outputs{};
+  using return_type = decltype(response_policy::format(qf(double{}, first_arg_t{}, T{}[0]...)));
+  tensor<return_type, n> outputs{};
   for (int i = 0; i < n; i++) {
     tensor<double, dim> x_q;
     tensor<double, dim, dim - 1> J_q;
@@ -150,13 +211,14 @@ SMITH_HOST_DEVICE auto batch_apply_qf(lambda qf, double t, const tensor<double, 
     }
     double scale = norm(cross(J_q));
 
-    get<0>(outputs[i]) = qf(t, smith::tuple{x_q, J_q}, inputs[i]...) * scale;
+    outputs[i] = response_policy::format(qf(t, smith::tuple{x_q, J_q}, inputs[i]...)) * scale;
   }
   return outputs;
 }
 
 /// @trial_elements the element type for each trial space
-template <uint32_t differentiation_index, int Q, mfem::Geometry::Type geom, typename test_element,
+template <typename response_policy, uint32_t differentiation_index, int Q, mfem::Geometry::Type geom,
+          typename test_element,
           typename trial_element_type, typename lambda_type, typename derivative_type, int... indices>
 void evaluation_kernel_impl(trial_element_type trial_elements, test_element, double t,
                             const std::vector<const double*>& inputs, double* outputs, const double* positions,
@@ -189,11 +251,10 @@ void evaluation_kernel_impl(trial_element_type trial_elements, test_element, dou
                                             (get<indices>(trial_elements).interpolate(get<indices>(u)[e], rule))...};
 
     // (batch) evalute the q-function at each quadrature point
-    auto qf_outputs = batch_apply_qf(qf, t, x_e, J_e, get<indices>(qf_inputs)...);
+    auto qf_outputs = batch_apply_qf<response_policy>(qf, t, x_e, J_e, get<indices>(qf_inputs)...);
 
-    // write out the q-function derivatives after applying the
-    // physical_to_parent transformation, so that those transformations
-    // won't need to be applied in the action_of_gradient and element_gradient kernels
+    // Store derivatives after boundary-measure scaling. Trial and test derivatives remain in the boundary element's
+    // parametric coordinates, so no parent/physical transformation is applied here or in the gradient kernels.
     if constexpr (differentiation_index != smith::NO_DIFFERENTIATION) {
       for (int q = 0; q < leading_dimension(qf_outputs); q++) {
         qf_derivatives[e * qpts_per_elem + uint32_t(q)] = get_gradient(qf_outputs[q]);
@@ -205,22 +266,13 @@ void evaluation_kernel_impl(trial_element_type trial_elements, test_element, dou
   }
 }
 
-//clang-format off
-template <typename S, typename T>
-SMITH_HOST_DEVICE auto chain_rule(const S& dfdx, const T& dx)
-{
-  return smith::chain_rule(smith::get<0>(smith::get<0>(dfdx)), smith::get<0>(dx)) +
-         smith::chain_rule(smith::get<1>(smith::get<0>(dfdx)), smith::get<1>(dx));
-}
-//clang-format on
-
-template <typename derivative_type, int n, typename T>
+template <typename response_policy, typename derivative_type, int n, typename T>
 SMITH_HOST_DEVICE auto batch_apply_chain_rule(derivative_type* qf_derivatives, const tensor<T, n>& inputs)
 {
-  using return_type = decltype(chain_rule(derivative_type{}, T{}));
-  tensor<tuple<return_type, zero>, n> outputs{};
+  using return_type = decltype(response_policy::apply_chain_rule(derivative_type{}, T{}));
+  tensor<return_type, n> outputs{};
   for (int i = 0; i < n; i++) {
-    get<0>(outputs[i]) = chain_rule(qf_derivatives[i], inputs[i]);
+    outputs[i] = response_policy::apply_chain_rule(qf_derivatives[i], inputs[i]);
   }
   return outputs;
 }
@@ -250,7 +302,8 @@ SMITH_HOST_DEVICE auto batch_apply_chain_rule(derivative_type* qf_derivatives, c
  * @see mfem::GeometricFactors
  * @param[in] num_elements The number of elements in the mesh
  */
-template <int Q, mfem::Geometry::Type geom, typename test, typename trial, typename derivatives_type>
+template <typename response_policy, int Q, mfem::Geometry::Type geom, typename test, typename trial,
+          typename derivatives_type>
 void action_of_gradient_kernel(const double* dU, double* dR, derivatives_type* qf_derivatives, std::size_t num_elements)
 {
   using test_element = finite_element<geom, test>;
@@ -269,7 +322,7 @@ void action_of_gradient_kernel(const double* dU, double* dR, derivatives_type* q
     auto qf_inputs = trial_element::interpolate(du[e], rule);
 
     // (batch) evalute the q-function at each quadrature point
-    auto qf_outputs = batch_apply_chain_rule(qf_derivatives + e * nqp, qf_inputs);
+    auto qf_outputs = batch_apply_chain_rule<response_policy>(qf_derivatives + e * nqp, qf_inputs);
 
     // (batch) integrate the material response against the test-space basis functions
     test_element::integrate(qf_outputs, rule, &dr[e]);
@@ -324,7 +377,8 @@ void element_gradient_kernel(ExecArrayView<double, 3, ExecutionSpace::CPU> dK, d
   }
 }
 
-template <uint32_t wrt, int Q, mfem::Geometry::Type geom, typename signature, typename lambda_type,
+template <typename response_policy, uint32_t wrt, int Q, mfem::Geometry::Type geom, typename signature,
+          typename lambda_type,
           typename derivative_type>
 auto evaluation_kernel(signature s, lambda_type qf, const double* positions, const double* jacobians,
                        std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
@@ -332,19 +386,22 @@ auto evaluation_kernel(signature s, lambda_type qf, const double* positions, con
   auto trial_elements = trial_elements_tuple<geom>(s);
   auto test_element = get_test_element<geom>(s);
   return [=](double time, const std::vector<const double*>& inputs, double* outputs, bool /* update state */) {
-    evaluation_kernel_impl<wrt, Q, geom>(trial_elements, test_element, time, inputs, outputs, positions, jacobians, qf,
-                                         qf_derivatives.get(), num_elements, s.index_seq);
+    evaluation_kernel_impl<response_policy, wrt, Q, geom>(trial_elements, test_element, time, inputs, outputs, positions,
+                                                          jacobians, qf, qf_derivatives.get(), num_elements,
+                                                          s.index_seq);
   };
 }
 
-template <int wrt, int Q, mfem::Geometry::Type geom, typename signature, typename derivative_type>
+template <typename response_policy, int wrt, int Q, mfem::Geometry::Type geom, typename signature,
+          typename derivative_type>
 std::function<void(const double*, double*)> jacobian_vector_product_kernel(
     signature, std::shared_ptr<derivative_type> qf_derivatives, uint32_t num_elements)
 {
   return [=](const double* du, double* dr) {
     using test_space = typename signature::return_type;
     using trial_space = typename std::tuple_element<wrt, typename signature::parameter_types>::type;
-    action_of_gradient_kernel<Q, geom, test_space, trial_space>(du, dr, qf_derivatives.get(), num_elements);
+    action_of_gradient_kernel<response_policy, Q, geom, test_space, trial_space>(du, dr, qf_derivatives.get(),
+                                                                                num_elements);
   };
 }
 
