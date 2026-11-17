@@ -53,13 +53,20 @@ void BoundaryConditionManager::addEssential(const mfem::Array<int>& local_dofs,
   all_dofs_valid_ = false;
 }
 
-void BoundaryConditionManager::addEssential(const mfem::Array<int>& local_dofs,
-                                            const FiniteElementState& prescribed_field,
-                                            mfem::ParFiniteElementSpace& space, std::optional<int> component)
+void BoundaryConditionManager::addEssential(const mfem::Array<int>& local_dofs, mfem::ParFiniteElementSpace& space,
+                                            std::optional<int> component)
 {
   auto true_dofs = getTrueDofs(local_dofs, space);
-  ess_bdr_.emplace_back(prescribed_field, component, space, true_dofs);
+  ess_bdr_.emplace_back(component, space, true_dofs);
   all_dofs_valid_ = false;
+}
+
+void BoundaryConditionManager::registerPrescribedField(const FiniteElementState& prescribed_field,
+                                                       const mfem::ParFiniteElementSpace& primal_space)
+{
+  SLIC_ERROR_IF(!sameFiniteElementSpace(prescribed_field.space(), primal_space),
+                "Prescribed boundary-condition field and constrained field have incompatible spaces");
+  prescribed_field_name_ = prescribed_field.name();
 }
 
 void BoundaryConditionManager::addEssentialByTrueDofs(const mfem::Array<int>& true_dofs,

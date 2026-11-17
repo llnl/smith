@@ -90,6 +90,39 @@ TEST(BoundaryCond, DirectLocalDofs)
   }
 }
 
+// Verify a coefficient-free BC records its prescribed vector field and copies values from that field to the selected
+// component's constrained DOFs.
+TEST(BoundaryCond, PrescribedVectorField)
+{
+  MPI_Barrier(MPI_COMM_WORLD);
+  auto mesh = mfem::Mesh::MakeCartesian2D(2, 2, mfem::Element::TRIANGLE);
+  mfem::ParMesh par_mesh(MPI_COMM_WORLD, mesh);
+  FiniteElementState state(par_mesh, H1<1, 2>{});
+  FiniteElementState prescribed_field(state.space(), "prescribed_field");
+
+  BoundaryConditionManager bcs(par_mesh);
+  bcs.registerPrescribedField(prescribed_field, state.space());
+
+  mfem::Array<int> local_dofs(1);
+  local_dofs[0] = 0;
+  state.space().DofsToVDofs(1, local_dofs);
+  bcs.addEssential(local_dofs, state.space(), 1);
+  const auto prescribed_dofs = bcs.allEssentialTrueDofs();
+  prescribed_field.SetSubVector(prescribed_dofs, 2.0);
+
+  ASSERT_EQ(bcs.essentials().size(), 1);
+  EXPECT_FALSE(bcs.essentials()[0].hasCoefficient());
+  ASSERT_TRUE(bcs.prescribedFieldName());
+  EXPECT_EQ(*bcs.prescribedFieldName(), prescribed_field.name());
+
+  for (const auto& bc : bcs.essentials()) {
+    bc.setDofs(prescribed_field, state);
+  }
+  for (int dof : prescribed_dofs) {
+    EXPECT_DOUBLE_EQ(state[dof], prescribed_field[dof]);
+  }
+}
+
 TEST(BoundaryCondHelper, ElementAttributeDofListScalar)
 {
   MPI_Barrier(MPI_COMM_WORLD);

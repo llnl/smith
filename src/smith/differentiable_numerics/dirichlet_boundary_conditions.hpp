@@ -106,43 +106,55 @@ class DirichletBoundaryConditions {
     bcs_.addEssential(local_dofs, component_disp_bdr_coef_, space_, 0);
   }
 
-  /// @brief Specify spatially varying Dirichlet boundary conditions from a finite element field over a domain.
+  /**
+   * @brief Register the finite element field supplying prescribed boundary values
+   *
+   * The field must have the same finite element space as the constrained field and must be a parameter input to the
+   * differentiable solve. Boundary values copied from this field are treated as constant by the reverse pass; other
+   * uses of the field in weak forms retain their existing differentiation behavior.
+   *
+   * @param[in] prescribed_field Full-volume field containing the prescribed values
+   */
+  void registerPrescribedField(const FieldState& prescribed_field)
+  {
+    bcs_.registerPrescribedField(*prescribed_field.get(), space_);
+  }
+
+  /// @brief Apply values from the registered prescribed field to scalar DOFs over a domain.
   /// @param domain All dofs in this domain have boundary conditions applied to it.
-  /// @param prescribed_field Finite element field containing the prescribed values; must have
-  /// the same finite element space as the constrained field.
-  void setScalarBCs(const Domain& domain, const FieldState& prescribed_field)
+  void setScalarBCsFromPrescribedField(const Domain& domain)
   {
     auto dof_list = domain.dof_list(&space_);
     space_.DofsToVDofs(static_cast<int>(0), dof_list);
-    bcs_.addEssential(dof_list, *prescribed_field.get(), space_, 0);
+    bcs_.addEssential(dof_list, space_, 0);
   }
 
-  /// @brief Specify spatially varying Dirichlet boundary conditions from a finite element field over a domain.
+  /// @brief Apply values from the registered prescribed field to selected vector components over a domain.
   /// @param domain All dofs in this domain have boundary conditions applied to it.
-  /// @param components vectors of computents.  The prescribed_field contains the full vector, this
-  /// specifies which subset of those should have dirichlet boundary conditions applied.  direction to apply boundary
-  /// condition to if the underlying field is a vector-field.
-  /// @param prescribed_field Vector-valued finite element field containing the prescribed values; must have
-  /// the same finite element space as the constrained field.
-  void setVectorBCs(const Domain& domain, std::vector<int> components, const FieldState& prescribed_field)
+  /// @param components Vector components to constrain.
+  void setVectorBCsFromPrescribedField(const Domain& domain, std::vector<int> components)
   {
+    const int field_dim = space_.GetVDim();
     for (auto component : components) {
+      SLIC_ERROR_IF(component >= field_dim || component < 0,
+                    std::format("Trying to set boundary conditions on a field with dim {}, using component {}",
+                                field_dim, component));
       auto dof_list = domain.dof_list(&space_);
       // scalar ldofs -> vector ldofs
       space_.DofsToVDofs(static_cast<int>(component), dof_list);
-      bcs_.addEssential(dof_list, *prescribed_field.get(), space_, static_cast<int>(component));
+      bcs_.addEssential(dof_list, space_, static_cast<int>(component));
     }
   }
 
   /// @overload
-  void setVectorBCs(const Domain& domain, const FieldState& prescribed_field)
+  void setVectorBCsFromPrescribedField(const Domain& domain)
   {
     const int field_dim = space_.GetVDim();
     std::vector<int> components(static_cast<size_t>(field_dim));
     for (int component = 0; component < field_dim; ++component) {
       components[static_cast<size_t>(component)] = component;
     }
-    setVectorBCs(domain, components, prescribed_field);
+    setVectorBCsFromPrescribedField(domain, components);
   }
 
   /// @brief Constrain the dofs of a scalar field over a domain

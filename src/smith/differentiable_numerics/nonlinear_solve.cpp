@@ -1,3 +1,5 @@
+#include <optional>
+
 #include "smith/physics/weak_form.hpp"
 #include "smith/physics/field_types.hpp"
 #include "smith/physics/boundary_conditions/boundary_condition_manager.hpp"
@@ -8,18 +10,18 @@ namespace smith {
 
 /// @brief apply boundary conditions
 void applyBoundaryConditions(double time, const smith::BoundaryConditionManager* bc_manager,
-                             smith::FEFieldPtr& primal_field, const std::vector<smith::FEFieldPtr>& prescribed_fields)
+                             const smith::FEFieldPtr& prescribed_field, smith::FEFieldPtr& primal_field)
 {
   if (!bc_manager) {
     return;
   }
 
-  size_t prescribed_field_index = 0;
   for (const auto& bc : bc_manager->essentials()) {
-    if (bc.prescribedField()) {
-      bc.setDofs(*primal_field, *prescribed_fields[prescribed_field_index++]);
-    } else {
+    if (bc.hasCoefficient()) {
       bc.setDofs(*primal_field, time);
+    } else {
+      SLIC_ERROR_IF(!prescribed_field, "A prescribed field is required for boundary conditions without coefficients");
+      bc.setDofs(*prescribed_field, *primal_field);
     }
   }
 }
@@ -46,22 +48,33 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     SLIC_ERROR_IF(num_rows_ != block_indices[r].size(), "All block index rows must have the same number of columns");
   }
 
-  std::vector<std::vector<size_t>> prescribed_field_indices(num_rows_);
+  // Locate the parameter supplying field-prescribed boundary values for each applicable row. Cache the optional
+  // per-row index for reconstructing the runtime fields in both the forward and reverse passes.
+  std::vector<std::optional<size_t>> prescribed_field_indices(num_rows_);
   for (size_t row = 0; row < num_rows_; ++row) {
     if (!bc_managers[row]) continue;
+    bool uses_prescribed_field = false;
     for (const auto& bc : bc_managers[row]->essentials()) {
-      const auto* prescribed_field = bc.prescribedField();
-      if (!prescribed_field) continue;
-
-      size_t parameter_index = 0;
-      while (parameter_index < params[row].size() && params[row][parameter_index].get()->name() != *prescribed_field) {
-        ++parameter_index;
+      if (!bc.hasCoefficient()) {
+        uses_prescribed_field = true;
+        break;
       }
-      SLIC_ERROR_IF(parameter_index == params[row].size(), "Prescribed boundary-condition field '"
-                                                               << *prescribed_field
-                                                               << "' is not a parameter input to the weak form");
-      prescribed_field_indices[row].push_back(parameter_index);
     }
+    if (!uses_prescribed_field) continue;
+
+    const auto& prescribed_field_name = bc_managers[row]->prescribedFieldName();
+    SLIC_ERROR_IF(!prescribed_field_name,
+                  "A prescribed field must be registered for boundary conditions without coefficients");
+
+    size_t parameter_index = 0;
+    while (parameter_index < params[row].size() &&
+           params[row][parameter_index].get()->name() != *prescribed_field_name) {
+      ++parameter_index;
+    }
+    SLIC_ERROR_IF(parameter_index == params[row].size(), "Prescribed boundary-condition field '"
+                                                             << *prescribed_field_name
+                                                             << "' is not a parameter input to the weak form");
+    prescribed_field_indices[row] = parameter_index;
   }
 
   // Validate block_indices bounds against states sizes
@@ -129,10 +142,10 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       }
     }
 
-    std::vector<std::vector<FEFieldPtr>> prescribed_fields(num_rows);
+    std::vector<FEFieldPtr> prescribed_fields(num_rows, nullptr);
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      for (size_t parameter_index : prescribed_field_indices[row_i]) {
-        prescribed_fields[row_i].push_back(input_fields[row_i][num_state_inputs[row_i] + parameter_index]);
+      if (prescribed_field_indices[row_i]) {
+        prescribed_fields[row_i] = input_fields[row_i][num_state_inputs[row_i] + *prescribed_field_indices[row_i]];
       }
     }
 
@@ -146,7 +159,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
-      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, prescribed_fields[row_i]);
+      applyBoundaryConditions(time_info.time(), bc_managers[row_i], prescribed_fields[row_i], primal_field_row_i);
     }
 
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
@@ -168,7 +181,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
-        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, prescribed_fields[row_i]);
+        applyBoundaryConditions(time_info.time(), bc_managers[row_i], prescribed_fields[row_i], primal_field_row_i);
       }
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         residuals[row_i] = residual_evals[row_i]->residual(time_info, shape_disp_ptr.get(),
@@ -188,7 +201,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
         FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
         *primal_field_row_i = *unknowns[row_i];
-        applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, prescribed_fields[row_i]);
+        applyBoundaryConditions(time_info.time(), bc_managers[row_i], prescribed_fields[row_i], primal_field_row_i);
       }
 
       for (size_t row_i = 0; row_i < num_rows; ++row_i) {
@@ -263,10 +276,10 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
       }
     }
 
-    std::vector<std::vector<FEFieldPtr>> prescribed_fields(num_rows);
+    std::vector<FEFieldPtr> prescribed_fields(num_rows, nullptr);
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
-      for (size_t parameter_index : prescribed_field_indices[row_i]) {
-        prescribed_fields[row_i].push_back(input_fields[row_i][num_state_inputs[row_i] + parameter_index]);
+      if (prescribed_field_indices[row_i]) {
+        prescribed_fields[row_i] = input_fields[row_i][num_state_inputs[row_i] + *prescribed_field_indices[row_i]];
       }
     }
 
@@ -292,7 +305,7 @@ std::vector<FieldState> block_solve(const std::vector<WeakForm*>& residual_evals
     // Need to double check for time-dependent boundary conditions
     for (size_t row_i = 0; row_i < num_rows; ++row_i) {
       FEFieldPtr primal_field_row_i = diagonal_fields[row_i];
-      applyBoundaryConditions(time_info.time(), bc_managers[row_i], primal_field_row_i, prescribed_fields[row_i]);
+      applyBoundaryConditions(time_info.time(), bc_managers[row_i], prescribed_fields[row_i], primal_field_row_i);
     }
 
     solver->clearMemory();

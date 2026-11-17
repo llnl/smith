@@ -212,15 +212,20 @@ TEST(PrescribedFieldBoundaryConditions, MixedSolidDisplacementSources)
       mesh->entireBodyName());
 
   auto prescribed_displacement = solid_system->field_store->getParameterFields()[0];
-  prescribed_displacement.get()->setFromFieldFunction([=](tensor<double, prescribed_bc_dim> X) {
-    tensor<double, prescribed_bc_dim> displacement{};
-    displacement[0] = extension * X[0];
-    displacement[1] = -lateral_contraction * X[1];
-    return displacement;
-  });
+  mfem::VectorFunctionCoefficient left_displacement(prescribed_bc_dim,
+                                                    [=](const mfem::Vector& X, mfem::Vector& displacement) {
+                                                      displacement[0] = extension * X[0];
+                                                      displacement[1] = -lateral_contraction * X[1];
+                                                    });
+  mfem::FunctionCoefficient right_transverse_displacement(
+      [=](const mfem::Vector& X) { return -lateral_contraction * X[1]; });
+  prescribed_displacement.get()->project(left_displacement, mesh->domain("left"));
+  auto right_dofs = mesh->domain("right").dof_list(&prescribed_displacement.get()->space());
+  prescribed_displacement.get()->project(right_transverse_displacement, right_dofs, 1);
 
-  solid_system->disp_bc->setVectorBCs(mesh->domain("left"), prescribed_displacement);
-  solid_system->disp_bc->setVectorBCs(mesh->domain("right"), {1}, prescribed_displacement);
+  solid_system->disp_bc->registerPrescribedField(prescribed_displacement);
+  solid_system->disp_bc->setVectorBCsFromPrescribedField(mesh->domain("left"));
+  solid_system->disp_bc->setVectorBCsFromPrescribedField(mesh->domain("right"), {1});
   solid_system->disp_bc->setVectorBCs<prescribed_bc_dim>(mesh->domain("right"), {0},
                                                          [=](double, tensor<double, prescribed_bc_dim>) {
                                                            tensor<double, prescribed_bc_dim> displacement{};

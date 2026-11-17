@@ -15,6 +15,7 @@
 #include <memory>
 #include <set>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "smith/physics/boundary_conditions/boundary_condition.hpp"
@@ -57,15 +58,26 @@ class BoundaryConditionManager {
                     mfem::ParFiniteElementSpace& space, std::optional<int> component = {});
 
   /**
-   * @brief Set a list of local degrees of freedom from a prescribed finite element field
+   * @brief Set a list of local degrees of freedom using the registered prescribed field
    *
    * @param[in] local_dofs Indices of ldofs to set with a Dirichlet condition
-   * @param[in] prescribed_field Finite element field supplying the prescribed values
    * @param[in] space The finite element space to which the BC should be applied
    * @param[in] component The component to set (null implies all components are set)
    */
-  void addEssential(const mfem::Array<int>& local_dofs, const FiniteElementState& prescribed_field,
-                    mfem::ParFiniteElementSpace& space, std::optional<int> component = {});
+  void addEssential(const mfem::Array<int>& local_dofs, mfem::ParFiniteElementSpace& space,
+                    std::optional<int> component = {});
+
+  /**
+   * @brief Register the finite element field supplying prescribed boundary values
+   *
+   * @param[in] prescribed_field Field supplying the prescribed values
+   * @param[in] primal_space Finite element space of the constrained field
+   */
+  void registerPrescribedField(const FiniteElementState& prescribed_field,
+                               const mfem::ParFiniteElementSpace& primal_space);
+
+  /// @brief Return the name of the field supplying prescribed values, if one has been registered.
+  const std::optional<std::string>& prescribedFieldName() const { return prescribed_field_name_; }
 
   /**
    * @ brief Set a list of true degrees of feedom from a vector coefficient
@@ -138,6 +150,11 @@ class BoundaryConditionManager {
    * @brief The vector of essential boundary conditions
    */
   std::vector<BoundaryCondition> ess_bdr_;
+
+  /**
+   * @brief Name of the finite element field supplying prescribed values to coefficient-free BCs
+   */
+  std::optional<std::string> prescribed_field_name_;
 
   /**
    * @brief The set of boundary attributes associated with

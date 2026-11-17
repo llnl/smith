@@ -94,7 +94,7 @@ const BoundaryConditionManager& DirichletBoundaryConditions::getSecondDerivative
 void DirichletBoundaryConditions::rebuildSecondDerivativeManager(BoundaryConditionManager& target) const
 {
   for (const auto& bc : bcs_.essentials()) {
-    if (bc.prescribedField()) {
+    if (!bc.hasCoefficient()) {
       auto zero = std::make_shared<mfem::ConstantCoefficient>(0.0);
       target.addEssential(bc.getLocalDofList(), zero, space_, bc.component());
       continue;

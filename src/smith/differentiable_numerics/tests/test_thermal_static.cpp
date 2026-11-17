@@ -206,13 +206,15 @@ TEST_F(ThermalStaticFixture, PrescribedTemperatureParameterField)
                               "entire_body");
 
   FieldState prescribed_temperature = thermal_system->field_store->getParameterFields()[0];
-  prescribed_temperature.get()->setFromFieldFunction([](tensor<double, 2> X) {
+  mfem::FunctionCoefficient prescribed_temperature_coefficient([](const mfem::Vector& X) {
     const double interior_perturbation = X[0] * (1.0 - X[0]) * X[1] * (1.0 - X[1]);
     return X[0] + interior_perturbation;
   });
+  prescribed_temperature.get()->project(prescribed_temperature_coefficient, mesh->domain("right"));
 
   thermal_system->temperature_bc->setScalarBCs<2>(mesh->domain("left"), [](double, tensor<double, 2>) { return 0.0; });
-  thermal_system->temperature_bc->setScalarBCs(mesh->domain("right"), prescribed_temperature);
+  thermal_system->temperature_bc->registerPrescribedField(prescribed_temperature);
+  thermal_system->temperature_bc->setScalarBCsFromPrescribedField(mesh->domain("right"));
 
   const auto& second_derivative_bcs = thermal_system->temperature_bc->getSecondDerivativeManager();
   mfem::Vector second_derivative(prescribed_temperature.get()->space().GetTrueVSize());
@@ -237,7 +239,7 @@ TEST_F(ThermalStaticFixture, PrescribedTemperatureParameterField)
   EXPECT_LT(computeL2Error(*temperature.get(), exact_temperature), 1.0e-10);
 }
 
-TEST_F(ThermalStaticFixture, MultiplePrescribedBoundaryFields)
+TEST_F(ThermalStaticFixture, MultiplePrescribedBoundaryDomains)
 {
   mesh->addDomainOfBoundaryElements("left", [](std::vector<vec2> nodes, int) { return allNodesAtX(nodes, 0.0); });
   mesh->addDomainOfBoundaryElements("right", [](std::vector<vec2> nodes, int) { return allNodesAtX(nodes, 1.0); });
@@ -245,20 +247,22 @@ TEST_F(ThermalStaticFixture, MultiplePrescribedBoundaryFields)
   NonlinearSolverOptions solver_options;
   solver_options.relative_tol = 1.0e-12;
   LinearSolverOptions linear_options;
-  auto thermal_system =
-      buildThermalSystem<2, 1>(solver_options, linear_options, ThermalOptions{}, mesh,
-                               FieldType<H1<1>>("left_temperature"), FieldType<H1<1>>("right_temperature"));
+  auto thermal_system = buildThermalSystem<2, 1>(solver_options, linear_options, ThermalOptions{}, mesh,
+                                                 FieldType<H1<1>>("prescribed_temperature"));
 
   thermal_system->setMaterial(
       [](const TimeInfo&, auto, auto grad_temperature, auto, auto) { return smith::tuple{0.0, -grad_temperature}; },
       "entire_body");
 
   const auto& prescribed_fields = thermal_system->field_store->getParameterFields();
-  prescribed_fields[0].get()->setFromFieldFunction([](tensor<double, 2>) { return -1.0; });
-  prescribed_fields[1].get()->setFromFieldFunction([](tensor<double, 2>) { return 2.0; });
+  mfem::FunctionCoefficient left_temperature([](const mfem::Vector&) { return -1.0; });
+  mfem::FunctionCoefficient right_temperature([](const mfem::Vector&) { return 2.0; });
+  prescribed_fields[0].get()->project(left_temperature, mesh->domain("left"));
+  prescribed_fields[0].get()->project(right_temperature, mesh->domain("right"));
 
-  thermal_system->temperature_bc->setScalarBCs(mesh->domain("left"), prescribed_fields[0]);
-  thermal_system->temperature_bc->setScalarBCs(mesh->domain("right"), prescribed_fields[1]);
+  thermal_system->temperature_bc->registerPrescribedField(prescribed_fields[0]);
+  thermal_system->temperature_bc->setScalarBCsFromPrescribedField(mesh->domain("left"));
+  thermal_system->temperature_bc->setScalarBCsFromPrescribedField(mesh->domain("right"));
 
   TimeInfo t_info(0.0, 1.0);
   auto [new_states, reactions] = makeAdvancer(thermal_system)
