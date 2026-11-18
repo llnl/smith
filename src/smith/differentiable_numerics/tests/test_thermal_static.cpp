@@ -251,7 +251,7 @@ TEST_F(ThermalStaticFixture, MultiplePrescribedBoundaryDomains)
                                                  FieldType<H1<1>>("prescribed_temperature"));
 
   thermal_system->setMaterial(
-      [](const TimeInfo&, auto, auto grad_temperature, auto, auto) { return smith::tuple{0.0, -grad_temperature}; },
+      [](const TimeInfo&, auto, auto grad_temperature, auto) { return smith::tuple{0.0, -grad_temperature}; },
       "entire_body");
 
   const auto& prescribed_fields = thermal_system->field_store->getParameterFields();
