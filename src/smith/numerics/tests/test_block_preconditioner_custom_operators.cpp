@@ -401,11 +401,11 @@ class MockSchurActionSolver : public smith::SchurComplementActionSolver {
     *context_block_size_ = block_offsets_[2] - block_offsets_[1];
   }
 
-  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  void updateForState(const mfem::BlockVector& state) override
   {
     ++(*update_calls_);
     update_order_->push_back(1);
-    *updated_state_ = state[block_offsets[1]];
+    *updated_state_ = state.GetBlock(1)[0];
   }
 
   void Mult(const mfem::Vector& x, mfem::Vector& y) const override
@@ -873,20 +873,20 @@ TEST(BlockSchurPreconditionerCustom, StateDependentProviderUpdatesSchurSolve)
   solvers.push_back(std::make_unique<OperatorDiagonalSolver>());
 
   auto update_count = std::make_shared<int>(0);
-  auto schur_provider = smith::makeStateDependentBlockProviderOverride(
-      1, [update_count](const mfem::Vector& state, const mfem::Array<int>& block_offsets) {
+  auto schur_provider =
+      smith::makeStateDependentBlockProviderOverride(1, [update_count](const mfem::BlockVector& state) {
         ++(*update_count);
-        const int block_size = block_offsets[2] - block_offsets[1];
-        return makeMutableLocalScaledIdentityOp(block_size, state[block_offsets[1]]);
+        const auto& block = state.GetBlock(1);
+        return makeMutableLocalScaledIdentityOp(block.Size(), block[0]);
       });
   smith::SchurOperator schur(std::move(schur_provider.provider));
 
   smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Diagonal, std::move(schur));
 
-  Vector state(2 * n);
+  BlockVector state(offsets);
   state = 0.0;
-  state[offsets[1]] = 5.0;
-  P.updateForState(state, offsets);
+  state.GetBlock(1)[0] = 5.0;
+  P.updateForState(state);
   P.SetOperator(A);
 
   Vector b(2 * n), x(2 * n);
@@ -898,8 +898,8 @@ TEST(BlockSchurPreconditionerCustom, StateDependentProviderUpdatesSchurSolve)
   EXPECT_NEAR(x[2], b[2] / 5.0, 1e-12);
   EXPECT_NEAR(x[3], b[3] / 5.0, 1e-12);
 
-  state[offsets[1]] = 7.0;
-  P.updateForState(state, offsets);
+  state.GetBlock(1)[0] = 7.0;
+  P.updateForState(state);
   P.SetOperator(A);
   P.Mult(b, x);
 
@@ -914,15 +914,15 @@ TEST(BlockSchurPreconditionerCustom, FailedProviderUpdatePreservesCurrentOperato
 {
   constexpr int n = 2;
   Array<int> offsets({0, n});
-  Vector state(n);
+  BlockVector state(offsets);
   state = 0.0;
 
   auto provider = smith::makeStateDependentBlockProviderOverride(
-      0, [](const mfem::Vector&, const mfem::Array<int>&) { return std::unique_ptr<mfem::Operator>(); },
+      0, [](const mfem::BlockVector&) { return std::unique_ptr<mfem::Operator>(); },
       makeMutableLocalScaledIdentityOp(n, 3.0));
   const auto* initial_operator = &provider.provider->currentOperator();
 
-  EXPECT_THROW(provider.provider->updateForState(state, offsets), std::invalid_argument);
+  EXPECT_THROW(provider.provider->updateForState(state), std::invalid_argument);
   EXPECT_EQ(&provider.provider->currentOperator(), initial_operator);
 }
 
@@ -953,7 +953,7 @@ TEST(BlockSchurPreconditionerCustom, ProviderOperatorOutlivesAttachedSolverRefer
 
     auto provider = smith::makeStateDependentBlockProviderOverride(
         1,
-        [updated_operator_alive, n](const mfem::Vector&, const mfem::Array<int>&) {
+        [updated_operator_alive, n](const mfem::BlockVector&) {
           return std::make_unique<LifetimeTrackedOperator>(n, updated_operator_alive);
         },
         std::make_unique<LifetimeTrackedOperator>(n, initial_operator_alive));
@@ -962,9 +962,9 @@ TEST(BlockSchurPreconditionerCustom, ProviderOperatorOutlivesAttachedSolverRefer
 
     P.SetOperator(A);
 
-    Vector state(2 * n);
+    BlockVector state(offsets);
     state = 0.0;
-    P.updateForState(state, offsets);
+    P.updateForState(state);
     EXPECT_TRUE(*initial_operator_alive);
     EXPECT_TRUE(*updated_operator_alive);
 
@@ -1007,10 +1007,10 @@ TEST(BlockSchurPreconditionerCustom, DirectInverseActionReceivesStateAndBlockCon
 
   smith::BlockSchurPreconditioner P(std::move(solvers), smith::BlockSchurType::Diagonal, std::move(schur));
 
-  Vector state(2 * n);
+  BlockVector state(offsets);
   state = 0.0;
-  state[offsets[1]] = 9.0;
-  P.updateForState(state, offsets);
+  state.GetBlock(1)[0] = 9.0;
+  P.updateForState(state);
   P.SetOperator(A);
 
   Vector b(2 * n), x(2 * n);

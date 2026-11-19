@@ -43,9 +43,9 @@ class StateDependentBlockOperatorProvider : public BlockOperatorProvider {
     }
   }
 
-  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  void updateForState(const mfem::BlockVector& state) override
   {
-    auto pending_op = builder_(state, block_offsets);
+    auto pending_op = builder_(state);
     if (!pending_op) {
       throw std::invalid_argument("State-dependent block operator builder returned a null operator");
     }
@@ -95,10 +95,10 @@ void applyOverrides(int num_blocks, std::vector<std::unique_ptr<BlockOperatorPro
   }
 }
 
-void updateSolverForState(mfem::Solver* solver, const mfem::Vector& state, const mfem::Array<int>& block_offsets)
+void updateSolverForState(mfem::Solver* solver, const mfem::BlockVector& state)
 {
   if (auto* state_dependent_solver = dynamic_cast<StateDependentSolver*>(solver)) {
-    state_dependent_solver->updateForState(state, block_offsets);
+    state_dependent_solver->updateForState(state);
   }
 }
 
@@ -131,15 +131,15 @@ BlockPreconditioner::BlockPreconditioner(std::vector<std::unique_ptr<mfem::Solve
 {
 }
 
-void BlockPreconditioner::updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets)
+void BlockPreconditioner::updateForState(const mfem::BlockVector& state)
 {
   for (auto& provider : block_op_providers_) {
     if (provider) {
-      provider->updateForState(state, block_offsets);
+      provider->updateForState(state);
     }
   }
   for (auto& solver : mfem_solvers_) {
-    updateSolverForState(solver.get(), state, block_offsets);
+    updateSolverForState(solver.get(), state);
   }
 }
 
@@ -441,10 +441,7 @@ void SchurComplementActionSolver::SetOperator(const mfem::Operator& op)
   width = op.Width();
 }
 
-void SchurComplementActionSolver::updateForState([[maybe_unused]] const mfem::Vector& state,
-                                                 [[maybe_unused]] const mfem::Array<int>& block_offsets)
-{
-}
+void SchurComplementActionSolver::updateForState([[maybe_unused]] const mfem::BlockVector& state) {}
 
 void BlockSchurPreconditioner::LowerBlock(const mfem::Vector& in, mfem::Vector& out) const
 {

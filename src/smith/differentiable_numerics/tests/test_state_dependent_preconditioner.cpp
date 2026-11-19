@@ -29,12 +29,9 @@ class StateScaledIdentityProvider : public BlockOperatorProvider {
  public:
   explicit StateScaledIdentityProvider(int size) : size_(size) { rebuild(1.0); }
 
-  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  void updateForState(const mfem::BlockVector& state) override
   {
-    double scale = 0.0;
-    for (int i = block_offsets[1]; i < block_offsets[2]; ++i) {
-      scale += state[i];
-    }
+    const double scale = state.GetBlock(1).Sum();
 
     last_scale_ = scale;
     ++update_count_;

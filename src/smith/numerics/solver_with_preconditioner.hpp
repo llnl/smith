@@ -48,13 +48,14 @@ class SolverWithPreconditioner : public StateDependentSolver {
   }
 
   /// @brief Refresh state-dependent owned solver data.
-  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  /// @param state Full nonlinear state forwarded to the owned solver and preconditioner.
+  void updateForState(const mfem::BlockVector& state) override
   {
     if (auto* state_dependent_solver = dynamic_cast<StateDependentSolver*>(linear_solver_.get())) {
-      state_dependent_solver->updateForState(state, block_offsets);
+      state_dependent_solver->updateForState(state);
     }
     if (auto* state_dependent_solver = dynamic_cast<StateDependentSolver*>(preconditioner_.get())) {
-      state_dependent_solver->updateForState(state, block_offsets);
+      state_dependent_solver->updateForState(state);
     }
   }
 

@@ -117,14 +117,14 @@ TEST_F(WeakFormBlockOperatorTest, StateDependentOverrideUpdatesFromStateBlock)
   mfem::Vector y(block_offsets[1]);
   x = 1.0;
 
-  mfem::Vector state(block_offsets[1]);
+  mfem::BlockVector state(block_offsets);
   state = 3.0;
-  override.provider->updateForState(state, block_offsets);
+  override.provider->updateForState(state);
   override.provider->currentOperator().Mult(x, y);
   const double first_norm = y.Norml2();
 
   state = 5.0;
-  override.provider->updateForState(state, block_offsets);
+  override.provider->updateForState(state);
   override.provider->currentOperator().Mult(x, y);
   const double second_norm = y.Norml2();
 

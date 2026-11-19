@@ -156,9 +156,9 @@ class TemperatureDiffusionSchurActionSolver : public smith::SchurComplementActio
   {
   }
 
-  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override
+  void updateForState(const mfem::BlockVector& state) override
   {
-    auto schur_operator = schur_operator_update_(state, block_offsets);
+    auto schur_operator = schur_operator_update_(state);
 
     auto amg_solver = std::make_unique<mfem::HypreBoomerAMG>();
     amg_solver->SetPrintLevel(0);

@@ -200,7 +200,7 @@ std::vector<NonlinearBlockSolverBase::FieldPtr> NonlinearBlockSolver::solve(
           *u_guesses[static_cast<size_t>(row_i)] = u->GetBlock(row_i);
         }
         if (state_dependent_solver_) {
-          state_dependent_solver_->updateForState(*u, block_offsets);
+          state_dependent_solver_->updateForState(*u);
         }
         matrix_of_jacs_ = jacobian_funcs(u_guesses);
         if (num_rows == 1) {
