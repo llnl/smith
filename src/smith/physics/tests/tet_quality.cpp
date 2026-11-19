@@ -33,12 +33,14 @@ TEST(QoI, TetrahedronQuality)
 {
   static constexpr int dim{3};
 
+  // Inverse of the right to regular tet Jacobian
   tensor<double, 3, 3> regular_tet_correction = {
       {{1.00000, -0.577350, -0.408248}, {0, 1.15470, -0.408248}, {0, 0, 1.22474}}};
 
+  // Use the squared Frobenius norm so the quality measure is invariant under rigid rotations.
   auto mu = [](auto J) {
     using std::pow;
-    return tr(dot(J, J)) / (3 * pow(smith::det(J), 2. / 3.)) - 1.0;
+    return double_dot(J, J) / (3 * pow(smith::det(J), 2. / 3.)) - 1.0;
   };
 
   using shape_space = H1<1, dim>;
@@ -59,7 +61,7 @@ TEST(QoI, TetrahedronQuality)
       smith::Dimension<3>{}, smith::DependsOn<>{},
       [=](double /*t*/, auto position) {
         auto [x, dx_dxi] = position;
-        return mu(dot(regular_tet_correction, dx_dxi));
+        return mu(dot(dx_dxi, regular_tet_correction));
       },
       whole_domain);
 
@@ -77,7 +79,7 @@ TEST(QoI, TetrahedronQuality)
         //            = (I + du/dX) * dX/dxi
         // auto dx_dxi = dot(I + du_dX, dX_dxi);
         auto dx_dxi = dX_dxi + dot(du_dX, dX_dxi);
-        return mu(dot(regular_tet_correction, dx_dxi));
+        return mu(dot(dx_dxi, regular_tet_correction));
       },
       whole_domain);
 
@@ -88,13 +90,20 @@ TEST(QoI, TetrahedronQuality)
   SLIC_INFO_ROOT(std::format("(ShapeAwareFunctional) mu(J) for right tetrahedron: {}", shape_aware_right_tet_quality));
   SLIC_INFO_ROOT(std::format("(          Functional) mu(J) for right tetrahedron: {}", functional_right_tet_quality));
 
-  // apply a displacement to make the domain into a regular tetrahedron
-  u.setFromFieldFunction([](tensor<double, dim> X) {
+  // Rotate the regular tetrahedron by 90 degrees about the z-axis so the correction and Jacobian do not commute.
+  const tensor<double, dim, dim> rotation = {{{0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 0.0, 1.0}}};
+
+  // Apply a displacement that first makes the domain a regular tetrahedron and then rotates it.
+  u.setFromFieldFunction([rotation](tensor<double, dim> X) {
     const double ux = 0.122462 * X[0] + 0.561231 * X[1] + 0.561231 * X[2];
     const double uy = -0.0279194 * X[1] + 0.324027 * X[2];
     const double uz = -0.0835136 * X[2];
-    tensor<double, dim> displacement = {{ux, uy, uz}};
-    return displacement;
+    const tensor<double, dim> regular_tet_displacement = {{ux, uy, uz}};
+    const auto regular_tet_position = X + regular_tet_displacement;
+
+    // Return the total displacement from the original position to the rotated regular-tet position.
+    const auto rotated_regular_tet_position = dot(rotation, regular_tet_position);
+    return rotated_regular_tet_position - X;
   });
 
   const double shape_aware_regular_tet_quality = saf_qoi(t, u);
@@ -103,6 +112,11 @@ TEST(QoI, TetrahedronQuality)
       std::format("(ShapeAwareFunctional) mu(J) for regular tetrahedron: {}", shape_aware_regular_tet_quality));
   SLIC_INFO_ROOT(
       std::format("(          Functional) mu(J) for regular tetrahedron: {}", functional_regular_tet_quality));
+
+  // A regular tetrahedron has zero quality regardless of its orientation.
+  constexpr double quality_tolerance = 1.0e-8;
+  EXPECT_NEAR(shape_aware_regular_tet_quality, 0.0, quality_tolerance);
+  EXPECT_NEAR(functional_regular_tet_quality, 0.0, quality_tolerance);
 }
 
 int main(int argc, char* argv[])
