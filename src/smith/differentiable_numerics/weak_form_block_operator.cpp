@@ -54,11 +54,10 @@ class WeakFormBlockOperatorBuilder {
 
   std::unique_ptr<mfem::HypreParMatrix> build() const { return buildFromFields(smith::getConstFieldPointers(fields_)); }
 
-  std::unique_ptr<mfem::HypreParMatrix> updateAndBuild(const mfem::Vector& state,
-                                                       const mfem::Array<int>& block_offsets) const
+  std::unique_ptr<mfem::HypreParMatrix> updateAndBuild(const mfem::BlockVector& state) const
   {
     auto operator_fields = copyFieldValues(fields_);
-    updateFieldsFromState(operator_fields, state, block_offsets);
+    updateFieldsFromState(operator_fields, state);
     return buildFromFields(smith::getConstFieldPointers(operator_fields));
   }
 
@@ -88,24 +87,17 @@ class WeakFormBlockOperatorBuilder {
     }
   }
 
-  void updateFieldsFromState(std::vector<FiniteElementState>& fields, const mfem::Vector& state,
-                             const mfem::Array<int>& block_offsets) const
+  void updateFieldsFromState(std::vector<FiniteElementState>& fields, const mfem::BlockVector& state) const
   {
     for (const auto& binding : state_block_bindings_) {
-      MFEM_VERIFY(binding.block_index + 1 < block_offsets.Size(), "Weak-form operator state block is out of range");
-
-      const int block_begin = block_offsets[binding.block_index];
-      const int block_size = block_offsets[binding.block_index + 1] - block_begin;
-      MFEM_VERIFY(block_begin >= 0 && block_size >= 0 && block_begin + block_size <= state.Size(),
-                  "Weak-form operator block offsets are inconsistent with the state size");
+      MFEM_VERIFY(binding.block_index < state.NumBlocks(), "Weak-form operator state block is out of range");
+      const auto& block = state.GetBlock(binding.block_index);
 
       FiniteElementState& field = fields[static_cast<size_t>(binding.field_index)];
-      MFEM_VERIFY(field.Size() == block_size,
+      MFEM_VERIFY(field.Size() == block.Size(),
                   "Weak-form operator cannot update a field from a block with incompatible size");
 
-      mfem::Vector block_view;
-      block_view.MakeRef(const_cast<mfem::Vector&>(state), block_begin, block_size);
-      field = block_view;
+      field = block;
     }
   }
 
@@ -148,9 +140,7 @@ StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm
   WeakFormBlockOperatorBuilder builder(weak_form, std::move(shape_disp), std::move(fields), std::move(jacobian_weights),
                                        time_info, std::move(ess_tdofs), std::move(state_block_bindings));
   // Move ownership into the returned callback so the builder remains alive after this function returns.
-  return [builder = std::move(builder)](const mfem::Vector& state, const mfem::Array<int>& block_offsets) {
-    return builder.updateAndBuild(state, block_offsets);
-  };
+  return [builder = std::move(builder)](const mfem::BlockVector& state) { return builder.updateAndBuild(state); };
 }
 
 StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm& weak_form, FieldState shape_disp,
@@ -193,9 +183,8 @@ BlockProviderOverride makeStateDependentWeakFormBlockProviderOverride(
                                        time_info, std::move(ess_tdofs), std::move(state_block_bindings));
   auto initial_operator = builder.build();
   StateDependentBlockOperatorBuilder block_builder =
-      [builder = std::move(builder)](const mfem::Vector& state,
-                                     const mfem::Array<int>& block_offsets) -> std::unique_ptr<mfem::Operator> {
-    return builder.updateAndBuild(state, block_offsets);
+      [builder = std::move(builder)](const mfem::BlockVector& state) -> std::unique_ptr<mfem::Operator> {
+    return builder.updateAndBuild(state);
   };
   return makeStateDependentBlockProviderOverride(block_index, std::move(block_builder), std::move(initial_operator));
 }

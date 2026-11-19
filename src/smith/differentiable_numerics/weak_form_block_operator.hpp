@@ -31,15 +31,14 @@ class WeakForm;
  * @brief Mapping from a nonlinear solve block to an input field of a weak form.
  */
 struct StateBlockBinding {
-  int block_index;  ///< Nonlinear solve block index in the monolithic state vector.
+  int block_index;  ///< Block index in the nonlinear mfem::BlockVector state.
   int field_index;  ///< Weak-form input field index to update from the block.
 };
 
 /**
- * @brief Callable that rebuilds a weak-form operator from a nonlinear state.
+ * @brief Callable that rebuilds a weak-form operator from a nonlinear block state.
  */
-using StateDependentWeakFormOperator =
-    std::function<std::unique_ptr<mfem::HypreParMatrix>(const mfem::Vector&, const mfem::Array<int>&)>;
+using StateDependentWeakFormOperator = std::function<std::unique_ptr<mfem::HypreParMatrix>(const mfem::BlockVector&)>;
 
 /**
  * @brief Assemble a weak-form Jacobian operator for use in a block preconditioner.
@@ -58,7 +57,10 @@ std::unique_ptr<mfem::HypreParMatrix> buildWeakFormOperator(const WeakForm& weak
                                                             const BoundaryConditionManager* bc_manager);
 
 /**
- * @brief Build a callable that updates bound weak-form fields from state and assembles the weak-form operator.
+ * @brief Build a callable that assembles a weak-form operator from a nonlinear block state.
+ *
+ * Each call updates scratch copies of @a fields from blocks of the supplied
+ * mfem::BlockVector according to @a state_block_bindings.
  *
  * @note @a weak_form must outlive the returned callable.
  */
@@ -70,6 +72,9 @@ StateDependentWeakFormOperator makeStateDependentWeakFormOperator(const WeakForm
 
 /**
  * @brief Build a callable using essential dofs copied from a boundary-condition manager.
+ *
+ * Each call updates scratch copies of @a fields from blocks of the supplied
+ * mfem::BlockVector according to @a state_block_bindings.
  *
  * @note @a weak_form must outlive the returned callable.
  */
@@ -99,6 +104,10 @@ BlockProviderOverride makeWeakFormBlockProviderOverride(int block_index, const W
 /**
  * @brief Build a state-dependent block override from a weak-form Jacobian operator.
  *
+ * The initial operator is assembled using @a fields. Each state update rebuilds
+ * it using scratch copies of those fields, updated from the supplied
+ * mfem::BlockVector according to @a state_block_bindings.
+ *
  * @note @a weak_form must outlive the returned provider and every preconditioner
  *       to which that provider is supplied.
  */
@@ -109,6 +118,10 @@ BlockProviderOverride makeStateDependentWeakFormBlockProviderOverride(
 
 /**
  * @brief Build a state-dependent block override using essential dofs copied from a boundary-condition manager.
+ *
+ * The initial operator is assembled using @a fields. Each state update rebuilds
+ * it using scratch copies of those fields, updated from the supplied
+ * mfem::BlockVector according to @a state_block_bindings.
  *
  * @note @a weak_form must outlive the returned provider and every preconditioner
  *       to which that provider is supplied.
@@ -138,16 +151,17 @@ SchurOperator weakFormSchur(const WeakForm& weak_form, FieldState shape_disp, st
 /**
  * @brief Build a state-dependent Schur operator from a single-field weak form.
  *
- * The weak form is differentiated with respect to @a schur_field and refreshed
- * from block 1 of the current nonlinear state. Essential dofs are copied from
- * @a bc_manager when it is non-null.
+ * The initial operator is assembled using @a schur_field. Each state update
+ * rebuilds the weak-form Jacobian using a scratch copy of @a schur_field populated
+ * from block 1 of the current nonlinear mfem::BlockVector state. Essential dofs
+ * are copied from @a bc_manager when it is non-null.
  *
  * @note @a weak_form must outlive the returned operator and every preconditioner
  *       to which that operator is supplied.
  *
  * @param weak_form Weak form whose Jacobian approximates the Schur complement.
  * @param shape_disp Mesh shape displacement used to assemble the weak form.
- * @param schur_field Field updated from the Schur block at each nonlinear iterate.
+ * @param schur_field Field supplying the Schur space and initial assembly state.
  * @param time_info Time information used to assemble the weak form.
  * @param bc_manager Optional boundary conditions for the Schur field.
  */

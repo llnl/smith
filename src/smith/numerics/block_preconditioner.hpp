@@ -21,13 +21,9 @@ class BlockOperatorProvider {
 
   /**
    * @brief Refresh the owned operator for the current nonlinear state.
-   * @param state Monolithic state vector at the current nonlinear iterate.
-   * @param block_offsets Offsets describing the block layout of @a state.
+   * @param state Current nonlinear state, including its block layout.
    */
-  virtual void updateForState([[maybe_unused]] const mfem::Vector& state,
-                              [[maybe_unused]] const mfem::Array<int>& block_offsets)
-  {
-  }
+  virtual void updateForState([[maybe_unused]] const mfem::BlockVector& state) {}
 
   /**
    * @brief Return the current concrete operator.
@@ -46,13 +42,15 @@ class BlockOperatorProvider {
 /**
  * @brief Builder that rebuilds an operator from the current nonlinear state.
  *
+ * The builder receives the full state as an mfem::BlockVector; individual blocks
+ * are accessible through mfem::BlockVector::GetBlock().
+ *
  * Builders are invoked by BlockPreconditioner::updateForState(). In nonlinear
  * block solves created with a custom state-dependent preconditioner, that update
- * is wired into the Newton loop before the preconditioner is configured with the
- * current Jacobian.
+ * runs during Jacobian evaluation before the preconditioner is configured with
+ * the current Jacobian.
  */
-using StateDependentBlockOperatorBuilder =
-    std::function<std::unique_ptr<mfem::Operator>(const mfem::Vector&, const mfem::Array<int>&)>;
+using StateDependentBlockOperatorBuilder = std::function<std::unique_ptr<mfem::Operator>(const mfem::BlockVector&)>;
 
 /**
  * @brief Optional provider override for a diagonal block operator.
@@ -115,8 +113,8 @@ BlockProviderOverride makeFixedBlockProviderOverride(int block_index, std::uniqu
  * @param initial_operator Optional operator to use before the first update.
  *
  * The builder is called from BlockPreconditioner::updateForState() with the
- * current monolithic nonlinear state and its block offsets. The rebuilt operator
- * is then used the next time SetOperator() configures the block solvers.
+ * current nonlinear block state. The rebuilt operator is then used the next
+ * time SetOperator() configures the block solvers.
  *
  * Provide @a initial_operator when SetOperator() may be called before the first
  * state update. Otherwise, currentOperator() will fail until updateForState()
@@ -146,8 +144,11 @@ class BlockPreconditioner : public StateDependentSolver {
     return mfem_solvers_[static_cast<size_t>(i)].get();
   }
 
-  /// @overload
-  void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) override;
+  /**
+   * @brief Refresh block operator providers and state-dependent sub-solvers.
+   * @param state Full nonlinear state, including its block layout.
+   */
+  void updateForState(const mfem::BlockVector& state) override;
 
   virtual ~BlockPreconditioner();
 

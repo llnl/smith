@@ -25,10 +25,9 @@ class StateDependentSolver : public mfem::Solver {
 
   /**
    * @brief Refresh solver-owned data for the current nonlinear state.
-   * @param state Monolithic state vector at the current nonlinear iterate.
-   * @param block_offsets Offsets describing the block layout of @a state.
+   * @param state Current nonlinear state, including its block layout.
    */
-  virtual void updateForState(const mfem::Vector& state, const mfem::Array<int>& block_offsets) = 0;
+  virtual void updateForState(const mfem::BlockVector& state) = 0;
 };
 
 }  // namespace smith
