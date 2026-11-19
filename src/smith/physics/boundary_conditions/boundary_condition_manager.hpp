@@ -91,16 +91,26 @@ class BoundaryConditionManager {
   }
 
   /**
+   * @brief Eliminate an explicit locally owned essential true-DOF list from a matrix
+   *
+   * @param[inout] matrix The matrix to eliminate from, will be modified
+   * @param[in] essential_true_dofs Locally owned essential true DOFs
+   * @return The eliminated matrix entries
+   *
+   * @note This is a collective operation. Every rank in the matrix communicator must call it, including ranks whose
+   *       local essential true-DOF list is empty.
+   */
+  static std::unique_ptr<mfem::HypreParMatrix> eliminateEssentialDofsFromMatrix(
+      mfem::HypreParMatrix& matrix, const mfem::Array<int>& essential_true_dofs);
+
+  /**
    * @brief Eliminates all essential BCs from a matrix
    * @param[inout] matrix The matrix to eliminate from, will be modified
    * @return The eliminated matrix entries
    * @note The sum of the eliminated matrix and the modified parameter is
    * equal to the initial state of the parameter
    */
-  std::unique_ptr<mfem::HypreParMatrix> eliminateAllEssentialDofsFromMatrix(mfem::HypreParMatrix& matrix) const
-  {
-    return std::unique_ptr<mfem::HypreParMatrix>(matrix.EliminateRowsCols(allEssentialTrueDofs()));
-  }
+  std::unique_ptr<mfem::HypreParMatrix> eliminateAllEssentialDofsFromMatrix(mfem::HypreParMatrix& matrix) const;
 
   /**
    * @brief Accessor for the essential BC objects
