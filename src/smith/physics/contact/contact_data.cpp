@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <format>
 #include <memory>
+#include <vector>
 
 #include "axom/slic.hpp"
 #include "mpi.h"
@@ -401,8 +402,8 @@ void ContactData::updateDofOffsets() const
   global_pressure_dof_offsets_.SetSize(mesh_.GetNRanks() + 1);
   global_pressure_dof_offsets_ = 0;
   global_pressure_dof_offsets_[mesh_.GetMyRank() + 1] = numPressureDofs();
-  MPI_Allreduce(MPI_IN_PLACE, global_pressure_dof_offsets_.GetData(), global_pressure_dof_offsets_.Size(), MPI_INT,
-                MPI_SUM, mesh_.GetComm());
+  MPI_Allreduce(MPI_IN_PLACE, global_pressure_dof_offsets_.GetData(), global_pressure_dof_offsets_.Size(),
+                HYPRE_MPI_BIG_INT, MPI_SUM, mesh_.GetComm());
   for (int i{1}; i < mesh_.GetNRanks(); ++i) {
     global_pressure_dof_offsets_[i + 1] += global_pressure_dof_offsets_[i];
   }
@@ -432,14 +433,14 @@ std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperat
   // number of rows of the restriction
   // operator owned by the local MPI process
   int nrows_loc = contact_dofs_.Size();
-  // should nrows_glb be of type HYPRE_BigInt?
   // global number of rows of restriction
   // operator
-  int nrows_glb = 0;
-  MPI_Allreduce(&nrows_loc, &nrows_glb, 1, MPI_INT, MPI_SUM, comm);
+  HYPRE_BigInt nrows_loc_hypre = nrows_loc;
+  HYPRE_BigInt nrows_glb = 0;
+  MPI_Allreduce(&nrows_loc_hypre, &nrows_glb, 1, HYPRE_MPI_BIG_INT, MPI_SUM, comm);
   // determine rows offsets of the restriction operator
-  int row_offset = 0;
-  MPI_Scan(&nrows_loc, &row_offset, 1, MPI_INT, MPI_SUM, comm);
+  HYPRE_BigInt row_offset = 0;
+  MPI_Scan(&nrows_loc_hypre, &row_offset, 1, HYPRE_MPI_BIG_INT, MPI_SUM, comm);
   row_offset -= nrows_loc;
   HYPRE_BigInt row_offsets[2];
   row_offsets[0] = row_offset;
@@ -449,7 +450,7 @@ std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperat
   // restriction from displacement dofs to
   // contact dofs
   // one nonzero (unit) entry per row
-  mfem::SparseMatrix Rsparse(nrows_loc, ncols_glb);
+  mfem::SparseMatrix Rsparse(nrows_loc, static_cast<int>(ncols_glb));
   mfem::Array<int> col(1);
   col = 0;
   mfem::Vector entry(1);
@@ -458,7 +459,7 @@ std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperat
   for (int k = 0; k < nrows_loc; k++) {
     // local per process contact dof
     // to global column number
-    col[0] = col_offset + contact_dofs_[k];
+    col[0] = static_cast<int>(col_offset + contact_dofs_[k]);
     Rsparse.SetRow(k, col, entry);
   }
   Rsparse.Finalize();
@@ -466,11 +467,17 @@ std::unique_ptr<mfem::HypreParMatrix> ContactData::contactSubspaceTransferOperat
   // convert local sparse restriction matrix
   // to distributed mfem::HypreParMatrix
   int* I = Rsparse.GetI();
-  HYPRE_BigInt* J = Rsparse.GetJ();
+  int* J = Rsparse.GetJ();
+  const size_t num_entries = static_cast<size_t>(I[nrows_loc]);
+  std::vector<HYPRE_BigInt> J_hypre(num_entries);
+  for (size_t i = 0; i < num_entries; i++) {
+    J_hypre[i] = static_cast<HYPRE_BigInt>(J[i]);
+  }
   double* data = Rsparse.GetData();
 
   std::unique_ptr<mfem::HypreParMatrix> restriction_operator = std::make_unique<mfem::HypreParMatrix>(
-      comm, nrows_loc, nrows_glb, ncols_glb, I, J, data, row_offsets, col_offsets);
+      comm, nrows_loc, nrows_glb, ncols_glb, I, J_hypre.data(), data, row_offsets,
+      col_offsets);
   // convert restriction operator
   // to a contact dof to displacement
   // dof transfer operator

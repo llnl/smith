@@ -217,13 +217,6 @@ install(TARGETS              smith
         DESTINATION          lib
         )
 
-if (SMITH_ENABLE_CODEVELOP)
-    install(TARGETS              mfem ${axom_exported_targets} ${tribol_exported_targets}
-            EXPORT               smith-targets
-            DESTINATION          lib
-            )
-endif()
-
 install(EXPORT smith-targets
         NAMESPACE smith::
         DESTINATION lib/cmake
