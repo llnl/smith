@@ -186,6 +186,45 @@ TEST_F(ConstrainedWeakFormFixture, CanComputeObjectivesAndTheirGradients)
   }
 }
 
+TEST_F(ConstrainedWeakFormFixture, BoundaryObjectivesIntegrateSurfaceMeasureInTwoAndThreeDimensions)
+{
+  // A constant integrand isolates boundary measure. The analytic perimeter and
+  // surface area detect both an incorrect intrinsic boundary dimension and an
+  // incorrect geometric measure without coupling the check to another model.
+  {
+    constexpr int objective_dim = 2;
+    constexpr double length = 2.0;
+    constexpr double width = 3.0;
+    auto objective_mesh = std::make_shared<smith::Mesh>(
+        mfem::Mesh::MakeCartesian2D(2, 3, mfem::Element::QUADRILATERAL, true, length, width), "boundary_objective_2d",
+        0, 0);
+    auto objective_shape = objective_mesh->newShapeDisplacement();
+    objective_shape = 0.0;
+
+    smith::FunctionalObjective<objective_dim> boundary_measure("boundary_measure_2d", objective_mesh, {});
+    boundary_measure.addBoundaryIntegral(smith::Mesh::entireBoundaryName(),
+                                         [](const smith::TimeInfo& /*t_info*/, auto /*X*/) { return 1.0; });
+
+    EXPECT_NEAR(boundary_measure.evaluate(smith::TimeInfo(0.0, 1.0), &objective_shape, {}), 2.0 * (length + width),
+                1.0e-12);
+  }
+
+  {
+    constexpr double length = 0.5;
+    constexpr double width = 0.7;
+    constexpr double depth = 0.3;
+    auto objective_shape = mesh->newShapeDisplacement();
+    objective_shape = 0.0;
+
+    smith::FunctionalObjective<dim> boundary_measure("boundary_measure_3d", mesh, {});
+    boundary_measure.addBoundaryIntegral(smith::Mesh::entireBoundaryName(),
+                                         [](const smith::TimeInfo& /*t_info*/, auto /*X*/) { return 1.0; });
+
+    EXPECT_NEAR(boundary_measure.evaluate(smith::TimeInfo(0.0, 1.0), &objective_shape, {}),
+                2.0 * (length * width + length * depth + width * depth), 1.0e-12);
+  }
+}
+
 int main(int argc, char* argv[])
 {
   smith::ApplicationManager manager(argc, argv);
