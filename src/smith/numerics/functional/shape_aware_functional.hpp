@@ -598,6 +598,26 @@ class ShapeAwareFunctional<shape, test(trials...), exec> {
   }
 
   /**
+   * @brief Adds shape-aware source and parametric-flux boundary terms to the weak formulation
+   *
+   * The integrand must return `smith::tuple{source, flux}`. Both terms receive the shape-dependent physical boundary
+   * measure correction, while the flux remains paired with derivatives in boundary-parametric coordinates.
+   *
+   * @tparam dim The dimension of the boundary element
+   * @tparam args The indices of the trial function inputs used by the integrand
+   * @tparam lambda The type of the integrand functor
+   * @param[in] integrand The user-provided quadrature function
+   * @param[in] domain The boundary domain on which to evaluate the integral
+   */
+  template <int dim, int... args, typename lambda>
+  void AddBoundarySourceFluxIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain)
+  {
+    functional_->AddBoundarySourceFluxIntegral(
+        Dimension<dim>{}, DependsOn<0, (args + 1)...>{},
+        ShapeAwareBoundaryIntegrandWrapper<lambda, dim, args...>(integrand), domain);
+  }
+
+  /**
    * @brief This function lets the user evaluate the smith::ShapeAwareFunctional with the given trial space values
    *
    * @note The first argument after time in the argument list is always the shape displacement field.

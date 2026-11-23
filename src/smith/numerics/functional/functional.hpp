@@ -440,6 +440,44 @@ class Functional<test(trials...), exec> {
   }
 
   /**
+   * @brief Adds source and parametric-flux boundary terms to the weak formulation
+   *
+   * The integrand must return `smith::tuple{source, flux}`. The source is integrated against test-function values and
+   * the flux is integrated against test-function derivatives with respect to the boundary element's parametric
+   * coordinates. Both terms are multiplied by the physical boundary measure. A scalar test space uses a scalar source
+   * and a flux with `dim` parametric components; when `dim == 1`, that flux is also scalar. For a test space with `c`
+   * components, the source has shape `(c)` and the flux has shape `(c, dim)`, with the final extent elided when
+   * `dim == 1`. Either response may be `smith::zero`. As with `AddBoundaryIntegral`, trial-function derivatives passed
+   * to the integrand are derivatives with respect to the boundary element's parametric coordinates.
+   *
+   * @tparam dim The dimension of the boundary element (1 for line, 2 for surface, etc.)
+   * @tparam args The indices of the trial function inputs used by the integrand
+   * @tparam lambda The type of the integrand functor
+   * @param[in] integrand The user-provided quadrature function
+   * @param[in] domain The boundary domain on which to evaluate the integral
+   */
+  template <int dim, int... args, typename lambda>
+  void AddBoundarySourceFluxIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain)
+  {
+    auto num_bdr_elements = domain.mesh_.GetNBE();
+    if (num_bdr_elements == 0) return;
+
+    SLIC_ERROR_ROOT_IF(dim != domain.dim_, "invalid domain of integration for boundary integral");
+
+    check_for_missing_nodal_gridfunc(domain.mesh_);
+
+    std::vector<uint32_t> arg_vec = {args...};
+    for (uint32_t i : arg_vec) {
+      domain.insert_restriction(trial_space_[i], trial_function_spaces_[i]);
+    }
+    domain.insert_restriction(test_space_, test_function_space_);
+
+    using signature = test(decltype(smith::type<args>(trial_spaces))...);
+    integrals_.push_back(
+        MakeBoundarySourceFluxIntegral<signature, Q, dim>(domain, integrand, std::vector<uint32_t>{args...}));
+  }
+
+  /**
    * @brief TODO
    */
   template <int dim, int... args, typename Integrand>
