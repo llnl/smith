@@ -50,7 +50,7 @@ if(NOT SMITH_FOUND)
   set(SMITH_USE_SUNDIALS       @SMITH_USE_SUNDIALS@)
   set(SMITH_USE_TRIBOL         @SMITH_USE_TRIBOL@)
   set(SMITH_USE_UMPIRE         @SMITH_USE_UMPIRE@)
-  
+
   set(SMITH_ADIAK_DIR          "@ADIAK_DIR@")
   set(SMITH_ARPACK_DIR         "@ARPACK_DIR@")
   set(SMITH_AXOM_DIR           "@AXOM_DIR@")
@@ -69,25 +69,24 @@ if(NOT SMITH_FOUND)
   set(SMITH_UMPIRE_DIR         "@UMPIRE_DIR@")
 
   # TPLs that are be included in our build
-  set(SMITH_CONTINUATION_DIR   "@SMITH_INSTALL_PREFIX@")
-  set(SMITH_GRETL_DIR          "@SMITH_INSTALL_PREFIX@")
+  set(SMITH_CONTINUATION_DIR   "${SMITH_INSTALL_PREFIX}")
+  set(SMITH_GRETL_DIR          "${SMITH_INSTALL_PREFIX}")
 
   # Tribol may be included in our build
-  if(SMITH_USE_TRIBOL AND NOT SMITH_TRIBOL_DIR)
-    set(SMITH_TRIBOL_DIR       "@SMITH_INSTALL_PREFIX@")
-    set(_tribol_included       TRUE)
-  else()
-    set(_tribol_included       FALSE)
-  endif()
-
-  if (NOT BLT_LOADED)
-    include("${CMAKE_CURRENT_LIST_DIR}/BLTInstallableMacros.cmake")
+  if(SMITH_USE_TRIBOL)
+    if (SMITH_ENABLE_CODEVELOP OR NOT SMITH_TRIBOL_DIR)
+      set(SMITH_TRIBOL_DIR "${SMITH_INSTALL_PREFIX}")
+    endif()
   endif()
 
   # Codevelop TPLs are installed alongside Smith
   if(SMITH_ENABLE_CODEVELOP)
     set(SMITH_AXOM_DIR "${SMITH_INSTALL_PREFIX}")
     set(SMITH_MFEM_DIR "${SMITH_INSTALL_PREFIX}")
+  endif()
+
+  if (NOT BLT_LOADED)
+    include("${CMAKE_CURRENT_LIST_DIR}/BLTInstallableMacros.cmake")
   endif()
 
   # Set to real variable unless user overrode it
@@ -113,7 +112,7 @@ if(NOT SMITH_FOUND)
   endif()
 
   # ARPACK
-  if(SMITH_USE_ARPACK)
+  if(SMITH_USE_ARPACK AND NOT TARGET arpack)
     blt_import_library(NAME       arpack
                        INCLUDES   @ARPACK_INCLUDE_DIRS@
                        LIBRARIES  @ARPACK_LIBRARIES@
@@ -151,6 +150,14 @@ if(NOT SMITH_FOUND)
     find_dependency(raja REQUIRED PATHS "${RAJA_DIR}")
   endif()
 
+  # Strumpack
+  if (SMITH_USE_STRUMPACK)
+    find_dependency(strumpack CONFIG
+                    PATHS "${STRUMPACK_DIR}"
+                          "${STRUMPACK_DIR}/lib/cmake/STRUMPACK"
+                          "${STRUMPACK_DIR}/lib64/cmake/STRUMPACK")
+  endif()
+
   # MFEM
   if(SMITH_USE_MFEM AND NOT TARGET mfem)
     set(SMITH_MFEM_BUILT_WITH_CMAKE @MFEM_BUILT_WITH_CMAKE@)
@@ -178,6 +185,11 @@ if(NOT SMITH_FOUND)
     find_dependency(Enzyme REQUIRED REQUIRED NO_DEFAULT_PATH PATHS "${ENZYME_DIR}")
   endif()
 
+  # Tribol
+  if(SMITH_USE_TRIBOL)
+    find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
+  endif()
+
   # Gretl
   if(SMITH_USE_GRETL)
     find_dependency(gretl REQUIRED PATHS "${GRETL_DIR}/lib/cmake")
@@ -197,18 +209,9 @@ if(NOT SMITH_FOUND)
   get_filename_component(SMITH_CMAKE_CONFIG_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
   include(${SMITH_CMAKE_CONFIG_DIR}/BLTSetupTargets.cmake)
 
-  # Tribol (uses BLTSetupTargets.cmake)
-  if(SMITH_USE_TRIBOL)
-    if(NOT _tribol_included)
-      find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
-    else()
-      include(${SMITH_CMAKE_CONFIG_DIR}/tribol-targets.cmake)
-    endif()
-  endif()
-
   # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
   if(SMITH_USE_ARPACK)
-    foreach(_target mfem axom::mfem tribol::mfem)
+    foreach(_target mfem)
       if(TARGET ${_target})
         target_link_libraries(${_target} INTERFACE arpack)
       endif()

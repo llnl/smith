@@ -128,14 +128,18 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Conduit (found via Axom)
     #------------------------------------------------------------------------------
-    if(NOT CONDUIT_DIR)
+    if(CONDUIT_DIR)
+        set(CONDUIT_FOUND TRUE)
+    else()
         MESSAGE(FATAL_ERROR "Could not find Conduit. Conduit requires explicit CONDUIT_DIR.")
     endif()
 
     #------------------------------------------------------------------------------
     # HDF5 (found via Axom)
     #------------------------------------------------------------------------------
-    if (NOT HDF5_DIR)
+    if (HDF5_DIR)
+        set(HDF5_FOUND TRUE)
+    else()
         MESSAGE(FATAL_ERROR "Could not find HDF5. HDF5 requires explicit HDF5_DIR.")
     endif()
 
@@ -400,9 +404,10 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
 
         # Patch the mfem target with the correct include directories
         get_target_property(_mfem_includes mfem INCLUDE_DIRECTORIES)
-        target_include_directories(mfem SYSTEM INTERFACE ${_mfem_includes})
-        target_include_directories(mfem SYSTEM INTERFACE $<BUILD_INTERFACE:${SMITH_SOURCE_DIR}>)
-        target_include_directories(mfem SYSTEM INTERFACE $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/mfem>)
+        target_include_directories(mfem SYSTEM BEFORE INTERFACE
+            ${_mfem_includes}
+            $<BUILD_INTERFACE:${SMITH_SOURCE_DIR}>
+            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/mfem>)
 
         # Restore flags and apply asan to mfem target directly
         if(APPLE AND ENABLE_ASAN)
@@ -420,6 +425,62 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         endforeach()
 
         set(MFEM_BUILT_WITH_CMAKE TRUE)
+    endif()
+
+    if (NOT TARGET mfem)
+        message(FATAL_ERROR "MFEM target not found")
+    endif()
+
+    # Remove non-existent INTERFACE_INCLUDE_DIRECTORIES from imported targets
+    # to work around CMake error
+    # TODO remove this once we get the following Spack PR:
+    # https://github.com/spack/spack-packages/pull/7550
+    get_target_property(_dirs mfem INTERFACE_INCLUDE_DIRECTORIES)
+    set(_existing_dirs)
+    foreach(_dir ${_dirs})
+        if("${_dir}" MATCHES "^\\$<" OR IS_DIRECTORY "${_dir}")
+            list(APPEND _existing_dirs "${_dir}")
+        endif()
+    endforeach()
+    if(_existing_dirs)
+        if(NOT "${_existing_dirs}" STREQUAL "${_dirs}")
+            message(STATUS "Removed non-existent include directories from target 'mfem'")
+        endif()
+        set_target_properties(mfem PROPERTIES
+                                INTERFACE_INCLUDE_DIRECTORIES "${_existing_dirs}" )
+    endif()
+    unset(_existing_dirs)
+    unset(_dirs)
+
+    # When both MFEM and Strumpack are on, MFEM adds the Fortran
+    # MPI library/directory but in some cases Spack cannot determine
+    # the correct MPI lib directory. This guards against that.
+    # https://github.com/spack/spack/issues/24685
+    if(STRUMPACK_FOUND)
+        list(GET MPI_C_LIBRARIES 0 _first_mpi_lib)
+        get_filename_component(_mpi_lib_dir ${_first_mpi_lib} DIRECTORY)
+    
+        message(STATUS "Adding MPI link directory to mfem target")
+        target_link_directories(mfem BEFORE INTERFACE ${_mpi_lib_dir})
+        if (ENABLE_FORTRAN AND DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
+            message(STATUS "Adding MPI Fortran library to mfem target")
+            target_link_libraries(mfem INTERFACE "-lmpifort")
+        endif()
+    endif()
+
+    # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
+    if(ARPACK_FOUND)
+        target_link_libraries(mfem INTERFACE arpack)
+    endif()
+
+    # Prevent unhelpful warnings by removing duplicate rpaths set in MFEM's config.mk MFEM_EXT_LIBS
+    if(APPLE)
+        get_target_property(_link_str ${_target} INTERFACE_LINK_LIBRARIES)
+        separate_arguments(_link_list UNIX_COMMAND "${_link_str}")
+        list(REMOVE_DUPLICATES _link_list)
+        set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_list}")
+        unset(_link_str)
+        unset(_link_libs)
     endif()
 
     #------------------------------------------------------------------------------
@@ -654,90 +715,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     endif()
 
     message(STATUS "Tribol support is " ${TRIBOL_FOUND})
-
-
-    #---------------------------------------------------------------------------
-    # Remove non-existant INTERFACE_INCLUDE_DIRECTORIES from imported targets
-    # to work around CMake error
-    #---------------------------------------------------------------------------
-    set(_imported_targets
-        axom
-        axom::mfem
-        conduit
-        conduit::conduit_mpi
-        conduit::conduit
-        conduit_relay_mpi
-        conduit_relay_mpi_io
-        conduit_blueprint
-        conduit_blueprint_mpi
-        mfem
-        tribol::mfem)
-
-    foreach(_target ${_imported_targets})
-        if(TARGET ${_target})
-            get_target_property(_dirs ${_target} INTERFACE_INCLUDE_DIRECTORIES)
-            set(_existing_dirs)
-            foreach(_dir ${_dirs})
-                if("${_dir}" MATCHES "^\\$<" OR IS_DIRECTORY "${_dir}")
-                    list(APPEND _existing_dirs "${_dir}")
-                endif()
-            endforeach()
-            if(_existing_dirs)
-                if(NOT "${_existing_dirs}" STREQUAL "${_dirs}")
-                    message(STATUS "Removed non-existant include directories from target '${_target}'")
-                endif()
-                set_target_properties(${_target} PROPERTIES
-                                      INTERFACE_INCLUDE_DIRECTORIES "${_existing_dirs}" )
-            endif()
-        endif()
-    endforeach()
-
-    # When both MFEM and Strumpack are on, MFEM adds the Fortran
-    # MPI library/directory but in some cases Spack cannot determine
-    # the correct MPI lib directory. This guards against that.
-    # https://github.com/spack/spack/issues/24685
-    set(_mfem_targets
-        mfem
-        axom::mfem
-        tribol::mfem)
-    if(STRUMPACK_FOUND)
-        list(GET MPI_C_LIBRARIES 0 _first_mpi_lib)
-        get_filename_component(_mpi_lib_dir ${_first_mpi_lib} DIRECTORY)
-    
-        foreach(_target ${_mfem_targets})
-            if(TARGET ${_target})
-                message(STATUS "Adding MPI link directory to target [${_target}]")
-                target_link_directories(${_target} BEFORE INTERFACE ${_mpi_lib_dir})
-                if (ENABLE_FORTRAN AND DEFINED ENV{SYS_TYPE} AND "$ENV{SYS_TYPE}" STREQUAL "toss_4_x86_64_ib_cray")
-                    target_link_libraries(${_target} INTERFACE "-lmpifort")
-                endif()
-            endif()
-        endforeach()
-    endif()
-
-    # SLEPc requires ARPACK, but MFEM omits it from its exported link interface.
-    if(ARPACK_FOUND)
-        foreach(_target ${_mfem_targets})
-            if(TARGET ${_target})
-                target_link_libraries(${_target} INTERFACE arpack)
-            endif()
-        endforeach()
-    endif()
-
-    # Prevent unhelpful warnings by removing duplicate rpaths set in MFEM's config.mk MFEM_EXT_LIBS
-    if(APPLE)
-        foreach(_target ${_mfem_targets})
-            if(TARGET ${_target})
-                get_target_property(_link_str ${_target} INTERFACE_LINK_LIBRARIES)
-                separate_arguments(_link_list UNIX_COMMAND "${_link_str}")
-                list(REMOVE_DUPLICATES _link_list)
-                set_target_properties(${_target} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_list}")
-            endif()
-        endforeach()
-        unset(_link_str)
-        unset(_link_libs)
-    endif()
-    unset(_mfem_targets)
 
     # Restore cleared Adiak/Caliper directories, reason at top of file.
     set(ADIAK_DIR ${_adiak_dir} CACHE PATH "" FORCE)
