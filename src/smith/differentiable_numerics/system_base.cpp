@@ -57,8 +57,11 @@ std::vector<FieldState> SystemBase::solve(const TimeInfo& time_info) const
     }
   }
 
-  auto params = field_store->getParameterFields();
-  std::vector<std::vector<FieldState>> wk_params(weak_forms.size(), params);
+  std::vector<std::vector<FieldState>> wk_params;
+  wk_params.reserve(weak_forms.size());
+  for (const auto& weak_form : weak_forms) {
+    wk_params.push_back(field_store->getParameters(weak_form->name()));
+  }
 
   std::vector<WeakForm*> weak_form_ptrs;
   for (auto& p : weak_forms) {
