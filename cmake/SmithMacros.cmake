@@ -274,6 +274,78 @@ endmacro(smith_assert_find_succeeded)
 
 
 ##------------------------------------------------------------------------------
+## smith_find_package(NAME          <package name given to find_package>
+##                    PROJECT_NAME  <project name used in messages>
+##                    TARGET        <expected target>
+##                    DIR_VARIABLE  <variable that holds the prefix>
+##                    [PATH_SUFFIXES <suffix>...])
+##
+## Finds a required package that provides a CMake config file. If DIR_VARIABLE
+## is set, it is searched first. The generic find_package(<NAME>) search paths
+## (e.g. <NAME>_ROOT, CMAKE_PREFIX_PATH, and system paths) are always searched.
+##
+## Sets <NAME in upper case>_FOUND. If the package was found without
+## DIR_VARIABLE, DIR_VARIABLE is set to the found install prefix so it is
+## recorded in the installed smith-config.cmake.
+##
+## Fails with a helpful message when the package could not be found.
+##------------------------------------------------------------------------------
+macro(smith_find_package)
+
+    set(options)
+    set(singleValueArgs NAME PROJECT_NAME TARGET DIR_VARIABLE)
+    set(multiValueArgs PATH_SUFFIXES)
+
+    # Parse the arguments to the macro
+    # Note: Use a unique prefix since this macro calls other macros that use 'arg'
+    cmake_parse_arguments(_sfp
+         "${options}" "${singleValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    string(TOUPPER ${_sfp_NAME} _sfp_upper_name)
+
+    set(_sfp_find_args)
+    if(${_sfp_DIR_VARIABLE})
+        smith_assert_is_directory(DIR_VARIABLE ${_sfp_DIR_VARIABLE})
+        set(_sfp_dir_given TRUE)
+        set(_sfp_dir "${${_sfp_DIR_VARIABLE}}")
+        list(APPEND _sfp_find_args HINTS "${_sfp_dir}")
+    else()
+        set(_sfp_dir_given FALSE)
+    endif()
+    if(_sfp_PATH_SUFFIXES)
+        list(APPEND _sfp_find_args PATH_SUFFIXES ${_sfp_PATH_SUFFIXES})
+    endif()
+
+    find_package(${_sfp_NAME} ${_sfp_find_args})
+
+    if(TARGET ${_sfp_TARGET})
+        if(NOT _sfp_dir_given)
+            # Record the install prefix of the found config file, e.g. <prefix>/lib/cmake/<name>
+            string(REGEX REPLACE "/(lib[^/]*|share)/cmake(/[^/]*)?/?$" ""
+                   _sfp_dir "${${_sfp_NAME}_DIR}")
+            set(${_sfp_DIR_VARIABLE} "${_sfp_dir}" CACHE PATH "" FORCE)
+        endif()
+        smith_assert_find_succeeded(PROJECT_NAME ${_sfp_PROJECT_NAME}
+                                    TARGET       ${_sfp_TARGET}
+                                    DIR_VARIABLE ${_sfp_DIR_VARIABLE})
+        message(STATUS "${_sfp_PROJECT_NAME} support is ON")
+        set(${_sfp_upper_name}_FOUND TRUE)
+    elseif(_sfp_dir_given)
+        message(FATAL_ERROR "${_sfp_PROJECT_NAME} failed to load from given ${_sfp_DIR_VARIABLE}: ${_sfp_dir}")
+    else()
+        message(FATAL_ERROR "Could not find ${_sfp_PROJECT_NAME}. Either set ${_sfp_DIR_VARIABLE} to its "
+                            "install prefix or add the install prefix to CMAKE_PREFIX_PATH.")
+    endif()
+
+    unset(_sfp_dir)
+    unset(_sfp_dir_given)
+    unset(_sfp_find_args)
+    unset(_sfp_upper_name)
+
+endmacro(smith_find_package)
+
+
+##------------------------------------------------------------------------------
 ## smith_convert_to_native_escaped_file_path( path output )
 ##
 ## This macro converts a cmake path to a platform specific string literal

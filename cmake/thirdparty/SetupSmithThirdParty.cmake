@@ -77,33 +77,19 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Camp
     #------------------------------------------------------------------------------
-    if (NOT CAMP_DIR)
-        message(FATAL_ERROR "CAMP_DIR is required.")
-    endif()
-
-    smith_assert_is_directory(DIR_VARIABLE CAMP_DIR)
-
-    find_dependency(camp REQUIRED PATHS "${CAMP_DIR}")
-
-    smith_assert_find_succeeded(PROJECT_NAME Camp
-                                TARGET       camp
-                                DIR_VARIABLE CAMP_DIR)
-    message(STATUS "Camp support is ON")
-    set(CAMP_FOUND TRUE)
+    smith_find_package(NAME         camp
+                       PROJECT_NAME Camp
+                       TARGET       camp
+                       DIR_VARIABLE CAMP_DIR)
 
     #------------------------------------------------------------------------------
     # Umpire
     #------------------------------------------------------------------------------
     if(UMPIRE_DIR)
-        smith_assert_is_directory(DIR_VARIABLE UMPIRE_DIR)
-        find_dependency(umpire REQUIRED PATHS "${UMPIRE_DIR}")
-
-        smith_assert_find_succeeded(PROJECT_NAME Umpire
-                                    TARGET       umpire
-                                    DIR_VARIABLE UMPIRE_DIR)
-
-        message(STATUS "Umpire support is ON")
-        set(UMPIRE_FOUND TRUE)
+        smith_find_package(NAME         umpire
+                           PROJECT_NAME Umpire
+                           TARGET       umpire
+                           DIR_VARIABLE UMPIRE_DIR)
     else()
         message(STATUS "Umpire support is OFF")
         set(UMPIRE_FOUND FALSE)
@@ -113,30 +99,13 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # RAJA
     #------------------------------------------------------------------------------
     if(RAJA_DIR)
-        smith_assert_is_directory(DIR_VARIABLE RAJA_DIR)
-        find_dependency(RAJA REQUIRED PATHS ${RAJA_DIR})
-        smith_assert_find_succeeded(PROJECT_NAME RAJA
-                                    TARGET       RAJA
-                                    DIR_VARIABLE RAJA_DIR)
-        message(STATUS "RAJA support is ON")
-        set(RAJA_FOUND TRUE)
+        smith_find_package(NAME         RAJA
+                           PROJECT_NAME RAJA
+                           TARGET       RAJA
+                           DIR_VARIABLE RAJA_DIR)
     else()
         message(STATUS "RAJA support is OFF")
         set(RAJA_FOUND FALSE)
-    endif()
-
-    #------------------------------------------------------------------------------
-    # Conduit (found via Axom)
-    #------------------------------------------------------------------------------
-    if(NOT CONDUIT_DIR)
-        MESSAGE(FATAL_ERROR "Could not find Conduit. Conduit requires explicit CONDUIT_DIR.")
-    endif()
-
-    #------------------------------------------------------------------------------
-    # HDF5 (found via Axom)
-    #------------------------------------------------------------------------------
-    if (NOT HDF5_DIR)
-        MESSAGE(FATAL_ERROR "Could not find HDF5. HDF5 requires explicit HDF5_DIR.")
     endif()
 
     #------------------------------------------------------------------------------
@@ -206,13 +175,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     # Enzyme
     #------------------------------------------------------------------------------
     if (ENZYME_DIR)
-        smith_assert_is_directory(DIR_VARIABLE ENZYME_DIR)
-        set(Enzyme_ROOT ${ENZYME_DIR} CACHE PATH "")
-        find_dependency(Enzyme REQUIRED)
-
-        smith_assert_find_succeeded(PROJECT_NAME Enzyme
-                                    TARGET       ClangEnzymeFlags
-                                    DIR_VARIABLE ENZYME_DIR)
+        # Note: Enzyme is only searched for when given since it requires a Clang-based compiler
+        smith_find_package(NAME         Enzyme
+                           PROJECT_NAME Enzyme
+                           TARGET       ClangEnzymeFlags
+                           DIR_VARIABLE ENZYME_DIR)
 
         message(STATUS "Checking for Target 'ClangEnzymeFlags' plugin target exists..")
         get_target_property(_clangenzyme_opts ClangEnzymeFlags INTERFACE_COMPILE_OPTIONS)
@@ -228,9 +195,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         else()
             message(STATUS "Skipped check. `ClangEnzymeFlags` target does not reference another target")
         endif()
-
-        message(STATUS "Enzyme support is ON")
-        set(ENZYME_FOUND TRUE)
     else()
         message(STATUS "Enzyme support is OFF")
         set(ENZYME_FOUND FALSE)
@@ -241,7 +205,6 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(NOT SMITH_ENABLE_CODEVELOP)
         message(STATUS "Using installed MFEM")
-        smith_assert_is_directory(DIR_VARIABLE MFEM_DIR)
         include(${CMAKE_CURRENT_LIST_DIR}/FindMFEM.cmake)
         smith_assert_find_succeeded(PROJECT_NAME MFEM
                                     TARGET       mfem
@@ -427,14 +390,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     if(NOT SMITH_ENABLE_CODEVELOP)
         message(STATUS "Using installed Axom")
-        smith_assert_is_directory(DIR_VARIABLE AXOM_DIR)
-
-        find_dependency(axom REQUIRED PATHS "${AXOM_DIR}/lib/cmake")
-
-        smith_assert_find_succeeded(PROJECT_NAME Axom
-                                    TARGET       axom
-                                    DIR_VARIABLE AXOM_DIR)
-        message(STATUS "Axom support is ON")
+        smith_find_package(NAME          axom
+                           PROJECT_NAME  Axom
+                           TARGET        axom
+                           DIR_VARIABLE  AXOM_DIR
+                           PATH_SUFFIXES lib/cmake)
 
         #
         # Check for optional Axom headers that are required for Smith
@@ -443,7 +403,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # sol.hpp
         find_path(
             _sol_found sol.hpp
-            PATHS ${AXOM_DIR}/include/axom
+            PATHS ${AXOM_INCLUDE_DIRS}/axom
             NO_DEFAULT_PATH
             NO_CMAKE_ENVIRONMENT_PATH
             NO_CMAKE_PATH
@@ -451,14 +411,14 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             NO_CMAKE_SYSTEM_PATH
         )
         if (NOT _sol_found)
-            message(FATAL_ERROR "Given AXOM_DIR did not contain a required header: axom/sol.hpp"
+            message(FATAL_ERROR "Axom install (${AXOM_DIR}) did not contain a required header: axom/sol.hpp"
                                 "\nTry building Axom with '-DBLT_CXX_STD=c++14' or higher\n ")
         endif()
 
         # LuaReader.hpp
         find_path(
             _luareader_found LuaReader.hpp
-            PATHS ${AXOM_DIR}/include/axom/inlet
+            PATHS ${AXOM_INCLUDE_DIRS}/axom/inlet
             NO_DEFAULT_PATH
             NO_CMAKE_ENVIRONMENT_PATH
             NO_CMAKE_PATH
@@ -466,7 +426,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             NO_CMAKE_SYSTEM_PATH
         )
         if (NOT _luareader_found)
-            message(FATAL_ERROR "Given AXOM_DIR did not contain a required header: axom/inlet/LuaReader.hpp"
+            message(FATAL_ERROR "Axom install (${AXOM_DIR}) did not contain a required header: axom/inlet/LuaReader.hpp"
                                 "\nTry building Axom with '-DLUA_DIR=path/to/lua/install'\n ")
         endif()
         set(LUA_FOUND TRUE)
@@ -474,7 +434,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         # MFEMSidreDataCollection.hpp
         find_path(
             _mfemdatacollection_found MFEMSidreDataCollection.hpp
-            PATHS ${AXOM_DIR}/include/axom/sidre/core
+            PATHS ${AXOM_INCLUDE_DIRS}/axom/sidre/core
             NO_DEFAULT_PATH
             NO_CMAKE_ENVIRONMENT_PATH
             NO_CMAKE_PATH
@@ -482,7 +442,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             NO_CMAKE_SYSTEM_PATH
         )
         if (NOT _mfemdatacollection_found)
-            message(FATAL_ERROR "Given AXOM_DIR did not contain a required header: axom/sidre/core/MFEMSidreDataCollection.hpp"
+            message(FATAL_ERROR "Axom install (${AXOM_DIR}) did not contain a required header: axom/sidre/core/MFEMSidreDataCollection.hpp"
                                 "\nTry building Axom with '-DAXOM_ENABLE_MFEM_SIDRE_DATACOLLECTION=ON'\n ")
         endif()
 
@@ -490,6 +450,14 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(ENABLE_FORTRAN OFF CACHE BOOL "" FORCE)
         # Otherwise we use the submodule
         message(STATUS "Using Axom submodule")
+        if(NOT CONDUIT_DIR)
+            message(FATAL_ERROR "CONDUIT_DIR is required to use the Axom submodule"
+                                "\nTry running CMake with '-DCONDUIT_DIR=path/to/conduit/install'\n ")
+        endif()
+        if(NOT HDF5_DIR)
+            message(FATAL_ERROR "HDF5_DIR is required to use the Axom submodule"
+                                "\nTry running CMake with '-DHDF5_DIR=path/to/hdf5/install'\n ")
+        endif()
         if(NOT LUA_DIR)
             message(FATAL_ERROR "LUA_DIR is required to use the Axom submodule"
                                 "\nTry running CMake with '-DLUA_DIR=path/to/lua/install'\n ")
@@ -601,15 +569,12 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
         set(TRIBOL_FOUND FALSE)
     elseif(TRIBOL_DIR)
         message(STATUS "Enabling pre-built Tribol in '${TRIBOL_DIR}'" )
-        smith_assert_is_directory(DIR_VARIABLE TRIBOL_DIR)
-
-        find_dependency(tribol REQUIRED PATHS "${TRIBOL_DIR}/lib/cmake")
-
-        smith_assert_find_succeeded(PROJECT_NAME Tribol
-                                    TARGET       tribol
-                                    DIR_VARIABLE TRIBOL_DIR)
+        smith_find_package(NAME          tribol
+                           PROJECT_NAME  Tribol
+                           TARGET        tribol
+                           DIR_VARIABLE  TRIBOL_DIR
+                           PATH_SUFFIXES lib/cmake)
         blt_convert_to_system_includes(TARGET tribol)
-        set(TRIBOL_FOUND TRUE)
     else()
         set(TRIBOL_ENABLE_DOCS  OFF CACHE BOOL "")
         set(TRIBOL_ENABLE_TESTS OFF CACHE BOOL "")
@@ -746,20 +711,11 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Adiak
     #------------------------------------------------------------------------------
-    if(SMITH_ENABLE_PROFILING AND NOT ADIAK_DIR)
-        message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without ADIAK_DIR defined. Either specify a host \
-                             config with ADIAK_DIR, or rebuild Smith TPLs with +adiak variant.")
-    endif()
-
-    if(ADIAK_DIR AND SMITH_ENABLE_PROFILING)
-        smith_assert_is_directory(DIR_VARIABLE ADIAK_DIR)
-
-        find_dependency(adiak REQUIRED PATHS "${ADIAK_DIR}")
-        smith_assert_find_succeeded(PROJECT_NAME Adiak
-                                    TARGET       adiak::adiak
-                                    DIR_VARIABLE ADIAK_DIR)
-        message(STATUS "Adiak support is ON")
-        set(ADIAK_FOUND TRUE)
+    if(SMITH_ENABLE_PROFILING)
+        smith_find_package(NAME         adiak
+                           PROJECT_NAME Adiak
+                           TARGET       adiak::adiak
+                           DIR_VARIABLE ADIAK_DIR)
     else()
         message(STATUS "Adiak support is OFF")
         set(ADIAK_FOUND FALSE)
@@ -768,14 +724,7 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
     #------------------------------------------------------------------------------
     # Caliper
     #------------------------------------------------------------------------------
-    if(SMITH_ENABLE_PROFILING AND NOT CALIPER_DIR)
-        message(FATAL_ERROR "SMITH_ENABLE_PROFILING cannot be ON without CALIPER_DIR defined. Either specify a host \
-                             config with CALIPER_DIR, or rebuild Smith TPLs with +caliper variant.")
-    endif()
-
-    if(CALIPER_DIR AND SMITH_ENABLE_PROFILING)
-        smith_assert_is_directory(DIR_VARIABLE CALIPER_DIR)
-
+    if(SMITH_ENABLE_PROFILING)
         # Should this logic be in the Caliper CMake package?
         # If CMake version doesn't support CUDAToolkit the libraries
         # are just "baked in"
@@ -787,12 +736,10 @@ if (NOT SMITH_THIRD_PARTY_LIBRARIES_FOUND)
             endif() 
         endif()
 
-        find_dependency(caliper REQUIRED PATHS "${CALIPER_DIR}")
-        smith_assert_find_succeeded(PROJECT_NAME Caliper
-                                    TARGET       caliper
-                                    DIR_VARIABLE CALIPER_DIR)
-        message(STATUS "Caliper support is ON")
-        set(CALIPER_FOUND TRUE)
+        smith_find_package(NAME         caliper
+                           PROJECT_NAME Caliper
+                           TARGET       caliper
+                           DIR_VARIABLE CALIPER_DIR)
     else()
         message(STATUS "Caliper support is OFF")
         set(CALIPER_FOUND FALSE)

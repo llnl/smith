@@ -14,16 +14,27 @@
 #  STRUMPACK_FOUND       - If MFEM was built with STRUMPACK
 #------------------------------------------------------------------------------
 
-if(NOT MFEM_DIR)
-    message(FATAL_ERROR "MFEM support needs explicit MFEM_DIR")
-endif()
-message(STATUS "Looking for MFEM using MFEM_DIR = ${MFEM_DIR}")
-smith_assert_is_directory(DIR_VARIABLE MFEM_DIR)
+if(MFEM_DIR)
+    message(STATUS "Looking for MFEM using MFEM_DIR = ${MFEM_DIR}")
+    smith_assert_is_directory(DIR_VARIABLE MFEM_DIR)
 
-set(_MFEM_DIR ${MFEM_DIR}) # Save MFEM_DIR as a non-cache variable
-find_package(MFEM CONFIG NO_DEFAULT_PATH PATHS "${MFEM_DIR}/lib/cmake/mfem")
-# find_package will overwrite MFEM_DIR, so restore it here
-set(MFEM_DIR ${_MFEM_DIR} CACHE PATH "" FORCE)
+    set(_MFEM_DIR ${MFEM_DIR}) # Save MFEM_DIR as a non-cache variable
+    find_package(MFEM CONFIG NO_DEFAULT_PATH PATHS "${MFEM_DIR}/lib/cmake/mfem")
+    # find_package will overwrite MFEM_DIR, so restore it here
+    set(MFEM_DIR ${_MFEM_DIR} CACHE PATH "" FORCE)
+else()
+    # Without MFEM_DIR, we can only find an MFEM that was built with CMake
+    message(STATUS "Looking for MFEM's CMake config file in the default search paths")
+    find_package(MFEM CONFIG)
+    if(NOT MFEM_FOUND)
+        message(FATAL_ERROR "Could not find MFEM. Either set MFEM_DIR to its install prefix "
+                            "or add the install prefix to CMAKE_PREFIX_PATH.")
+    endif()
+    # find_package sets MFEM_DIR to the config file directory, so set it to the install prefix
+    get_filename_component(_MFEM_DIR "${MFEM_DIR}/../../.." ABSOLUTE)
+    set(MFEM_DIR ${_MFEM_DIR} CACHE PATH "" FORCE)
+endif()
+unset(_MFEM_DIR)
 
 set(_mfem_uses_mpi FALSE)
 set(_mfem_uses_openmp FALSE)
