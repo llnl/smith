@@ -253,6 +253,42 @@ TEST(StateManager, ResetDoesNotDeleteExternallySharedMesh)
   EXPECT_EQ(2, mesh->Dimension());
 }
 
+TEST(StateManager, MoveAssignmentLifetime)
+{
+  std::string name = "move_assignment_test";
+  axom::sidre::DataStore datastore;
+  const std::string output_dir = name + "_data";
+
+  if (axom::utilities::filesystem::pathExists(output_dir)) {
+    GTEST_SKIP() << "Output directory already exists from a prior run: " << output_dir;
+  }
+  if (axom::utilities::filesystem::makeDirsForPath(output_dir) != 0) {
+    GTEST_SKIP() << "Could not create output directory: " << output_dir;
+  }
+  StateManager::initialize(datastore, output_dir);
+
+  std::string filename = SMITH_REPO_DIR "/data/meshes/ball.mesh";
+  std::string mesh_tag = "ball_mesh";
+  auto mesh = mesh::refineAndDistribute(buildMeshFromFile(filename), 0, 0);
+  StateManager::setMesh(std::move(mesh), mesh_tag);
+
+  {
+    // Create an initial state via StateManager
+    smith::FiniteElementState state1 = smith::StateManager::newState(smith::H1<1>{}, "my_field", mesh_tag);
+    state1 = 1.0;
+
+    // Move-assign it into a brand new state
+    smith::FiniteElementState state2(smith::StateManager::mesh(mesh_tag), smith::H1<1>{}, "dummy");
+    state2 = std::move(state1);
+    state2 = 2.0;
+
+    // Both state1 and state2 go out of scope here and are destroyed
+  }
+
+  // Now, StateManager attempts to save. This should work since state1 and state2's space are saved as std::shared_ptr.
+  EXPECT_NO_THROW(smith::StateManager::save(0.0, 1, mesh_tag));
+}
+
 }  // namespace smith
 
 int main(int argc, char* argv[])

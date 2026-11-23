@@ -163,6 +163,16 @@ class FiniteElementVector : public mfem::HypreParVector {
   std::string name() const { return name_; }
 
   /**
+   * @brief Get a shared pointer to the internal ParFiniteElementSpace
+   */
+  std::shared_ptr<mfem::ParFiniteElementSpace> shared_space() const { return space_; }
+
+  /**
+   * @brief Get a shared pointer to the internal FiniteElementCollection
+   */
+  std::shared_ptr<mfem::FiniteElementCollection> shared_coll() const { return coll_; }
+
+  /**
    * @brief Set a finite element state to a constant value
    *
    * @param value The constant to set the finite element state to
@@ -184,15 +194,17 @@ class FiniteElementVector : public mfem::HypreParVector {
   std::reference_wrapper<mfem::ParMesh> mesh_;
 
   /**
-   * @brief Handle to the FiniteElementCollection, which is owned by MFEMSidreDataCollection
+   * @brief Handle to the FiniteElementCollection. Shared to allow safe memory management when multiple vectors or grid
+   * functions use the same collection.
    * @note Must be const as FESpaces store a const reference to their FEColls
    */
-  std::unique_ptr<mfem::FiniteElementCollection> coll_;
+  std::shared_ptr<mfem::FiniteElementCollection> coll_;
 
   /**
-   * @brief Handle to the mfem::ParFiniteElementSpace, which is owned by MFEMSidreDataCollection
+   * @brief Handle to the mfem::ParFiniteElementSpace. Shared to allow safe memory management when multiple vectors or
+   * grid functions use the same space.
    */
-  std::unique_ptr<mfem::ParFiniteElementSpace> space_;
+  std::shared_ptr<mfem::ParFiniteElementSpace> space_;
 
   /**
    * @brief The name of the finite element vector

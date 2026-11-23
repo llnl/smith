@@ -147,13 +147,10 @@ class FiniteElementState : public FiniteElementVector {
   /**
    * @brief Move assignment
    *
-   * @note Move assignment is deleted because replacing a registered state's identity and FE space does not interact
-   * well with StateManager.
-   *
    * @param rhs The right hand side input State
    * @return The assigned FiniteElementState
    */
-  FiniteElementState& operator=(FiniteElementState&& rhs) = delete;
+  FiniteElementState& operator=(FiniteElementState&& rhs) = default;
 
   /**
    * @brief Copy assignment with HypreParVector
