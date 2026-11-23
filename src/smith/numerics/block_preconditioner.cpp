@@ -7,7 +7,6 @@
 
 #include "mfem.hpp"
 #include "axom/slic/core/SimpleLogger.hpp"
-#include "axom/fmt.hpp"
 
 namespace smith {
 
@@ -64,10 +63,9 @@ void BlockDiagonalPreconditioner::SetOperator(const mfem::Operator& jacobian)
   block_jacobian_ = dynamic_cast<const mfem::BlockOperator*>(&jacobian);
   MFEM_VERIFY(block_jacobian_, "Jacobian must be a BlockOperator");
 
-  SLIC_ERROR_ROOT_IF(
-      block_jacobian_->NumRowBlocks() != num_blocks_ || block_jacobian_->NumColBlocks() != num_blocks_,
-      axom::fmt::format("BlockDiagonalPreconditioner solver count ({}) must match block operator size ({}x{})",
-                        num_blocks_, block_jacobian_->NumRowBlocks(), block_jacobian_->NumColBlocks()));
+  SLIC_ERROR_ROOT_IF(block_jacobian_->NumRowBlocks() != num_blocks_ || block_jacobian_->NumColBlocks() != num_blocks_,
+                     std::format("BlockDiagonalPreconditioner solver count ({}) must match block operator size ({}x{})",
+                                 num_blocks_, block_jacobian_->NumRowBlocks(), block_jacobian_->NumColBlocks()));
 
   block_offsets_.MakeRef(const_cast<mfem::Array<int>&>(block_jacobian_->RowOffsets()));
   solver_diag_ = std::make_unique<mfem::BlockOperator>(block_offsets_);
@@ -219,8 +217,8 @@ void BlockTriangularPreconditioner::SetOperator(const mfem::Operator& jacobian)
 
   SLIC_ERROR_ROOT_IF(
       block_jacobian_->NumRowBlocks() != num_blocks_ || block_jacobian_->NumColBlocks() != num_blocks_,
-      axom::fmt::format("BlockTriangularPreconditioner solver count ({}) must match block operator size ({}x{})",
-                        num_blocks_, block_jacobian_->NumRowBlocks(), block_jacobian_->NumColBlocks()));
+      std::format("BlockTriangularPreconditioner solver count ({}) must match block operator size ({}x{})", num_blocks_,
+                  block_jacobian_->NumRowBlocks(), block_jacobian_->NumColBlocks()));
 
   block_offsets_.MakeRef(const_cast<mfem::Array<int>&>(block_jacobian_->RowOffsets()));
 
@@ -406,11 +404,10 @@ void BlockSchurPreconditioner::SetOperator(const mfem::Operator& jacobian)
   MFEM_VERIFY(block_jacobian_, "Jacobian must be a BlockOperator");
 
   SLIC_ERROR_ROOT_IF(block_jacobian_->NumRowBlocks() != 2 || block_jacobian_->NumColBlocks() != 2,
-                     axom::fmt::format("BlockSchurPreconditioner requires a 2x2 block operator, got {}x{}",
-                                       block_jacobian_->NumRowBlocks(), block_jacobian_->NumColBlocks()));
-  SLIC_ERROR_ROOT_IF(
-      mfem_solvers_.size() != 2,
-      axom::fmt::format("BlockSchurPreconditioner requires exactly 2 solvers, got {}", mfem_solvers_.size()));
+                     std::format("BlockSchurPreconditioner requires a 2x2 block operator, got {}x{}",
+                                 block_jacobian_->NumRowBlocks(), block_jacobian_->NumColBlocks()));
+  SLIC_ERROR_ROOT_IF(mfem_solvers_.size() != 2,
+                     std::format("BlockSchurPreconditioner requires exactly 2 solvers, got {}", mfem_solvers_.size()));
 
   block_offsets_.MakeRef(const_cast<mfem::Array<int>&>(block_jacobian_->RowOffsets()));
   solver_diag_ = std::make_unique<mfem::BlockOperator>(block_offsets_);

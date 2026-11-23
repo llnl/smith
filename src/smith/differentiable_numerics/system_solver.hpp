@@ -10,6 +10,7 @@
 #include <memory>
 #include <mpi.h>
 #include "smith/differentiable_numerics/field_state.hpp"
+#include "smith/differentiable_numerics/nonlinear_solve.hpp"
 #include "smith/numerics/solver_config.hpp"
 #include "smith/physics/common.hpp"
 
@@ -59,16 +60,15 @@ class SystemSolver {
 
   /// @brief Solves the multiphysics system using staggered iterations.
   /// @param residual_evals Vector of WeakForm evaluations for each block.
-  /// @param block_indices Block indices for each residual evaluation.
+  /// @param block_indices Argument slot lists for each residual and solved field.
   /// @param shape_disp Current shape displacement.
   /// @param states Nested vector of field states.
   /// @param params Nested vector of parameters.
   /// @param time_info Current time information.
   /// @param bc_managers Managers for boundary conditions.
   /// @return Updated field states.
-  std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals,
-                                const std::vector<std::vector<size_t>>& block_indices, const FieldState& shape_disp,
-                                const std::vector<std::vector<FieldState>>& states,
+  std::vector<FieldState> solve(const std::vector<WeakForm*>& residual_evals, const BlockArgumentMap& block_indices,
+                                const FieldState& shape_disp, const std::vector<std::vector<FieldState>>& states,
                                 const std::vector<std::vector<FieldState>>& params, const TimeInfo& time_info,
                                 const std::vector<const BoundaryConditionManager*>& bc_managers) const;
 
