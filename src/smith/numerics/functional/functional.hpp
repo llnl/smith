@@ -386,7 +386,7 @@ class Functional<test(trials...), exec> {
    * @param[in] domain The domain on which to evaluate the integral
    * @note The @p Dimension parameters are used to assist in the deduction of the @a geometry_dim
    * and @a spatial_dim template parameter
-   * @param[inout] qdata The data for each quadrature point
+   * @param[in,out] qdata The data for each quadrature point
    */
   template <int dim, int... args, typename lambda, typename qpt_data_type = Nothing>
   void AddDomainIntegral(Dimension<dim>, DependsOn<args...>, const lambda& integrand, Domain& domain,
@@ -465,7 +465,7 @@ class Functional<test(trials...), exec> {
    * @param[in] which_args a tag type used to indicate which trial spaces are required by this calculation
    * @param[in] integrand The quadrature function
    * @param[in] domain The mesh to evaluate the integral on
-   * @param[inout] data The data for each quadrature point
+   * @param[in,out] data The data for each quadrature point
    */
   template <int... args, typename lambda, typename qpt_data_type = Nothing>
   void AddAreaIntegral(DependsOn<args...> which_args, const lambda& integrand, Domain& domain,
@@ -481,7 +481,7 @@ class Functional<test(trials...), exec> {
    * @param[in] which_args a tag type used to indicate which trial spaces are required by this calculation
    * @param[in] integrand The quadrature function
    * @param[in] domain The mesh to evaluate the integral on
-   * @param[inout] data The data for each quadrature point
+   * @param[in,out] data The data for each quadrature point
    */
   template <int... args, typename lambda, typename qpt_data_type = Nothing>
   void AddVolumeIntegral(DependsOn<args...> which_args, const lambda& integrand, Domain& domain,

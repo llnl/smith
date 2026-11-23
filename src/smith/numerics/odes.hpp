@@ -151,10 +151,10 @@ class SecondOrderODE : public mfem::SecondOrderTimeDependentOperator {
   /**
    * @brief Performs a time step
    *
-   * @param[inout] x The predicted solution
-   * @param[inout] dxdt The predicted rate
-   * @param[inout] time The current time
-   * @param[inout] dt The desired time step
+   * @param[in,out] x The predicted solution
+   * @param[in,out] dxdt The predicted rate
+   * @param[in,out] time The current time
+   * @param[in,out] dt The desired time step
    *
    * @see mfem::SecondOrderODESolver::Step
    */
@@ -334,9 +334,9 @@ class FirstOrderODE : public mfem::TimeDependentOperator {
   /**
    * @brief Performs a time step
    *
-   * @param[inout] x The predicted solution
-   * @param[inout] time The current time
-   * @param[inout] dt The desired time step
+   * @param[in,out] x The predicted solution
+   * @param[in,out] time The current time
+   * @param[in,out] dt The desired time step
    *
    * @see mfem::ODESolver::Step
    */
