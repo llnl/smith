@@ -232,6 +232,50 @@ TEST(EquationSolverManualConvergence, InjectedManagedSolverSupportsScalarConverg
   EXPECT_LE(residual.Norml2(), 1.0e-2 * eq_solver.nonlinearSolver().GetInitialNorm());
 }
 
+TEST(LinearSolverFactory, BuildsNativeFGMRES)
+{
+  const LinearSolverOptions options{.linear_solver = LinearSolver::FGMRES,
+                                    .preconditioner = Preconditioner::None};
+  auto [solver, preconditioner] = buildLinearSolverAndPreconditioner(options, MPI_COMM_WORLD);
+
+  EXPECT_NE(dynamic_cast<mfem::FGMRESSolver*>(solver.get()), nullptr);
+  EXPECT_EQ(preconditioner.get(), nullptr);
+}
+
+TEST(LinearSolverFactory, ConfiguresGMRESAndFGMRESRestartDimension)
+{
+  mfem::SparseMatrix op(3);
+  op.Add(0, 0, 1.0);
+  op.Add(1, 1, 2.0);
+  op.Add(2, 2, 4.0);
+  op.Finalize();
+
+  for (const auto solver_type : {LinearSolver::GMRES, LinearSolver::FGMRES}) {
+    auto solve_with_restart = [&](int krylov_dimension) {
+      const LinearSolverOptions options{.linear_solver = solver_type,
+                                        .preconditioner = Preconditioner::None,
+                                        .relative_tol = 1.0e-12,
+                                        .absolute_tol = 0.0,
+                                        .max_iterations = 3,
+                                        .krylov_dimension = krylov_dimension};
+      auto [solver, preconditioner] = buildLinearSolverAndPreconditioner(options, MPI_COMM_WORLD);
+      auto* iterative_solver = dynamic_cast<mfem::IterativeSolver*>(solver.get());
+      EXPECT_NE(iterative_solver, nullptr);
+      EXPECT_EQ(preconditioner.get(), nullptr);
+
+      solver->SetOperator(op);
+      mfem::Vector rhs(3), x(3);
+      rhs = 1.0;
+      x = 0.0;
+      solver->Mult(rhs, x);
+      return iterative_solver->GetConverged();
+    };
+
+    EXPECT_FALSE(solve_with_restart(1));
+    EXPECT_TRUE(solve_with_restart(3));
+  }
+}
+
 /**
  * @brief Nonlinear solvers to test. Always includes NonlinearSolver::Newton and NonlinearSolver::LBFGS
  * If SMITH_USE_SUNDIALS is set, adds: NonlinearSolver::KINFullStep, NonlinearSolver::KINBacktrackingLineSearch, and
@@ -252,10 +296,11 @@ auto nonlinear_solvers = testing::Values(
 );
 
 /**
- * @brief Linear solvers to test. Always includes LinearSolver::CG, LinearSolver::GMRES, and LinearSolver::SuperLU.
+ * @brief Linear solvers to test. Always includes CG, GMRES, FGMRES, and SuperLU.
  * If MFEM_USE_PETSC and SMITH_USE_PETSC are set, adds LinearSolver::PetscCG and LinearSolver::PetscGMRES.
  */
-auto linear_solvers = testing::Values(LinearSolver::CG, LinearSolver::GMRES, LinearSolver::SuperLU
+auto linear_solvers = testing::Values(LinearSolver::CG, LinearSolver::GMRES, LinearSolver::FGMRES,
+                                      LinearSolver::SuperLU
 #ifdef SMITH_USE_PETSC
                                       ,
                                       LinearSolver::PetscCG, LinearSolver::PetscGMRES

@@ -92,6 +92,7 @@ bool linearSolverSupportsBlockOperator(LinearSolver linear_solver)
   switch (linear_solver) {
     case LinearSolver::CG:
     case LinearSolver::GMRES:
+    case LinearSolver::FGMRES:
     case LinearSolver::SuperLU:
 #ifdef MFEM_USE_STRUMPACK
     case LinearSolver::Strumpack:
@@ -1293,6 +1294,9 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
     case LinearSolver::GMRES:
       iter_lin_solver = std::make_unique<mfem::GMRESSolver>(comm);
       break;
+    case LinearSolver::FGMRES:
+      iter_lin_solver = std::make_unique<mfem::FGMRESSolver>(comm);
+      break;
 #ifdef SMITH_USE_PETSC
     case LinearSolver::PetscCG:
       iter_lin_solver = std::make_unique<smith::mfem_ext::PetscKSPSolver>(comm, KSPCG, std::string());
@@ -1319,6 +1323,17 @@ std::pair<std::unique_ptr<mfem::Solver>, std::unique_ptr<mfem::Solver>> buildLin
   iter_lin_solver->SetAbsTol(linear_opts.absolute_tol);
   iter_lin_solver->SetMaxIter(linear_opts.max_iterations);
   iter_lin_solver->SetPrintLevel(linear_opts.print_level);
+
+  SLIC_ERROR_ROOT_IF((linear_opts.linear_solver == LinearSolver::GMRES ||
+                      linear_opts.linear_solver == LinearSolver::FGMRES) &&
+                         linear_opts.krylov_dimension <= 0,
+                     "GMRES/FGMRES Krylov dimension must be positive");
+  if (auto* gmres = dynamic_cast<mfem::GMRESSolver*>(iter_lin_solver.get())) {
+    gmres->SetKDim(linear_opts.krylov_dimension);
+  }
+  if (auto* fgmres = dynamic_cast<mfem::FGMRESSolver*>(iter_lin_solver.get())) {
+    fgmres->SetKDim(linear_opts.krylov_dimension);
+  }
 
   if (preconditioner) {
     iter_lin_solver->SetPreconditioner(*preconditioner);
@@ -1480,8 +1495,9 @@ void EquationSolver::defineInputFileSchema(axom::inlet::Container& container)
   iterative_container.addDouble("rel_tol", "Relative tolerance for the linear solve.").defaultValue(1.0e-6);
   iterative_container.addDouble("abs_tol", "Absolute tolerance for the linear solve.").defaultValue(1.0e-8);
   iterative_container.addInt("max_iter", "Maximum iterations for the linear solve.").defaultValue(5000);
+  iterative_container.addInt("krylov_dimension", "GMRES/FGMRES restart length.").defaultValue(50);
   iterative_container.addInt("print_level", "Linear print level.").defaultValue(0);
-  iterative_container.addString("solver_type", "Solver type (gmres|minres|cg).").defaultValue("gmres");
+  iterative_container.addString("solver_type", "Solver type (gmres|fgmres|cg).").defaultValue("gmres");
   iterative_container.addString("prec_type", "Preconditioner type (JacobiSmoother|L1JacobiSmoother|AMG|ILU|Petsc).")
       .defaultValue("JacobiSmoother");
   iterative_container.addString("petsc_prec_type", "Type of PETSc preconditioner to use.").defaultValue("jacobi");
@@ -1521,10 +1537,13 @@ smith::LinearSolverOptions FromInlet<smith::LinearSolverOptions>::operator()(con
   options.relative_tol = config["rel_tol"];
   options.absolute_tol = config["abs_tol"];
   options.max_iterations = config["max_iter"];
+  options.krylov_dimension = config["krylov_dimension"];
   options.print_level = config["print_level"];
   std::string solver_type = config["solver_type"];
   if (solver_type == "gmres") {
     options.linear_solver = smith::LinearSolver::GMRES;
+  } else if (solver_type == "fgmres") {
+    options.linear_solver = smith::LinearSolver::FGMRES;
   } else if (solver_type == "cg") {
     options.linear_solver = smith::LinearSolver::CG;
   } else {

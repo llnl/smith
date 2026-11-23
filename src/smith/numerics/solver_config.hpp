@@ -105,6 +105,7 @@ enum class LinearSolver
 {
   CG,         /**< Conjugate gradient */
   GMRES,      /**< Generalized minimal residual method */
+  FGMRES,     /**< Flexible generalized minimal residual method */
   SuperLU,    /**< SuperLU MPI-enabled direct nodal solver */
   Strumpack,  /**< Strumpack MPI-enabled direct frontal solver*/
   PetscCG,    /**< PETSc MPI-enabled conjugate gradient solver */
@@ -121,6 +122,8 @@ inline std::string linearName(const LinearSolver& s)
       return "CG";
     case LinearSolver::GMRES:
       return "GMRES";
+    case LinearSolver::FGMRES:
+      return "FGMRES";
     case LinearSolver::SuperLU:
       return "SuperLU";
     case LinearSolver::Strumpack:
@@ -143,6 +146,7 @@ inline std::ostream& operator<<(std::ostream& os, LinearSolver s) { return os <<
 inline std::map<std::string, LinearSolver> linearSolverMap = {
     {"CG", LinearSolver::CG},
     {"GMRES", LinearSolver::GMRES},
+    {"FGMRES", LinearSolver::FGMRES},
     {"SuperLU", LinearSolver::SuperLU},
     {"Strumpack", LinearSolver::Strumpack},
     {"PetscCG", LinearSolver::PetscCG},
@@ -437,6 +441,9 @@ struct LinearSolverOptions {
 
   /// Maximum number of iterations
   int max_iterations = 300;
+
+  /// Number of Krylov vectors between restarts for GMRES and FGMRES
+  int krylov_dimension = 50;
 
   /// Debugging print level for the linear solver
   int print_level = 0;
