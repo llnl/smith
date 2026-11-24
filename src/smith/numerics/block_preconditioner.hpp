@@ -74,32 +74,6 @@ struct BlockProviderOverride {
 };
 
 /**
- * @brief Operator source used to approximate a Schur complement.
- *
- * This semantic wrapper lets Schur-preconditioner callers provide a custom
- * operator without specifying the Schur block index or approximation enum.
- */
-class SchurOperator {
- public:
-  /**
-   * @brief Construct from an owned fixed Schur operator.
-   * @param op Fixed assembled Schur operator.
-   */
-  explicit SchurOperator(std::unique_ptr<const mfem::Operator> op);
-
-  /**
-   * @brief Construct from an owned operator provider.
-   * @param provider Provider supplying the Schur operator.
-   */
-  explicit SchurOperator(std::unique_ptr<BlockOperatorProvider> provider) : provider_(std::move(provider)) {}
-
- private:
-  std::unique_ptr<BlockOperatorProvider> provider_;
-
-  friend class BlockSchurPreconditioner;
-};
-
-/**
  * @brief Build an override from a fixed concrete operator.
  * @param block_index Block index to override.
  * @param op Fixed concrete operator.
@@ -171,7 +145,7 @@ class BlockPreconditioner : public StateDependentSolver {
   /// @brief Owned MFEM solver for each block.
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
-  /// @brief Per-block operator providers; null entries use the corresponding Jacobian diagonal block.
+  /// @brief Per-block operator providers; null entries use the preconditioner's default operator or action.
   std::vector<std::unique_ptr<BlockOperatorProvider>> block_op_providers_;
 };
 
@@ -215,7 +189,7 @@ class BlockDiagonalPreconditioner : public BlockPreconditioner {
   virtual ~BlockDiagonalPreconditioner();
 
  private:
-  // The diagonal part of the preconditioner containing BoomerAMG applications
+  // Block diagonal operator applying the owned block solvers.
   std::unique_ptr<mfem::BlockOperator> solver_diag_;
 };
 
@@ -282,6 +256,63 @@ class BlockTriangularPreconditioner : public BlockPreconditioner {
 };
 
 /**
+ * @class SchurComplementActionSolver
+ * @brief Base class for custom solvers that apply an approximate Schur inverse/action directly.
+ *
+ * Subclasses normally override updateForState() to refresh any state-dependent
+ * approximation and Mult() to apply the approximate Schur inverse/action. Override
+ * setBlockContext() only when the current 2x2 block Jacobian is needed. In a
+ * nonlinear solve, updateForState() receives the current mfem::BlockVector before
+ * Jacobian assembly, and setBlockContext() is called later from
+ * BlockSchurPreconditioner::SetOperator().
+ */
+class SchurComplementActionSolver : public StateDependentSolver {
+ public:
+  /// @brief Configure this action solver with the current 2x2 block context.
+  virtual void setBlockContext(const mfem::BlockOperator& jacobian);
+
+  /// @brief Set the action dimensions from the supplied operator.
+  void SetOperator(const mfem::Operator& op) override;
+
+  /**
+   * @brief Optional state update; the default implementation does nothing.
+   * @param state Full nonlinear state, including its block layout.
+   */
+  void updateForState([[maybe_unused]] const mfem::BlockVector& state) override;
+
+ protected:
+  const mfem::BlockOperator* block_jacobian_ = nullptr;  ///< Current 2x2 block Jacobian context.
+  mfem::Array<int> block_offsets_;                       ///< Current block offsets.
+};
+
+/**
+ * @brief Named assembled operator used to approximate a Schur complement.
+ *
+ * The supplied operator is inverted by the second block solver. This input
+ * does not expose a Schur block index or custom approximation enum at the call
+ * site.
+ */
+class SchurOperator {
+ public:
+  /**
+   * @brief Construct from an owned fixed Schur operator.
+   * @param op Fixed assembled Schur operator.
+   */
+  explicit SchurOperator(std::unique_ptr<const mfem::Operator> op);
+
+  /**
+   * @brief Construct an assembled Schur-operator input.
+   * @param provider Provider supplying the Schur operator.
+   */
+  explicit SchurOperator(std::unique_ptr<BlockOperatorProvider> provider) : provider_(std::move(provider)) {}
+
+ private:
+  std::unique_ptr<BlockOperatorProvider> provider_;
+
+  friend class BlockSchurPreconditioner;
+};
+
+/**
  * @class BlockSchurPreconditioner
  * @brief Simple 2x2 block Schur complement preconditioner for block systems.
  *
@@ -305,17 +336,27 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
                            std::vector<BlockProviderOverride> overrides = {});
 
   /**
-   * @brief Construct with a custom Schur operator.
+   * @brief Construct with a named custom assembled Schur operator.
    *
    * Supplying @a schur selects the custom Schur approximation and installs it
    * for the second block of the 2x2 system.
    *
-   * @param solvers Two solvers, for $ A_{11} $ and the Schur approximation.
+   * @param solvers Two solvers for $ A_{11} $ and the Schur approximation.
    * @param type Preconditioner variant (diagonal, lower, upper, or full).
-   * @param schur Operator source used for the Schur approximation.
+   * @param schur Custom assembled Schur operator.
    */
   BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type,
                            SchurOperator schur);
+
+  /**
+   * @brief Construct with an action that directly approximates \f$S^{-1}\f$.
+   *
+   * @param a11_solvers One solver for \f$A_{11}\f$.
+   * @param type Preconditioner variant (diagonal, lower, upper, or full).
+   * @param schur_action Solver/action that applies the Schur inverse approximation.
+   */
+  BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> a11_solvers, BlockSchurType type,
+                           std::unique_ptr<SchurComplementActionSolver> schur_action);
 
   /**
    * @brief The action of the precondition on the block vector (b_1, b_2)
@@ -328,7 +369,10 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
   /**
    * @brief Set the preconditioner to use the supplied linearized block Jacobian.
    *
-   * The Schur complement approximation is given by S_approx = A22 - A21 * diag(A11)^{-1} * A12
+   * For DiagInv, assemble S_approx = A22 - A21 * diag(A11)^{-1} * A12.
+   * For A22Only, use a copy of A22. A custom assembled Schur operator is taken
+   * from its provider. A direct Schur inverse action receives the block Jacobian
+   * through SchurComplementActionSolver::setBlockContext().
    *
    * @param jacobian The supplied linearized Jacobian. Note that it is always a block operator
    */
@@ -337,10 +381,17 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
   virtual ~BlockSchurPreconditioner();
 
  private:
-  BlockSchurPreconditioner(std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type,
-                           std::optional<SchurApproxType> approx_type, std::vector<BlockProviderOverride> overrides);
+  struct SchurSetup;
 
-  // The diagonal part of the preconditioner containing BoomerAMG applications
+  static SchurSetup makeSchurSetup(std::vector<std::unique_ptr<mfem::Solver>> solvers, BlockSchurType type,
+                                   SchurOperator schur);
+
+  static SchurSetup makeSchurSetup(std::vector<std::unique_ptr<mfem::Solver>> a11_solvers, BlockSchurType type,
+                                   std::unique_ptr<SchurComplementActionSolver> schur_action);
+
+  explicit BlockSchurPreconditioner(SchurSetup setup);
+
+  // Block diagonal operator applying the A11 solver and Schur solver or inverse action.
   std::unique_ptr<mfem::BlockOperator> solver_diag_;
 
   // Views of the linearized Jacobian blocks
@@ -350,12 +401,16 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
   // Schur complement approximation operator used by solver for block (1,1).
   //
   // For DiagInv and A22Only, the approximation is rebuilt on each SetOperator call and stored in
-  // S_approx_owned_. A custom assembled approximation is retained by block_op_providers_[1].
+  // S_approx_owned_. A custom assembled approximation is retained by block_op_providers_[1]. A direct inverse
+  // action is configured directly.
   mutable std::unique_ptr<const mfem::Operator> S_approx_owned_;
 
   BlockSchurType type_;
 
   std::optional<SchurApproxType> approx_type_;
+
+  /// @brief Non-owning view of the direct inverse action stored in mfem_solvers_, when present.
+  SchurComplementActionSolver* schur_action_ = nullptr;
 
   /**
    * @brief The action of the lower sweep on the block vector (b_1, b_2)
