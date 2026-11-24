@@ -145,7 +145,7 @@ class BlockPreconditioner : public StateDependentSolver {
   /// @brief Owned MFEM solver for each block.
   mutable std::vector<std::unique_ptr<mfem::Solver>> mfem_solvers_;
 
-  /// @brief Per-block operator providers; null entries use the corresponding Jacobian diagonal block.
+  /// @brief Per-block operator providers; null entries use the preconditioner's default operator or action.
   std::vector<std::unique_ptr<BlockOperatorProvider>> block_op_providers_;
 };
 
@@ -189,7 +189,7 @@ class BlockDiagonalPreconditioner : public BlockPreconditioner {
   virtual ~BlockDiagonalPreconditioner();
 
  private:
-  // The diagonal part of the preconditioner containing BoomerAMG applications
+  // Block diagonal operator applying the owned block solvers.
   std::unique_ptr<mfem::BlockOperator> solver_diag_;
 };
 
@@ -271,10 +271,13 @@ class SchurComplementActionSolver : public StateDependentSolver {
   /// @brief Configure this action solver with the current 2x2 block context.
   virtual void setBlockContext(const mfem::BlockOperator& jacobian);
 
-  /// @overload
+  /// @brief Set the action dimensions from the supplied operator.
   void SetOperator(const mfem::Operator& op) override;
 
-  /// @brief Refresh the action for the current nonlinear block state.
+  /**
+   * @brief Optional state update; the default implementation does nothing.
+   * @param state Full nonlinear state, including its block layout.
+   */
   void updateForState([[maybe_unused]] const mfem::BlockVector& state) override;
 
  protected:
@@ -366,7 +369,10 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
   /**
    * @brief Set the preconditioner to use the supplied linearized block Jacobian.
    *
-   * The Schur complement approximation is given by S_approx = A22 - A21 * diag(A11)^{-1} * A12
+   * For DiagInv, assemble S_approx = A22 - A21 * diag(A11)^{-1} * A12.
+   * For A22Only, use a copy of A22. A custom assembled Schur operator is taken
+   * from its provider. A direct Schur inverse action receives the block Jacobian
+   * through SchurComplementActionSolver::setBlockContext().
    *
    * @param jacobian The supplied linearized Jacobian. Note that it is always a block operator
    */
@@ -385,7 +391,7 @@ class BlockSchurPreconditioner : public BlockPreconditioner {
 
   explicit BlockSchurPreconditioner(SchurSetup setup);
 
-  // The diagonal part of the preconditioner containing BoomerAMG applications
+  // Block diagonal operator applying the A11 solver and Schur solver or inverse action.
   std::unique_ptr<mfem::BlockOperator> solver_diag_;
 
   // Views of the linearized Jacobian blocks
